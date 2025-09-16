@@ -1,0 +1,105 @@
+@page
+@model ConDiag.Pages.ApiDocsModel
+@{
+    ViewData["Title"] = "API Documentation";
+}
+
+<div class="row">
+    <div class="col-12">
+        <h1 class="display-4 text-primary">
+            <i class="fas fa-code"></i>
+            API Documentation
+        </h1>
+        <p class="lead">Explore the ConDiag REST API endpoints</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-book"></i>
+                    Interactive API Explorer
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <iframe src="/swagger" width="100%" height="600" frameborder="0" style="border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list"></i>
+                    Quick Reference
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Core Endpoints:</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <code class="bg-light p-1 rounded">GET /api/health</code><br>
+                        <small class="text-muted">System health check</small>
+                    </li>
+                    <li class="mb-2">
+                        <code class="bg-light p-1 rounded">GET /api/diagnostics/status</code><br>
+                        <small class="text-muted">Service status and workers</small>
+                    </li>
+                    <li class="mb-2">
+                        <code class="bg-light p-1 rounded">GET /api/diagnostics/ping</code><br>
+                        <small class="text-muted">Single ping test</small>
+                    </li>
+                    <li class="mb-2">
+                        <code class="bg-light p-1 rounded">GET /api/diagnostics/ping-test</code><br>
+                        <small class="text-muted">Multiple ping test</small>
+                    </li>
+                </ul>
+                
+                <h6 class="mt-4">Example Usage:</h6>
+                <div class="bg-dark text-light p-2 rounded mb-2" style="font-size: 0.875rem;">
+                    <code>
+                        curl http://localhost:5000/api/diagnostics/ping?host=google.com
+                    </code>
+                </div>
+                
+                <div class="bg-dark text-light p-2 rounded" style="font-size: 0.875rem;">
+                    <code>
+                        curl http://localhost:5000/api/diagnostics/ping-test?host=8.8.8.8&count=5
+                    </code>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-lightbulb"></i>
+                    Tips
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i>
+                        All endpoints return JSON
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i>
+                        CORS enabled for development
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i>
+                        OpenAPI/Swagger documentation
+                    </li>
+                    <li class="mb-0">
+                        <i class="fas fa-check text-success"></i>
+                        Real-time background monitoring
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
