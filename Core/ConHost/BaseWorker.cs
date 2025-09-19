@@ -6,7 +6,7 @@ namespace ConHost;
 /// <summary>
 /// Base class for background workers that provides common functionality.
 /// </summary>
-public abstract class ConWorker : BackgroundService
+public abstract class BaseWorker : BackgroundService
 {
     protected readonly ILogger Logger;
 
@@ -14,7 +14,7 @@ public abstract class ConWorker : BackgroundService
     /// Initializes a new instance of the ConWorker class.
     /// </summary>
     /// <param name="logger">The logger instance.</param>
-    protected ConWorker(ILogger logger)
+    protected BaseWorker(ILogger logger)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

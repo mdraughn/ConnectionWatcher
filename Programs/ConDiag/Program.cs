@@ -1,5 +1,4 @@
 ﻿using ConHost;
-using ConHost.Examples;
 using Microsoft.Extensions.Logging;
 
 Console.WriteLine("ConDiag - Connection Diagnostics Tool");
@@ -19,9 +18,6 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
     
-    // Add our ping worker as a hosted service
-    builder.Services.AddHostedService<PingWorker>();
-
     // Configure logging
     builder.Logging.ClearProviders();
     builder.Logging.AddConsole();
