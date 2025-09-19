@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConHost", "Core\ConHost\Con
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConTinker", "ConTinker\ConTinker.csproj", "{3EF95663-5EF2-4584-94E0-9A0202379007}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConInfrastructure", "ConInfrastructure\ConInfrastructure.csproj", "{3581B714-60DA-4734-BB13-FD0992A2AADD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{3EF95663-5EF2-4584-94E0-9A0202379007}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3EF95663-5EF2-4584-94E0-9A0202379007}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3EF95663-5EF2-4584-94E0-9A0202379007}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3581B714-60DA-4734-BB13-FD0992A2AADD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3581B714-60DA-4734-BB13-FD0992A2AADD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3581B714-60DA-4734-BB13-FD0992A2AADD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3581B714-60DA-4734-BB13-FD0992A2AADD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -48,6 +54,7 @@ Global
 		{2BA015B5-83B5-C840-BCDF-7C4191A8DEF0} = {59AB6BE3-9E76-44A5-9E34-F2659590BE92}
 		{2FAFC120-68B3-D60C-E67D-C5BD52EC54CB} = {59AB6BE3-9E76-44A5-9E34-F2659590BE92}
 		{3EF95663-5EF2-4584-94E0-9A0202379007} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{3581B714-60DA-4734-BB13-FD0992A2AADD} = {59AB6BE3-9E76-44A5-9E34-F2659590BE92}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F7A066A8-8B84-4513-A5AE-8342412192CD}

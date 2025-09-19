@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 
-namespace ConEngine
+namespace ConEngine.Network
 {
     /// <summary>
     /// Represents an immutable result of a ping operation.
@@ -42,35 +42,6 @@ namespace ConEngine
         /// Gets the status description of the ping operation.
         /// </summary>
         public string Status { get; }
-
-        /// <summary>
-        /// Creates a successful PingResult from a PingReply.
-        /// </summary>
-        public static PingResult FromReply(IPAddress ipAddress, PingReply reply)
-        {
-            return new PingResult(
-                ipAddress,
-                reply.Status == IPStatus.Success,
-                reply.RoundtripTime,
-                reply.Status.ToString()
-            );
-        }
-
-        /// <summary>
-        /// Creates a failed PingResult with an error message.
-        /// </summary>
-        public static PingResult FromError(IPAddress ipAddress, string errorMessage)
-        {
-            return new PingResult(ipAddress, false, 0, errorMessage);
-        }
-
-        /// <summary>
-        /// Creates a cancelled PingResult.
-        /// </summary>
-        public static PingResult FromCancellation(IPAddress ipAddress)
-        {
-            return new PingResult(ipAddress, false, 0, "Cancelled");
-        }
 
         /// <summary>
         /// Returns a string representation of this PingResult.

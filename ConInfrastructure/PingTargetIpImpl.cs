@@ -1,18 +1,18 @@
 using System.Net;
 using System.Net.NetworkInformation;
+using ConEngine.Network;
 
-namespace ConEngine
+namespace ConInfrastructure
 {
     /// <summary>
     /// High-performance ping target implementation using System.Net.NetworkInformation.Ping.
     /// This is a drop-in replacement for PingTarget with significantly better performance.
     /// </summary>
-    public class PingTarget : IPingTarget, IDisposable
+    public class PingTargetIpImpl : IPingTarget
     {
         private readonly IPAddress _ipAddress;
         private readonly CancellationToken _cancellationToken;
         private readonly Ping _ping;
-        private readonly int _timeout;
         private bool _disposed = false;
 
         /// <summary>
@@ -21,11 +21,10 @@ namespace ConEngine
         /// <param name="ipAddress">The IP address to ping.</param>
         /// <param name="cancellationToken">Cancellation token for async operations.</param>
         /// <param name="timeout">Timeout in milliseconds (default: 5000ms).</param>
-        public PingTarget(IPAddress ipAddress, CancellationToken cancellationToken, int timeout = 5000)
+        public PingTargetIpImpl(IPAddress ipAddress, CancellationToken cancellationToken)
         {
             _ipAddress = ipAddress ?? throw new ArgumentNullException(nameof(ipAddress));
             _cancellationToken = cancellationToken;
-            _timeout = timeout;
             _ping = new Ping();
         }
 
@@ -39,31 +38,38 @@ namespace ConEngine
         /// Uses the optimized System.Net.NetworkInformation.Ping implementation for better performance.
         /// </summary>
         /// <returns>A task that represents the asynchronous ping operation. The task result contains the ping result.</returns>
-        public async Task<PingResult> PingAsync()
+        public async Task<PingResult> PingAsync(int timeoutMs)
         {
             if (_disposed)
-                throw new ObjectDisposedException(nameof(PingTarget));
+                throw new ObjectDisposedException(nameof(PingTargetIpImpl));
 
             try
             {
                 // Use the built-in Ping class which is optimized and doesn't require raw sockets
-                var reply = await _ping.SendPingAsync(_ipAddress, _timeout);
-                return PingResult.FromReply(_ipAddress, reply);
+                PingReply reply = await _ping.SendPingAsync(_ipAddress, timeoutMs);
+                return new PingResult(
+                    _ipAddress,
+                    reply.Status == IPStatus.Success,
+                    reply.RoundtripTime,
+                    reply.Status.ToString()
+                );
             }
             catch (PingException ex)
             {
                 // Handle ping-specific exceptions
-                return PingResult.FromError(_ipAddress, $"PingException: {ex.Message}");
+                string errorMessage = $"PingException: {ex.Message}";
+                return new PingResult(_ipAddress, false, 0, errorMessage);
             }
             catch (OperationCanceledException)
             {
                 // Handle cancellation
-                return PingResult.FromCancellation(_ipAddress);
+                return new PingResult(_ipAddress, false, 0, "Cancelled");
             }
             catch (Exception ex)
             {
                 // Handle any other exceptions
-                return PingResult.FromError(_ipAddress, $"Error: {ex.Message}");
+                string errorMessage = $"Error: {ex.Message}";
+                return new PingResult(_ipAddress, false, 0, errorMessage);
             }
         }
 
@@ -97,7 +103,7 @@ namespace ConEngine
         /// <summary>
         /// Finalizer for PingTarget to ensure cleanup if Dispose is not called.
         /// </summary>
-        ~PingTarget()
+        ~PingTargetIpImpl()
         {
             Dispose(false);
         }

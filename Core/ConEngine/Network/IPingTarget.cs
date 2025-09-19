@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace ConEngine
+namespace ConEngine.Network
 {
     /// <summary>
     /// Interface for ping target implementations.
@@ -15,7 +15,8 @@ namespace ConEngine
         /// <summary>
         /// Launches an async ICMP echo request to the configured IP address.
         /// </summary>
+        /// <param name="timeoutMs"></param>
         /// <returns>A task that represents the asynchronous ping operation. The task result contains the ping result.</returns>
-        Task<PingResult> PingAsync();
+        Task<PingResult> PingAsync(int timeoutMs);
     }
 }

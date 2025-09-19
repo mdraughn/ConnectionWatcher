@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ConInfrastructure\ConInfrastructure.csproj" />
     <ProjectReference Include="..\Core\ConEngine\ConEngine.csproj" />
   </ItemGroup>
 
