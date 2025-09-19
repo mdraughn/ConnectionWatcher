@@ -5,7 +5,7 @@ namespace ConEngine.Network
     /// <summary>
     /// Interface for ping target implementations.
     /// </summary>
-    public interface IPingTarget : IDisposable
+    public interface IPingTransceiver : IDisposable
     {
         /// <summary>
         /// Gets the IP address that this ping target is configured to ping.
