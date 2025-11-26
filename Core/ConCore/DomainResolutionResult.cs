@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace ConEngine.Network
+namespace ConCore
 {
     /// <summary>
     /// Represents an immutable result of a domain name resolution operation.

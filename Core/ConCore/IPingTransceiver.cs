@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace ConEngine.Network
+namespace ConCore
 {
     /// <summary>
     /// Interface for ping target implementations.

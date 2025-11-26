@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace ConEngine.Network;
+namespace ConCore;
 
 public interface IPingTransceiverFactory
 {

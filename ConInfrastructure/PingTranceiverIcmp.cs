@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.NetworkInformation;
-using ConEngine.Network;
+using ConCore;
 
 namespace ConInfrastructure;
 

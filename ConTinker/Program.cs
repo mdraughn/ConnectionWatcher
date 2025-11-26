@@ -1,30 +1,48 @@
-﻿// See https://aka.ms/new-console-template for more information
-
+﻿using ConInfrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Net;
-using ConEngine.Network;
-using ConInfrastructure;
+using System.Threading;
+using ConCore;
+using ConTinker;
+using Serilog;
 
-Console.WriteLine("Hello, World!");
-var resolverFactory = new DomainNameResolverFactory();
-using IDomainNameResolver resolver = resolverFactory.Create(CancellationToken.None);
-string domainName = "cloudflare.com";
-DomainResolutionResult hostInfo = await resolver.ResolveAsync(domainName, 5000);
-foreach (IPAddress ipAddress in hostInfo.IPv4Addresses.Concat(hostInfo.IPv6Addresses))
+Console.WriteLine("Program Running");
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateLogger();
+
+try
 {
-    Console.WriteLine($"Resolved {domainName} IP: {ipAddress}");
+    IHostBuilder hostBuilder = Host.CreateDefaultBuilder();
+    hostBuilder.UseSerilog();
+        //.ConfigureLogging(logging =>
+        //{
+        //    logging.ClearProviders();
+        //    logging.AddConsole();
+        //    logging.SetMinimumLevel(LogLevel.Information);
+        //});
+    hostBuilder.ConfigureServices(services =>
+    {
+        services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
+        services.AddTransient<IDomainNameResolverFactory, DomainNameResolverFactory>();
+        services.AddTransient<IPingTransceiverFactory, PingTransceiverFactory>();
+        services.AddHostedService<TinkerService>();
+    });
+    using var host = hostBuilder.Build();
+    await host.RunAsync(CancellationToken.None);
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Host terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
 }
 
-var pingFactory = new PingTransceiverFactory();
-var engine = new PingController(TimeProvider.System, pingFactory, CancellationToken.None);
-engine.Start(IPAddress.Parse("8.8.8.8")).GetAwaiter().GetResult();
-
-//using IPingTransceiver pt = pingFactory.Create(IPAddress.Parse("8.8.8.8"), CancellationToken.None);
-//for (int i = 0; i < 5; i++)
-//{
-//    if (i > 0)
-//    {
-//        await Task.Delay(1000); // Wait 1 second between pings
-//    }
-//    PingResult result = await pt.PingAsync(5000);
-//    Console.WriteLine($"Ping to {result.IpAddress} {(result.Success ? "succeeded" : "failed")} in {result.RoundtripTime} ms");
-//}
+Console.WriteLine("Program Completed");

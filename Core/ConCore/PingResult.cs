@@ -1,7 +1,6 @@
 using System.Net;
-using System.Net.NetworkInformation;
 
-namespace ConEngine.Network
+namespace ConCore
 {
     /// <summary>
     /// Represents an immutable result of a ping operation.

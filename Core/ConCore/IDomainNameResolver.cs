@@ -1,6 +1,4 @@
-using System.Net;
-
-namespace ConEngine.Network
+namespace ConCore
 {
     /// <summary>
     /// Interface for domain name resolution implementations.

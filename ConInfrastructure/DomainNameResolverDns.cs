@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using ConEngine.Network;
+using ConCore;
 
 namespace ConInfrastructure
 {
