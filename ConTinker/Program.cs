@@ -11,7 +11,7 @@ using Serilog;
 Console.WriteLine("Program Running");
 
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
+    .MinimumLevel.Verbose()
     .Enrich.FromLogContext()
     .WriteTo.Console()
     .CreateLogger();

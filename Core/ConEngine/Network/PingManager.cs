@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ConCore;
+using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Network;
 
@@ -16,11 +17,14 @@ public class PingManager : IDisposable
     private readonly ChannelReader<PingResult> _resultReader;
     private readonly Task _messageProcessingTask;
     private bool _disposed = false;
+    private readonly ILogger _log;
 
     public PingManager(TimeProvider timeProvider,
         IPingTransceiverFactory pingTransceiverFactory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger log)
     {
+        _log = log;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _cancellationToken = cancellationToken;
@@ -47,7 +51,7 @@ public class PingManager : IDisposable
         if (!_pingControllers.TryGetValue(ipAddress, out var controller))
         {
             var controllerId = $"Controller-{ipAddress}";
-            controller = new PingController(_timeProvider, _pingTransceiverFactory); 
+            controller = new PingController(_timeProvider, _pingTransceiverFactory,_log); 
             controller.Start(ipAddress,
                 _resultWriter,
                 _cancellationToken);

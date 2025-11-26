@@ -5,6 +5,7 @@ using System;
 using System.Threading.Channels;
 using System.Xml;
 using ConCore;
+using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Network;
 
@@ -13,9 +14,9 @@ namespace ConEngine.Network;
 /// </summary>
 /// <param name="timeProvider"></param>
 /// <param name="pingTransceiverFactory"></param>
-public class PingController(TimeProvider timeProvider, IPingTransceiverFactory pingTransceiverFactory) : IDisposable
+public class PingController(TimeProvider timeProvider, IPingTransceiverFactory pingTransceiverFactory, ILogger log) : IDisposable
 {
-    private TaskCompletionSource<bool> _taskCompletionSource = new();
+    private TaskCompletionSource<bool>? _taskCompletionSource = null;
     private Task? _pingTask;
     private bool _disposed = false;
     private IPAddress? _ipAddress = null;
@@ -36,6 +37,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
 
         if (_taskCompletionSource is null)
         {
+            // Start running.
             _cancellationToken = cancellationToken;
             _taskCompletionSource = new TaskCompletionSource<bool>();
             _ipAddress = ipAddress;
@@ -47,6 +49,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 try
                 {
                     // Create the transceiver to send and receive pings for the specified IP address
+                    log.LogTrace("Creating ping transceiver for {ipAddress} ...",_ipAddress);
                     using var ping = pingTransceiverFactory.Create(_ipAddress, _cancellationToken);
 
                     // Run until we finish or are cancelled
@@ -54,7 +57,16 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                     {
                         try
                         {
+                            log.LogTrace("Pinging {ipAddress} ...", _ipAddress);
                             var reply = await ping.PingAsync(5000).ConfigureAwait(false);
+                            if (reply.Success)
+                            {
+                                log.LogTrace("Ping received from {ipAddress}, {pingTime} ms", _ipAddress, reply.RoundtripTime);
+                            }
+                            else
+                            {
+                                log.LogTrace("Ping lost for {ipAddress}, {pingTimeout} ms", _ipAddress, reply.RoundtripTime);
+                            }
 
                             // Send the ping result through the channel
                             await SendMessage(ipAddress, reply);
@@ -69,10 +81,12 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                         catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
                         {
                             // Expected cancellation, exit gracefully
+                            log.LogTrace("Ping for {ipAddress} has been cancelled", _ipAddress);
                             break;
                         }
                         catch (Exception pingEx)
                         {
+                            log.LogError(pingEx, "Error pinging {ipAddress}", _ipAddress);
                             // Handle individual ping errors - send error result but continue pinging
                             var errorResult = new PingResult(ipAddress, false, 0, $"Ping error: {pingEx.Message}");
                             await SendMessage(ipAddress, errorResult);
@@ -91,11 +105,13 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 catch (OperationCanceledException)
                 {
                     // Handle cancellation
+                    log.LogTrace("Ping for {ipAddress} has been cancelled", _ipAddress);
                     _taskCompletionSource?.TrySetResult(false);
                 }
                 catch (Exception ex)
                 {
                     // Handle unexpected errors
+                    log.LogError(ex, "Error pinging {ipAddress}", _ipAddress);
                     _taskCompletionSource?.TrySetException(ex);
                 }
                 finally
@@ -113,7 +129,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     /// <returns>true if the task has not completed and cancellation has not been requested; otherwise, false.</returns>
     private bool IsRunnable()
     {
-        return !_taskCompletionSource.Task.IsCompleted && !_cancellationToken.IsCancellationRequested;
+        return !_taskCompletionSource!.Task.IsCompleted && !_cancellationToken.IsCancellationRequested;
     }
 
     /// <summary>
@@ -140,7 +156,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
             // Try to send the message - if the channel is closed, this will fail gracefully
             if (!_resultWriter.TryWrite(result))
             {
-                Console.WriteLine($"[{ipAddress}] Warning: Failed to send message to channel");
+                log.LogError("[{ipAddress}] Warning: Failed to send message to channel",_ipAddress);
             }
         }
         catch (Exception ex)
