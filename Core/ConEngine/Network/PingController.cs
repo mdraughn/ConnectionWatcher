@@ -64,7 +64,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                         }
                         else
                         {
-                            log.LogTrace("Ping lost for {ipAddress}", _ipAddress);
+                            log.LogTrace("Ping timeout for {ipAddress}", _ipAddress);
                         }
 
                         // Send the ping result through the channel

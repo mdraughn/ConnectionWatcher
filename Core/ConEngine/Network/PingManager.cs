@@ -6,13 +6,15 @@ using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Network;
 
+/// <summary>
+/// Manages a collection of PingControllers, each responsible for pinging a specific IP address.
+/// </summary>
 public class PingManager : IDisposable
 {
     private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingTransceiverFactory;
-    private readonly CancellationToken _cancellationToken;
+    private readonly CancellationToken _globalCancellationToken;
     private readonly Dictionary<IPAddress, PingController> _pingControllers = new();
-    private readonly Channel<PingResult> _resultChannel;
     private readonly ChannelWriter<PingResult> _resultWriter;
     private readonly ChannelReader<PingResult> _resultReader;
     private readonly Task _messageProcessingTask;
@@ -21,21 +23,21 @@ public class PingManager : IDisposable
 
     public PingManager(TimeProvider timeProvider,
         IPingTransceiverFactory pingTransceiverFactory,
-        CancellationToken cancellationToken,
+        CancellationToken globalCancellationToken,
         ILogger log)
     {
         _log = log;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
-        _cancellationToken = cancellationToken;
+        _globalCancellationToken = globalCancellationToken;
 
         // Create unbounded channel for ping results
-        _resultChannel = Channel.CreateUnbounded<PingResult>();
-        _resultWriter = _resultChannel.Writer;
-        _resultReader = _resultChannel.Reader;
+        var resultChannel = Channel.CreateUnbounded<PingResult>();
+        _resultWriter = resultChannel.Writer;
+        _resultReader = resultChannel.Reader;
 
         // Launch background task to process messages
-        _messageProcessingTask = Task.Run(ProcessMessages, cancellationToken);
+        _messageProcessingTask = Task.Run(ProcessMessages, globalCancellationToken);
     }
 
     /// <summary>
@@ -50,11 +52,10 @@ public class PingManager : IDisposable
 
         if (!_pingControllers.TryGetValue(ipAddress, out var controller))
         {
-            var controllerId = $"Controller-{ipAddress}";
             controller = new PingController(_timeProvider, _pingTransceiverFactory,_log); 
             controller.Launch(ipAddress,
                 _resultWriter,
-                _cancellationToken);
+                _globalCancellationToken);
             _pingControllers[ipAddress] = controller;
         }
         return controller;
@@ -97,14 +98,9 @@ public class PingManager : IDisposable
     {
         try
         {
-            await foreach (var message in _resultReader.ReadAllAsync(_cancellationToken))
+            await foreach (var message in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
-                // Print the message - in a real application, you might want to:
-                // - Log to a structured logger
-                // - Store in a database
-                // - Send to a monitoring system
-                // - Update metrics/statistics
-                Console.WriteLine($"[PingManager] {message}");
+                LogPingResult(message);
 
                 // You could also add additional processing here, such as:
                 // - Tracking success/failure rates
@@ -121,6 +117,17 @@ public class PingManager : IDisposable
         catch (Exception ex)
         {
             Console.WriteLine($"[PingManager] Error processing messages: {ex.Message}");
+        }
+    }
+
+    private void LogPingResult(PingResult message)
+    {
+        if (message.Success)
+        {
+            _log.LogTrace("Processing success from {ipAddress}", message.IpAddress);
+        } else
+        {
+            _log.LogTrace("Processing lost ping from {ipAddress}", message.IpAddress);
         }
     }
 

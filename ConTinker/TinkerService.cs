@@ -11,6 +11,7 @@ namespace ConTinker;
 public class TinkerService : IHostedService
 {
     private readonly ILogger<TinkerService> _log;
+    private PingManager _manager;
 
     public TinkerService(ILogger<TinkerService> log)
     {
@@ -37,9 +38,12 @@ public class TinkerService : IHostedService
             }
 
             var pingFactory = new PingTransceiverFactory();
-            var pingController = new PingController(TimeProvider.System, pingFactory,_log);
             _log.LogDebug("Starting Pinger...");
-            Task controller = pingController.Launch(IPAddress.Parse("192.168.99.1"), resultWriter, cancellationToken);
+            //Task controller1 = new PingController(TimeProvider.System, pingFactory, _log).Launch(IPAddress.Parse("192.168.99.1"), resultWriter, cancellationToken);
+            //Task controller2 = new PingController(TimeProvider.System, pingFactory, _log).Launch(IPAddress.Parse("8.8.8.8"), resultWriter, cancellationToken);
+            _manager = new PingManager(TimeProvider.System, pingFactory, cancellationToken, _log);
+            _manager.GetOrCreateController(IPAddress.Parse("192.168.99.1"));
+            _manager.GetOrCreateController(IPAddress.Parse("8.8.8.8"));
             _log.LogDebug("Pinger started.");
 
             //using IPingTransceiver pt = pingFactory.Create(IPAddress.Parse("8.8.8.8"), CancellationToken.None);
@@ -59,6 +63,7 @@ public class TinkerService : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         // Stop your service logic here
+        _manager.StopAllControllers();
         return Task.CompletedTask;
     }
 }
