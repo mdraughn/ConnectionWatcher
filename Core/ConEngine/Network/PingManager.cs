@@ -34,7 +34,7 @@ public class PingManager : IDisposable
         _resultWriter = _resultChannel.Writer;
         _resultReader = _resultChannel.Reader;
 
-        // Start background task to process messages
+        // Launch background task to process messages
         _messageProcessingTask = Task.Run(ProcessMessages, cancellationToken);
     }
 
@@ -52,7 +52,7 @@ public class PingManager : IDisposable
         {
             var controllerId = $"Controller-{ipAddress}";
             controller = new PingController(_timeProvider, _pingTransceiverFactory,_log); 
-            controller.Start(ipAddress,
+            controller.Launch(ipAddress,
                 _resultWriter,
                 _cancellationToken);
             _pingControllers[ipAddress] = controller;

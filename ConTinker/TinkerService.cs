@@ -39,7 +39,7 @@ public class TinkerService : IHostedService
             var pingFactory = new PingTransceiverFactory();
             var pingController = new PingController(TimeProvider.System, pingFactory,_log);
             _log.LogDebug("Starting Pinger...");
-            pingController.Start(IPAddress.Parse("192.168.99.1"), resultWriter, cancellationToken);
+            await pingController.Launch(IPAddress.Parse("192.168.99.1"), resultWriter, cancellationToken);
             _log.LogDebug("Pinger started.");
 
             //using IPingTransceiver pt = pingFactory.Create(IPAddress.Parse("8.8.8.8"), CancellationToken.None);

@@ -10,7 +10,8 @@ using Microsoft.Extensions.Logging;
 namespace ConEngine.Network;
 
 /// <summary>
-/// This class manages ping operations to a specific IP address.
+/// This class manages the pinging of a specific IP address,
+/// creating and controlling ping transceivers as needed.
 /// </summary>
 /// <param name="timeProvider"></param>
 /// <param name="pingTransceiverFactory"></param>
@@ -30,7 +31,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     /// <param name="resultWriter">Channel to report results.</param>
     /// <param name="cancellationToken"></param>
     /// <returns>A task that completes when the ping operation is stopped.</returns>
-    public Task<bool> Start(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter, CancellationToken cancellationToken)
+    public Task Launch(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter, CancellationToken cancellationToken)
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(PingController));
@@ -120,6 +121,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 }
             }, _cancellationToken);
         }
+
         return _taskCompletionSource.Task;
     }
 
@@ -162,7 +164,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
         catch (Exception ex)
         {
             // Log the error but don't let it stop the ping operations
-            Console.WriteLine($"[{ipAddress}] Error sending message: {ex.Message}");
+            log.LogError("[{ipAddress}] Error sending message: {ErrorMessage}",ipAddress,ex.Message);
         }
     }
 
