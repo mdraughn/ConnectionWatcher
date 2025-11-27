@@ -3,6 +3,8 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ConCore;
 using Microsoft.Extensions.Logging;
+using System.Reactive;
+using System.Reactive.Subjects;
 
 namespace ConEngine.Network;
 
@@ -20,6 +22,9 @@ public class PingManager : IDisposable
     private readonly Task _messageProcessingTask;
     private bool _disposed = false;
     private readonly ILogger _log;
+
+    private readonly ReplaySubject<PingResult> _pingResultSubject = new ReplaySubject<PingResult>(bufferSize: 100);
+    public IObservable<PingResult> PingResults => _pingResultSubject;
 
     public PingManager(TimeProvider timeProvider,
         IPingTransceiverFactory pingTransceiverFactory,
@@ -101,12 +106,7 @@ public class PingManager : IDisposable
             await foreach (var message in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
                 LogPingResult(message);
-
-                // You could also add additional processing here, such as:
-                // - Tracking success/failure rates
-                // - Detecting patterns or anomalies
-                // - Triggering alerts on failures
-                ProcessPingResult(message);
+                _pingResultSubject.OnNext(message);
             }
         }
         catch (OperationCanceledException)
@@ -118,6 +118,10 @@ public class PingManager : IDisposable
         {
             Console.WriteLine($"[PingManager] Error processing messages: {ex.Message}");
         }
+        finally
+        {
+            _pingResultSubject.OnCompleted();
+        }
     }
 
     private void LogPingResult(PingResult message)
@@ -128,19 +132,6 @@ public class PingManager : IDisposable
         } else
         {
             _log.LogTrace("Processing lost ping from {ipAddress}", message.IpAddress);
-        }
-    }
-
-    /// <summary>
-    /// Processes individual ping result messages. Override this method to customize message handling.
-    /// </summary>
-    /// <param name="message">The ping result message to process.</param>
-    protected virtual void ProcessPingResult(PingResult message)
-    {
-        // Default implementation - you can extend this for custom logic
-        if (!message.Success)
-        {
-            Console.WriteLine($"[PingManager] ⚠️  Ping failure detected for {message.IpAddress}: {message.Status}");
         }
     }
 

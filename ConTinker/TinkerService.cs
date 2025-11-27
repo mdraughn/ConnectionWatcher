@@ -1,25 +1,32 @@
-﻿using ConEngine.Network;
+﻿using ConCore;
+using ConEngine.Network;
 using ConInfrastructure;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Net;
 using System.Threading.Channels;
-using ConCore;
-using Microsoft.Extensions.Logging;
 
 namespace ConTinker;
 
 public class TinkerService : IHostedService
 {
+    private TimeProvider _timeProvider;
+    private IPingTransceiverFactory _pingFactory;
     private readonly ILogger<TinkerService> _log;
-    private PingManager _manager;
+    private PingManager? _manager;
 
-    public TinkerService(ILogger<TinkerService> log)
+    public TinkerService(ILogger<TinkerService> log, TimeProvider timeProvider, IPingTransceiverFactory pingFactory)
     {
         _log = log;
+        _timeProvider = timeProvider;
+        _pingFactory = pingFactory;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        _manager = new PingManager(_timeProvider, _pingFactory,cancellationToken, _log);
+
         return Task.Run(async () =>
         {
             var resolverFactory = new DomainNameResolverFactory();
@@ -44,26 +51,24 @@ public class TinkerService : IHostedService
             _manager = new PingManager(TimeProvider.System, pingFactory, cancellationToken, _log);
             _manager.GetOrCreateController(IPAddress.Parse("192.168.99.1"));
             _manager.GetOrCreateController(IPAddress.Parse("8.8.8.8"));
+            _manager.PingResults.Subscribe((message) =>
+            {
+                if(message.Success)
+                {
+                    _log.LogTrace("Reacting to success from {ipAddress}", message.IpAddress);
+                } else
+                {
+                    _log.LogTrace("Reacting to lost ping from {ipAddress}", message.IpAddress);
+                }
+            });
             _log.LogDebug("Pinger started.");
-
-            //using IPingTransceiver pt = pingFactory.Create(IPAddress.Parse("8.8.8.8"), CancellationToken.None);
-            //for (int i = 0; i < 5; i++)
-            //{
-            //    if (i > 0)
-            //    {
-            //        await Task.Delay(1000); // Wait 1 second between pings
-            //    }
-            //    PingResult result = await pt.PingAsync(5000);
-            //    Console.WriteLine($"Ping to {result.IpAddress} {(result.Success ? "succeeded" : "failed")} in {result.RoundtripTime} ms");
-            //}
-
         });
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
         // Stop your service logic here
-        _manager.StopAllControllers();
+        _manager?.StopAllControllers();
         return Task.CompletedTask;
     }
 }

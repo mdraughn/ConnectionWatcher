@@ -13,13 +13,13 @@ namespace ConCore
         /// <param name="ipAddress">The IP address that was pinged.</param>
         /// <param name="success">Whether the ping was successful.</param>
         /// <param name="roundtripTime">The round-trip time in milliseconds.</param>
-        /// <param name="status">The status of the ping operation.</param>
-        public PingResult(IPAddress ipAddress, bool success, long roundtripTime, string? status = null)
+        /// <param name="message"></param>
+        public PingResult(IPAddress ipAddress, bool success, long roundtripTime, string? message = null)
         {
             IpAddress = ipAddress ?? throw new ArgumentNullException(nameof(ipAddress));
             Success = success;
             RoundtripTime = roundtripTime;
-            Status = status ?? (success ? "Success" : "Failed");
+            Message = message ?? string.Empty;
         }
 
         /// <summary>
@@ -38,9 +38,9 @@ namespace ConCore
         public long RoundtripTime { get; }
 
         /// <summary>
-        /// Gets the status description of the ping operation.
+        /// Gets any attached message (e.g., error description).
         /// </summary>
-        public string Status { get; }
+        public string Message { get; }
 
         /// <summary>
         /// Returns a string representation of this PingResult.
@@ -49,7 +49,7 @@ namespace ConCore
         {
             return Success
                 ? $"Ping to {IpAddress} succeeded in {RoundtripTime}ms"
-                : $"Ping to {IpAddress} failed: {Status}";
+                : $"Ping to {IpAddress} failed";
         }
     }
 }
