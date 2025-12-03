@@ -13,6 +13,7 @@ namespace ConEngine.Network;
 /// </summary>
 public class PingManager : IDisposable
 {
+    public const int MaxEventBuffer = 5;
     private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingTransceiverFactory;
     private readonly CancellationToken _globalCancellationToken;
@@ -21,17 +22,36 @@ public class PingManager : IDisposable
     private readonly ChannelReader<PingResult> _resultReader;
     private readonly Task _messageProcessingTask;
     private bool _disposed = false;
-    private readonly ILogger _log;
+    private readonly ILogger<PingManager> _log;
+    private readonly ILoggerFactory _loggerFactory;
 
-    private readonly ReplaySubject<PingResult> _pingResultSubject = new ReplaySubject<PingResult>(bufferSize: 100);
+    private readonly ReplaySubject<PingResult> _pingResultSubject = new ReplaySubject<PingResult>(bufferSize: MaxEventBuffer);
     public IObservable<PingResult> PingResults => _pingResultSubject;
 
     public PingManager(TimeProvider timeProvider,
         IPingTransceiverFactory pingTransceiverFactory,
         CancellationToken globalCancellationToken,
-        ILogger log)
+        ILogger<PingManager> log)
+        : this(timeProvider, pingTransceiverFactory, globalCancellationToken, log, null)
     {
-        _log = log;
+    }
+
+    public PingManager(TimeProvider timeProvider,
+        IPingTransceiverFactory pingTransceiverFactory,
+        CancellationToken globalCancellationToken,
+        ILoggerFactory loggerFactory)
+        : this(timeProvider, pingTransceiverFactory, globalCancellationToken, loggerFactory.CreateLogger<PingManager>(), loggerFactory)
+    {
+    }
+
+    private PingManager(TimeProvider timeProvider,
+        IPingTransceiverFactory pingTransceiverFactory,
+        CancellationToken globalCancellationToken,
+        ILogger<PingManager> log,
+        ILoggerFactory? loggerFactory)
+    {
+        _log = log ?? throw new ArgumentNullException(nameof(log));
+        _loggerFactory = loggerFactory ?? new LoggerFactory(); // Create default factory if not provided
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
@@ -57,11 +77,16 @@ public class PingManager : IDisposable
 
         if (!_pingControllers.TryGetValue(ipAddress, out var controller))
         {
-            controller = new PingController(_timeProvider, _pingTransceiverFactory,_log); 
+            // Create a logger for the PingController with the IP address in the category
+            var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
+
+            controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
             controller.Launch(ipAddress,
                 _resultWriter,
                 _globalCancellationToken);
             _pingControllers[ipAddress] = controller;
+
+            _log.LogInformation("Created PingController for {IpAddress}", ipAddress);
         }
         return controller;
     }
@@ -74,7 +99,9 @@ public class PingManager : IDisposable
     {
         if (_pingControllers.TryGetValue(ipAddress, out var controller))
         {
+            _log.LogInformation("Stopping PingController for {IpAddress}", ipAddress);
             controller.Stop();
+            controller.Dispose();
             _pingControllers.Remove(ipAddress);
         }
     }
@@ -84,9 +111,12 @@ public class PingManager : IDisposable
     /// </summary>
     public void StopAllControllers()
     {
-        foreach (var controller in _pingControllers.Values)
+        _log.LogInformation("Stopping all {Count} PingControllers", _pingControllers.Count);
+        
+        foreach (var (ipAddress, controller) in _pingControllers)
         {
             controller.Stop();
+            controller.Dispose();
         }
         _pingControllers.Clear();
     }
@@ -103,6 +133,8 @@ public class PingManager : IDisposable
     {
         try
         {
+            _log.LogDebug("PingManager message processing started");
+            
             await foreach (var message in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
                 LogPingResult(message);
@@ -112,11 +144,11 @@ public class PingManager : IDisposable
         catch (OperationCanceledException)
         {
             // Expected when cancellation is requested
-            Console.WriteLine("[PingManager] Message processing stopped due to cancellation");
+            _log.LogInformation("PingManager message processing stopped due to cancellation");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[PingManager] Error processing messages: {ex.Message}");
+            _log.LogError(ex, "Error processing messages in PingManager");
         }
         finally
         {
@@ -128,10 +160,10 @@ public class PingManager : IDisposable
     {
         if (message.Success)
         {
-            _log.LogTrace("Processing success from {ipAddress}", message.IpAddress);
+            _log.LogTrace("Processing success from {IpAddress}, {RoundtripTime}ms", message.IpAddress, message.RoundtripTime);
         } else
         {
-            _log.LogTrace("Processing lost ping from {ipAddress}", message.IpAddress);
+            _log.LogTrace("Processing lost ping from {IpAddress}: {Message}", message.IpAddress, message.Message);
         }
     }
 
@@ -162,6 +194,8 @@ public class PingManager : IDisposable
         {
             if (disposing)
             {
+                _log.LogDebug("Disposing PingManager");
+                
                 // Stop all controllers first
                 StopAllControllers();
 
@@ -175,11 +209,17 @@ public class PingManager : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[PingManager] Warning: Message processing task did not complete cleanly: {ex.Message}");
+                    _log.LogWarning(ex, "Message processing task did not complete cleanly");
                 }
 
                 // Dispose the message processing task
                 _messageProcessingTask?.Dispose();
+                
+                // Dispose the logger factory if we created it
+                if (_loggerFactory is LoggerFactory lf)
+                {
+                    lf.Dispose();
+                }
             }
 
             _disposed = true;
