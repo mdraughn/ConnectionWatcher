@@ -44,7 +44,7 @@ public class TinkerService : IHostedService
                 _log.LogDebug("Resolved {domainName} IP: {ipAddress}",domainName,ipAddress);
             }
 
-            var pingFactory = new PingTransceiverFactory();
+            var pingFactory = PingTransceiverFactorySimulated.CreateUnreliableNetwork();
             _log.LogDebug("Starting Pinger...");
             //Task controller1 = new PingController(TimeProvider.System, pingFactory, _log).Launch(IPAddress.Parse("192.168.99.1"), resultWriter, cancellationToken);
             //Task controller2 = new PingController(TimeProvider.System, pingFactory, _log).Launch(IPAddress.Parse("8.8.8.8"), resultWriter, cancellationToken);

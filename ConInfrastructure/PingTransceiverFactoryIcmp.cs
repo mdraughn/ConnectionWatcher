@@ -3,7 +3,7 @@ using ConCore;
 
 namespace ConInfrastructure;
 
-public class PingTransceiverFactory : IPingTransceiverFactory
+public class PingTransceiverFactoryIcmp : IPingTransceiverFactory
 {
     public IPingTransceiver Create(IPAddress ipAddress, CancellationToken cancellationToken)
     {
