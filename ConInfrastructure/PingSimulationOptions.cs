@@ -149,7 +149,7 @@ namespace ConInfrastructure
             {
                 MeanRoundTripTimeMs = 100.0,
                 RoundTripTimeStdDevMs = 50.0,
-                BasePacketLossRate = 0.05, // 5% loss
+                BasePacketLossRate = 0.1, // 10% loss
                 OutageProbability = 0.01, // 1% chance per ping
                 MeanOutageDurationMs = 15000.0,
                 OutageDurationStdDevMs = 5000.0,

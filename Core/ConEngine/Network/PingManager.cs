@@ -14,6 +14,8 @@ namespace ConEngine.Network;
 public class PingManager : IDisposable
 {
     public const int MaxEventBuffer = 5;
+
+    private readonly Lock _lock = new();
     private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingTransceiverFactory;
     private readonly CancellationToken _globalCancellationToken;
@@ -31,27 +33,10 @@ public class PingManager : IDisposable
     public PingManager(TimeProvider timeProvider,
         IPingTransceiverFactory pingTransceiverFactory,
         CancellationToken globalCancellationToken,
-        ILogger<PingManager> log)
-        : this(timeProvider, pingTransceiverFactory, globalCancellationToken, log, null)
-    {
-    }
-
-    public PingManager(TimeProvider timeProvider,
-        IPingTransceiverFactory pingTransceiverFactory,
-        CancellationToken globalCancellationToken,
         ILoggerFactory loggerFactory)
-        : this(timeProvider, pingTransceiverFactory, globalCancellationToken, loggerFactory.CreateLogger<PingManager>(), loggerFactory)
     {
-    }
-
-    private PingManager(TimeProvider timeProvider,
-        IPingTransceiverFactory pingTransceiverFactory,
-        CancellationToken globalCancellationToken,
-        ILogger<PingManager> log,
-        ILoggerFactory? loggerFactory)
-    {
-        _log = log ?? throw new ArgumentNullException(nameof(log));
-        _loggerFactory = loggerFactory ?? new LoggerFactory(); // Create default factory if not provided
+        _loggerFactory = loggerFactory;
+        _log = loggerFactory.CreateLogger<PingManager>();
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
@@ -72,23 +57,26 @@ public class PingManager : IDisposable
     /// <returns>A PingController configured for the specified IP address.</returns>
     public PingController GetOrCreateController(IPAddress ipAddress)
     {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(PingManager));
-
-        if (!_pingControllers.TryGetValue(ipAddress, out var controller))
+        lock (_lock)    
         {
-            // Create a logger for the PingController with the IP address in the category
-            var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(PingManager));
 
-            controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
-            controller.Launch(ipAddress,
-                _resultWriter,
-                _globalCancellationToken);
-            _pingControllers[ipAddress] = controller;
+            if (!_pingControllers.TryGetValue(ipAddress, out var controller))
+            {
+                // Create a logger for the PingController with the IP address in the category
+                var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
 
-            _log.LogInformation("Created PingController for {IpAddress}", ipAddress);
+                controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
+                controller.Launch(ipAddress,
+                    _resultWriter,
+                    _globalCancellationToken);
+                _pingControllers[ipAddress] = controller;
+
+                _log.LogInformation("Created PingController for {IpAddress}", ipAddress);
+            }
+            return controller;
         }
-        return controller;
     }
 
     /// <summary>
@@ -97,12 +85,15 @@ public class PingManager : IDisposable
     /// <param name="ipAddress">The IP address whose controller should be stopped.</param>
     public void StopController(IPAddress ipAddress)
     {
-        if (_pingControllers.TryGetValue(ipAddress, out var controller))
+        lock (_lock)
         {
-            _log.LogInformation("Stopping PingController for {IpAddress}", ipAddress);
-            controller.Stop();
-            controller.Dispose();
-            _pingControllers.Remove(ipAddress);
+            if (_pingControllers.TryGetValue(ipAddress, out var controller))
+            {
+                _log.LogInformation("Stopping PingController for {IpAddress}", ipAddress);
+                controller.Stop();
+                controller.Dispose();
+                _pingControllers.Remove(ipAddress);
+            }
         }
     }
 
@@ -111,14 +102,17 @@ public class PingManager : IDisposable
     /// </summary>
     public void StopAllControllers()
     {
-        _log.LogInformation("Stopping all {Count} PingControllers", _pingControllers.Count);
-        
-        foreach (var (ipAddress, controller) in _pingControllers)
+        lock (_lock)
         {
-            controller.Stop();
-            controller.Dispose();
+            _log.LogInformation("Stopping all {Count} PingControllers", _pingControllers.Count);
+        
+            foreach (var (ipAddress, controller) in _pingControllers)
+            {
+                controller.Stop();
+                controller.Dispose();
+            }
+            _pingControllers.Clear();
         }
-        _pingControllers.Clear();
     }
 
     /// <summary>
@@ -190,39 +184,42 @@ public class PingManager : IDisposable
     /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
     protected virtual void Dispose(bool disposing)
     {
-        if (!_disposed)
+        lock (_lock)
         {
-            if (disposing)
+            if (!_disposed)
             {
-                _log.LogDebug("Disposing PingManager");
+                if (disposing)
+                {
+                    _log.LogDebug("Disposing PingManager");
                 
-                // Stop all controllers first
-                StopAllControllers();
+                    // Stop all controllers first
+                    StopAllControllers();
 
-                // Close the channel to signal no more messages
-                CloseChannel();
+                    // Close the channel to signal no more messages
+                    CloseChannel();
 
-                // Wait for message processing to complete (with timeout)
-                try
-                {
-                    _messageProcessingTask.Wait(TimeSpan.FromSeconds(5));
-                }
-                catch (Exception ex)
-                {
-                    _log.LogWarning(ex, "Message processing task did not complete cleanly");
-                }
+                    // Wait for message processing to complete (with timeout)
+                    try
+                    {
+                        _messageProcessingTask.Wait(TimeSpan.FromSeconds(5));
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "Message processing task did not complete cleanly");
+                    }
 
-                // Dispose the message processing task
-                _messageProcessingTask?.Dispose();
+                    // Dispose the message processing task
+                    _messageProcessingTask?.Dispose();
                 
-                // Dispose the logger factory if we created it
-                if (_loggerFactory is LoggerFactory lf)
-                {
-                    lf.Dispose();
+                    // Dispose the logger factory if we created it
+                    if (_loggerFactory is LoggerFactory lf)
+                    {
+                        lf.Dispose();
+                    }
                 }
+
+                _disposed = true;
             }
-
-            _disposed = true;
         }
     }
 

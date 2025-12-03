@@ -45,29 +45,44 @@ public class WatcherEngine
                 _log.LogDebug("Resolved {domainName} IP: {ipAddress}", domainName, ipAddress);
             }
 
-            var pingFactory = PingTransceiverFactorySimulated.CreateUnreliableNetwork();
+            //var pingFactory = PingTransceiverFactorySimulated.CreateUnreliableNetwork();
             _log.LogDebug("Starting manager...");
             
             // Create PingManager with its own properly-typed logger
             var pingManagerLogger = _loggerFactory.CreateLogger<PingManager>();
-            _manager = new PingManager(TimeProvider.System, pingFactory, cancellationToken, pingManagerLogger);
+            _manager = new PingManager(TimeProvider.System, _pingFactory, cancellationToken, _loggerFactory);
             
-            _manager.GetOrCreateController(IPAddress.Parse("192.168.99.1"));
-            _manager.GetOrCreateController(IPAddress.Parse("8.8.8.8"));
-            
-            _manager.PingResults.Subscribe((message) =>
-            {
-                if(message.Success)
-                {
-                    _log.LogTrace("Reacting to success from {ipAddress}", message.IpAddress);
-                } else
-                {
-                    _log.LogTrace("Reacting to lost ping from {ipAddress}", message.IpAddress);
-                }
-            });
-            
+            _manager.PingResults.Subscribe(HandlePingResult,HandlePingError,HandlePingCompletion);
+
             _log.LogInformation("Manager started.");
         });
+    }
+
+    private void HandlePingResult(PingResult message)
+    {
+        if(message.Success)
+        {
+            _log.LogTrace("Reacting to success from {ipAddress}", message.IpAddress);
+        } 
+        else
+        {
+            _log.LogTrace("Reacting to lost ping from {ipAddress}", message.IpAddress);
+        }
+    }
+
+    private void HandlePingCompletion()
+    {
+        // Nothing for now
+    }
+
+    private void HandlePingError(Exception ex)
+    {
+        _log.LogError(ex, "Error occurred while processing ping result");
+    }
+
+    public void StartWatching(IPAddress ipAddress)
+    {
+        _manager?.GetOrCreateController(ipAddress);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

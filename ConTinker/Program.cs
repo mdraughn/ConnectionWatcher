@@ -30,7 +30,8 @@ try
     {
         services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddTransient<IDomainNameResolverFactory, DomainNameResolverFactory>();
-        services.AddTransient<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
+        //services.AddTransient<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
+        services.AddTransient<IPingTransceiverFactory>(sp => PingTransceiverFactorySimulated.CreateUnreliableNetwork());
         services.AddHostedService<TinkerService>();
     });
     using var host = hostBuilder.Build();
