@@ -24,21 +24,6 @@ namespace ConEngine.Tracking
         public DateTimeOffset TrackingStarted { get; }
 
         /// <summary>
-        /// Gets the total number of pings recorded for this host.
-        /// </summary>
-        public int TotalPingCount { get; private set; }
-
-        /// <summary>
-        /// Gets the number of successful pings.
-        /// </summary>
-        public int SuccessfulPingCount { get; private set; }
-
-        /// <summary>
-        /// Gets the number of failed pings.
-        /// </summary>
-        public int FailedPingCount { get; private set; }
-
-        /// <summary>
         /// Initializes a new instance of the HostTracker class.
         /// </summary>
         /// <param name="hostAddress">The IP address of the host to track.</param>
@@ -52,9 +37,6 @@ namespace ConEngine.Tracking
 
             _history = new CircularBuffer<PingHistoryEntry>(historySize);
             TrackingStarted = DateTimeOffset.UtcNow;
-            TotalPingCount = 0;
-            SuccessfulPingCount = 0;
-            FailedPingCount = 0;
         }
 
         /// <summary>
@@ -91,12 +73,6 @@ namespace ConEngine.Tracking
             lock (_lock)
             {
                 _history.Add(entry);
-                TotalPingCount++;
-
-                if (result.Success)
-                    SuccessfulPingCount++;
-                else
-                    FailedPingCount++;
             }
         }
 
@@ -131,25 +107,9 @@ namespace ConEngine.Tracking
         public DateTimeOffset? LatestTimestamp => LatestResult?.Timestamp;
 
         /// <summary>
-        /// Gets the overall success rate as a percentage (0-100).
-        /// </summary>
-        public double SuccessRate
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    if (TotalPingCount == 0)
-                        return 0.0;
-                    return (double)SuccessfulPingCount / TotalPingCount * 100.0;
-                }
-            }
-        }
-
-        /// <summary>
         /// Gets the success rate for the current history window as a percentage (0-100).
         /// </summary>
-        public double RecentSuccessRate
+        public double SuccessRate
         {
             get
             {
@@ -276,7 +236,7 @@ namespace ConEngine.Tracking
         }
 
         /// <summary>
-        /// Clears all history entries. Statistics are not reset.
+        /// Clears all history entries.
         /// </summary>
         public void ClearHistory()
         {
@@ -294,11 +254,7 @@ namespace ConEngine.Tracking
                 {
                     HostAddress = HostAddress,
                     TrackingStarted = TrackingStarted,
-                    TotalPingCount = TotalPingCount,
-                    SuccessfulPingCount = SuccessfulPingCount,
-                    FailedPingCount = FailedPingCount,
                     SuccessRate = SuccessRate,
-                    RecentSuccessRate = RecentSuccessRate,
                     LatestResult = LatestResult,
                     AverageRoundtripTime = AverageRoundtripTime,
                     MinimumRoundtripTime = MinimumRoundtripTime,
@@ -315,7 +271,7 @@ namespace ConEngine.Tracking
         /// </summary>
         public override string ToString()
         {
-            return $"{HostAddress}: {SuccessRate:F1}% success ({SuccessfulPingCount}/{TotalPingCount}), " +
+            return $"{HostAddress}: {SuccessRate:F1}% success (last {HistoryCount}), " +
                    $"Latest: {(LatestSuccess == true ? "?" : "?")} {LatestRoundtripTime}ms";
         }
     }
@@ -327,11 +283,7 @@ namespace ConEngine.Tracking
     {
         public required IPAddress HostAddress { get; init; }
         public DateTimeOffset TrackingStarted { get; init; }
-        public int TotalPingCount { get; init; }
-        public int SuccessfulPingCount { get; init; }
-        public int FailedPingCount { get; init; }
         public double SuccessRate { get; init; }
-        public double RecentSuccessRate { get; init; }
         public PingHistoryEntry? LatestResult { get; init; }
         public double? AverageRoundtripTime { get; init; }
         public long? MinimumRoundtripTime { get; init; }
@@ -342,8 +294,8 @@ namespace ConEngine.Tracking
 
         public override string ToString()
         {
-            return $"{HostAddress}: {SuccessRate:F1}% overall, {RecentSuccessRate:F1}% recent, " +
-                   $"Avg: {AverageRoundtripTime:F1}ms, {TotalPingCount} total pings";
+            return $"{HostAddress}: {SuccessRate:F1}% (last {HistoryCount}), " +
+                   $"Avg: {AverageRoundtripTime:F1}ms";
         }
     }
 }

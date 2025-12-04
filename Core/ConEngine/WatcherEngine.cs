@@ -106,22 +106,22 @@ public class WatcherEngine
 
         if(message.Success)
         {
-            _log.LogTrace("Reacting to success from {ipAddress}: {roundtripTime}ms (Success rate: {successRate:F1}%)",
-                message.IpAddress, message.RoundtripTime, tracker.SuccessRate);
+            _log.LogTrace("Reacting to success from {ipAddress}: {roundtripTime}ms (Success rate: {successRate:F1}%, last {historyCount})",
+                message.IpAddress, message.RoundtripTime, tracker.SuccessRate, tracker.HistoryCount);
         } 
         else
         {
-            _log.LogTrace("Reacting to lost ping from {ipAddress}: {message} (Success rate: {successRate:F1}%)",
-                message.IpAddress, message.Message, tracker.SuccessRate);
+            _log.LogTrace("Reacting to lost ping from {ipAddress}: {message} (Success rate: {successRate:F1}%, last {historyCount})",
+                message.IpAddress, message.Message, tracker.SuccessRate, tracker.HistoryCount);
         }
 
         // Log additional tracking info at debug level
         if (_log.IsEnabled(LogLevel.Debug))
         {
-            _log.LogDebug("Host {ipAddress} stats: Total={totalPings}, Recent={recentCount}, Consecutive={consecutive}",
+            _log.LogDebug("Host {ipAddress} stats: History={historyCount}/{capacity}, Consecutive={consecutive}",
                 message.IpAddress, 
-                tracker.TotalPingCount,
                 tracker.HistoryCount,
+                tracker.HistoryCapacity,
                 message.Success ? tracker.ConsecutiveSuccessCount : tracker.ConsecutiveFailureCount);
         }
     }
