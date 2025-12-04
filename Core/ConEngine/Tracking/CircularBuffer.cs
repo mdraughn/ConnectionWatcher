@@ -7,7 +7,7 @@ namespace ConEngine.Tracking
     /// When the buffer is full, adding a new item overwrites the oldest item.
     /// </summary>
     /// <typeparam name="T">The type of items stored in the buffer.</typeparam>
-    public class CircularBuffer<T> : IEnumerable<T>
+    public class CircularBuffer<T>
     {
         private readonly T[] _buffer;
         private readonly int _capacity;
@@ -134,56 +134,26 @@ namespace ConEngine.Tracking
         }
 
         /// <summary>
-        /// Gets the last N items from the buffer in chronological order (oldest to newest).
-        /// If N is greater than the current count, returns all available items.
-        /// This method efficiently extracts items directly from the circular buffer without
-        /// creating intermediate arrays, properly handling wrap-around.
+        /// Gets all items in the buffer in chronological order (newest to oldest).
         /// </summary>
-        /// <param name="count">The number of items to retrieve.</param>
-        /// <returns>A span containing up to N most recent items in chronological order.</returns>
-        public ReadOnlySpan<T> GetLastItems(int count)
+        /// <returns>An enumerator of items in chronological order.</returns>
+        public IEnumerable<T> InOrder()
         {
-            if (count <= 0)
-                throw new ArgumentException("Count must be greater than zero.", nameof(count));
-
-            lock (_lock)
+            for(int i = 0; i < _count; i++)
             {
-                if (_count == 0)
-                    return ReadOnlySpan<T>.Empty;
+                yield return _buffer[(_head + i) % _capacity];
+            }
+        }
 
-                // Get the actual number of items to return (min of requested count and available items)
-                int itemsToReturn = Math.Min(count, _count);
-                
-                // Allocate result array
-                var result = new T[itemsToReturn];
-                
-                // Calculate the starting position for the last N items
-                // This is the oldest item in our desired window
-                int startIndex = (_head + _count - itemsToReturn + _capacity) % _capacity;
-                
-                // Copy items from the circular buffer to the result array
-                // We need to handle the case where items wrap around the end of the buffer
-                int firstSegmentLength;
-                int secondSegmentLength;
-                
-                if (startIndex + itemsToReturn <= _capacity)
-                {
-                    // No wrap-around: all items are in a contiguous segment
-                    Array.Copy(_buffer, startIndex, result, 0, itemsToReturn);
-                }
-                else
-                {
-                    // Wrap-around: items are split into two segments
-                    // First segment: from startIndex to end of buffer
-                    firstSegmentLength = _capacity - startIndex;
-                    Array.Copy(_buffer, startIndex, result, 0, firstSegmentLength);
-                    
-                    // Second segment: from start of buffer to complete the count
-                    secondSegmentLength = itemsToReturn - firstSegmentLength;
-                    Array.Copy(_buffer, 0, result, firstSegmentLength, secondSegmentLength);
-                }
-                
-                return result;
+        /// <summary>
+        /// Gets all items in the buffer in reverse chronological order (newest to oldest).
+        /// </summary>
+        /// <returns>An enumerator of items in reverse chronological order.</returns>
+        public IEnumerable<T> InReverseOrder()
+        {
+            for(int i = 0; i < _count; i++)
+            {
+                yield return _buffer[(_tail - 1 - i + _capacity) % _capacity];
             }
         }
 
@@ -196,7 +166,7 @@ namespace ConEngine.Tracking
             lock (_lock)
             {
                 if (_count == 0)
-                    return Array.Empty<T>();
+                    return [];
 
                 var result = new T[_count];
                 for (int i = 0; i < _count; i++)
@@ -216,7 +186,7 @@ namespace ConEngine.Tracking
             lock (_lock)
             {
                 if (_count == 0)
-                    return Array.Empty<T>();
+                    return [];
 
                 var result = new T[_count];
                 for (int i = 0; i < _count; i++)
@@ -239,20 +209,6 @@ namespace ConEngine.Tracking
                 _count = 0;
                 Array.Clear(_buffer, 0, _capacity);
             }
-        }
-
-        /// <summary>
-        /// Returns an enumerator that iterates through the buffer in chronological order.
-        /// </summary>
-        public IEnumerator<T> GetEnumerator()
-        {
-            var snapshot = ToArray();
-            return ((IEnumerable<T>)snapshot).GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
         }
     }
 }

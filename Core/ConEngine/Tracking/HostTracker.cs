@@ -32,9 +32,8 @@ namespace ConEngine.Tracking
         public HostTracker(IPAddress hostAddress, HostTrackingOptions options)
         {
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
-            
-            if (options == null)
-                throw new ArgumentNullException(nameof(options));
+
+            ArgumentNullException.ThrowIfNull(options);
 
             _history = new CircularBuffer<PingHistoryEntry>(options.HistorySize);
             _minUsableSample = options.MinUsableSample;
@@ -68,8 +67,7 @@ namespace ConEngine.Tracking
         /// <param name="result">The ping result to record.</param>
         public void RecordPingResult(PingResult result)
         {
-            if (result == null)
-                throw new ArgumentNullException(nameof(result));
+            ArgumentNullException.ThrowIfNull(result);
 
             var entry = PingHistoryEntry.FromPingResult(result);
 
@@ -114,9 +112,10 @@ namespace ConEngine.Tracking
         /// creating intermediate arrays.
         /// </summary>
         /// <returns>A span containing up to MinUsableSample most recent entries.</returns>
-        public ReadOnlySpan<PingHistoryEntry> GetSample()
+        public IEnumerable<PingHistoryEntry> Sample()
         {
-            return _history.GetLastItems(_minUsableSample);
+            int sampleCount = Math.Min(_history.Count, _minUsableSample);
+            return _history.InReverseOrder().Take(sampleCount);
         }
 
         /// <summary>

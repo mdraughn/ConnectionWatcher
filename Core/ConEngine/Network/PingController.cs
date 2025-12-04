@@ -38,8 +38,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     {
         lock (_lock)
         {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(PingController));
+            ObjectDisposedException.ThrowIf(_disposed, nameof(PingController));
 
             // Start running.
             _cancellationToken =

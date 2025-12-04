@@ -74,7 +74,7 @@ public class WatcherEngine
             _manager.PingResults.Subscribe(HandlePingResult, HandlePingError, HandlePingCompletion);
 
             _log.LogInformation("Manager started. Tracking {TrackedCount} hosts.", _hostTrackers.Count);
-        });
+        }, cancellationToken);
     }
 
     private void HandlePingResult(PingResult message)
@@ -85,30 +85,6 @@ public class WatcherEngine
 
         // Record the ping result in the tracker
         tracker.RecordPingResult(message);
-
-        if(message.Success)
-        {
-            var usabilityNote = tracker.IsUsableSample ? "" : " (building sample)";
-            _log.LogTrace("Reacting to success from {ipAddress}: {roundtripTime}ms (Success rate: {successRate:F1}%, last {historyCount}){usabilityNote}",
-                message.IpAddress, message.RoundtripTime, tracker.SuccessRate, tracker.HistoryCount, usabilityNote);
-        } 
-        else
-        {
-            var usabilityNote = tracker.IsUsableSample ? "" : " (building sample)";
-            _log.LogTrace("Reacting to lost ping from {ipAddress}: {message} (Success rate: {successRate:F1}%, last {historyCount}){usabilityNote}",
-                message.IpAddress, message.Message, tracker.SuccessRate, tracker.HistoryCount, usabilityNote);
-        }
-
-        // Log additional tracking info at debug level
-        if (_log.IsEnabled(LogLevel.Debug))
-        {
-            _log.LogDebug("Host {ipAddress} stats: History={historyCount}/{capacity}, Usable={isUsable}, Consecutive={consecutive}",
-                message.IpAddress, 
-                tracker.HistoryCount,
-                tracker.HistoryCapacity,
-                tracker.IsUsableSample,
-                message.Success ? tracker.ConsecutiveSuccessCount : tracker.ConsecutiveFailureCount);
-        }
     }
 
     private void HandlePingCompletion()
@@ -152,7 +128,7 @@ public class WatcherEngine
     /// <returns>True if the host was being tracked and was removed; otherwise false.</returns>
     public bool RemoveTracking(IPAddress hostAddress)
     {
-        if (_hostTrackers.TryRemove(hostAddress, out var tracker))
+        if (_hostTrackers.TryRemove(hostAddress, out var _))
         {
             _log.LogInformation("Removed tracking for {ipAddress}. Total tracked hosts: {trackedCount}",
                 hostAddress, _hostTrackers.Count);
@@ -171,14 +147,14 @@ public class WatcherEngine
         _log.LogInformation("Cleared tracking for all {count} hosts", count);
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public Task StopAsync()
     {
         _log.LogInformation("WatcherEngine stopping...");
         
         _manager?.StopAllControllers();
         _manager?.Dispose();
         
-        _log.LogInformation("WatcherEngine stopped. Final tracked hosts: {trackedCount}", _hostTrackers.Count);
+        _log.LogInformation("WatcherEngine stopped.");
         
         return Task.CompletedTask;
     }

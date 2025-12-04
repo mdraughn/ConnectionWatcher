@@ -39,7 +39,7 @@ public class TinkerService : IHostedService
     {
         _log.LogInformation("TinkerService stopping...");
         
-        _watcherEngine?.StopAsync(cancellationToken);
+        _watcherEngine?.StopAsync();
         
         _log.LogInformation("TinkerService stopped");
         
