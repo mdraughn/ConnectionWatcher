@@ -85,125 +85,9 @@ namespace ConEngine.Tracking
         public PingHistoryEntry? LatestResult => _history.GetLatest();
 
         /// <summary>
-        /// Gets the oldest ping result in the current window.
-        /// </summary>
-        public PingHistoryEntry? OldestResult => _history.GetOldest();
-
-        /// <summary>
         /// Gets the timestamp of the most recent ping.
         /// </summary>
         public DateTimeOffset? LatestTimestamp => LatestResult?.Timestamp;
-
-        /// <summary>
-        /// Gets the success rate for the current history window as a percentage (0-100).
-        /// </summary>
-        public double SuccessRate
-        {
-            get
-            {
-                var history = GetHistory();
-                if (history.Length == 0)
-                    return 0.0;
-
-                var successCount = history.Count(e => e.Success);
-                return (double)successCount / history.Length * 100.0;
-            }
-        }
-
-        /// <summary>
-        /// Gets the average round-trip time for successful pings in the current history window.
-        /// </summary>
-        public double? AverageRoundtripTime
-        {
-            get
-            {
-                var history = GetHistory();
-                var successfulPings = history.Where(e => e.Success).ToArray();
-                
-                if (successfulPings.Length == 0)
-                    return null;
-
-                return successfulPings.Average(e => e.RoundtripTime);
-            }
-        }
-
-        /// <summary>
-        /// Gets the minimum round-trip time for successful pings in the current history window.
-        /// </summary>
-        public long? MinimumRoundtripTime
-        {
-            get
-            {
-                var history = GetHistory();
-                var successfulPings = history.Where(e => e.Success).ToArray();
-                
-                if (successfulPings.Length == 0)
-                    return null;
-
-                return successfulPings.Min(e => e.RoundtripTime);
-            }
-        }
-
-        /// <summary>
-        /// Gets the maximum round-trip time for successful pings in the current history window.
-        /// </summary>
-        public long? MaximumRoundtripTime
-        {
-            get
-            {
-                var history = GetHistory();
-                var successfulPings = history.Where(e => e.Success).ToArray();
-                
-                if (successfulPings.Length == 0)
-                    return null;
-
-                return successfulPings.Max(e => e.RoundtripTime);
-            }
-        }
-
-        /// <summary>
-        /// Gets the current consecutive success count (from most recent backwards).
-        /// </summary>
-        public int ConsecutiveSuccessCount
-        {
-            get
-            {
-                var history = GetHistoryReversed();
-                int count = 0;
-                
-                foreach (var entry in history)
-                {
-                    if (entry.Success)
-                        count++;
-                    else
-                        break;
-                }
-                
-                return count;
-            }
-        }
-
-        /// <summary>
-        /// Gets the current consecutive failure count (from most recent backwards).
-        /// </summary>
-        public int ConsecutiveFailureCount
-        {
-            get
-            {
-                var history = GetHistoryReversed();
-                int count = 0;
-                
-                foreach (var entry in history)
-                {
-                    if (!entry.Success)
-                        count++;
-                    else
-                        break;
-                }
-                
-                return count;
-            }
-        }
 
         /// <summary>
         /// Gets all history entries in chronological order (oldest to newest).
@@ -221,6 +105,28 @@ namespace ConEngine.Tracking
         public PingHistoryEntry[] GetHistoryReversed()
         {
             return _history.ToArrayReversed();
+        }
+
+        /// <summary>
+        /// Gets the most recent MinUsableSample entries in chronological order (oldest to newest).
+        /// If fewer entries exist than MinUsableSample, returns all available entries.
+        /// </summary>
+        /// <returns>A span containing up to MinUsableSample most recent entries.</returns>
+        public ReadOnlySpan<PingHistoryEntry> GetSample()
+        {
+            var allHistory = _history.ToArray();
+            
+            if (allHistory.Length <= _minUsableSample)
+            {
+                // Return all entries if we have fewer than MinUsableSample
+                return allHistory.AsSpan();
+            }
+            
+            // Return only the most recent MinUsableSample entries
+            // Array is already in chronological order (oldest to newest)
+            // So we skip the oldest entries and take the last MinUsableSample
+            var startIndex = allHistory.Length - _minUsableSample;
+            return allHistory.AsSpan(startIndex, _minUsableSample);
         }
 
         /// <summary>
@@ -242,13 +148,7 @@ namespace ConEngine.Tracking
                 {
                     HostAddress = HostAddress,
                     TrackingStarted = TrackingStarted,
-                    SuccessRate = SuccessRate,
                     LatestResult = LatestResult,
-                    AverageRoundtripTime = AverageRoundtripTime,
-                    MinimumRoundtripTime = MinimumRoundtripTime,
-                    MaximumRoundtripTime = MaximumRoundtripTime,
-                    ConsecutiveSuccessCount = ConsecutiveSuccessCount,
-                    ConsecutiveFailureCount = ConsecutiveFailureCount,
                     HistoryCount = HistoryCount,
                     IsUsableSample = IsUsableSample,
                     MinUsableSample = MinUsableSample
@@ -262,7 +162,7 @@ namespace ConEngine.Tracking
         public override string ToString()
         {
             var usabilityIndicator = IsUsableSample ? "" : " (insufficient samples)";
-            return $"{HostAddress}: {SuccessRate:F1}% success (last {HistoryCount}){usabilityIndicator}";
+            return $"{HostAddress}: (last {HistoryCount}){usabilityIndicator}";
         }
     }
 
@@ -273,13 +173,7 @@ namespace ConEngine.Tracking
     {
         public required IPAddress HostAddress { get; init; }
         public DateTimeOffset TrackingStarted { get; init; }
-        public double SuccessRate { get; init; }
         public PingHistoryEntry? LatestResult { get; init; }
-        public double? AverageRoundtripTime { get; init; }
-        public long? MinimumRoundtripTime { get; init; }
-        public long? MaximumRoundtripTime { get; init; }
-        public int ConsecutiveSuccessCount { get; init; }
-        public int ConsecutiveFailureCount { get; init; }
         public int HistoryCount { get; init; }
         public bool IsUsableSample { get; init; }
         public int MinUsableSample { get; init; }
@@ -287,8 +181,7 @@ namespace ConEngine.Tracking
         public override string ToString()
         {
             var usabilityNote = IsUsableSample ? "" : $" (needs {MinUsableSample - HistoryCount} more samples)";
-            return $"{HostAddress}: {SuccessRate:F1}% (last {HistoryCount}){usabilityNote}, " +
-                   $"Avg: {AverageRoundtripTime:F1}ms";
+            return $"{HostAddress}: (last {HistoryCount}){usabilityNote}";
         }
     }
 }
