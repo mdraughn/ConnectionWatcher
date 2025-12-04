@@ -31,11 +31,11 @@ namespace ConEngine.Tracking
         /// <summary>
         /// Creates a PingHistoryEntry from a PingResult.
         /// </summary>
-        public static PingHistoryEntry FromPingResult(PingResult result, DateTimeOffset timestamp)
+        public static PingHistoryEntry FromPingResult(PingResult result)
         {
             return new PingHistoryEntry
             {
-                Timestamp = timestamp,
+                Timestamp = result.Timestamp,
                 Success = result.Success,
                 RoundtripTime = result.RoundtripTime,
                 Message = result.Message
@@ -47,9 +47,8 @@ namespace ConEngine.Tracking
         /// </summary>
         public override string ToString()
         {
-            var status = Success ? "?" : "?";
-            var time = Success ? $"{RoundtripTime}ms" : Message ?? "Failed";
-            return $"{Timestamp:HH:mm:ss.fff} {status} {time}";
+            var time = Success ? $"{RoundtripTime} ms" : Message ?? "Failed";
+            return $"{Timestamp:HH:mm:ss.fff} {time}";
         }
     }
 }

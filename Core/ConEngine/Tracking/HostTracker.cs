@@ -12,7 +12,7 @@ namespace ConEngine.Tracking
     {
         private readonly CircularBuffer<PingHistoryEntry> _history;
         private readonly int _minUsableSample;
-        private readonly object _lock = new();
+        private readonly Lock _lock = new();
 
         /// <summary>
         /// Gets the IP address of the host being tracked.
@@ -42,27 +42,6 @@ namespace ConEngine.Tracking
         }
 
         /// <summary>
-        /// Initializes a new instance of the HostTracker class with explicit parameters.
-        /// </summary>
-        /// <param name="hostAddress">The IP address of the host to track.</param>
-        /// <param name="historySize">The number of recent results to maintain.</param>
-        /// <param name="minUsableSample">The minimum number of samples required for usable statistics.</param>
-        public HostTracker(IPAddress hostAddress, int historySize, int minUsableSample = 10)
-        {
-            HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
-            
-            if (historySize <= 0)
-                throw new ArgumentException("History size must be greater than zero.", nameof(historySize));
-            
-            if (minUsableSample < 1 || minUsableSample > historySize)
-                throw new ArgumentException($"MinUsableSample must be between 1 and {historySize}.", nameof(minUsableSample));
-
-            _history = new CircularBuffer<PingHistoryEntry>(historySize);
-            _minUsableSample = minUsableSample;
-            TrackingStarted = DateTimeOffset.UtcNow;
-        }
-
-        /// <summary>
         /// Gets the capacity of the history buffer.
         /// </summary>
         public int HistoryCapacity => _history.Capacity;
@@ -84,25 +63,15 @@ namespace ConEngine.Tracking
         public bool IsUsableSample => HistoryCount >= _minUsableSample;
 
         /// <summary>
-        /// Records a new ping result in the history.
+        /// Records a new ping result in the history with a specific timestamp.
         /// </summary>
         /// <param name="result">The ping result to record.</param>
         public void RecordPingResult(PingResult result)
         {
-            RecordPingResult(result, DateTimeOffset.UtcNow);
-        }
-
-        /// <summary>
-        /// Records a new ping result in the history with a specific timestamp.
-        /// </summary>
-        /// <param name="result">The ping result to record.</param>
-        /// <param name="timestamp">The timestamp for this result.</param>
-        public void RecordPingResult(PingResult result, DateTimeOffset timestamp)
-        {
             if (result == null)
                 throw new ArgumentNullException(nameof(result));
 
-            var entry = PingHistoryEntry.FromPingResult(result, timestamp);
+            var entry = PingHistoryEntry.FromPingResult(result);
 
             lock (_lock)
             {
@@ -119,21 +88,6 @@ namespace ConEngine.Tracking
         /// Gets the oldest ping result in the current window.
         /// </summary>
         public PingHistoryEntry? OldestResult => _history.GetOldest();
-
-        /// <summary>
-        /// Gets whether the most recent ping was successful.
-        /// </summary>
-        public bool? LatestSuccess => LatestResult?.Success;
-
-        /// <summary>
-        /// Gets the round-trip time of the most recent ping.
-        /// </summary>
-        public long? LatestRoundtripTime => LatestResult?.RoundtripTime;
-
-        /// <summary>
-        /// Gets any message from the most recent ping.
-        /// </summary>
-        public string? LatestMessage => LatestResult?.Message;
 
         /// <summary>
         /// Gets the timestamp of the most recent ping.
@@ -308,8 +262,7 @@ namespace ConEngine.Tracking
         public override string ToString()
         {
             var usabilityIndicator = IsUsableSample ? "" : " (insufficient samples)";
-            return $"{HostAddress}: {SuccessRate:F1}% success (last {HistoryCount}){usabilityIndicator}, " +
-                   $"Latest: {(LatestSuccess == true ? "?" : "?")} {LatestRoundtripTime}ms";
+            return $"{HostAddress}: {SuccessRate:F1}% success (last {HistoryCount}){usabilityIndicator}";
         }
     }
 

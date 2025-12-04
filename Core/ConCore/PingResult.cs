@@ -16,11 +16,17 @@ namespace ConCore
         /// <param name="message"></param>
         public PingResult(IPAddress ipAddress, bool success, long roundtripTime, string? message = null)
         {
+            Timestamp = DateTimeOffset.UtcNow;
             IpAddress = ipAddress ?? throw new ArgumentNullException(nameof(ipAddress));
             Success = success;
             RoundtripTime = roundtripTime;
             Message = message ?? string.Empty;
         }
+
+        /// <summary>
+        /// Gets the timestamp of the ping result.
+        /// </summary>    
+        public DateTimeOffset Timestamp { get; }
 
         /// <summary>
         /// Gets the IP address that was pinged.

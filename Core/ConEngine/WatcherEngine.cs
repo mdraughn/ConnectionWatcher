@@ -47,30 +47,6 @@ public class WatcherEngine
     /// </summary>
     public int TrackedHostCount => _hostTrackers.Count;
 
-    /// <summary>
-    /// Gets all host trackers.
-    /// </summary>
-    public IEnumerable<HostTracker> GetAllTrackers() => _hostTrackers.Values;
-
-    /// <summary>
-    /// Gets the tracker for a specific host, or null if not found.
-    /// </summary>
-    /// <param name="hostAddress">The IP address of the host.</param>
-    /// <returns>The HostTracker for the host, or null if not tracked.</returns>
-    public HostTracker? GetTracker(IPAddress hostAddress)
-    {
-        _hostTrackers.TryGetValue(hostAddress, out var tracker);
-        return tracker;
-    }
-
-    /// <summary>
-    /// Gets a summary of all tracked hosts.
-    /// </summary>
-    public IEnumerable<HostTrackerSummary> GetAllTrackerSummaries()
-    {
-        return _hostTrackers.Values.Select(t => t.GetSummary());
-    }
-
     public Task StartAsync(CancellationToken cancellationToken)
     {
         return Task.Run(async () =>
@@ -79,10 +55,6 @@ public class WatcherEngine
 
             var resolverFactory = new DomainNameResolverFactory();
             using IDomainNameResolver resolver = resolverFactory.Create(CancellationToken.None);
-
-            var resultChannel = Channel.CreateUnbounded<PingResult>();
-            var resultWriter = resultChannel.Writer;
-            var resultReader = resultChannel.Reader;
 
             string domainName = "cloudflare.com";
             DomainResolutionResult hostInfo = await resolver.ResolveAsync(domainName, 5000);
@@ -112,7 +84,7 @@ public class WatcherEngine
             ipAddress => new HostTracker(ipAddress, _trackingOptions));
 
         // Record the ping result in the tracker
-        tracker.RecordPingResult(message, _timeProvider.GetUtcNow());
+        tracker.RecordPingResult(message);
 
         if(message.Success)
         {

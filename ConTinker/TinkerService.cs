@@ -12,18 +12,13 @@ namespace ConTinker;
 
 public class TinkerService : IHostedService
 {
-    private readonly TimeProvider _timeProvider;
-    private readonly IPingTransceiverFactory _pingFactory;
     private readonly ILogger<TinkerService> _log;
-    private readonly ILoggerFactory _loggerFactory;
-    private WatcherEngine? _watcherEngine;
+    private WatcherEngine _watcherEngine;
 
-    public TinkerService(ILogger<TinkerService> log, TimeProvider timeProvider, IPingTransceiverFactory pingFactory, ILoggerFactory loggerFactory)
+    public TinkerService(ILogger<TinkerService> log, WatcherEngine watcherEngine)
     {
         _log = log;
-        _timeProvider = timeProvider;
-        _pingFactory = pingFactory;
-        _loggerFactory = loggerFactory;
+        _watcherEngine = watcherEngine;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -31,9 +26,6 @@ public class TinkerService : IHostedService
         return Task.Run(async () =>
         {
             _log.LogInformation("TinkerService starting...");
-
-            // Create WatcherEngine with its own properly-typed logger
-            _watcherEngine = new WatcherEngine(_timeProvider, _pingFactory, _loggerFactory);
 
             await _watcherEngine.StartAsync(cancellationToken);
             _watcherEngine.StartWatching(IPAddress.Parse("192.168.99.1"));

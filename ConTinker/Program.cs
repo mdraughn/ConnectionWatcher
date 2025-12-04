@@ -7,7 +7,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Threading;
+using System.ComponentModel.DataAnnotations;
 using ConCore;
+using ConEngine;
 using ConTinker;
 using Serilog;
 
@@ -22,6 +24,16 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     IHostBuilder hostBuilder = Host.CreateDefaultBuilder();
+    // Configure HostTrackingOptions with validation
+    hostBuilder.ConfigureServices((context, services) =>
+    {
+        // Configure HostTrackingOptions with validation
+        services.AddOptions<HostTrackingOptions>()
+            .Bind(context.Configuration.GetSection("MyFeature"))
+            .ValidateOnStart();
+        // Register the validator
+        services.AddSingleton<IValidateOptions<HostTrackingOptions>, HostTrackingOptionsValidator>();
+    });
     hostBuilder.UseSerilog();
         //.ConfigureLogging(logging =>
         //{
@@ -31,18 +43,11 @@ try
         //});
     hostBuilder.ConfigureServices((context, services) =>
     {
-        // Configure HostTrackingOptions with validation
-        services.AddOptions<HostTrackingOptions>()
-            .Bind(context.Configuration.GetSection(HostTrackingOptions.SectionName))
-            .ValidateOnStart();
-        
-        // Register the validator
-        services.AddSingleton<IValidateOptions<HostTrackingOptions>, HostTrackingOptionsValidator>();
         
         services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddTransient<IDomainNameResolverFactory, DomainNameResolverFactory>();
-        //services.AddTransient<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
         services.AddTransient<IPingTransceiverFactory>(sp => PingTransceiverFactorySimulated.CreateUnreliableNetwork());
+        services.AddTransient<WatcherEngine>();
         services.AddHostedService<TinkerService>();
     });
     using var host = hostBuilder.Build();
