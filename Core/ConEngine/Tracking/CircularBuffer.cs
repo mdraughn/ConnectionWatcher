@@ -134,6 +134,60 @@ namespace ConEngine.Tracking
         }
 
         /// <summary>
+        /// Gets the last N items from the buffer in chronological order (oldest to newest).
+        /// If N is greater than the current count, returns all available items.
+        /// This method efficiently extracts items directly from the circular buffer without
+        /// creating intermediate arrays, properly handling wrap-around.
+        /// </summary>
+        /// <param name="count">The number of items to retrieve.</param>
+        /// <returns>A span containing up to N most recent items in chronological order.</returns>
+        public ReadOnlySpan<T> GetLastItems(int count)
+        {
+            if (count <= 0)
+                throw new ArgumentException("Count must be greater than zero.", nameof(count));
+
+            lock (_lock)
+            {
+                if (_count == 0)
+                    return ReadOnlySpan<T>.Empty;
+
+                // Get the actual number of items to return (min of requested count and available items)
+                int itemsToReturn = Math.Min(count, _count);
+                
+                // Allocate result array
+                var result = new T[itemsToReturn];
+                
+                // Calculate the starting position for the last N items
+                // This is the oldest item in our desired window
+                int startIndex = (_head + _count - itemsToReturn + _capacity) % _capacity;
+                
+                // Copy items from the circular buffer to the result array
+                // We need to handle the case where items wrap around the end of the buffer
+                int firstSegmentLength;
+                int secondSegmentLength;
+                
+                if (startIndex + itemsToReturn <= _capacity)
+                {
+                    // No wrap-around: all items are in a contiguous segment
+                    Array.Copy(_buffer, startIndex, result, 0, itemsToReturn);
+                }
+                else
+                {
+                    // Wrap-around: items are split into two segments
+                    // First segment: from startIndex to end of buffer
+                    firstSegmentLength = _capacity - startIndex;
+                    Array.Copy(_buffer, startIndex, result, 0, firstSegmentLength);
+                    
+                    // Second segment: from start of buffer to complete the count
+                    secondSegmentLength = itemsToReturn - firstSegmentLength;
+                    Array.Copy(_buffer, 0, result, firstSegmentLength, secondSegmentLength);
+                }
+                
+                return result;
+            }
+        }
+
+        /// <summary>
         /// Gets all items in the buffer in chronological order (oldest to newest).
         /// </summary>
         /// <returns>An array of items in chronological order.</returns>

@@ -110,23 +110,13 @@ namespace ConEngine.Tracking
         /// <summary>
         /// Gets the most recent MinUsableSample entries in chronological order (oldest to newest).
         /// If fewer entries exist than MinUsableSample, returns all available entries.
+        /// This method efficiently extracts items directly from the circular buffer without
+        /// creating intermediate arrays.
         /// </summary>
         /// <returns>A span containing up to MinUsableSample most recent entries.</returns>
         public ReadOnlySpan<PingHistoryEntry> GetSample()
         {
-            var allHistory = _history.ToArray();
-            
-            if (allHistory.Length <= _minUsableSample)
-            {
-                // Return all entries if we have fewer than MinUsableSample
-                return allHistory.AsSpan();
-            }
-            
-            // Return only the most recent MinUsableSample entries
-            // Array is already in chronological order (oldest to newest)
-            // So we skip the oldest entries and take the last MinUsableSample
-            var startIndex = allHistory.Length - _minUsableSample;
-            return allHistory.AsSpan(startIndex, _minUsableSample);
+            return _history.GetLastItems(_minUsableSample);
         }
 
         /// <summary>
