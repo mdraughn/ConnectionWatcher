@@ -1,12 +1,14 @@
 ﻿using ConCore;
 using ConEngine.Network;
 using ConEngine.Tracking;
+using ConEngine.Configuration;
 using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Threading.Channels;
 using ConInfrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ConEngine;
 
@@ -16,20 +18,28 @@ public class WatcherEngine
     private readonly IPingTransceiverFactory _pingFactory;
     private readonly ILogger<WatcherEngine> _log;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly HostTrackingOptions _trackingOptions;
     private PingManager? _manager;
     
     // Dictionary to track information about every host we are pinging
     // Using ConcurrentDictionary for thread-safe access
     private readonly ConcurrentDictionary<IPAddress, HostTracker> _hostTrackers;
-    private const int DefaultHistorySize = 10;
 
-    public WatcherEngine(TimeProvider timeProvider, IPingTransceiverFactory pingFactory, ILoggerFactory loggerFactory)
+    public WatcherEngine(
+        TimeProvider timeProvider, 
+        IPingTransceiverFactory pingFactory, 
+        ILoggerFactory loggerFactory,
+        IOptions<HostTrackingOptions> trackingOptions)
     {
         _timeProvider = timeProvider;
         _pingFactory = pingFactory;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        _trackingOptions = trackingOptions?.Value ?? throw new ArgumentNullException(nameof(trackingOptions));
         _log = _loggerFactory.CreateLogger<WatcherEngine>();
         _hostTrackers = new ConcurrentDictionary<IPAddress, HostTracker>();
+        
+        _log.LogInformation("WatcherEngine initialized with HistorySize={HistorySize}, MinUsableSample={MinUsableSample}",
+            _trackingOptions.HistorySize, _trackingOptions.MinUsableSample);
     }
 
     /// <summary>
@@ -99,29 +109,32 @@ public class WatcherEngine
     {
         // Get or create tracker for this host
         var tracker = _hostTrackers.GetOrAdd(message.IpAddress, 
-            ipAddress => new HostTracker(ipAddress, DefaultHistorySize));
+            ipAddress => new HostTracker(ipAddress, _trackingOptions));
 
         // Record the ping result in the tracker
         tracker.RecordPingResult(message, _timeProvider.GetUtcNow());
 
         if(message.Success)
         {
-            _log.LogTrace("Reacting to success from {ipAddress}: {roundtripTime}ms (Success rate: {successRate:F1}%, last {historyCount})",
-                message.IpAddress, message.RoundtripTime, tracker.SuccessRate, tracker.HistoryCount);
+            var usabilityNote = tracker.IsUsableSample ? "" : " (building sample)";
+            _log.LogTrace("Reacting to success from {ipAddress}: {roundtripTime}ms (Success rate: {successRate:F1}%, last {historyCount}){usabilityNote}",
+                message.IpAddress, message.RoundtripTime, tracker.SuccessRate, tracker.HistoryCount, usabilityNote);
         } 
         else
         {
-            _log.LogTrace("Reacting to lost ping from {ipAddress}: {message} (Success rate: {successRate:F1}%, last {historyCount})",
-                message.IpAddress, message.Message, tracker.SuccessRate, tracker.HistoryCount);
+            var usabilityNote = tracker.IsUsableSample ? "" : " (building sample)";
+            _log.LogTrace("Reacting to lost ping from {ipAddress}: {message} (Success rate: {successRate:F1}%, last {historyCount}){usabilityNote}",
+                message.IpAddress, message.Message, tracker.SuccessRate, tracker.HistoryCount, usabilityNote);
         }
 
         // Log additional tracking info at debug level
         if (_log.IsEnabled(LogLevel.Debug))
         {
-            _log.LogDebug("Host {ipAddress} stats: History={historyCount}/{capacity}, Consecutive={consecutive}",
+            _log.LogDebug("Host {ipAddress} stats: History={historyCount}/{capacity}, Usable={isUsable}, Consecutive={consecutive}",
                 message.IpAddress, 
                 tracker.HistoryCount,
                 tracker.HistoryCapacity,
+                tracker.IsUsableSample,
                 message.Success ? tracker.ConsecutiveSuccessCount : tracker.ConsecutiveFailureCount);
         }
     }
@@ -140,7 +153,7 @@ public class WatcherEngine
     {
         // Create a tracker for this host when we start watching it
         _hostTrackers.GetOrAdd(ipAddress, 
-            ip => new HostTracker(ip, DefaultHistorySize));
+            ip => new HostTracker(ip, _trackingOptions));
         
         _manager?.GetOrCreateController(ipAddress);
         

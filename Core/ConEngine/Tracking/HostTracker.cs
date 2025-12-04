@@ -1,5 +1,6 @@
 using System.Net;
 using ConCore;
+using ConEngine.Configuration;
 
 namespace ConEngine.Tracking
 {
@@ -9,8 +10,8 @@ namespace ConEngine.Tracking
     /// </summary>
     public class HostTracker
     {
-        private const int DefaultHistorySize = 10;
         private readonly CircularBuffer<PingHistoryEntry> _history;
+        private readonly int _minUsableSample;
         private readonly object _lock = new();
 
         /// <summary>
@@ -24,18 +25,40 @@ namespace ConEngine.Tracking
         public DateTimeOffset TrackingStarted { get; }
 
         /// <summary>
-        /// Initializes a new instance of the HostTracker class.
+        /// Initializes a new instance of the HostTracker class with options.
         /// </summary>
         /// <param name="hostAddress">The IP address of the host to track.</param>
-        /// <param name="historySize">The number of recent results to maintain (default: 10).</param>
-        public HostTracker(IPAddress hostAddress, int historySize = DefaultHistorySize)
+        /// <param name="options">Configuration options for host tracking.</param>
+        public HostTracker(IPAddress hostAddress, HostTrackingOptions options)
+        {
+            HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
+            
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+
+            _history = new CircularBuffer<PingHistoryEntry>(options.HistorySize);
+            _minUsableSample = options.MinUsableSample;
+            TrackingStarted = DateTimeOffset.UtcNow;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the HostTracker class with explicit parameters.
+        /// </summary>
+        /// <param name="hostAddress">The IP address of the host to track.</param>
+        /// <param name="historySize">The number of recent results to maintain.</param>
+        /// <param name="minUsableSample">The minimum number of samples required for usable statistics.</param>
+        public HostTracker(IPAddress hostAddress, int historySize, int minUsableSample = 10)
         {
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             
             if (historySize <= 0)
                 throw new ArgumentException("History size must be greater than zero.", nameof(historySize));
+            
+            if (minUsableSample < 1 || minUsableSample > historySize)
+                throw new ArgumentException($"MinUsableSample must be between 1 and {historySize}.", nameof(minUsableSample));
 
             _history = new CircularBuffer<PingHistoryEntry>(historySize);
+            _minUsableSample = minUsableSample;
             TrackingStarted = DateTimeOffset.UtcNow;
         }
 
@@ -48,6 +71,17 @@ namespace ConEngine.Tracking
         /// Gets the current count of items in the history buffer.
         /// </summary>
         public int HistoryCount => _history.Count;
+
+        /// <summary>
+        /// Gets the minimum number of samples required for statistics to be considered usable.
+        /// </summary>
+        public int MinUsableSample => _minUsableSample;
+
+        /// <summary>
+        /// Gets whether the current sample size is sufficient for reliable statistics.
+        /// Returns true if HistoryCount >= MinUsableSample.
+        /// </summary>
+        public bool IsUsableSample => HistoryCount >= _minUsableSample;
 
         /// <summary>
         /// Records a new ping result in the history.
@@ -261,7 +295,9 @@ namespace ConEngine.Tracking
                     MaximumRoundtripTime = MaximumRoundtripTime,
                     ConsecutiveSuccessCount = ConsecutiveSuccessCount,
                     ConsecutiveFailureCount = ConsecutiveFailureCount,
-                    HistoryCount = HistoryCount
+                    HistoryCount = HistoryCount,
+                    IsUsableSample = IsUsableSample,
+                    MinUsableSample = MinUsableSample
                 };
             }
         }
@@ -271,7 +307,8 @@ namespace ConEngine.Tracking
         /// </summary>
         public override string ToString()
         {
-            return $"{HostAddress}: {SuccessRate:F1}% success (last {HistoryCount}), " +
+            var usabilityIndicator = IsUsableSample ? "" : " (insufficient samples)";
+            return $"{HostAddress}: {SuccessRate:F1}% success (last {HistoryCount}){usabilityIndicator}, " +
                    $"Latest: {(LatestSuccess == true ? "?" : "?")} {LatestRoundtripTime}ms";
         }
     }
@@ -291,10 +328,13 @@ namespace ConEngine.Tracking
         public int ConsecutiveSuccessCount { get; init; }
         public int ConsecutiveFailureCount { get; init; }
         public int HistoryCount { get; init; }
+        public bool IsUsableSample { get; init; }
+        public int MinUsableSample { get; init; }
 
         public override string ToString()
         {
-            return $"{HostAddress}: {SuccessRate:F1}% (last {HistoryCount}), " +
+            var usabilityNote = IsUsableSample ? "" : $" (needs {MinUsableSample - HistoryCount} more samples)";
+            return $"{HostAddress}: {SuccessRate:F1}% (last {HistoryCount}){usabilityNote}, " +
                    $"Avg: {AverageRoundtripTime:F1}ms";
         }
     }
