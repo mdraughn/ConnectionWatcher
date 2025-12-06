@@ -71,7 +71,7 @@ public class WatcherEngine
             var pingManagerLogger = _loggerFactory.CreateLogger<PingManager>();
             _manager = new PingManager(TimeProvider.System, _pingFactory, cancellationToken, _loggerFactory);
             
-            _manager.PingResults.Subscribe(HandlePingResult, HandlePingError, HandlePingCompletion);
+            _manager.PingResultSource.Subscribe(HandlePingResult, HandlePingError, HandlePingCompletion);
 
             _log.LogInformation("Manager started. Tracking {TrackedCount} hosts.", _hostTrackers.Count);
         }, cancellationToken);
@@ -101,7 +101,15 @@ public class WatcherEngine
     {
         // Create a tracker for this host when we start watching it
         _hostTrackers.GetOrAdd(ipAddress, 
-            ip => new HostTracker(ip, _trackingOptions));
+            ip =>
+            {
+                HostTracker tracker = new HostTracker(ip, _trackingOptions);
+                tracker.HostStatusSource.Subscribe(status =>
+                {
+                    _log.LogInformation("Host status updated: {Status}", status);
+                });
+                return tracker;
+            });
         
         _manager?.GetOrCreateController(ipAddress);
         

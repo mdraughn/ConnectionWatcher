@@ -1,6 +1,7 @@
-using System.Net;
 using ConCore;
 using ConEngine.Configuration;
+using System.Net;
+using System.Reactive.Subjects;
 
 namespace ConEngine.Tracking
 {
@@ -19,10 +20,11 @@ namespace ConEngine.Tracking
         /// </summary>
         public IPAddress HostAddress { get; }
 
-        /// <summary>
-        /// Gets the timestamp when tracking started for this host.
-        /// </summary>
-        public DateTimeOffset TrackingStarted { get; }
+        // Observable host status
+        private readonly ReplaySubject<HostStatus> _hostStatusSubject = new(bufferSize: 1);
+        public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
+
+        private readonly HostAnalysisEngine _analysisEngine;
 
         /// <summary>
         /// Initializes a new instance of the HostTracker class with options.
@@ -37,7 +39,11 @@ namespace ConEngine.Tracking
 
             _history = new CircularBuffer<PingHistoryEntry>(options.HistorySize);
             _minUsableSample = options.MinUsableSample;
-            TrackingStarted = DateTimeOffset.UtcNow;
+            _analysisEngine = new HostAnalysisEngine(options,hostAddress);
+            _analysisEngine.HostStatusSource.Subscribe((status =>
+            {
+                _hostStatusSubject.OnNext(status);
+            }));
         }
 
         /// <summary>
@@ -74,7 +80,13 @@ namespace ConEngine.Tracking
             lock (_lock)
             {
                 _history.Add(entry);
+                Recalculate();
             }
+        }
+
+        private void Recalculate()
+        {
+            _analysisEngine.Recalculate(Sample());
         }
 
         /// <summary>
@@ -127,50 +139,12 @@ namespace ConEngine.Tracking
         }
 
         /// <summary>
-        /// Gets a summary of the current tracking state.
-        /// </summary>
-        public HostTrackerSummary GetSummary()
-        {
-            lock (_lock)
-            {
-                return new HostTrackerSummary
-                {
-                    HostAddress = HostAddress,
-                    TrackingStarted = TrackingStarted,
-                    LatestResult = LatestResult,
-                    HistoryCount = HistoryCount,
-                    IsUsableSample = IsUsableSample,
-                    MinUsableSample = MinUsableSample
-                };
-            }
-        }
-
-        /// <summary>
         /// Returns a string representation of this host tracker.
         /// </summary>
         public override string ToString()
         {
             var usabilityIndicator = IsUsableSample ? "" : " (insufficient samples)";
             return $"{HostAddress}: (last {HistoryCount}){usabilityIndicator}";
-        }
-    }
-
-    /// <summary>
-    /// Represents a summary of host tracking statistics.
-    /// </summary>
-    public record HostTrackerSummary
-    {
-        public required IPAddress HostAddress { get; init; }
-        public DateTimeOffset TrackingStarted { get; init; }
-        public PingHistoryEntry? LatestResult { get; init; }
-        public int HistoryCount { get; init; }
-        public bool IsUsableSample { get; init; }
-        public int MinUsableSample { get; init; }
-
-        public override string ToString()
-        {
-            var usabilityNote = IsUsableSample ? "" : $" (needs {MinUsableSample - HistoryCount} more samples)";
-            return $"{HostAddress}: (last {HistoryCount}){usabilityNote}";
         }
     }
 }

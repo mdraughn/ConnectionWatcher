@@ -26,6 +26,11 @@ namespace ConEngine.Configuration
         [Range(1, int.MaxValue, ErrorMessage = "MinUsableSample must be at least 1.")]
         public int MinUsableSample { get; set; } = 10;
 
+        public double RespondingThreshold { get; set; } = 0.95;
+        public double FalteringThreshold { get; set; } = 0.75;
+        public double DownThreshold { get; set; } = 0.10;
+        public double RecoveringThreshold { get; set; } = 0.25;
+
         /// <summary>
         /// Validates that MinUsableSample is not greater than HistorySize.
         /// </summary>
