@@ -13,7 +13,7 @@ namespace ConInfrastructure
         private readonly CancellationToken _cancellationToken;
         private readonly PingSimulationOptions _options;
         private readonly Random _random;
-        private readonly object _lock = new();
+        private readonly Lock _lock = new();
         
         private DateTime? _outageStartTime;
         private TimeSpan _currentOutageDuration;

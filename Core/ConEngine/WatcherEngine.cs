@@ -81,7 +81,7 @@ public class WatcherEngine
     {
         // Get or create tracker for this host
         var tracker = _hostTrackers.GetOrAdd(message.IpAddress, 
-            ipAddress => new HostTracker(ipAddress, _trackingOptions));
+            ipAddress => new HostTracker(ipAddress, _trackingOptions, _loggerFactory.CreateLogger<HostTracker>()));
 
         // Record the ping result in the tracker
         tracker.RecordPingResult(message);
@@ -103,8 +103,8 @@ public class WatcherEngine
         _hostTrackers.GetOrAdd(ipAddress, 
             ip =>
             {
-                HostTracker tracker = new HostTracker(ip, _trackingOptions);
-                tracker.HostStatusSource.Subscribe(status =>
+                HostTracker tracker = new HostTracker(ip, _trackingOptions, _loggerFactory.CreateLogger<HostTracker>());
+                tracker.HostStateChangeSource.Subscribe(status =>
                 {
                     _log.LogInformation("Host status updated: {Status}", status);
                 });

@@ -2,6 +2,7 @@ using ConCore;
 using ConEngine.Configuration;
 using System.Net;
 using System.Reactive.Subjects;
+using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Tracking
 {
@@ -14,6 +15,7 @@ namespace ConEngine.Tracking
         private readonly CircularBuffer<PingHistoryEntry> _history;
         private readonly int _minUsableSample;
         private readonly Lock _lock = new();
+        private readonly ILogger<HostTracker> _log;
 
         /// <summary>
         /// Gets the IP address of the host being tracked.
@@ -21,6 +23,8 @@ namespace ConEngine.Tracking
         public IPAddress HostAddress { get; }
 
         // Observable host status
+        private readonly ReplaySubject<HostStatus> _hostStateChangeSubject = new(bufferSize: 1);
+        public IObservable<HostStatus> HostStateChangeSource => _hostStateChangeSubject;
         private readonly ReplaySubject<HostStatus> _hostStatusSubject = new(bufferSize: 1);
         public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
 
@@ -31,8 +35,10 @@ namespace ConEngine.Tracking
         /// </summary>
         /// <param name="hostAddress">The IP address of the host to track.</param>
         /// <param name="options">Configuration options for host tracking.</param>
-        public HostTracker(IPAddress hostAddress, HostTrackingOptions options)
+        /// <param name="log"></param>
+        public HostTracker(IPAddress hostAddress, HostTrackingOptions options, ILogger<HostTracker> log)
         {
+            _log = log;
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
 
             ArgumentNullException.ThrowIfNull(options);
@@ -42,7 +48,13 @@ namespace ConEngine.Tracking
             _analysisEngine = new HostAnalysisEngine(options,hostAddress);
             _analysisEngine.HostStatusSource.Subscribe((status =>
             {
+                _log.LogDebug("Host status updated: Success = {SuccessRate}", status.SuccessRate);
                 _hostStatusSubject.OnNext(status);
+            }));
+            _analysisEngine.HostStateChangeSource.Subscribe((status =>
+            {
+                _log.LogDebug("Host state updated: {HostState}", status.State);
+                _hostStateChangeSubject.OnNext(status);
             }));
         }
 

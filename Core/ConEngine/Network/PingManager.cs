@@ -27,7 +27,7 @@ public class PingManager : IDisposable
     private readonly ILogger<PingManager> _log;
     private readonly ILoggerFactory _loggerFactory;
 
-    private readonly ReplaySubject<PingResult> _pingResultSubject = new ReplaySubject<PingResult>(bufferSize: MaxEventBuffer);
+    private readonly ReplaySubject<PingResult> _pingResultSubject = new(bufferSize: MaxEventBuffer);
     public IObservable<PingResult> PingResultSource => _pingResultSubject;
 
     public PingManager(TimeProvider timeProvider,

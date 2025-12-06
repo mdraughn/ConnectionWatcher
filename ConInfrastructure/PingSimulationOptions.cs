@@ -25,17 +25,17 @@ namespace ConInfrastructure
         /// Gets or sets the probability of an outage occurring per ping operation.
         /// Value between 0.0 and 1.0. Default is 0.001 (0.1% chance per ping).
         /// </summary>
-        public double OutageProbability { get; set; } = 0.01;
+        public double OutageProbability { get; set; } = 0.001;
 
         /// <summary>
         /// Gets or sets the mean duration of an outage in milliseconds.
         /// </summary>
-        public double MeanOutageDurationMs { get; set; } = 90000.0;
+        public double MeanOutageDurationMs { get; set; } = 10000.0;
 
         /// <summary>
         /// Gets or sets the standard deviation for outage duration in milliseconds.
         /// </summary>
-        public double OutageDurationStdDevMs { get; set; } = 5000.0;
+        public double OutageDurationStdDevMs { get; set; } = 2000.0;
 
         /// <summary>
         /// Gets or sets the packet loss rate during an outage.
@@ -56,12 +56,12 @@ namespace ConInfrastructure
         /// <summary>
         /// Gets or sets the minimum outage duration in milliseconds.
         /// </summary>
-        public double MinOutageDurationMs { get; set; } = 20000.0; // 20 second
+        public double MinOutageDurationMs { get; set; } = 10000.0; // 10 seconds
 
         /// <summary>
         /// Gets or sets the maximum outage duration in milliseconds.
         /// </summary>
-        public double MaxOutageDurationMs { get; set; } = 60000.0; // 1 minute
+        public double MaxOutageDurationMs { get; set; } = 300000.0; // 5 minutes
 
         /// <summary>
         /// Gets or sets the random seed for reproducible simulations.
@@ -151,7 +151,7 @@ namespace ConInfrastructure
                 RoundTripTimeStdDevMs = 50.0,
                 BasePacketLossRate = 0.1, // 10% loss
                 OutageProbability = 0.01, // 1% chance per ping
-                MeanOutageDurationMs = 15000.0,
+                MeanOutageDurationMs = 60000.0,
                 OutageDurationStdDevMs = 5000.0,
                 OutagePacketLossRate = 1.0
             };

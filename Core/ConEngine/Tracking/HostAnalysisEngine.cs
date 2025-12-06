@@ -16,8 +16,8 @@ internal class HostAnalysisEngine
         _hostAddress = hostAddress;
     }
 
-    private HostTrackingOptions _trackingOptions;
-    private IPAddress _hostAddress;
+    private readonly HostTrackingOptions _trackingOptions;
+    private readonly IPAddress _hostAddress;
 
     public HostState CurrentState { get; private set; } = HostState.Initializing;
     public HostState PreviousState { get; private set; } = HostState.Initializing;
@@ -41,6 +41,8 @@ internal class HostAnalysisEngine
     // Observable host status
     private readonly ReplaySubject<HostStatus> _hostStatusSubject = new(bufferSize: 1);
     public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
+    private readonly ReplaySubject<HostStatus> _hostStateChangeSubject = new(bufferSize: 1);
+    public IObservable<HostStatus> HostStateChangeSource => _hostStateChangeSubject;
 
 
     public void Recalculate(IEnumerable<PingHistoryEntry> samples)
@@ -136,22 +138,22 @@ internal class HostAnalysisEngine
                 break;
         }
 
-        // If state changed, publish HostStatus and update previous state
+        // Notify observers of status change
+        HostStatus newStatus = new() {
+            HostAddress = _hostAddress,
+            State = CurrentState,
+            TrackingStarted = TrackingStarted,
+            SampleSize = SampleSize,
+            SuccessRate = SuccessRate,
+            FailureRate = FailureRate,
+            AverageRoundtripTime = AverageRoundtripTime,
+            Timestamp = LastUpdated
+        };
+        _hostStatusSubject.OnNext(newStatus);
         if (CurrentState != PreviousState)
         {
-            HostStatus newStatus = new()
-            {
-                HostAddress = _hostAddress,
-                State = CurrentState,
-                TrackingStarted = TrackingStarted,
-                SampleSize = SampleSize,
-                SuccessRate = SuccessRate,
-                FailureRate = FailureRate,
-                AverageRoundtripTime = AverageRoundtripTime,
-                Timestamp = LastUpdated
-            };
-            PreviousState = CurrentState;
-            _hostStatusSubject.OnNext(newStatus);
+            _hostStateChangeSubject.OnNext(newStatus);
         }
+        PreviousState = CurrentState;
     }
 }

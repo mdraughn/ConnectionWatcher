@@ -66,7 +66,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 try
                 {
                     log.LogTrace("Pinging {ipAddress} ...", ipAddress);
-                    var reply = await ping.PingAsync(5000).ConfigureAwait(false);
+                    var reply = await ping.PingAsync(3000).ConfigureAwait(false);
                     if(reply.Success)
                     {
                         log.LogTrace("Ping received from {ipAddress}, {pingTime} ms", ipAddress, reply.RoundtripTime);
