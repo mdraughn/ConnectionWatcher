@@ -64,7 +64,7 @@ public class WatcherEngine
                 _log.LogDebug("Resolved {domainName} IP: {ipAddress}", domainName, ipAddress);
             }
 
-            //var pingFactory = PingTransceiverFactorySimulated.CreateUnreliableNetwork();
+            //var pingFactory = PingTransceiverSimulatedFactory.CreateUnreliableNetwork();
             _log.LogDebug("Starting manager...");
             
             // Create PingManager with its own properly-typed logger

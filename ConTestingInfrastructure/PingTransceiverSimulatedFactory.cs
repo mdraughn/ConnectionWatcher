@@ -7,23 +7,23 @@ namespace ConInfrastructure
     /// Factory for creating simulated ping transceivers with configurable network behavior.
     /// Useful for testing, demonstrations, and development without actual network access.
     /// </summary>
-    public class PingTransceiverFactorySimulated : IPingTransceiverFactory
+    public class PingTransceiverSimulatedFactory : IPingTransceiverFactory
     {
         private readonly PingSimulationOptions _options;
 
         /// <summary>
-        /// Initializes a new instance of the PingTransceiverFactorySimulated class with default options.
+        /// Initializes a new instance of the PingTransceiverSimulatedFactory class with default options.
         /// </summary>
-        public PingTransceiverFactorySimulated()
+        public PingTransceiverSimulatedFactory()
             : this(new PingSimulationOptions())
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the PingTransceiverFactorySimulated class with custom options.
+        /// Initializes a new instance of the PingTransceiverSimulatedFactory class with custom options.
         /// </summary>
         /// <param name="options">Simulation options controlling network behavior.</param>
-        public PingTransceiverFactorySimulated(PingSimulationOptions options)
+        public PingTransceiverSimulatedFactory(PingSimulationOptions options)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _options.Validate();
@@ -49,27 +49,27 @@ namespace ConInfrastructure
         /// Creates a factory configured for a perfect network (no packet loss, consistent latency).
         /// </summary>
         /// <param name="latencyMs">The consistent latency in milliseconds.</param>
-        public static PingTransceiverFactorySimulated CreatePerfectNetwork(double latencyMs = 10.0)
+        public static PingTransceiverSimulatedFactory CreatePerfectNetwork(double latencyMs = 10.0)
         {
-            return new PingTransceiverFactorySimulated(
+            return new PingTransceiverSimulatedFactory(
                 PingSimulationOptions.CreatePerfectNetwork(latencyMs));
         }
 
         /// <summary>
         /// Creates a factory configured for a typical stable network.
         /// </summary>
-        public static PingTransceiverFactorySimulated CreateStableNetwork()
+        public static PingTransceiverSimulatedFactory CreateStableNetwork()
         {
-            return new PingTransceiverFactorySimulated(
+            return new PingTransceiverSimulatedFactory(
                 PingSimulationOptions.CreateStableNetwork());
         }
 
         /// <summary>
         /// Creates a factory configured for an unreliable network with frequent issues.
         /// </summary>
-        public static PingTransceiverFactorySimulated CreateUnreliableNetwork()
+        public static PingTransceiverSimulatedFactory CreateUnreliableNetwork()
         {
-            return new PingTransceiverFactorySimulated(
+            return new PingTransceiverSimulatedFactory(
                 PingSimulationOptions.CreateUnreliableNetwork());
         }
 
@@ -159,9 +159,9 @@ namespace ConInfrastructure
             /// <summary>
             /// Builds the factory with the configured options.
             /// </summary>
-            public PingTransceiverFactorySimulated Build()
+            public PingTransceiverSimulatedFactory Build()
             {
-                return new PingTransceiverFactorySimulated(_options);
+                return new PingTransceiverSimulatedFactory(_options);
             }
         }
     }
