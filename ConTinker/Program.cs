@@ -12,6 +12,7 @@ using ConCore;
 using ConEngine;
 using ConTinker;
 using Serilog;
+using ConTinker.Configuration;
 
 Console.WriteLine("Program Running");
 
@@ -24,40 +25,56 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     IHostBuilder hostBuilder = Host.CreateDefaultBuilder();
-    // Configure HostTrackingOptions with validation
+    
     hostBuilder.ConfigureServices((context, services) =>
     {
+        // Log the environment and configuration sources
+        var environment = context.HostingEnvironment.EnvironmentName;
+        Log.Information("Running in environment: {Environment}", environment);
+        Log.Information("Application name: {ApplicationName}", context.HostingEnvironment.ApplicationName);
+        Log.Information("Content root: {ContentRoot}", context.HostingEnvironment.ContentRootPath);
+        
         // Configure HostTrackingOptions with validation
         services.AddOptions<HostTrackingOptions>()
-            .Bind(context.Configuration.GetSection("MyFeature"))
+            .Bind(context.Configuration.GetSection("HostTracking"))
             .ValidateOnStart();
-        // Register the validator
         services.AddSingleton<IValidateOptions<HostTrackingOptions>, HostTrackingOptionsValidator>();
+        
+        // Configure PingTransceiverOptions with validation
+        services.AddOptions<PingTransceiverOptions>()
+            .Bind(context.Configuration.GetSection(PingTransceiverOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<PingTransceiverOptions>, PingTransceiverOptionsValidator>();
     });
+    
     hostBuilder.UseSerilog();
-        //.ConfigureLogging(logging =>
-        //{
-        //    logging.ClearProviders();
-        //    logging.AddConsole();
-        //    logging.SetMinimumLevel(LogLevel.Information);
-        //});
+    
     hostBuilder.ConfigureServices((context, services) =>
     {
-        
         services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddTransient<IDomainNameResolverFactory, DomainNameResolverFactory>();
-        services.AddSingleton<IPingTransceiverFactory>(sp => PingTransceiverInteractiveSimFactory.CreateUnreliableNetwork());
+        
+        // Use configuration-based factory instead of hardcoded simulation
+        services.AddSingleton<IPingTransceiverFactory, ConfiguredPingTransceiverFactory>();
+        
         services.AddTransient<WatcherEngine>();
         services.AddHostedService<TinkerService>();
     });
+    
     using var host = hostBuilder.Build();
     
     // Validate options on startup
-    var optionsValidator = host.Services.GetRequiredService<IOptions<HostTrackingOptions>>();
-    var options = optionsValidator.Value; // This will throw if validation fails
+    var hostTrackingOptions = host.Services.GetRequiredService<IOptions<HostTrackingOptions>>();
+    var hostTracking = hostTrackingOptions.Value;
+    
+    var pingTransceiverOptions = host.Services.GetRequiredService<IOptions<PingTransceiverOptions>>();
+    var pingTransceiver = pingTransceiverOptions.Value;
     
     Log.Information("Starting with HostTracking configuration: HistorySize={HistorySize}, MinUsableSample={MinUsableSample}",
-        options.HistorySize, options.MinUsableSample);
+        hostTracking.HistorySize, hostTracking.MinUsableSample);
+    
+    Log.Information("PingTransceiver configuration: UseSimulation={UseSimulation}, Preset={Preset}, ShowControlWindow={ShowControlWindow}",
+        pingTransceiver.UseSimulation, pingTransceiver.SimulationPreset, pingTransceiver.ShowControlWindow);
     
     await host.RunAsync(CancellationToken.None);
 }

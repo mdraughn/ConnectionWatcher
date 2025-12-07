@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Core\ConCore\ConCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Configuration\" />
+  </ItemGroup>
+
 </Project>
