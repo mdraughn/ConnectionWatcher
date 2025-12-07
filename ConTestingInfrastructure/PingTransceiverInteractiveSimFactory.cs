@@ -9,21 +9,27 @@ namespace ConInfrastructure
     public class PingTransceiverInteractiveSimFactory : IPingTransceiverFactory, IDisposable
     {
         private readonly PingSimulationOptions _options;
-        private readonly SimulationControlManager _controlManager;
+        private readonly SimulationControlManager? _controlManager;
+        private readonly bool _showControlWindow;
         private bool _disposed = false;
 
         /// <summary>
         /// Initializes a new instance of the PingTransceiverInteractiveSimFactory class with custom options.
         /// </summary>
         /// <param name="options">Simulation options controlling network behavior.</param>
-        public PingTransceiverInteractiveSimFactory(PingSimulationOptions options)
+        /// <param name="showControlWindow">Whether to display the interactive control window. Defaults to false.</param>
+        public PingTransceiverInteractiveSimFactory(PingSimulationOptions options, bool showControlWindow = false)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _options.Validate();
+            _showControlWindow = showControlWindow;
             
-            // Initialize the UI control manager on a separate thread
-            _controlManager = new SimulationControlManager();
-            _controlManager.Initialize();
+            // Initialize the UI control manager on a separate thread only if requested
+            if (_showControlWindow)
+            {
+                _controlManager = new SimulationControlManager();
+                _controlManager.Initialize();
+            }
         }
 
         /// <summary>
@@ -34,8 +40,10 @@ namespace ConInfrastructure
         /// <returns>An interactive simulated ping transceiver instance.</returns>
         public IPingTransceiver Create(IPAddress ipAddress, CancellationToken cancellationToken)
         {
-            // Register this IP address with the control manager
-            var viewModel = _controlManager.RegisterSimulator(ipAddress, _options);
+            // Register this IP address with the control manager only if window is shown
+            var viewModel = _showControlWindow && _controlManager != null
+                ? _controlManager.RegisterSimulator(ipAddress, _options)
+                : null;
             
             return new PingTransceiverInteractiveSim(ipAddress, cancellationToken, _options, viewModel);
         }
@@ -46,31 +54,39 @@ namespace ConInfrastructure
         public PingSimulationOptions Options => _options;
 
         /// <summary>
+        /// Gets whether the control window is shown.
+        /// </summary>
+        public bool ShowControlWindow => _showControlWindow;
+
+        /// <summary>
         /// Creates a factory configured for a perfect network (no packet loss, consistent latency).
         /// </summary>
         /// <param name="latencyMs">The consistent latency in milliseconds.</param>
-        public static PingTransceiverInteractiveSimFactory CreatePerfectNetwork(double latencyMs = 10.0)
+        /// <param name="showControlWindow">Whether to display the interactive control window. Defaults to false.</param>
+        public static PingTransceiverInteractiveSimFactory CreatePerfectNetwork(double latencyMs = 10.0, bool showControlWindow = false)
         {
             return new PingTransceiverInteractiveSimFactory(
-                PingSimulationOptions.CreatePerfectNetwork(latencyMs));
+                PingSimulationOptions.CreatePerfectNetwork(latencyMs), showControlWindow);
         }
 
         /// <summary>
         /// Creates a factory configured for a typical stable network.
         /// </summary>
-        public static PingTransceiverInteractiveSimFactory CreateStableNetwork()
+        /// <param name="showControlWindow">Whether to display the interactive control window. Defaults to false.</param>
+        public static PingTransceiverInteractiveSimFactory CreateStableNetwork(bool showControlWindow = false)
         {
             return new PingTransceiverInteractiveSimFactory(
-                PingSimulationOptions.CreateStableNetwork());
+                PingSimulationOptions.CreateStableNetwork(), showControlWindow);
         }
 
         /// <summary>
         /// Creates a factory configured for an unreliable network with frequent issues.
         /// </summary>
-        public static PingTransceiverInteractiveSimFactory CreateUnreliableNetwork()
+        /// <param name="showControlWindow">Whether to display the interactive control window. Defaults to false.</param>
+        public static PingTransceiverInteractiveSimFactory CreateUnreliableNetwork(bool showControlWindow = false)
         {
             return new PingTransceiverInteractiveSimFactory(
-                PingSimulationOptions.CreateUnreliableNetwork());
+                PingSimulationOptions.CreateUnreliableNetwork(), showControlWindow);
         }
 
         /// <summary>
@@ -87,6 +103,7 @@ namespace ConInfrastructure
         public class Builder
         {
             private readonly PingSimulationOptions _options = new();
+            private bool _showControlWindow = false;
 
             /// <summary>
             /// Sets the mean round-trip time and standard deviation.
@@ -157,11 +174,21 @@ namespace ConInfrastructure
             }
 
             /// <summary>
+            /// Enables or disables the interactive control window.
+            /// </summary>
+            /// <param name="show">Whether to display the interactive control window. Defaults to true.</param>
+            public Builder WithControlWindow(bool show = true)
+            {
+                _showControlWindow = show;
+                return this;
+            }
+
+            /// <summary>
             /// Builds the factory with the configured options.
             /// </summary>
             public PingTransceiverInteractiveSimFactory Build()
             {
-                return new PingTransceiverInteractiveSimFactory(_options);
+                return new PingTransceiverInteractiveSimFactory(_options, _showControlWindow);
             }
         }
 
