@@ -1,185 +1,202 @@
-﻿using ConCore;
-using ConCore.Targets;
+using System.Net;
+using System.Reactive.Subjects;
+using ConCore;
+using ConEngine.Configuration;
 using ConEngine.Events;
 using ConEngine.Network;
+using ConEngine.Scheduling;
+using ConEngine.Topology;
 using ConEngine.Tracking;
-using ConEngine.Configuration;
-using System;
-using System.Collections.Concurrent;
-using System.Net;
-using System.Threading.Channels;
-using ConInfrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 
 namespace ConEngine;
 
+/// <summary>
+/// Orchestrates the Phase 1 engine: builds the target graph from configuration,
+/// wires monitors, disciplines, topology and pool coordinators, and routes
+/// ping results from the PingManager to the right monitor.
+/// </summary>
 public class WatcherEngine
 {
     private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingFactory;
-    private readonly ILogger<WatcherEngine> _log;
+    private readonly IDomainNameResolverFactory _resolverFactory;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly HostTrackingOptions _trackingOptions;
-    private PingManager? _manager;
-    
-    // Dictionary to track information about every host we are pinging
-    // Using ConcurrentDictionary for thread-safe access
-    private readonly ConcurrentDictionary<IPAddress, HostTracker> _hostTrackers;
+    private readonly ILogger<WatcherEngine> _log;
+    private readonly WatcherOptions _options;
 
-    public WatcherEngine(
-        TimeProvider timeProvider, 
-        IPingTransceiverFactory pingFactory, 
-        ILoggerFactory loggerFactory,
-        IOptions<HostTrackingOptions> trackingOptions)
+    private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
+    private readonly List<PoolCoordinator> _poolCoordinators = new();
+    private readonly ConcurrentDictionary<IPAddress, TargetMonitor> _routingTable = new();
+    private readonly List<IDisposable> _subscriptions = new();
+    private readonly Subject<TargetTransition> _transitionSubject = new();
+
+    private TargetGraph? _graph;
+    private PingManager? _manager;
+    private TopologyCoordinator? _topology;
+    private CancellationTokenSource? _cts;
+
+    public WatcherEngine(TimeProvider timeProvider, IPingTransceiverFactory pingFactory,
+        IDomainNameResolverFactory resolverFactory, ILoggerFactory loggerFactory,
+        IOptions<WatcherOptions> options)
     {
         _timeProvider = timeProvider;
         _pingFactory = pingFactory;
+        _resolverFactory = resolverFactory;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        _trackingOptions = trackingOptions?.Value ?? throw new ArgumentNullException(nameof(trackingOptions));
-        _log = _loggerFactory.CreateLogger<WatcherEngine>();
-        _hostTrackers = new ConcurrentDictionary<IPAddress, HostTracker>();
-        
-        _log.LogInformation("WatcherEngine initialized with HistorySize={HistorySize}, MinUsableSample={MinUsableSample}",
-            _trackingOptions.HistorySize, _trackingOptions.MinUsableSample);
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _log = loggerFactory.CreateLogger<WatcherEngine>();
     }
 
-    /// <summary>
-    /// Gets the number of hosts currently being tracked.
-    /// </summary>
-    public int TrackedHostCount => _hostTrackers.Count;
-
-    // Temporary bridge until the Task 12 rewrite: adapts legacy HostTrackingOptions
-    // to the PingProfile the tracker now requires.
-    private PingProfile BridgeProfile => new()
-    {
-        Name = "Bridge",
-        HistorySize = _trackingOptions.HistorySize,
-        MinUsableSample = _trackingOptions.MinUsableSample,
-        RespondingThreshold = _trackingOptions.RespondingThreshold,
-        FalteringThreshold = _trackingOptions.FalteringThreshold,
-        DownThreshold = _trackingOptions.DownThreshold,
-        RecoveringThreshold = _trackingOptions.RecoveringThreshold,
-    };
+    /// <summary>Merged transition stream: every monitor and every pool.</summary>
+    public IObservable<TargetTransition> TransitionSource => _transitionSubject;
+    public IReadOnlyDictionary<Guid, TargetMonitor> Monitors => _monitors;
+    public IReadOnlyList<PoolCoordinator> PoolCoordinators => _poolCoordinators;
+    public TargetGraph Graph => _graph ?? throw new InvalidOperationException("Engine not started");
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        return Task.Run(async () =>
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var ct = _cts.Token;
+
+        _graph = TargetGraph.FromOptions(_options);
+        _log.LogInformation("WatcherEngine starting: {TargetCount} targets, {PoolCount} pools",
+            _graph.Targets.Count, _graph.Pools.Count);
+
+        // Pool membership index for phase staggering: targetId -> (memberIndex, memberCount).
+        var poolPosition = new Dictionary<Guid, (int index, int count)>();
+        foreach (var pool in _graph.Pools.Values)
+            for (int i = 0; i < pool.MemberTargetIds.Count; i++)
+                poolPosition[pool.MemberTargetIds[i]] = (i, pool.MemberTargetIds.Count);
+
+        // Monitors and disciplines for enabled targets.
+        foreach (var target in _graph.Targets.Values.Where(t => t.Enabled))
         {
-            _log.LogInformation("WatcherEngine starting...");
+            var profile = _graph.ProfileFor(target);
+            var initialDelay = poolPosition.TryGetValue(target.Id, out var pos)
+                ? PoolCoordinator.PhaseOffset(pos.index, pos.count, profile.NormalInterval)
+                : TimeSpan.Zero;
+            var discipline = new PingDiscipline(profile, _timeProvider, initialDelay);
+            var monitor = new TargetMonitor(target, profile, discipline, _timeProvider, _loggerFactory);
+            _monitors[target.Id] = monitor;
+            _subscriptions.Add(monitor.TransitionSource.Subscribe(_transitionSubject.OnNext));
+        }
 
-            var resolverFactory = new DomainNameResolverFactory();
-            using IDomainNameResolver resolver = resolverFactory.Create(CancellationToken.None);
+        // Topology enforcement.
+        _topology = new TopologyCoordinator(_graph, _monitors,
+            _loggerFactory.CreateLogger<TopologyCoordinator>());
+        _topology.Start();
 
-            string domainName = "cloudflare.com";
-            DomainResolutionResult hostInfo = await resolver.ResolveAsync(domainName, 5000);
+        // Pool aggregation (members that are disabled have no monitor and are skipped).
+        foreach (var pool in _graph.Pools.Values)
+        {
+            var members = pool.MemberTargetIds
+                .Where(_monitors.ContainsKey)
+                .Select(id => _monitors[id])
+                .ToList();
+            if (members.Count == 0)
+                continue;
+            var coordinator = new PoolCoordinator(pool, members, _timeProvider,
+                _loggerFactory.CreateLogger<PoolCoordinator>());
+            _subscriptions.Add(coordinator.TransitionSource.Subscribe(_transitionSubject.OnNext));
+            coordinator.Start();
+            _poolCoordinators.Add(coordinator);
+        }
 
-            foreach(IPAddress ipAddress in hostInfo.IPv4Addresses.Concat(hostInfo.IPv6Addresses))
+        // Ping plumbing: one manager, results routed by IP.
+        _manager = new PingManager(_timeProvider, _pingFactory, ct, _loggerFactory);
+        _subscriptions.Add(_manager.PingResultSource.Subscribe(
+            result =>
             {
-                _log.LogDebug("Resolved {domainName} IP: {ipAddress}", domainName, ipAddress);
+                if (_routingTable.TryGetValue(result.IpAddress, out var monitor))
+                    monitor.RecordPingResult(result);
+            },
+            ex => _log.LogError(ex, "Error in ping result stream"),
+            () => _log.LogInformation("Ping result stream completed")));
+
+        // Activate every enabled target (immediately for IP literals, via DNS otherwise).
+        foreach (var (targetId, monitor) in _monitors)
+        {
+            var target = _graph.Targets[targetId];
+            if (IPAddress.TryParse(target.Address, out var ip))
+                Activate(monitor, ip);
+            else
+                _ = Task.Run(() => ResolveAndActivateAsync(monitor, target.Address, ct), ct);
+        }
+
+        _log.LogInformation("WatcherEngine started with {MonitorCount} active monitors", _monitors.Count);
+        return Task.CompletedTask;
+    }
+
+    private void Activate(TargetMonitor monitor, IPAddress ip)
+    {
+        monitor.StartTracking(ip);
+        _routingTable[ip] = monitor;
+        _manager!.GetOrCreateController(ip, monitor.Discipline,
+            (int)monitor.Profile.PingTimeout.TotalMilliseconds);
+        _log.LogInformation("Activated {Target} at {Ip}", monitor.Target.Name, ip);
+    }
+
+    private async Task ResolveAndActivateAsync(TargetMonitor monitor, string hostname, CancellationToken ct)
+    {
+        var backoff = TimeSpan.FromSeconds(30);
+        var maxBackoff = TimeSpan.FromMinutes(5);
+        using var resolver = _resolverFactory.Create(ct);
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var result = await resolver.ResolveAsync(hostname, 5000).ConfigureAwait(false);
+                var ip = result.IPv4Addresses.FirstOrDefault();
+                if (ip is not null)
+                {
+                    Activate(monitor, ip);
+                    return;
+                }
+                monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "DNS resolution failed for {Hostname}", hostname);
+                monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {ex.Message}");
             }
 
-            //var pingFactory = PingTransceiverSimulatedFactory.CreateUnreliableNetwork();
-            _log.LogDebug("Starting manager...");
-            
-            // Create PingManager with its own properly-typed logger
-            var pingManagerLogger = _loggerFactory.CreateLogger<PingManager>();
-            _manager = new PingManager(TimeProvider.System, _pingFactory, cancellationToken, _loggerFactory);
-            
-            _manager.PingResultSource.Subscribe(HandlePingResult, HandlePingError, HandlePingCompletion);
-
-            _log.LogInformation("Manager started. Tracking {TrackedCount} hosts.", _hostTrackers.Count);
-        }, cancellationToken);
-    }
-
-    private void HandlePingResult(PingResult message)
-    {
-        // Get or create tracker for this host
-        var tracker = _hostTrackers.GetOrAdd(message.IpAddress,
-            ipAddress => new HostTracker(ipAddress, BridgeProfile, _timeProvider, _loggerFactory.CreateLogger<HostTracker>()));
-
-        // Record the ping result in the tracker
-        tracker.RecordPingResult(message);
-    }
-
-    private void HandlePingCompletion()
-    {
-        _log.LogInformation("Ping result stream completed");
-    }
-
-    private void HandlePingError(Exception ex)
-    {
-        _log.LogError(ex, "Error occurred while processing ping result");
-    }
-
-    public void StartWatching(IPAddress ipAddress)
-    {
-        // Create a tracker for this host when we start watching it
-        _hostTrackers.GetOrAdd(ipAddress, 
-            ip =>
+            try
             {
-                HostTracker tracker = new HostTracker(ip, BridgeProfile, _timeProvider, _loggerFactory.CreateLogger<HostTracker>());
-                tracker.HostStateChangeSource.Subscribe(t =>
-                {
-                    _log.LogInformation("Host state changed: {From} -> {To} ({Reason})", t.From, t.To, t.Reason);
-                });
-                return tracker;
-            });
-        
-        _manager?.GetOrCreateController(ipAddress,
-            new Scheduling.FixedIntervalCadence(TimeSpan.FromSeconds(1), _timeProvider), timeoutMs: 3000);
-        
-        _log.LogInformation("Started watching {ipAddress}. Total tracked hosts: {trackedCount}",
-            ipAddress, _hostTrackers.Count);
-    }
-
-    public void StopWatching(IPAddress ipAddress)
-    {
-        _manager?.StopController(ipAddress);
-        
-        // Optionally remove from tracking (or keep historical data)
-        // For now, we'll keep the tracker but you could remove it:
-        // _hostTrackers.TryRemove(ipAddress, out _);
-        
-        _log.LogInformation("Stopped watching {ipAddress}. Total tracked hosts: {trackedCount}",
-            ipAddress, _hostTrackers.Count);
-    }
-
-    /// <summary>
-    /// Removes a host from tracking and clears its history.
-    /// </summary>
-    /// <param name="hostAddress">The IP address of the host to stop tracking.</param>
-    /// <returns>True if the host was being tracked and was removed; otherwise false.</returns>
-    public bool RemoveTracking(IPAddress hostAddress)
-    {
-        if (_hostTrackers.TryRemove(hostAddress, out var _))
-        {
-            _log.LogInformation("Removed tracking for {ipAddress}. Total tracked hosts: {trackedCount}",
-                hostAddress, _hostTrackers.Count);
-            return true;
+                await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
         }
-        return false;
-    }
-
-    /// <summary>
-    /// Clears all tracking data for all hosts.
-    /// </summary>
-    public void ClearAllTracking()
-    {
-        var count = _hostTrackers.Count;
-        _hostTrackers.Clear();
-        _log.LogInformation("Cleared tracking for all {count} hosts", count);
     }
 
     public Task StopAsync()
     {
         _log.LogInformation("WatcherEngine stopping...");
-        
-        _manager?.StopAllControllers();
+        _cts?.Cancel();
+
+        foreach (var s in _subscriptions)
+            s.Dispose();
+        _subscriptions.Clear();
+
+        _topology?.Dispose();
+        foreach (var pool in _poolCoordinators)
+            pool.Dispose();
         _manager?.Dispose();
-        
+        foreach (var monitor in _monitors.Values)
+            monitor.Dispose();
+
         _log.LogInformation("WatcherEngine stopped.");
-        
         return Task.CompletedTask;
     }
 }

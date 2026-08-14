@@ -34,11 +34,11 @@ try
         Log.Information("Application name: {ApplicationName}", context.HostingEnvironment.ApplicationName);
         Log.Information("Content root: {ContentRoot}", context.HostingEnvironment.ContentRootPath);
         
-        // Configure HostTrackingOptions with validation
-        services.AddOptions<HostTrackingOptions>()
-            .Bind(context.Configuration.GetSection("HostTracking"))
+        // Configure WatcherOptions with validation
+        services.AddOptions<WatcherOptions>()
+            .Bind(context.Configuration.GetSection(WatcherOptions.SectionName))
             .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<HostTrackingOptions>, HostTrackingOptionsValidator>();
+        services.AddSingleton<IValidateOptions<WatcherOptions>, WatcherOptionsValidator>();
         
         // Configure PingTransceiverOptions with validation
         services.AddOptions<PingTransceiverOptions>()
@@ -62,17 +62,11 @@ try
     });
     
     using var host = hostBuilder.Build();
-    
+
     // Validate options on startup
-    var hostTrackingOptions = host.Services.GetRequiredService<IOptions<HostTrackingOptions>>();
-    var hostTracking = hostTrackingOptions.Value;
-    
     var pingTransceiverOptions = host.Services.GetRequiredService<IOptions<PingTransceiverOptions>>();
     var pingTransceiver = pingTransceiverOptions.Value;
-    
-    Log.Information("Starting with HostTracking configuration: HistorySize={HistorySize}, MinUsableSample={MinUsableSample}",
-        hostTracking.HistorySize, hostTracking.MinUsableSample);
-    
+
     Log.Information("PingTransceiver configuration: UseSimulation={UseSimulation}, Preset={Preset}, ShowControlWindow={ShowControlWindow}",
         pingTransceiver.UseSimulation, pingTransceiver.SimulationPreset, pingTransceiver.ShowControlWindow);
     

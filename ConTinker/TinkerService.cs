@@ -28,8 +28,6 @@ public class TinkerService : IHostedService
             _log.LogInformation("TinkerService starting...");
 
             await _watcherEngine.StartAsync(cancellationToken);
-            _watcherEngine.StartWatching(IPAddress.Parse("192.168.99.1"));
-            //_watcherEngine.StartWatching(IPAddress.Parse("8.8.8.8"));
 
             _log.LogInformation("TinkerService started successfully");
         });
