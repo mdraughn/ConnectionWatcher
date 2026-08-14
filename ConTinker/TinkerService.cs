@@ -29,6 +29,11 @@ public class TinkerService : IHostedService
 
             await _watcherEngine.StartAsync(cancellationToken);
 
+            // LogWarning so transitions stand out against Trace/Debug ping noise.
+            _watcherEngine.TransitionSource.Subscribe(t =>
+                _log.LogWarning("TRANSITION {Name}: {From} -> {To} | {Reason}",
+                    t.TargetName, t.From, t.To, t.Reason));
+
             _log.LogInformation("TinkerService started successfully");
         });
     }
