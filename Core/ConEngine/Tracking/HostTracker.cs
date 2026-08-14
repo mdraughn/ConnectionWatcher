@@ -1,7 +1,7 @@
 using ConCore;
-using ConEngine.Configuration;
+using ConCore.Targets;
+using ConEngine.Events;
 using System.Net;
-using System.Reactive.Subjects;
 using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Tracking
@@ -22,41 +22,34 @@ namespace ConEngine.Tracking
         /// </summary>
         public IPAddress HostAddress { get; }
 
-        // Observable host status
-        private readonly ReplaySubject<HostStatus> _hostStateChangeSubject = new(bufferSize: 1);
-        public IObservable<HostStatus> HostStateChangeSource => _hostStateChangeSubject;
-        private readonly ReplaySubject<HostStatus> _hostStatusSubject = new(bufferSize: 1);
-        public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
-
         private readonly HostAnalysisEngine _analysisEngine;
 
         /// <summary>
-        /// Initializes a new instance of the HostTracker class with options.
+        /// Initializes a new instance of the HostTracker class.
         /// </summary>
         /// <param name="hostAddress">The IP address of the host to track.</param>
-        /// <param name="options">Configuration options for host tracking.</param>
-        /// <param name="log"></param>
-        public HostTracker(IPAddress hostAddress, HostTrackingOptions options, ILogger<HostTracker> log)
+        /// <param name="profile">Ping profile providing analysis settings.</param>
+        /// <param name="timeProvider">Clock used for commanded transitions.</param>
+        /// <param name="log">Logger.</param>
+        public HostTracker(IPAddress hostAddress, PingProfile profile, TimeProvider timeProvider, ILogger<HostTracker> log)
         {
             _log = log;
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
+            ArgumentNullException.ThrowIfNull(profile);
 
-            ArgumentNullException.ThrowIfNull(options);
-
-            _history = new CircularBuffer<PingHistoryEntry>(options.HistorySize);
-            _minUsableSample = options.MinUsableSample;
-            _analysisEngine = new HostAnalysisEngine(options,hostAddress);
-            _analysisEngine.HostStatusSource.Subscribe((status =>
-            {
-                _log.LogDebug("Host status updated: Success = {SuccessRate}", status.SuccessRate);
-                _hostStatusSubject.OnNext(status);
-            }));
-            _analysisEngine.HostStateChangeSource.Subscribe((status =>
-            {
-                _log.LogDebug("Host state updated: {HostState}", status.State);
-                _hostStateChangeSubject.OnNext(status);
-            }));
+            _history = new CircularBuffer<PingHistoryEntry>(profile.HistorySize);
+            _minUsableSample = profile.MinUsableSample;
+            _analysisEngine = new HostAnalysisEngine(profile, hostAddress, timeProvider);
         }
+
+        /// <summary>Current state of the host state machine.</summary>
+        public HostState CurrentState => _analysisEngine.CurrentState;
+
+        /// <summary>Stream of periodic status snapshots.</summary>
+        public IObservable<HostStatus> HostStatusSource => _analysisEngine.HostStatusSource;
+
+        /// <summary>Stream of state transitions with structured reasons.</summary>
+        public IObservable<AnalysisTransition> HostStateChangeSource => _analysisEngine.HostStateChangeSource;
 
         /// <summary>
         /// Gets the capacity of the history buffer.
@@ -80,7 +73,7 @@ namespace ConEngine.Tracking
         public bool IsUsableSample => HistoryCount >= _minUsableSample;
 
         /// <summary>
-        /// Records a new ping result in the history with a specific timestamp.
+        /// Records a new ping result in the history and recalculates state.
         /// </summary>
         /// <param name="result">The ping result to record.</param>
         public void RecordPingResult(PingResult result)
@@ -95,6 +88,29 @@ namespace ConEngine.Tracking
                 Recalculate();
             }
         }
+
+        /// <summary>Commanded by topology: an ancestor is Down.</summary>
+        public void MarkUnreachable(Guid ancestorId)
+        {
+            lock (_lock)
+            {
+                _analysisEngine.MarkUnreachable(ancestorId);
+            }
+        }
+
+        /// <summary>Commanded by topology: the ancestor recovered; clear history and re-prove.</summary>
+        public void Release()
+        {
+            lock (_lock)
+            {
+                _history.Clear();
+                _analysisEngine.Release();
+            }
+        }
+
+        /// <summary>History entries with Timestamp &gt;= since, oldest first.</summary>
+        public IEnumerable<PingHistoryEntry> EntriesSince(DateTimeOffset since) =>
+            _history.InReverseOrder().TakeWhile(e => e.Timestamp >= since).Reverse();
 
         private void Recalculate()
         {
@@ -132,10 +148,8 @@ namespace ConEngine.Tracking
         /// <summary>
         /// Gets the most recent MinUsableSample entries in chronological order (oldest to newest).
         /// If fewer entries exist than MinUsableSample, returns all available entries.
-        /// This method efficiently extracts items directly from the circular buffer without
-        /// creating intermediate arrays.
         /// </summary>
-        /// <returns>A span containing up to MinUsableSample most recent entries.</returns>
+        /// <returns>Up to MinUsableSample most recent entries.</returns>
         public IEnumerable<PingHistoryEntry> Sample()
         {
             int sampleCount = Math.Min(_history.Count, _minUsableSample);

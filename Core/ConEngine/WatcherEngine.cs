@@ -1,4 +1,6 @@
 ﻿using ConCore;
+using ConCore.Targets;
+using ConEngine.Events;
 using ConEngine.Network;
 using ConEngine.Tracking;
 using ConEngine.Configuration;
@@ -47,6 +49,19 @@ public class WatcherEngine
     /// </summary>
     public int TrackedHostCount => _hostTrackers.Count;
 
+    // Temporary bridge until the Task 12 rewrite: adapts legacy HostTrackingOptions
+    // to the PingProfile the tracker now requires.
+    private PingProfile BridgeProfile => new()
+    {
+        Name = "Bridge",
+        HistorySize = _trackingOptions.HistorySize,
+        MinUsableSample = _trackingOptions.MinUsableSample,
+        RespondingThreshold = _trackingOptions.RespondingThreshold,
+        FalteringThreshold = _trackingOptions.FalteringThreshold,
+        DownThreshold = _trackingOptions.DownThreshold,
+        RecoveringThreshold = _trackingOptions.RecoveringThreshold,
+    };
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         return Task.Run(async () =>
@@ -80,8 +95,8 @@ public class WatcherEngine
     private void HandlePingResult(PingResult message)
     {
         // Get or create tracker for this host
-        var tracker = _hostTrackers.GetOrAdd(message.IpAddress, 
-            ipAddress => new HostTracker(ipAddress, _trackingOptions, _loggerFactory.CreateLogger<HostTracker>()));
+        var tracker = _hostTrackers.GetOrAdd(message.IpAddress,
+            ipAddress => new HostTracker(ipAddress, BridgeProfile, _timeProvider, _loggerFactory.CreateLogger<HostTracker>()));
 
         // Record the ping result in the tracker
         tracker.RecordPingResult(message);
@@ -103,10 +118,10 @@ public class WatcherEngine
         _hostTrackers.GetOrAdd(ipAddress, 
             ip =>
             {
-                HostTracker tracker = new HostTracker(ip, _trackingOptions, _loggerFactory.CreateLogger<HostTracker>());
-                tracker.HostStateChangeSource.Subscribe(status =>
+                HostTracker tracker = new HostTracker(ip, BridgeProfile, _timeProvider, _loggerFactory.CreateLogger<HostTracker>());
+                tracker.HostStateChangeSource.Subscribe(t =>
                 {
-                    _log.LogInformation("Host status updated: {Status}", status);
+                    _log.LogInformation("Host state changed: {From} -> {To} ({Reason})", t.From, t.To, t.Reason);
                 });
                 return tracker;
             });

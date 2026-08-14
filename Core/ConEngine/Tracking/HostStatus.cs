@@ -9,7 +9,8 @@ public enum HostState
     Responding,
     Faltering,
     Down,
-    Recovering
+    Recovering,
+    Unreachable
 }
 
 /// <summary>
