@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ConCore;
+using ConEngine.Scheduling;
 using Microsoft.Extensions.Logging;
 using System.Reactive;
 using System.Reactive.Subjects;
@@ -54,10 +55,12 @@ public class PingManager : IDisposable
     /// Gets or creates a PingController for the specified IP address.
     /// </summary>
     /// <param name="ipAddress">The IP address to ping.</param>
+    /// <param name="cadence">Decides when each ping happens.</param>
+    /// <param name="timeoutMs">Per-ping timeout in milliseconds.</param>
     /// <returns>A PingController configured for the specified IP address.</returns>
-    public PingController GetOrCreateController(IPAddress ipAddress)
+    public PingController GetOrCreateController(IPAddress ipAddress, IPingCadence cadence, int timeoutMs)
     {
-        lock (_lock)    
+        lock (_lock)
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(PingManager));
@@ -70,6 +73,8 @@ public class PingManager : IDisposable
                 controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
                 controller.Launch(ipAddress,
                     _resultWriter,
+                    cadence,
+                    timeoutMs,
                     _globalCancellationToken);
                 _pingControllers[ipAddress] = controller;
 

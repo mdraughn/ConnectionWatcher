@@ -3,8 +3,8 @@ using System.Threading.Tasks;
 using System.Net.NetworkInformation;
 using System;
 using System.Threading.Channels;
-using System.Xml;
 using ConCore;
+using ConEngine.Scheduling;
 using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Network;
@@ -22,19 +22,25 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     private Task? _pingTask;
     private IPAddress? _ipAddress = null;
     private ChannelWriter<PingResult>? _resultWriter;
+    private IPingCadence? _cadence;
+    private int _timeoutMs;
     private readonly CancellationTokenSource _localCancellationTokenSource = new();
     private CancellationToken _cancellationToken;
 
     public Task? Task => _pingTask;
 
     /// <summary>
-    /// Starts pinging the specified IP address and sending results through the channel.
+    /// Starts pinging the specified IP address, pacing pings via the cadence,
+    /// and sending results through the channel.
     /// </summary>
     /// <param name="ipAddress">The IP address to ping.</param>
     /// <param name="resultWriter">Channel to report results.</param>
+    /// <param name="cadence">Decides when each ping happens (may park indefinitely).</param>
+    /// <param name="timeoutMs">Per-ping timeout in milliseconds.</param>
     /// <param name="cancellationToken"></param>
     /// <returns>A task that completes when the ping operation is stopped.</returns>
-    public Task Launch(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter, CancellationToken cancellationToken)
+    public Task Launch(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter,
+        IPingCadence cadence, int timeoutMs, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -45,6 +51,8 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _localCancellationTokenSource.Token).Token;
             _ipAddress = ipAddress;
             _resultWriter = resultWriter;
+            _cadence = cadence;
+            _timeoutMs = timeoutMs;
 
             // Start long-running ping task
             _pingTask = Task.Run(()=>PollingLoop(ipAddress), _cancellationToken);
@@ -65,25 +73,14 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
             {
                 try
                 {
-                    log.LogTrace("Pinging {ipAddress} ...", ipAddress);
-                    var reply = await ping.PingAsync(3000).ConfigureAwait(false);
-                    if(reply.Success)
-                    {
-                        log.LogTrace("Ping received from {ipAddress}, {pingTime} ms", ipAddress, reply.RoundtripTime);
-                    } else
-                    {
-                        log.LogTrace("Ping timeout for {ipAddress}", ipAddress);
-                    }
+                    // Cadence first: honors initial phase offsets and parking.
+                    await _cadence!.WaitForNextPingAsync(_cancellationToken).ConfigureAwait(false);
+                    if(!IsRunnable())
+                        break;
 
-                    // Send the ping result through the channel
+                    var reply = await ping.PingAsync(_timeoutMs).ConfigureAwait(false);
+                    log.LogTrace("Ping result for {ipAddress}: {reply}", ipAddress, reply);
                     SendMessage(ipAddress, reply);
-
-                    // Wait before next ping (only if we're still running)
-                    if(IsRunnable())
-                    {
-                        await Task.Delay(TimeSpan.FromMilliseconds(1000), timeProvider, _cancellationToken)
-                            .ConfigureAwait(false);
-                    }
                 }
                 catch(OperationCanceledException) when(_cancellationToken.IsCancellationRequested)
                 {
@@ -93,17 +90,9 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 }
                 catch(Exception pingEx)
                 {
+                    // Fault isolation: report a failed sample and keep the loop alive.
                     log.LogError(pingEx, "Error pinging {ipAddress}", ipAddress);
-                    // Handle individual ping errors - send error result but continue pinging
-                    var errorResult = new PingResult(ipAddress, false, 0, $"Ping error: {pingEx.Message}");
-                    SendMessage(ipAddress, errorResult);
-
-                    // Wait before retrying
-                    if(IsRunnable())
-                    {
-                        await Task.Delay(TimeSpan.FromMilliseconds(1000), timeProvider, _cancellationToken)
-                            .ConfigureAwait(false);
-                    }
+                    SendMessage(ipAddress, new PingResult(ipAddress, false, 0, $"Ping error: {pingEx.Message}"));
                 }
             }
         }
@@ -115,13 +104,11 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
         catch(Exception ex)
         {
             // Handle unexpected errors
-            log.LogError(ex, "Error pinging {ipAddress}", _ipAddress);
+            log.LogError(ex, "Ping loop for {ipAddress} terminated unexpectedly", _ipAddress);
         }
-        finally
-        {
-            _resultWriter?.Complete();
-        }
-
+        // NOTE: no writer completion here. The result channel is shared by all
+        // controllers and owned by PingManager; completing it would kill the
+        // stream for every other host.
     }
 
     /// <summary>

@@ -126,7 +126,8 @@ public class WatcherEngine
                 return tracker;
             });
         
-        _manager?.GetOrCreateController(ipAddress);
+        _manager?.GetOrCreateController(ipAddress,
+            new Scheduling.FixedIntervalCadence(TimeSpan.FromSeconds(1), _timeProvider), timeoutMs: 3000);
         
         _log.LogInformation("Started watching {ipAddress}. Total tracked hosts: {trackedCount}",
             ipAddress, _hostTrackers.Count);
