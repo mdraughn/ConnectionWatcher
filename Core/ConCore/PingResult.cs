@@ -14,9 +14,10 @@ namespace ConCore
         /// <param name="success">Whether the ping was successful.</param>
         /// <param name="roundtripTime">The round-trip time in milliseconds.</param>
         /// <param name="message"></param>
-        public PingResult(IPAddress ipAddress, bool success, long roundtripTime, string? message = null)
+        public PingResult(IPAddress ipAddress, bool success, long roundtripTime, string? message = null,
+            DateTimeOffset? timestamp = null)
         {
-            Timestamp = DateTimeOffset.UtcNow;
+            Timestamp = timestamp ?? DateTimeOffset.UtcNow;
             IpAddress = ipAddress ?? throw new ArgumentNullException(nameof(ipAddress));
             Success = success;
             RoundtripTime = roundtripTime;
