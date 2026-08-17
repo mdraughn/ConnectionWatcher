@@ -57,6 +57,7 @@ if (app.Environment.IsDevelopment())
 var api = app.MapGroup("/api/v1");
 api.MapConfig();
 api.MapStatus();
+api.MapHistory();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {

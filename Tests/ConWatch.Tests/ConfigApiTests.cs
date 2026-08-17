@@ -68,8 +68,9 @@ public class ConfigApiTests : IDisposable
                 && status.Verdict is { State: "Healthy" };
         });
 
-        var final = (await GetStatus())!;
-        Assert.Equal(3, final.Targets.Count);
+        StatusDto? final = null;
+        await Eventually(async () => (final = await GetStatus()) is not null);
+        Assert.Equal(3, final!.Targets.Count);
         Assert.Single(final.Pools);
         Assert.Contains(final.Targets, t => t.Name == "Google" && t.Address == "8.8.8.8");
     }
