@@ -9,7 +9,8 @@ public enum TransitionTrigger
     ParentDown,
     ParentRecovered,
     ResolutionFailed,
-    PoolMembersChanged
+    PoolMembersChanged,
+    VerdictChanged
 }
 
 /// <summary>Structured evidence behind a transition.</summary>
@@ -23,6 +24,8 @@ public record TransitionReason
     /// <summary>The ancestor target responsible, for ParentDown/ParentRecovered.</summary>
     public Guid? AncestorId { get; init; }
     public string? Detail { get; init; }
+    /// <summary>Verdict label (e.g. "InternetWeather") when Trigger is VerdictChanged.</summary>
+    public string? Verdict { get; init; }
 
     public override string ToString()
     {

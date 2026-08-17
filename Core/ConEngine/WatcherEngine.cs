@@ -39,17 +39,23 @@ public class WatcherEngine
     private TopologyCoordinator? _topology;
     private CancellationTokenSource? _cts;
 
+    private readonly VerdictOptions _verdictOptions;
+
     public WatcherEngine(TimeProvider timeProvider, IPingTransceiverFactory pingFactory,
         IDomainNameResolverFactory resolverFactory, ILoggerFactory loggerFactory,
-        IOptions<WatcherOptions> options)
+        IOptions<WatcherOptions> options, IOptions<VerdictOptions>? verdictOptions = null)
     {
         _timeProvider = timeProvider;
         _pingFactory = pingFactory;
         _resolverFactory = resolverFactory;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _verdictOptions = verdictOptions?.Value ?? new VerdictOptions();
         _log = loggerFactory.CreateLogger<WatcherEngine>();
     }
+
+    /// <summary>The verdict layer, or null when no anchor pool is configured.</summary>
+    public VerdictCoordinator? Verdict { get; private set; }
 
     /// <summary>Merged transition stream: every monitor and every pool.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
@@ -107,6 +113,25 @@ public class WatcherEngine
             _subscriptions.Add(coordinator.TransitionSource.Subscribe(_transitionSubject.OnNext));
             coordinator.Start();
             _poolCoordinators.Add(coordinator);
+        }
+
+        // Verdict layer, if an anchor pool is configured.
+        if (_verdictOptions.AnchorPool is { Length: > 0 } anchorPoolName)
+        {
+            var anchorPool = _graph.Pools.Values.FirstOrDefault(p =>
+                p.Name.Equals(anchorPoolName, StringComparison.OrdinalIgnoreCase));
+            if (anchorPool is null)
+            {
+                _log.LogWarning("Verdict disabled: anchor pool '{Pool}' not found", anchorPoolName);
+            }
+            else
+            {
+                Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
+                    _verdictOptions.WeatherThreshold, _timeProvider,
+                    _loggerFactory.CreateLogger<VerdictCoordinator>());
+                _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
+                Verdict.Start();
+            }
         }
 
         // Ping plumbing: one manager, results routed by IP.
@@ -197,6 +222,7 @@ public class WatcherEngine
         _subscriptions.Clear();
 
         _topology?.Dispose();
+        Verdict?.Dispose();
         foreach (var pool in _poolCoordinators)
             pool.Dispose();
         _manager?.Dispose();

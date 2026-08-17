@@ -39,6 +39,10 @@ try
             .Bind(context.Configuration.GetSection(WatcherOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<WatcherOptions>, WatcherOptionsValidator>();
+
+        // Verdict layer configuration (optional; disabled when AnchorPool is unset)
+        services.AddOptions<VerdictOptions>()
+            .Bind(context.Configuration.GetSection(VerdictOptions.SectionName));
         
         // Configure PingTransceiverOptions with validation
         services.AddOptions<PingTransceiverOptions>()
