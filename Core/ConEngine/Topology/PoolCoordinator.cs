@@ -24,6 +24,9 @@ public class PoolCoordinator : IDisposable
 
     public HostState CurrentState { get; private set; } = HostState.Initializing;
 
+    /// <summary>The pool this coordinator aggregates.</summary>
+    public PoolDefinition Pool => _pool;
+
     public PoolCoordinator(PoolDefinition pool, IReadOnlyList<TargetMonitor> members,
         TimeProvider timeProvider, ILogger<PoolCoordinator> log)
     {

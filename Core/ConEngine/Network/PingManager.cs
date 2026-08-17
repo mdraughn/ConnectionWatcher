@@ -215,12 +215,10 @@ public class PingManager : IDisposable
 
                     // Dispose the message processing task
                     _messageProcessingTask?.Dispose();
-                
-                    // Dispose the logger factory if we created it
-                    if (_loggerFactory is LoggerFactory lf)
-                    {
-                        lf.Dispose();
-                    }
+
+                    // NOTE: the ILoggerFactory is owned by the host, never by
+                    // this class — disposing it here killed all logging after
+                    // an engine rebuild.
                 }
 
                 _disposed = true;

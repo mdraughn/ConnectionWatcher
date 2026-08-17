@@ -4,6 +4,7 @@ using ConInfrastructure;
 using ConPersistence;
 using ConPersistence.Services;
 using ConWatch;
+using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +55,8 @@ if (app.Environment.IsDevelopment())
 }
 
 var api = app.MapGroup("/api/v1");
+api.MapConfig();
+api.MapStatus();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {
