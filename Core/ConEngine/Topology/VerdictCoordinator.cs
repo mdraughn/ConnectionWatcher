@@ -149,9 +149,16 @@ public class VerdictCoordinator : IDisposable
 
     public void Dispose()
     {
-        foreach (var s in _subscriptions)
+        List<IDisposable> toDispose;
+        lock (_lock)
+        {
+            toDispose = new List<IDisposable>(_subscriptions);
+            _subscriptions.Clear();
+        }
+        if (toDispose.Count == 0)
+            return; // already disposed
+        foreach (var s in toDispose)
             s.Dispose();
-        _subscriptions.Clear();
         _transitionSubject.OnCompleted();
         GC.SuppressFinalize(this);
     }

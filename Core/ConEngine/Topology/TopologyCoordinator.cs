@@ -55,11 +55,18 @@ public class TopologyCoordinator : IDisposable
         }
     }
 
+    private readonly Lock _disposeLock = new();
+
     public void Dispose()
     {
-        foreach (var s in _subscriptions)
+        List<IDisposable> toDispose;
+        lock (_disposeLock)
+        {
+            toDispose = new List<IDisposable>(_subscriptions);
+            _subscriptions.Clear();
+        }
+        foreach (var s in toDispose)
             s.Dispose();
-        _subscriptions.Clear();
         GC.SuppressFinalize(this);
     }
 }

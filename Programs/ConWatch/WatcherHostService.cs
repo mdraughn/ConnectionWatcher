@@ -63,10 +63,20 @@ public class WatcherHostService(
     {
         configService.ConfigChanged -= OnConfigChanged;
         _debounceCts?.Cancel();
-        if (Engine is { } engine)
+        // Serialize with any in-flight rebuild: two concurrent engine.StopAsync
+        // calls race inside the coordinators' Dispose.
+        await _rebuildLock.WaitAsync(CancellationToken.None);
+        try
         {
-            Engine = null;
-            await engine.StopAsync();
+            if (Engine is { } engine)
+            {
+                Engine = null;
+                await engine.StopAsync();
+            }
+        }
+        finally
+        {
+            _rebuildLock.Release();
         }
     }
 
