@@ -16,6 +16,8 @@ public class WatcherOptions
 /// <summary>One monitored endpoint, as authored in configuration.</summary>
 public class TargetConfig
 {
+    /// <summary>Stable id; when null, the graph generates one (file-based config).</summary>
+    public Guid? Id { get; set; }
     public string Name { get; set; } = "";
     /// <summary>IP literal or DNS hostname.</summary>
     public string Address { get; set; } = "";
@@ -28,6 +30,8 @@ public class TargetConfig
 /// <summary>A rotation pool, as authored in configuration.</summary>
 public class PoolConfig
 {
+    /// <summary>Stable id; when null, the graph generates one (file-based config).</summary>
+    public Guid? Id { get; set; }
     public string Name { get; set; } = "";
     public List<string> Members { get; set; } = new();
     public string? Parent { get; set; }

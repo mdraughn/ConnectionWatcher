@@ -32,6 +32,7 @@ public class WatcherEngine
     private readonly ConcurrentDictionary<IPAddress, TargetMonitor> _routingTable = new();
     private readonly List<IDisposable> _subscriptions = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
+    private readonly Subject<(Guid TargetId, PingResult Result)> _pingSampleSubject = new();
 
     private TargetGraph? _graph;
     private PingManager? _manager;
@@ -52,6 +53,9 @@ public class WatcherEngine
 
     /// <summary>Merged transition stream: every monitor and every pool.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
+
+    /// <summary>Every routed ping result, tagged with its target id (feeds rollups).</summary>
+    public IObservable<(Guid TargetId, PingResult Result)> PingSampleSource => _pingSampleSubject;
     public IReadOnlyDictionary<Guid, TargetMonitor> Monitors => _monitors;
     public IReadOnlyList<PoolCoordinator> PoolCoordinators => _poolCoordinators;
     public TargetGraph Graph => _graph ?? throw new InvalidOperationException("Engine not started");
@@ -111,7 +115,10 @@ public class WatcherEngine
             result =>
             {
                 if (_routingTable.TryGetValue(result.IpAddress, out var monitor))
+                {
                     monitor.RecordPingResult(result);
+                    _pingSampleSubject.OnNext((monitor.Target.Id, result));
+                }
             },
             ex => _log.LogError(ex, "Error in ping result stream"),
             () => _log.LogInformation("Ping result stream completed")));

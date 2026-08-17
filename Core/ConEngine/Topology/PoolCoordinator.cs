@@ -68,6 +68,7 @@ public class PoolCoordinator : IDisposable
                 _members.Select(m => $"{m.Target.Name}={m.CurrentState}"));
             var transition = new TargetTransition
             {
+                Kind = TransitionSubjectKind.Pool,
                 TargetId = _pool.Id,
                 TargetName = _pool.Name,
                 From = from,

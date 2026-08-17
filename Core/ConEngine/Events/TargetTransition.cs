@@ -45,9 +45,18 @@ public record AnalysisTransition
     public required HostStatus Status { get; init; }
 }
 
+/// <summary>What kind of subject a transition describes.</summary>
+public enum TransitionSubjectKind
+{
+    Target,
+    Pool,
+    Verdict
+}
+
 /// <summary>A target-level state transition: the event the whole system revolves around.</summary>
 public record TargetTransition
 {
+    public TransitionSubjectKind Kind { get; init; } = TransitionSubjectKind.Target;
     public required Guid TargetId { get; init; }
     public required string TargetName { get; init; }
     public required HostState From { get; init; }

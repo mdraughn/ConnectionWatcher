@@ -94,6 +94,7 @@ public class PoolCoordinatorTests
         Assert.Equal(HostState.Down, _pool.CurrentState);
         var t = _poolTransitions.Last();
         Assert.Equal(TransitionTrigger.PoolMembersChanged, t.Reason.Trigger);
+        Assert.Equal(TransitionSubjectKind.Pool, t.Kind);
         Assert.Contains("Google=Down", t.Reason.Detail);
     }
 

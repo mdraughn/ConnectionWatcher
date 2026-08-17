@@ -43,7 +43,7 @@ public class TargetGraph
         foreach (var (profileName, config) in options.Profiles)
             profiles[profileName] = config.ToProfile(profileName);
 
-        var idsByName = options.Targets.ToDictionary(t => t.Name, _ => Guid.NewGuid(), StringComparer.OrdinalIgnoreCase);
+        var idsByName = options.Targets.ToDictionary(t => t.Name, t => t.Id ?? Guid.NewGuid(), StringComparer.OrdinalIgnoreCase);
 
         var targets = options.Targets.ToDictionary(
             t => idsByName[t.Name],
@@ -60,7 +60,7 @@ public class TargetGraph
         var poolDefs = options.Pools
             .Select(p =>
             {
-                var id = Guid.NewGuid();
+                var id = p.Id ?? Guid.NewGuid();
                 return new PoolDefinition
                 {
                     Id = id,

@@ -50,6 +50,9 @@ public class TargetMonitor : IDisposable
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
     public IObservable<TargetStatus> StatusSource => _statusSubject;
 
+    /// <summary>Most recent status snapshot, for polling consumers (e.g. /status).</summary>
+    public TargetStatus? LastStatus { get; private set; }
+
     public HostState CurrentState
     {
         get { lock (_lock) { return _tracker?.CurrentState ?? _preTrackerState; } }
@@ -69,10 +72,14 @@ public class TargetMonitor : IDisposable
 
             _transitionSubscription = _tracker.HostStateChangeSource.Subscribe(OnAnalysisTransition);
             _statusSubscription = _tracker.HostStatusSource.Subscribe(status =>
-                _statusSubject.OnNext(new TargetStatus
+            {
+                var targetStatus = new TargetStatus
                 {
                     TargetId = Target.Id, TargetName = Target.Name, Host = status,
-                }));
+                };
+                LastStatus = targetStatus;
+                _statusSubject.OnNext(targetStatus);
+            });
 
             // Honor topology commands that arrived before we started.
             if (_pendingUnreachableAncestor is { } ancestor)
