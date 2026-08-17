@@ -22,6 +22,7 @@ API exposes all of it. This is the phase that turns the engine into a service.
 | Retention | Transitions **forever**. Minute rollups **90 days** → hourly; hourly **13 months** → daily; daily **forever**. All knobs configurable. |
 | API style | **Minimal APIs** under `/api/v1`, OpenAPI document always on, Swagger UI in development. **No auth** (LAN appliance; revisit in Phase 4). |
 | Simulator | ConWatch references real ICMP only (`ConInfrastructure`). The WPF simulator stays in ConTinker (Windows-only dev harness). Engine-level integration tests use the existing `FakePingTransceiverFactory`. |
+| Verdict layer | **Included in Phase 2** (added at design review): a `VerdictCoordinator` classifies overall internet health — Healthy / SiteIncident / InternetWeather / LinkDegraded / LinkDown — from existing states; its transitions are recorded like all others. |
 
 ## 3. Projects
 
@@ -53,10 +54,10 @@ directory is the container volume mount in Phase 4).
 ### Data tables
 
 - **Transitions**: `Id` INTEGER PK autoincrement, `Timestamp` (UTC),
-  `SubjectId` GUID, `SubjectName`, `SubjectKind` (Target|Pool), `FromState`,
-  `ToState`, `Trigger`, `SuccessRate?`, `SampleSize?`, `BurstLossRate?`,
-  `AncestorId?`, `Detail?`, `AvgRtt`. Indexes: (`SubjectId`,`Timestamp`),
-  (`Timestamp`). Never pruned.
+  `SubjectId` GUID, `SubjectName`, `SubjectKind` (Target|Pool|Verdict),
+  `FromState`, `ToState`, `Trigger`, `SuccessRate?`, `SampleSize?`,
+  `BurstLossRate?`, `AncestorId?`, `Detail?`, `Verdict?`, `AvgRtt`.
+  Indexes: (`SubjectId`,`Timestamp`), (`Timestamp`). Never pruned.
 - **Rollups**: `Id` INTEGER PK, `TargetId` GUID, `PeriodStart` (UTC),
   `Resolution` (Minute|Hour|Day), `PingCount`, `SuccessCount`, `RttAvg`,
   `RttMin`, `RttMax`. Unique index (`TargetId`,`Resolution`,`PeriodStart`).
@@ -78,6 +79,31 @@ directory is the container volume mount in Phase 4).
 2. **`WatcherEngine.PingSampleSource`**: public
    `IObservable<(Guid TargetId, PingResult Result)>`, emitted at the existing
    routing step where results are matched to monitors. Feeds the RollupCollector.
+3. **`VerdictCoordinator`** (new, `ConEngine.Topology`, same pattern as
+   PoolCoordinator): classifies overall internet health from existing states.
+   - **Anchor set**: the members of a configured pool (`Verdict:AnchorPool`,
+     e.g. "Internet"). Verdict is disabled with a startup warning if the
+     setting is absent or names no existing pool.
+   - **Rules**, evaluated on every relevant transition:
+     1. Any *ancestor* of the anchor set is `Down` → **LinkDown** (deepest
+        Down ancestor named as culprit). Ancestor `Faltering` → **LinkDegraded**.
+     2. Otherwise count anchors in `Down`/`Faltering`/`Recovering`
+        ("degraded"): 0 → **Healthy**; 1..(threshold−1) → **SiteIncident**
+        (names listed); ≥ `WeatherThreshold` (default 2) → **InternetWeather**.
+     3. Anchors still `Initializing`/`Starting` are excluded from counts;
+        before any anchor is determinable the verdict is **Unknown**.
+   - **Emission**: verdict changes emit a `TargetTransition` on the merged
+     stream with a synthetic subject (fixed GUID, name "Internet"),
+     `Trigger = VerdictChanged` (new enum member), `Reason.Verdict` (new
+     optional field) carrying the verdict label, and `Detail` the evidence
+     (e.g. "InternetWeather: 3 of 8 anchors degraded (Google=Down, ...)").
+     `From`/`To` map the verdict onto `HostState` for stream compatibility:
+     Healthy/SiteIncident→Responding, InternetWeather/LinkDegraded→Faltering,
+     LinkDown→Down, Unknown→Starting. A transition is emitted whenever the
+     verdict *label* changes, even if the mapped HostState is unchanged
+     (e.g. Healthy→SiteIncident is Responding→Responding).
+   - Config: appsettings section `Verdict { AnchorPool, WeatherThreshold }`
+     (system-level tuning, not part of the CRUD'd monitoring config).
 
 ## 6. Runtime services (ConPersistence, hosted by ConWatch)
 
@@ -112,7 +138,7 @@ directory is the container volume mount in Phase 4).
 
 | Route | Behavior |
 |---|---|
-| `GET /status` | Current state of all targets and pools from the live engine: state, success rate, avg RTT, sample size, resolved address |
+| `GET /status` | Current state of all targets and pools from the live engine (state, success rate, avg RTT, sample size, resolved address) plus the current **verdict** with its evidence |
 | `GET /targets` · `GET /targets/{id}` | List / fetch config |
 | `POST /targets` · `PUT /targets/{id}` · `DELETE /targets/{id}` | CRUD; 400 with validator messages, 404 unknown id, 409 delete-while-referenced |
 | `/profiles`, `/pools` | Same CRUD pattern |
@@ -137,6 +163,10 @@ No authentication in Phase 2 (LAN-only appliance; Phase 4 revisits exposure).
 
 ## 9. Testing
 
+- **ConEngine.Tests** additions: VerdictCoordinator rules — link-down beats
+  weather, single anchor down = SiteIncident, threshold crossing to
+  InternetWeather, degraded-ancestor = LinkDegraded, Unknown during startup,
+  label-change emission with unchanged mapped state.
 - **ConPersistence.Tests** (unit, SQLite in-memory): rollup bucket math and
   minute-boundary flushing (FakeTimeProvider), weighted downsampling
   arithmetic, retention boundary selection and idempotence, ConfigService
@@ -158,7 +188,11 @@ No authentication in Phase 2 (LAN-only appliance; Phase 4 revisits exposure).
 4. Minute rollups accumulate; a synthetic aged dataset downsamples correctly
    on the retention pass.
 5. Export → wipe → import restores identical config (same GUIDs).
-6. Both new test suites and the existing ConEngine.Tests are green.
+6. With intermediates healthy, taking one simulated anchor down yields a
+   SiteIncident verdict; taking a second down flips it to InternetWeather;
+   taking the router down flips it to LinkDown — each recorded as a
+   transition row with evidence.
+7. Both new test suites and the existing ConEngine.Tests are green.
 
 ## 11. Out of scope for Phase 2
 
