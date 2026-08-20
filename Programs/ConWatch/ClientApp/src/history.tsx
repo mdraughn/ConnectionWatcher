@@ -1,6 +1,127 @@
+// History island: subject + range pickers, stats, charts, and the ribbon.
+import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { StateRibbon } from "./components/StateRibbon";
+import { StatsRow } from "./components/StatsRow";
+import { TimeChart } from "./components/TimeChart";
+import { incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
+import type { RollupPoint, TransitionEvent } from "./lib/types";
+
+interface Subject {
+  id: string;
+  name: string;
+  kind: "target" | "pool" | "verdict";
+}
+
+const RANGES: Record<string, number> = {
+  "24h": 24 * 3_600_000,
+  "7d": 7 * 24 * 3_600_000,
+  "30d": 30 * 24 * 3_600_000,
+};
+
+async function fetchRollups(subjectId: string, from: Date, to: Date): Promise<RollupPoint[]> {
+  const url = `/api/v1/rollups/${subjectId}?from=${from.toISOString()}&to=${to.toISOString()}&resolution=auto`;
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  return (await response.json()).points as RollupPoint[];
+}
+
+async function fetchTransitions(subjectId: string, from: Date, to: Date): Promise<TransitionEvent[]> {
+  const url = `/api/v1/transitions?subjectId=${subjectId}&from=${from.toISOString()}&to=${to.toISOString()}&limit=1000`;
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  const items = (await response.json()).items as TransitionEvent[];
+  return items.reverse(); // API is newest-first; we want chronological
+}
+
+function App({ subjects }: { subjects: Subject[] }) {
+  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
+  const [rangeKey, setRangeKey] = useState("24h");
+  const [rollups, setRollups] = useState<RollupPoint[]>([]);
+  const [transitions, setTransitions] = useState<TransitionEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const subject = subjects.find((s) => s.id === subjectId);
+  const to = useMemo(() => new Date(), [subjectId, rangeKey]);
+  const from = useMemo(() => new Date(to.getTime() - (RANGES[rangeKey] ?? RANGES["24h"])), [to, rangeKey]);
+
+  useEffect(() => {
+    if (!subject) return;
+    let live = true;
+    setLoading(true);
+    Promise.all([
+      subject.kind === "target" ? fetchRollups(subject.id, from, to) : Promise.resolve([]),
+      fetchTransitions(subject.id, from, to),
+    ]).then(([r, t]) => {
+      if (!live) return;
+      setRollups(r);
+      setTransitions(t);
+      setLoading(false);
+    });
+    return () => { live = false; };
+  }, [subject, from, to]);
+
+  if (!subject) return <p>No subjects yet — add targets on the Config page.</p>;
+
+  const stats = incidents(transitions, to.toISOString());
+  const uptime = subject.kind === "target" ? uptimePercent(rollups) : null;
+  const totalSuccess = rollups.reduce((n, p) => n + p.successCount, 0);
+  const avgRtt = totalSuccess > 0
+    ? rollups.reduce((n, p) => n + p.rttAvg * p.successCount, 0) / totalSuccess
+    : null;
+  const latency = rollups.map((p) => ({ x: new Date(p.periodStart), y: p.rttAvg }));
+  const lossBars = rollups.map((p) => ({
+    x: new Date(p.periodStart),
+    y: p.pingCount > 0 ? (100 * (p.pingCount - p.successCount)) / p.pingCount : null,
+  }));
+  const segments = ribbonSegments(transitions, from.toISOString(), to.toISOString());
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+        <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} style={{ maxWidth: "18rem" }}>
+          {subjects.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.kind === "verdict" ? "🌐 " : s.kind === "pool" ? "▣ " : ""}{s.name}
+            </option>
+          ))}
+        </select>
+        <select value={rangeKey} onChange={(e) => setRangeKey(e.target.value)} style={{ maxWidth: "8rem" }}>
+          <option value="24h">Last 24 h</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+      </div>
+
+      {loading && <p aria-busy="true">loading…</p>}
+
+      <StatsRow uptime={uptime} incidentCount={stats.count} longestMs={stats.longestMs} avgRtt={avgRtt} />
+
+      <h4>State timeline</h4>
+      <StateRibbon segments={segments} rangeStart={from} rangeEnd={to} />
+
+      {subject.kind === "target" && (
+        <>
+          <h4>Latency (avg ms)</h4>
+          <div style={{ height: 180 }}>
+            <TimeChart series={[{ label: "RTT avg", data: latency }]} height={180} />
+          </div>
+          <h4>Loss (%)</h4>
+          <div style={{ height: 120 }}>
+            <TimeChart series={[{ label: "loss %", data: lossBars }]} height={120} />
+          </div>
+        </>
+      )}
+      {subject.kind !== "target" && (
+        <p style={{ opacity: 0.7 }}>Pools and the verdict have no ping rollups; their story is the timeline above.</p>
+      )}
+    </div>
+  );
+}
 
 const el = document.getElementById("history-root");
-if (el) {
-  createRoot(el).render(<p>island pending</p>);
+const dataEl = document.getElementById("history-data");
+if (el && dataEl) {
+  const subjects = JSON.parse(dataEl.textContent ?? "[]") as Subject[];
+  createRoot(el).render(<App subjects={subjects} />);
 }
