@@ -1,0 +1,51 @@
+export interface TargetStatus {
+  id: string;
+  name: string;
+  address: string | null;
+  state: string;
+  successRate: number;
+  avgRtt: number;
+  sampleSize: number;
+}
+
+export interface PoolStatus {
+  id: string;
+  name: string;
+  state: string;
+}
+
+export interface VerdictStatus {
+  state: string;
+  detail: string | null;
+}
+
+export interface Snapshot {
+  verdict: VerdictStatus | null;
+  targets: TargetStatus[];
+  pools: PoolStatus[];
+}
+
+export interface TransitionEvent {
+  id?: number;
+  timestamp: string;
+  subjectId: string;
+  subjectName: string;
+  subjectKind: string;
+  from: string;
+  to: string;
+  trigger: string;
+  detail: string | null;
+  verdict: string | null;
+  successRate: number | null;
+  sampleSize: number | null;
+  burstLossRate: number | null;
+}
+
+export interface RollupPoint {
+  periodStart: string;
+  pingCount: number;
+  successCount: number;
+  rttAvg: number;
+  rttMin: number;
+  rttMax: number;
+}
