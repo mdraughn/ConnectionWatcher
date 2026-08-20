@@ -25,7 +25,8 @@ public class WatcherHostService(
     IOptions<PersistenceOptions> persistenceOptions,
     IConfiguration configuration,
     TransitionRecorder recorder,
-    RollupCollector collector) : IHostedService
+    RollupCollector collector,
+    StatusBroadcaster broadcaster) : IHostedService
 {
     private readonly ILogger<WatcherHostService> _log = loggerFactory.CreateLogger<WatcherHostService>();
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
@@ -96,6 +97,7 @@ public class WatcherHostService(
             loggerFactory, Options.Create(options), verdictOptions);
         recorder.Attach(engine.TransitionSource);
         collector.Attach(engine.PingSampleSource);
+        broadcaster.Attach(engine);
         await engine.StartAsync(_appStopping);
         Engine = engine;
         _log.LogInformation("Engine started with {Count} targets", options.Targets.Count);

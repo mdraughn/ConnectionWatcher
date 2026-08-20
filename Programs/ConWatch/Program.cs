@@ -42,6 +42,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<StatusBroadcaster>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());
 
 var app = builder.Build();
 
@@ -58,6 +61,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapRazorPages();
+app.MapHub<StatusHub>("/hubs/status");
 
 var api = app.MapGroup("/api/v1");
 api.MapConfig();
