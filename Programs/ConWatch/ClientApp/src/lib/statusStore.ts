@@ -91,6 +91,11 @@ export function createStatusStore() {
       }
       if (changed) notify();
     },
+    seedRecent(transitions: TransitionEvent[]): void {
+      state.recentTransitions = transitions.slice(0, MAX_RECENT);
+      state.latestTransition = transitions[0] ?? state.latestTransition;
+      notify();
+    },
     togglePin(id: string): void {
       const next = togglePin(row(id));
       rows.set(id, next);

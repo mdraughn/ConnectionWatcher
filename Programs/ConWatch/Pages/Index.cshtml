@@ -1,11 +1,46 @@
 @page
+@using ConEngine.Tracking
 @model ConWatch.Pages.IndexModel
 @{
     ViewData["Title"] = "Dashboard — ConnectionWatcher";
 }
 
+@functions {
+    private void RenderNode(TargetMonitor monitor)
+    {
+        <li>
+            <div class="cw-row">
+                <span class="dot @monitor.CurrentState.ToString().ToLowerInvariant()"></span>
+                <span>@monitor.Target.Name</span>
+                <span class="stats">@monitor.CurrentState</span>
+            </div>
+            @if (Model.Children.TryGetValue(monitor.Target.Id, out var children))
+            {
+                <ul>
+                    @foreach (var child in children)
+                    {
+                        RenderNode(child);
+                    }
+                </ul>
+            }
+        </li>
+    }
+}
+
+<script id="initial-data" type="application/json">@Html.Raw(Model.InitialDataJson)</script>
+
 <div id="dashboard-root">
-    <p aria-busy="true">island pending</p>
+    @* Server-rendered fallback: correct at page load; the island replaces it. *@
+    <ul class="cw-tree">
+        @foreach (var root in Model.Roots)
+        {
+            RenderNode(root);
+        }
+    </ul>
+    @if (Model.Roots.Count == 0)
+    {
+        <p>No targets configured yet — add some on the <a href="/Config/Targets">Config</a> page.</p>
+    }
 </div>
 
 @section Scripts {

@@ -15,14 +15,25 @@ describe("expansion rule C", () => {
     expect(isExpanded(row)).toBe(true);
   });
 
-  it("Starting after leaving the starting family expands (release path)", () => {
+  it("Starting after release from Unreachable expands (re-prove path)", () => {
     let row = initialRow();
     row = onStateChange(row, "Starting", 0);
-    row = onStateChange(row, "Responding", 1000);   // left starting family
+    row = onStateChange(row, "Responding", 1000);
     row = onStateChange(row, "Unreachable", 2000);  // parent down
     expect(isExpanded(row)).toBe(true);
     row = onStateChange(row, "Starting", 3000);     // released, re-proving
     expect(isExpanded(row)).toBe(true);
+  });
+
+  it("engine-rebuild Starting (from Responding) stays collapsed", () => {
+    let row = initialRow();
+    row = onStateChange(row, "Starting", 0);
+    row = onStateChange(row, "Responding", 1000);
+    expect(isExpanded(row)).toBe(false);
+    row = onStateChange(row, "Starting", 2000);     // config-change rebuild
+    expect(isExpanded(row)).toBe(false);
+    row = onStateChange(row, "Responding", 3000);
+    expect(isExpanded(row)).toBe(false);
   });
 
   it("recovery holds through cooldown then collapses on tick", () => {

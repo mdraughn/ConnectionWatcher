@@ -61,6 +61,13 @@ describe("statusStore", () => {
     expect(second.isExpanded("t1")).toBe(true);
   });
 
+  it("seeds recent transitions from the API", () => {
+    const store = createStatusStore();
+    store.seedRecent([transition({ subjectName: "A" }), transition({ subjectName: "B" })]);
+    expect(store.getState().recentTransitions.length).toBe(2);
+    expect(store.getState().latestTransition?.subjectName).toBe("A");
+  });
+
   it("notifies subscribers", () => {
     const store = createStatusStore();
     const spy = vi.fn();
