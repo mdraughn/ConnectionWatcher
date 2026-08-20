@@ -1,0 +1,13 @@
+@page
+@model ConWatch.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard — ConnectionWatcher";
+}
+
+<div id="dashboard-root">
+    <p aria-busy="true">island pending</p>
+</div>
+
+@section Scripts {
+    <script type="module" src="~/js/dashboard.js" asp-append-version="true"></script>
+}

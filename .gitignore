@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 data/
 .superpowers/
+
+Programs/ConWatch/ClientApp/node_modules/
+Programs/ConWatch/wwwroot/js/

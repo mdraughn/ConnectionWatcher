@@ -17,4 +17,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="ClientApp\**" Exclude="ClientApp\node_modules\**;ClientApp\dist\**" />
+    <Content Remove="ClientApp\**" />
+  </ItemGroup>
+
+  <Target Name="EnsureClientBuild" BeforeTargets="Build"
+          Condition="!Exists('wwwroot\js\dashboard.js')">
+    <Exec Command="npm ci" WorkingDirectory="ClientApp" Condition="!Exists('ClientApp\node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="ClientApp" />
+  </Target>
+
+  <Target Name="PublishClientBuild" BeforeTargets="ComputeFilesToPublish">
+    <Exec Command="npm ci" WorkingDirectory="ClientApp" />
+    <Exec Command="npm run build" WorkingDirectory="ClientApp" />
+  </Target>
+
 </Project>

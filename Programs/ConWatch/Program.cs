@@ -41,8 +41,11 @@ builder.Services.AddSingleton<WatcherHostService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
 
 builder.Services.AddOpenApi();
+builder.Services.AddRazorPages();
 
 var app = builder.Build();
+
+app.UseStaticFiles();
 
 app.MapOpenApi();
 if (app.Environment.IsDevelopment())
@@ -53,6 +56,8 @@ if (app.Environment.IsDevelopment())
         o.RoutePrefix = "swagger";
     });
 }
+
+app.MapRazorPages();
 
 var api = app.MapGroup("/api/v1");
 api.MapConfig();
