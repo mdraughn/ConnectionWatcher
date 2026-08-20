@@ -17,13 +17,17 @@ public class IcmpTtlProbe : ITtlProbe
         using var ping = new Ping();
         try
         {
+            // Windows reports RoundtripTime=0 for TtlExpired replies, so time it ourselves.
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var reply = await ping.SendPingAsync(destination, TimeSpan.FromMilliseconds(timeoutMs),
                 Payload, new PingOptions(ttl, dontFragment: true), ct).ConfigureAwait(false);
+            var elapsed = stopwatch.ElapsedMilliseconds;
+            var rtt = reply.RoundtripTime > 0 ? reply.RoundtripTime : elapsed;
             return reply.Status switch
             {
-                IPStatus.Success => new TtlProbeResult(reply.Address, reply.RoundtripTime, true, false),
+                IPStatus.Success => new TtlProbeResult(reply.Address, rtt, true, false),
                 IPStatus.TtlExpired or IPStatus.TimeExceeded =>
-                    new TtlProbeResult(reply.Address, reply.RoundtripTime, false, false),
+                    new TtlProbeResult(reply.Address, rtt, false, false),
                 IPStatus.TimedOut => new TtlProbeResult(null, 0, false, true),
                 _ => new TtlProbeResult(null, 0, false, true),
             };

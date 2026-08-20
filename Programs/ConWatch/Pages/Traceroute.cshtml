@@ -5,4 +5,24 @@
 }
 
 <h2>Traceroute</h2>
-<p>Traceroute assist arrives in a later task.</p>
+<p>
+    Discover the hops between you and a destination — your router, the cable
+    modem, and the ISP infrastructure beyond it — then add the interesting ones
+    as monitored targets. Hops that are already monitored become the suggested
+    parent for hops past them.
+</p>
+
+<form id="trace-form" class="grid">
+    <input id="host" name="host" value="8.8.8.8" placeholder="IP or hostname" required />
+    <button id="run" type="submit">Run traceroute</button>
+</form>
+<ul class="form-errors" id="errors"></ul>
+
+<table id="hops">
+    <thead><tr><th>TTL</th><th>Address</th><th>Hostname</th><th>RTT</th><th></th></tr></thead>
+    <tbody></tbody>
+</table>
+
+@section Scripts {
+    <script src="~/lib/site-traceroute.js" asp-append-version="true"></script>
+}
