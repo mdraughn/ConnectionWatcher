@@ -35,4 +35,24 @@ dotnet run --project Programs/ConWatch
   internet anchors; with intermediates healthy, one degraded anchor is a
   SiteIncident, two or more (configurable) is InternetWeather.
 
+## Web UI
+
+ConWatch serves its UI at the root:
+
+- **Dashboard** (`/`) — verdict banner, live reachability tree (SignalR).
+  Misbehaving targets expand in place into tiles with a 60-minute chart and the
+  transition evidence; click any row to pin it open. Bottom status bar shows
+  the latest event.
+- **History** (`/History`) — uptime stats, latency band, loss chart, and a
+  state-timeline ribbon per target; the "Internet (verdict)" subject shows your
+  internet-weather history.
+- **Config** (`/Config/Targets`, `/Config/Profiles`, `/Config/Pools`) — CRUD
+  with inline validation errors, plus whole-config export/import.
+- **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
+  monitored targets with the right parent pre-filled.
+
+Frontend dev loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside
+`dotnet run`; `npm test` runs the Vitest suite. `dotnet publish` builds the
+bundles automatically.
+
 Design specs and implementation plans live in `docs/superpowers/`.
