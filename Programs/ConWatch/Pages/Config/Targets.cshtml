@@ -1,8 +1,98 @@
 @page
+@using System.Text.Json
 @model ConWatch.Pages.Config.TargetsModel
 @{
     ViewData["Title"] = "Targets — ConnectionWatcher";
+    var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
 <h2>Targets</h2>
-<p>Config editor arrives in a later task.</p>
+<p>Changes apply within seconds — the engine rebuilds automatically.</p>
+
+<table>
+    <thead><tr><th>Name</th><th>Address</th><th>Parent</th><th>Profile</th><th>Enabled</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+    {
+        <tr>
+            <td>@t.Name</td><td>@t.Address</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td>
+            <td>@(t.Enabled ? "yes" : "no")</td>
+            <td>
+                <button class="outline" data-edit="@t.Id" data-json="@json(t)">Edit</button>
+                <button class="outline" data-delete="@t.Id" data-name="@t.Name">Delete</button>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3 id="form-title">Add target</h3>
+<ul class="form-errors" id="errors"></ul>
+<form id="target-form">
+    <div class="grid">
+        <label>Name <input name="name" required value="@Model.PrefillName" /></label>
+        <label>Address <input name="address" required placeholder="IP or hostname" value="@Model.PrefillAddress" /></label>
+    </div>
+    <div class="grid">
+        <label>Parent
+            <select name="parent">
+                <option value="">(none — root)</option>
+                @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                {
+                    <option selected="@(t.Name == Model.PrefillParent)">@t.Name</option>
+                }
+            </select>
+        </label>
+        <label>Profile
+            <select name="profile">
+                @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
+                {
+                    <option selected="@(p.Name == "External")">@p.Name</option>
+                }
+            </select>
+        </label>
+        <label>Enabled <input type="checkbox" name="enabled" checked /></label>
+    </div>
+    <button type="submit">Add target</button>
+</form>
+
+<h3>Backup</h3>
+<p>
+    <a href="/api/v1/config/export" download="conwatch-config.json" role="button" class="outline">Export config</a>
+    <label style="display:inline-block">Import: <input type="file" id="import-file" accept=".json" /></label>
+</p>
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script>
+        const form = document.getElementById("target-form");
+        wireConfigPage({
+            form,
+            errorList: document.getElementById("errors"),
+            endpoint: "/api/v1/targets",
+            buildDto: () => ({
+                name: form.elements.name.value,
+                address: form.elements.address.value,
+                parent: form.elements.parent.value || null,
+                profile: form.elements.profile.value,
+                enabled: form.elements.enabled.checked,
+            }),
+            fillForm: (dto) => {
+                form.elements.name.value = dto.name;
+                form.elements.address.value = dto.address;
+                form.elements.parent.value = dto.parent ?? "";
+                form.elements.profile.value = dto.profile;
+                form.elements.enabled.checked = dto.enabled;
+                document.getElementById("form-title").textContent = `Edit ${dto.name}`;
+            },
+        });
+        document.getElementById("import-file").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file || !confirm("Replace the ENTIRE configuration with this file?")) return;
+            const doc = JSON.parse(await file.text());
+            const result = await apiFetch("POST", "/api/v1/config/import", doc);
+            if (result.ok) location.reload();
+            else showErrors(document.getElementById("errors"), result);
+        });
+    </script>
+}

@@ -1,8 +1,109 @@
 @page
+@using System.Text.Json
 @model ConWatch.Pages.Config.PoolsModel
 @{
     ViewData["Title"] = "Pools — ConnectionWatcher";
+    var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
 <h2>Pools</h2>
-<p>Config editor arrives in a later task.</p>
+<p>Rotation pools: members share the pinging load by phase-stagger; pool state is derived (any member responding → responding). Member order sets the stagger offsets.</p>
+
+<table>
+    <thead><tr><th>Name</th><th>Members (in order)</th><th>Parent</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var p in Model.Config.Pools.OrderBy(p => p.Name))
+    {
+        <tr>
+            <td>@p.Name</td>
+            <td>@string.Join(" → ", p.Members)</td>
+            <td>@(p.Parent ?? "—")</td>
+            <td>
+                <button class="outline" data-edit="@p.Id" data-json="@json(p)">Edit</button>
+                <button class="outline" data-delete="@p.Id" data-name="@p.Name">Delete</button>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3 id="form-title">Add pool</h3>
+<ul class="form-errors" id="errors"></ul>
+<form id="pool-form">
+    <div class="grid">
+        <label>Name <input name="name" required /></label>
+        <label>Parent
+            <select name="parent">
+                <option value="">(none)</option>
+                @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                {
+                    <option>@t.Name</option>
+                }
+            </select>
+        </label>
+    </div>
+    <fieldset>
+        <legend>Members (click to add, in stagger order)</legend>
+        <div class="grid">
+            <div>
+                @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                {
+                    <button type="button" class="outline" data-add-member="@t.Name">@t.Name</button>
+                }
+            </div>
+            <div>
+                <ol id="member-list"></ol>
+            </div>
+        </div>
+    </fieldset>
+    <button type="submit">Add pool</button>
+</form>
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script>
+        const form = document.getElementById("pool-form");
+        const memberList = document.getElementById("member-list");
+        let members = [];
+
+        function renderMembers() {
+            memberList.innerHTML = "";
+            members.forEach((name, i) => {
+                const li = document.createElement("li");
+                li.textContent = name + " ";
+                const up = document.createElement("button");
+                up.type = "button"; up.className = "outline"; up.textContent = "↑";
+                up.onclick = () => { if (i > 0) { [members[i-1], members[i]] = [members[i], members[i-1]]; renderMembers(); } };
+                const remove = document.createElement("button");
+                remove.type = "button"; remove.className = "outline"; remove.textContent = "✕";
+                remove.onclick = () => { members.splice(i, 1); renderMembers(); };
+                li.append(up, remove);
+                memberList.appendChild(li);
+            });
+        }
+
+        document.querySelectorAll("[data-add-member]").forEach((btn) =>
+            btn.addEventListener("click", () => {
+                const name = btn.dataset.addMember;
+                if (!members.includes(name)) { members.push(name); renderMembers(); }
+            }));
+
+        wireConfigPage({
+            form,
+            errorList: document.getElementById("errors"),
+            endpoint: "/api/v1/pools",
+            buildDto: () => ({
+                name: form.elements.name.value,
+                parent: form.elements.parent.value || null,
+                members,
+            }),
+            fillForm: (dto) => {
+                form.elements.name.value = dto.name;
+                form.elements.parent.value = dto.parent ?? "";
+                members = [...dto.members];
+                renderMembers();
+                document.getElementById("form-title").textContent = `Edit ${dto.name}`;
+            },
+        });
+    </script>
+}

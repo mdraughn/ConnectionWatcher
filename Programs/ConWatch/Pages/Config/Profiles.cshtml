@@ -1,8 +1,79 @@
 @page
+@using System.Text.Json
 @model ConWatch.Pages.Config.ProfilesModel
 @{
     ViewData["Title"] = "Profiles — ConnectionWatcher";
+    var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
 <h2>Profiles</h2>
-<p>Config editor arrives in a later task.</p>
+<p>Ping discipline bundles. Intervals and durations are in seconds; thresholds are 0–1 success rates.</p>
+
+<table>
+    <thead><tr><th>Name</th><th>Normal</th><th>Burst</th><th>Burst cap</th><th>Timeout</th><th>Window</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
+    {
+        <tr>
+            <td>@p.Name</td>
+            <td>@(p.NormalIntervalSeconds)s</td>
+            <td>@(p.BurstIntervalSeconds)s</td>
+            <td>@(p.BurstMaxDurationSeconds)s</td>
+            <td>@(p.PingTimeoutSeconds)s</td>
+            <td>@p.MinUsableSample/@p.HistorySize</td>
+            <td>
+                <button class="outline" data-edit="@p.Id" data-json="@json(p)">Edit</button>
+                <button class="outline" data-delete="@p.Id" data-name="@p.Name">Delete</button>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3 id="form-title">Add profile</h3>
+<ul class="form-errors" id="errors"></ul>
+<form id="profile-form">
+    <label>Name <input name="name" required /></label>
+    <div class="grid">
+        <label>Normal interval (s) <input name="normalIntervalSeconds" type="number" step="any" value="10" /></label>
+        <label>Burst interval (s) <input name="burstIntervalSeconds" type="number" step="any" value="1" /></label>
+        <label>Burst max duration (s) <input name="burstMaxDurationSeconds" type="number" step="any" value="60" /></label>
+        <label>Ping timeout (s) <input name="pingTimeoutSeconds" type="number" step="any" value="3" /></label>
+    </div>
+    <div class="grid">
+        <label>History size <input name="historySize" type="number" value="100" /></label>
+        <label>Min usable sample <input name="minUsableSample" type="number" value="10" /></label>
+    </div>
+    <div class="grid">
+        <label>Responding ≥ <input name="respondingThreshold" type="number" step="any" value="0.95" /></label>
+        <label>Faltering &lt; <input name="falteringThreshold" type="number" step="any" value="0.75" /></label>
+        <label>Down &lt; <input name="downThreshold" type="number" step="any" value="0.10" /></label>
+        <label>Recovering ≥ <input name="recoveringThreshold" type="number" step="any" value="0.25" /></label>
+    </div>
+    <button type="submit">Add profile</button>
+</form>
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script>
+        const form = document.getElementById("profile-form");
+        const numberFields = ["normalIntervalSeconds", "burstIntervalSeconds", "burstMaxDurationSeconds",
+            "pingTimeoutSeconds", "historySize", "minUsableSample", "respondingThreshold",
+            "falteringThreshold", "downThreshold", "recoveringThreshold"];
+        wireConfigPage({
+            form,
+            errorList: document.getElementById("errors"),
+            endpoint: "/api/v1/profiles",
+            buildDto: () => {
+                const dto = { name: form.elements.name.value };
+                for (const f of numberFields) dto[f] = Number(form.elements[f].value);
+                return dto;
+            },
+            fillForm: (dto) => {
+                form.elements.name.value = dto.name;
+                for (const f of numberFields) form.elements[f].value = dto[f];
+                document.getElementById("form-title").textContent = `Edit ${dto.name}`;
+            },
+        });
+    </script>
+}
