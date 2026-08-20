@@ -26,6 +26,8 @@ builder.Services.AddDbContextFactory<ConWatchDbContext>(o => o.UseSqlite($"Data 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
 builder.Services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
+builder.Services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
+builder.Services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
 
 // Persistence services
 builder.Services.AddSingleton<ConfigStore>();
@@ -67,6 +69,7 @@ var api = app.MapGroup("/api/v1");
 api.MapConfig();
 api.MapStatus();
 api.MapHistory();
+api.MapTraceroute();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {
