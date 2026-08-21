@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { StateRibbon } from "./components/StateRibbon";
 import { StatsRow } from "./components/StatsRow";
 import { TimeChart } from "./components/TimeChart";
-import { incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
+import { clipAtReset, incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
 import type { RollupPoint, TransitionEvent } from "./lib/types";
 
 interface Subject {
@@ -63,14 +63,22 @@ function App({ subjects }: { subjects: Subject[] }) {
 
   if (!subject) return <p>No subjects yet — add targets on the Config page.</p>;
 
-  const stats = incidents(transitions, to.toISOString());
-  const uptime = subject.kind === "target" ? uptimePercent(rollups) : null;
-  const totalSuccess = rollups.reduce((n, p) => n + p.successCount, 0);
+  // Attribution stops at the latest HistoryReset (address correction/repoint):
+  // stats and charts use only the current data history; the ribbon still shows
+  // the earlier era, dimmed.
+  const { transitions: clipped, resetAt } = clipAtReset(transitions);
+  const measuredRollups = resetAt
+    ? rollups.filter((p) => p.periodStart >= resetAt)
+    : rollups;
+
+  const stats = incidents(clipped, to.toISOString());
+  const uptime = subject.kind === "target" ? uptimePercent(measuredRollups) : null;
+  const totalSuccess = measuredRollups.reduce((n, p) => n + p.successCount, 0);
   const avgRtt = totalSuccess > 0
-    ? rollups.reduce((n, p) => n + p.rttAvg * p.successCount, 0) / totalSuccess
+    ? measuredRollups.reduce((n, p) => n + p.rttAvg * p.successCount, 0) / totalSuccess
     : null;
-  const latency = rollups.map((p) => ({ x: new Date(p.periodStart), y: p.rttAvg }));
-  const lossBars = rollups.map((p) => ({
+  const latency = measuredRollups.map((p) => ({ x: new Date(p.periodStart), y: p.rttAvg }));
+  const lossBars = measuredRollups.map((p) => ({
     x: new Date(p.periodStart),
     y: p.pingCount > 0 ? (100 * (p.pingCount - p.successCount)) / p.pingCount : null,
   }));
@@ -95,10 +103,11 @@ function App({ subjects }: { subjects: Subject[] }) {
 
       {loading && <p aria-busy="true">loading…</p>}
 
-      <StatsRow uptime={uptime} incidentCount={stats.count} longestMs={stats.longestMs} avgRtt={avgRtt} />
+      <StatsRow uptime={uptime} outageCount={stats.outageCount}
+        longestOutageMs={stats.longestOutageMs} unreachableMs={stats.unreachableMs} avgRtt={avgRtt} />
 
       <h4>State timeline</h4>
-      <StateRibbon segments={segments} rangeStart={from} rangeEnd={to} />
+      <StateRibbon segments={segments} rangeStart={from} rangeEnd={to} resetAt={resetAt} />
 
       {subject.kind === "target" && (
         <>

@@ -27,16 +27,26 @@ function clearErrors(listEl) {
     listEl.innerHTML = "";
 }
 
-/** Wires a config form: submit -> POST/PUT, delete buttons, edit buttons. */
-function wireConfigPage({ form, errorList, buildDto, fillForm, endpoint }) {
+/**
+ * Wires a config form: submit -> POST/PUT, delete buttons, edit buttons.
+ * Optional beforeSave({isEdit, dto, form}) may return false to abort, or
+ * { query: "?k=v" } to append to the PUT/POST URL.
+ */
+function wireConfigPage({ form, errorList, buildDto, fillForm, endpoint, beforeSave }) {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         clearErrors(errorList);
         const dto = buildDto();
         const id = form.dataset.editingId;
+        let query = "";
+        if (beforeSave) {
+            const verdict = await beforeSave({ isEdit: Boolean(id), dto, form });
+            if (verdict === false) return;
+            query = verdict?.query ?? "";
+        }
         const result = id
-            ? await apiFetch("PUT", `${endpoint}/${id}`, dto)
-            : await apiFetch("POST", endpoint, dto);
+            ? await apiFetch("PUT", `${endpoint}/${id}${query}`, dto)
+            : await apiFetch("POST", `${endpoint}${query}`, dto);
         if (result.ok) location.reload();
         else showErrors(errorList, result);
     });

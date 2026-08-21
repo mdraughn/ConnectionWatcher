@@ -104,6 +104,31 @@ public class ConfigApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Address_edit_requires_kind_and_records_marker()
+    {
+        await SeedHomeAsync(_client);
+        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        var google = targets!.Single(t => t.Name == "Google");
+
+        // Without addressChange: 400 naming the values.
+        var bare = await _client.PutAsJsonAsync($"/api/v1/targets/{google.Id}",
+            google with { Address = "8.8.4.4" });
+        Assert.Equal(HttpStatusCode.BadRequest, bare.StatusCode);
+        Assert.Contains("correction", await bare.Content.ReadAsStringAsync());
+
+        // With correction: succeeds and a HistoryReset marker lands in the log.
+        var withKind = await _client.PutAsJsonAsync(
+            $"/api/v1/targets/{google.Id}?addressChange=correction",
+            google with { Address = "8.8.4.4" });
+        Assert.Equal(HttpStatusCode.NoContent, withKind.StatusCode);
+
+        var log = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/v1/transitions?subjectId={google.Id}&limit=50");
+        Assert.Contains(log.GetProperty("items").EnumerateArray(),
+            i => i.GetProperty("trigger").GetString() == "HistoryReset");
+    }
+
+    [Fact]
     public async Task Export_import_roundtrips_to_second_instance()
     {
         await SeedHomeAsync(_client);

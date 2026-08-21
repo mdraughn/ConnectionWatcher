@@ -56,6 +56,25 @@
     <button type="submit">Add target</button>
 </form>
 
+<dialog id="addr-dialog">
+    <article>
+        <h4>Address changed</h4>
+        <p>
+            What does this change mean? It decides whether the target's history
+            continues or starts fresh.
+        </p>
+        <p>
+            <button class="outline" data-kind="correction">I'm correcting a mistake<br />
+                <small>the old address was wrong — start a fresh history</small></button>
+            <button class="outline" data-kind="repoint">This is a different device/interface<br />
+                <small>measuring something new — start a fresh history</small></button>
+            <button class="outline" data-kind="renumber">Same device, new address<br />
+                <small>e.g. the ISP renumbered it — continue the history</small></button>
+        </p>
+        <p><button class="secondary" data-kind="">Cancel</button></p>
+    </article>
+</dialog>
+
 <h3>Backup</h3>
 <p>
     <a href="/api/v1/config/export" download="conwatch-config.json" role="button" class="outline">Export config</a>
@@ -66,10 +85,35 @@
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
     <script>
         const form = document.getElementById("target-form");
+
+        function askAddressChange() {
+            const dialog = document.getElementById("addr-dialog");
+            return new Promise((resolve) => {
+                const onClick = (e) => {
+                    const kind = e.target.closest("[data-kind]")?.dataset.kind;
+                    if (kind === undefined) return;
+                    dialog.removeEventListener("click", onClick);
+                    dialog.close();
+                    resolve(kind || null);
+                };
+                dialog.addEventListener("click", onClick);
+                dialog.showModal();
+            });
+        }
+
         wireConfigPage({
             form,
             errorList: document.getElementById("errors"),
             endpoint: "/api/v1/targets",
+            beforeSave: async ({ isEdit, dto }) => {
+                const original = form.dataset.originalAddress;
+                if (!isEdit || !original ||
+                    dto.address.trim().toLowerCase() === original.toLowerCase())
+                    return {};
+                const kind = await askAddressChange();
+                if (!kind) return false; // cancelled
+                return { query: `?addressChange=${kind}` };
+            },
             buildDto: () => ({
                 name: form.elements.name.value,
                 address: form.elements.address.value,
@@ -78,6 +122,7 @@
                 enabled: form.elements.enabled.checked,
             }),
             fillForm: (dto) => {
+                form.dataset.originalAddress = dto.address;
                 form.elements.name.value = dto.name;
                 form.elements.address.value = dto.address;
                 form.elements.parent.value = dto.parent ?? "";

@@ -16,8 +16,9 @@ public static class ConfigEndpoints
         targets.MapPost("/", async (TargetDto dto, ConfigService service) =>
             (await service.UpsertTargetAsync(dto with { Id = null }))
                 .ToHttp(r => Results.Created($"/api/v1/targets/{r.Id}", new { id = r.Id })));
-        targets.MapPut("/{id:guid}", async (Guid id, TargetDto dto, ConfigService service) =>
-            (await service.UpsertTargetAsync(dto with { Id = id })).ToHttp());
+        targets.MapPut("/{id:guid}", async (Guid id, TargetDto dto, ConfigService service,
+                string? addressChange) =>
+            (await service.UpsertTargetAsync(dto with { Id = id }, addressChange)).ToHttp());
         targets.MapDelete("/{id:guid}", async (Guid id, ConfigService service) =>
             (await service.DeleteTargetAsync(id)).ToHttp());
 

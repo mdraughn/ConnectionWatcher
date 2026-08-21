@@ -24,9 +24,19 @@ public record ConfigResult(bool Success, ConfigErrorKind Kind = ConfigErrorKind.
 /// only valid states are committed. Successful commits raise ConfigChanged.
 /// </summary>
 public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, ConfigStore store,
-    ILogger<ConfigService>? log = null)
+    ILogger<ConfigService>? log = null, TimeProvider? timeProvider = null)
 {
     private readonly ILogger<ConfigService> _log = log ?? NullLogger<ConfigService>.Instance;
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+
+    private static readonly Dictionary<string, string> AddressChangeMarkers =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            // correction/repoint start a fresh data history; renumber continues it.
+            ["correction"] = "HistoryReset",
+            ["repoint"] = "HistoryReset",
+            ["renumber"] = "AddressChanged",
+        };
 
     /// <summary>Raised after any committed config change; the host debounces rebuilds.</summary>
     public event Action? ConfigChanged;
@@ -73,7 +83,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         return ConfigResult.Ok(id);
     });
 
-    public Task<ConfigResult> UpsertTargetAsync(TargetDto dto) => MutateAsync(async db =>
+    public Task<ConfigResult> UpsertTargetAsync(TargetDto dto, string? addressChange = null) => MutateAsync(async db =>
     {
         var profile = await db.Profiles.SingleOrDefaultAsync(p => p.Name == dto.Profile);
         if (profile is null)
@@ -95,6 +105,30 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             if (existing is null)
                 return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No target with id {id}.");
             row = existing;
+
+            var oldAddress = row.Address;
+            var newAddress = dto.Address.Trim();
+            if (!string.Equals(oldAddress, newAddress, StringComparison.OrdinalIgnoreCase))
+            {
+                // The user must say what an address edit MEANS: correcting a
+                // mistake / probing a different interface (fresh history) or a
+                // renumbered interface (continuous history).
+                if (addressChange is null || !AddressChangeMarkers.TryGetValue(addressChange, out var trigger))
+                    return ConfigResult.Fail(ConfigErrorKind.Validation,
+                        "Address changed; specify addressChange as one of: correction, repoint, renumber.");
+
+                db.Transitions.Add(new TransitionRow
+                {
+                    TimestampUtc = _time.GetUtcNow().UtcDateTime,
+                    SubjectId = row.Id,
+                    SubjectName = dto.Name,
+                    SubjectKind = "Target",
+                    FromState = "Starting",
+                    ToState = "Starting",
+                    Trigger = trigger,
+                    Detail = $"address changed {oldAddress} → {newAddress} ({addressChange.ToLowerInvariant()})",
+                });
+            }
         }
         else
         {
@@ -102,7 +136,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             db.Targets.Add(row);
         }
         row.Name = dto.Name;
-        row.Address = dto.Address;
+        row.Address = dto.Address.Trim();
         row.ParentId = parentId;
         row.ProfileId = profile.Id;
         row.Enabled = dto.Enabled;

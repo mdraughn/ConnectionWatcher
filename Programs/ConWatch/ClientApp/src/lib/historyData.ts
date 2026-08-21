@@ -12,33 +12,78 @@ export function uptimePercent(points: RollupPoint[]): number | null {
   return pings > 0 ? (100 * successes) / pings : null;
 }
 
-const INCIDENT_STATES = new Set(["Down", "Unreachable"]);
-const INCIDENT_END_STATES = new Set(["Responding"]);
-
 /**
- * An incident spans from a transition into Down/Unreachable until the next
- * transition into Responding; an open incident ends at the range end.
- * Transitions must be in chronological order.
+ * Split incident semantics:
+ * - An OUTAGE (`Down`) is the target's own problem: counted, with the longest
+ *   window reported. It ends at recovery (`Responding`) or when superseded by
+ *   `Unreachable`.
+ * - UNREACHABLE is a coverage gap — no data, never the target's fault: only
+ *   total time is reported. It ends at the release (`ParentRecovered`) or any
+ *   transition to `Responding`/`Down`.
+ * Open windows run to the range end. Transitions must be chronological and
+ * already clipped via clipAtReset().
  */
-export function incidents(transitions: TransitionEvent[], rangeEndIso: string):
-  { count: number; longestMs: number } {
-  let count = 0;
-  let longestMs = 0;
-  let openStart: number | null = null;
+export interface IncidentStats {
+  outageCount: number;
+  longestOutageMs: number;
+  unreachableMs: number;
+}
+
+export function incidents(transitions: TransitionEvent[], rangeEndIso: string): IncidentStats {
+  let outageCount = 0;
+  let longestOutageMs = 0;
+  let unreachableMs = 0;
+  let open: { kind: "outage" | "unreach"; start: number } | null = null;
+
+  const close = (atMs: number) => {
+    if (!open) return;
+    if (open.kind === "outage") longestOutageMs = Math.max(longestOutageMs, atMs - open.start);
+    else unreachableMs += atMs - open.start;
+    open = null;
+  };
+
   for (const t of transitions) {
     const at = Date.parse(t.timestamp);
-    if (openStart === null && INCIDENT_STATES.has(t.to)) {
-      openStart = at;
-      count++;
-    } else if (openStart !== null && INCIDENT_END_STATES.has(t.to)) {
-      longestMs = Math.max(longestMs, at - openStart);
-      openStart = null;
+    if (t.to === "Down") {
+      if (open?.kind === "unreach") close(at);
+      if (open === null) {
+        open = { kind: "outage", start: at };
+        outageCount++;
+      }
+    } else if (t.to === "Unreachable") {
+      close(at);
+      open = { kind: "unreach", start: at };
+    } else if (t.to === "Responding") {
+      close(at);
+    } else if (t.trigger === "ParentRecovered" && open?.kind === "unreach") {
+      close(at);
     }
   }
-  if (openStart !== null) {
-    longestMs = Math.max(longestMs, Date.parse(rangeEndIso) - openStart);
+  close(Date.parse(rangeEndIso));
+  return { outageCount, longestOutageMs, unreachableMs };
+}
+
+/**
+ * Cuts the series at the latest HistoryReset marker (an address correction or
+ * repoint): everything before it belongs to a different data history and is
+ * excluded from attribution. Returns the surviving transitions and the reset
+ * timestamp (null when the series is unbroken).
+ */
+export function clipAtReset(transitions: TransitionEvent[]):
+  { transitions: TransitionEvent[]; resetAt: string | null } {
+  let resetIndex = -1;
+  for (let i = transitions.length - 1; i >= 0; i--) {
+    if (transitions[i].trigger === "HistoryReset") {
+      resetIndex = i;
+      break;
+    }
   }
-  return { count, longestMs };
+  if (resetIndex < 0)
+    return { transitions, resetAt: null };
+  return {
+    transitions: transitions.slice(resetIndex + 1),
+    resetAt: transitions[resetIndex].timestamp,
+  };
 }
 
 export interface RibbonSegment {

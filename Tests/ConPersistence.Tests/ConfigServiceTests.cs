@@ -113,6 +113,71 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Address_edit_without_kind_is_rejected()
+    {
+        var routerId = await IdOf("Router");
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        {
+            Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
+        });
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("addressChange"));
+        var options = await _store.LoadWatcherOptionsAsync();
+        Assert.Equal("192.168.1.1", options.Targets.Single(t => t.Name == "Router").Address);
+    }
+
+    [Theory]
+    [InlineData("correction", "HistoryReset")]
+    [InlineData("repoint", "HistoryReset")]
+    [InlineData("renumber", "AddressChanged")]
+    public async Task Address_edit_records_the_right_marker(string kind, string expectedTrigger)
+    {
+        var routerId = await IdOf("Router");
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        {
+            Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
+        }, addressChange: kind);
+        Assert.True(result.Success);
+
+        await using var db = _factory.CreateDbContext();
+        var marker = Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+            .ToListAsync(db.Transitions).Result.Single();
+        Assert.Equal(expectedTrigger, marker.Trigger);
+        Assert.Equal(routerId, marker.SubjectId);
+        Assert.Equal("Target", marker.SubjectKind);
+        Assert.Contains("192.168.1.1", marker.Detail);
+        Assert.Contains("192.168.1.254", marker.Detail);
+        Assert.Contains(kind, marker.Detail);
+    }
+
+    [Fact]
+    public async Task Non_address_edit_needs_no_kind_and_records_no_marker()
+    {
+        var routerId = await IdOf("Router");
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        {
+            Id = routerId, Name = "Router Renamed", Address = "192.168.1.1", Profile = "Internal",
+        });
+        Assert.True(result.Success);
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(0, Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+            .CountAsync(db.Transitions).Result);
+    }
+
+    [Fact]
+    public async Task Invalid_address_change_kind_is_rejected()
+    {
+        var routerId = await IdOf("Router");
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        {
+            Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
+        }, addressChange: "oops");
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+    }
+
+    [Fact]
     public async Task Import_roundtrips_into_fresh_db()
     {
         var doc = await _store.ExportAsync();
