@@ -15,6 +15,7 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Admin", "Danger zone")]
     [InlineData("/Setup", "Quick setup")]
+    [InlineData("/Report", "Internet connection report")]
     public async Task Page_renders(string url, string marker)
     {
         var client = _factory.CreateClient();

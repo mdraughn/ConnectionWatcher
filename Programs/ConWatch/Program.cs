@@ -37,6 +37,7 @@ builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddSingleton<ConfigService>();
 builder.Services.AddSingleton<SettingsStore>();
 builder.Services.AddSingleton<ConfigHealth>();
+builder.Services.AddSingleton<ConPersistence.Report.IspReportBuilder>();
 builder.Services.AddSingleton<TransitionRecorder>();
 builder.Services.AddSingleton<RollupCollector>();
 
