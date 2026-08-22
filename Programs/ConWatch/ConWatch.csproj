@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.11" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
   </ItemGroup>
 
@@ -22,8 +23,7 @@
     <Content Remove="ClientApp\**" />
   </ItemGroup>
 
-  <Target Name="EnsureClientBuild" BeforeTargets="Build"
-          Condition="!Exists('wwwroot\js\dashboard.js')">
+  <Target Name="EnsureClientBuild" BeforeTargets="Build" Condition="!Exists('wwwroot\js\dashboard.js')">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" Condition="!Exists('ClientApp\node_modules')" />
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
   </Target>

@@ -7,7 +7,17 @@ using ConWatch;
 using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;
 
-var builder = WebApplication.CreateBuilder(args);
+// Under the Windows Service Control Manager the working directory is
+// System32 — pin the content root to the exe folder so appsettings and the
+// default data/ directory resolve next to the app. Both helpers are inert
+// when running normally (console, container, tests).
+var isWindowsService = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = isWindowsService ? AppContext.BaseDirectory : null,
+});
+builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionWatcher");
 
 // Options
 builder.Services.Configure<PersistenceOptions>(
@@ -95,6 +105,20 @@ api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
     return engine is not null ? Results.Ok(body) : Results.Json(body, statusCode: 503);
 });
 
-app.Run();
+try
+{
+    app.Run();
+}
+catch (IOException ex) when (ex.InnerException is Microsoft.AspNetCore.Connections.AddressInUseException)
+{
+    // A crash-looping service with a silent log is the worst outcome; name
+    // the problem and the fix loudly instead.
+    var urls = builder.Configuration["urls"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "(default)";
+    app.Logger.LogCritical(
+        "ConnectionWatcher could not start: the listen address {Urls} is already in use by another program. " +
+        "Change the port (service: re-run install-service.ps1 with -Port <n>; console: --urls) and start again.",
+        urls);
+    throw;
+}
 
 public partial class Program { }
