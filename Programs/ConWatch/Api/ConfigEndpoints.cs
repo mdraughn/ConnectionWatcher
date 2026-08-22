@@ -6,6 +6,8 @@ namespace ConWatch.Api;
 /// <summary>CRUD for targets, profiles, pools, and whole-config export/import.</summary>
 public static class ConfigEndpoints
 {
+    public record InsertParentRequest(TargetDto NewTarget, List<Guid> ChildIds);
+
     public static void MapConfig(this RouteGroupBuilder api)
     {
         var targets = api.MapGroup("/targets");
@@ -21,6 +23,9 @@ public static class ConfigEndpoints
             (await service.UpsertTargetAsync(dto with { Id = id }, addressChange)).ToHttp());
         targets.MapDelete("/{id:guid}", async (Guid id, ConfigService service) =>
             (await service.DeleteTargetAsync(id)).ToHttp());
+        targets.MapPost("/insert-parent", async (InsertParentRequest request, ConfigService service) =>
+            (await service.InsertParentAsync(request.NewTarget, request.ChildIds))
+                .ToHttp(r => Results.Created($"/api/v1/targets/{r.Id}", new { id = r.Id })));
 
         var profiles = api.MapGroup("/profiles");
         profiles.MapGet("/", async (ConfigStore store) => (await store.ExportAsync()).Profiles);

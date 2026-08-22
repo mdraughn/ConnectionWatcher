@@ -129,6 +129,27 @@ public class ConfigApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Insert_parent_reparents_children_over_http()
+    {
+        await SeedHomeAsync(_client);
+        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        var childIds = targets!.Where(t => t.Name is "Google" or "Cloudflare")
+            .Select(t => t.Id!.Value).ToList();
+
+        var response = await _client.PostAsJsonAsync("/api/v1/targets/insert-parent", new
+        {
+            newTarget = new TargetDto { Name = "Modem", Address = "192.168.100.1", Profile = "Fast" },
+            childIds,
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        Assert.Equal("Router", after!.Single(t => t.Name == "Modem").Parent);
+        Assert.Equal("Modem", after.Single(t => t.Name == "Google").Parent);
+        Assert.Equal("Modem", after.Single(t => t.Name == "Cloudflare").Parent);
+    }
+
+    [Fact]
     public async Task Export_import_roundtrips_to_second_instance()
     {
         await SeedHomeAsync(_client);

@@ -143,6 +143,44 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         return ConfigResult.Ok(row.Id);
     });
 
+    /// <summary>
+    /// Slides a new target into the tree above the given children: the new
+    /// target takes their (shared) parent, and the children are re-parented to
+    /// it — one transaction, fully validated.
+    /// </summary>
+    public Task<ConfigResult> InsertParentAsync(TargetDto newTarget, IReadOnlyList<Guid> childIds)
+        => MutateAsync(async db =>
+    {
+        if (childIds.Count == 0)
+            return ConfigResult.Fail(ConfigErrorKind.Validation, "At least one child is required.");
+
+        var children = await db.Targets.Where(t => childIds.Contains(t.Id)).ToListAsync();
+        if (children.Count != childIds.Count)
+            return ConfigResult.Fail(ConfigErrorKind.Validation, "One or more children do not exist.");
+        var parents = children.Select(c => c.ParentId).Distinct().ToList();
+        if (parents.Count != 1)
+            return ConfigResult.Fail(ConfigErrorKind.Validation,
+                "All children must currently share the same parent.");
+
+        var profile = await db.Profiles.SingleOrDefaultAsync(p => p.Name == newTarget.Profile);
+        if (profile is null)
+            return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{newTarget.Profile}'.");
+
+        var row = new TargetRow
+        {
+            Id = Guid.NewGuid(),
+            Name = newTarget.Name,
+            Address = newTarget.Address.Trim(),
+            ParentId = parents[0],
+            ProfileId = profile.Id,
+            Enabled = newTarget.Enabled,
+        };
+        db.Targets.Add(row);
+        foreach (var child in children)
+            child.ParentId = row.Id;
+        return ConfigResult.Ok(row.Id);
+    });
+
     public Task<ConfigResult> DeleteTargetAsync(Guid id) => MutateAsync(async db =>
     {
         var row = await db.Targets.FindAsync(id);

@@ -178,6 +178,64 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task InsertParent_slides_a_node_above_shared_children()
+    {
+        var options = await _store.LoadWatcherOptionsAsync();
+        var google = options.Targets.Single(t => t.Name == "Google").Id!.Value;
+        var cloudflare = options.Targets.Single(t => t.Name == "Cloudflare").Id!.Value;
+
+        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        {
+            Name = "IspHop", Address = "198.51.100.11", Profile = "External",
+        }, [google, cloudflare]);
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+
+        var after = await _store.LoadWatcherOptionsAsync();
+        Assert.Equal("Modem", after.Targets.Single(t => t.Name == "IspHop").Parent);
+        Assert.Equal("IspHop", after.Targets.Single(t => t.Name == "Google").Parent);
+        Assert.Equal("IspHop", after.Targets.Single(t => t.Name == "Cloudflare").Parent);
+    }
+
+    [Fact]
+    public async Task InsertParent_rejects_children_with_mixed_parents()
+    {
+        var options = await _store.LoadWatcherOptionsAsync();
+        var router = options.Targets.Single(t => t.Name == "Router").Id!.Value;   // parent: none
+        var google = options.Targets.Single(t => t.Name == "Google").Id!.Value;   // parent: Modem
+
+        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        {
+            Name = "X", Address = "10.9.9.9",
+        }, [router, google]);
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Equal(0, _changeSignals);
+    }
+
+    [Fact]
+    public async Task InsertParent_rejects_unknown_child()
+    {
+        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        {
+            Name = "X", Address = "10.9.9.9",
+        }, [Guid.NewGuid()]);
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+    }
+
+    [Fact]
+    public async Task InsertParent_rejects_empty_children()
+    {
+        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        {
+            Name = "X", Address = "10.9.9.9",
+        }, []);
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+    }
+
+    [Fact]
     public async Task Import_roundtrips_into_fresh_db()
     {
         var doc = await _store.ExportAsync();
