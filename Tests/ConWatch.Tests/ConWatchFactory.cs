@@ -15,8 +15,12 @@ namespace ConWatch.Tests;
 public class ConWatchFactory : WebApplicationFactory<Program>
 {
     public FakePingTransceiverFactory Pings { get; } = new();
-    public string DbPath { get; } =
-        Path.Combine(Path.GetTempPath(), $"conwatch-test-{Guid.NewGuid():N}.db");
+    public string DbPath { get; }
+
+    public ConWatchFactory(string? dbPath = null)
+    {
+        DbPath = dbPath ?? Path.Combine(Path.GetTempPath(), $"conwatch-test-{Guid.NewGuid():N}.db");
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

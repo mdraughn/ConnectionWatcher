@@ -17,6 +17,7 @@ public class WatcherHostService(
     IDbContextFactory<ConWatchDbContext> dbFactory,
     ConfigStore store,
     ConfigService configService,
+    SettingsStore settingsStore,
     IPingTransceiverFactory pingFactory,
     IDomainNameResolverFactory resolverFactory,
     TimeProvider timeProvider,
@@ -55,14 +56,29 @@ public class WatcherHostService(
             await store.SeedAsync(seed);
         }
 
+        // Appsettings values fill any settings keys not yet in the DB (upgrade
+        // path); the table is authoritative from then on.
+        var seedDefaults = new Dictionary<string, string>
+        {
+            [SettingKeys.WeatherThreshold] = verdictOptions.Value.WeatherThreshold.ToString(),
+            [SettingKeys.MinuteRetentionDays] = persistenceOptions.Value.MinuteRetentionDays.ToString(),
+            [SettingKeys.HourlyRetentionMonths] = persistenceOptions.Value.HourlyRetentionMonths.ToString(),
+            [SettingKeys.RetentionRunHourUtc] = persistenceOptions.Value.RetentionRunHourUtc.ToString(),
+        };
+        if (verdictOptions.Value.AnchorPool is { Length: > 0 } anchorPool)
+            seedDefaults[SettingKeys.AnchorPool] = anchorPool;
+        await settingsStore.SeedMissingAsync(seedDefaults);
+
         await StartEngineAsync();
         configService.ConfigChanged += OnConfigChanged;
+        settingsStore.SettingsChanged += OnConfigChanged;
         _log.LogInformation("WatcherHostService started");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         configService.ConfigChanged -= OnConfigChanged;
+        settingsStore.SettingsChanged -= OnConfigChanged;
         _debounceCts?.Cancel();
         // Serialize with any in-flight rebuild: two concurrent engine.StopAsync
         // calls race inside the coordinators' Dispose.
@@ -93,8 +109,14 @@ public class WatcherHostService(
             return;
         }
 
+        var effectiveVerdict = new VerdictOptions
+        {
+            AnchorPool = await settingsStore.GetAsync(SettingKeys.AnchorPool),
+            WeatherThreshold = await settingsStore.GetIntAsync(SettingKeys.WeatherThreshold,
+                verdictOptions.Value.WeatherThreshold),
+        };
         var engine = new WatcherEngine(timeProvider, pingFactory, resolverFactory,
-            loggerFactory, Options.Create(options), verdictOptions);
+            loggerFactory, Options.Create(options), Options.Create(effectiveVerdict));
         recorder.Attach(engine.TransitionSource);
         collector.Attach(engine.PingSampleSource);
         broadcaster.Attach(engine);

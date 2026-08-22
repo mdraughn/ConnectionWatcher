@@ -11,8 +11,27 @@ namespace ConPersistence.Services;
 /// </summary>
 public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
     IOptions<PersistenceOptions> options, TimeProvider timeProvider,
-    ILogger<RetentionService> log) : BackgroundService
+    ILogger<RetentionService> log, SettingsStore? settingsStore = null) : BackgroundService
 {
+    /// <summary>Appsettings values overridden by DB settings when present.</summary>
+    private async Task<PersistenceOptions> EffectiveOptionsAsync()
+    {
+        var effective = options.Value;
+        if (settingsStore is null)
+            return effective;
+        return new PersistenceOptions
+        {
+            DbPath = effective.DbPath,
+            RebuildDebounceSeconds = effective.RebuildDebounceSeconds,
+            MinuteRetentionDays = await settingsStore.GetIntAsync(
+                SettingKeys.MinuteRetentionDays, effective.MinuteRetentionDays),
+            HourlyRetentionMonths = await settingsStore.GetIntAsync(
+                SettingKeys.HourlyRetentionMonths, effective.HourlyRetentionMonths),
+            RetentionRunHourUtc = await settingsStore.GetIntAsync(
+                SettingKeys.RetentionRunHourUtc, effective.RetentionRunHourUtc),
+        };
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var pass = new RetentionPass(log);
@@ -22,10 +41,15 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
             {
                 await using var db = await dbFactory.CreateDbContextAsync(stoppingToken).ConfigureAwait(false);
                 var converted = await pass.RunAsync(db, timeProvider.GetUtcNow().UtcDateTime,
-                    options.Value, stoppingToken).ConfigureAwait(false);
+                    await EffectiveOptionsAsync().ConfigureAwait(false), stoppingToken).ConfigureAwait(false);
                 if (converted > 0)
                     await db.Database.ExecuteSqlRawAsync("PRAGMA incremental_vacuum;", stoppingToken)
                         .ConfigureAwait(false);
+                if (settingsStore is not null)
+                    await settingsStore.SetManyAsync(new Dictionary<string, string?>
+                    {
+                        [SettingKeys.RetentionLastRunUtc] = timeProvider.GetUtcNow().ToString("O"),
+                    }).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -36,9 +60,21 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
                 log.LogError(ex, "Retention pass failed; will retry at next scheduled run");
             }
 
+            TimeSpan delay;
             try
             {
-                await Task.Delay(DelayUntilNextRun(), timeProvider, stoppingToken).ConfigureAwait(false);
+                delay = await DelayUntilNextRunAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Settings unreadable (e.g. transient DB issue): never let the
+                // scheduler kill the host — retry in an hour.
+                log.LogWarning(ex, "Could not compute next retention run; retrying in 1h");
+                delay = TimeSpan.FromHours(1);
+            }
+            try
+            {
+                await Task.Delay(delay, timeProvider, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -47,11 +83,11 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
         }
     }
 
-    private TimeSpan DelayUntilNextRun()
+    private async Task<TimeSpan> DelayUntilNextRunAsync()
     {
         var now = timeProvider.GetUtcNow();
-        var next = new DateTimeOffset(now.Year, now.Month, now.Day,
-            options.Value.RetentionRunHourUtc, 0, 0, TimeSpan.Zero);
+        var hour = (await EffectiveOptionsAsync().ConfigureAwait(false)).RetentionRunHourUtc;
+        var next = new DateTimeOffset(now.Year, now.Month, now.Day, hour, 0, 0, TimeSpan.Zero);
         if (next <= now)
             next = next.AddDays(1);
         return next - now;

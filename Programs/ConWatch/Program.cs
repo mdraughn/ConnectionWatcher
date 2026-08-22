@@ -32,15 +32,17 @@ builder.Services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
 // Persistence services
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddSingleton<ConfigService>();
+builder.Services.AddSingleton<SettingsStore>();
 builder.Services.AddSingleton<TransitionRecorder>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder>());
 builder.Services.AddSingleton<RollupCollector>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
-builder.Services.AddHostedService<RetentionService>();
 
-// Engine host
+// Engine host FIRST: hosted services start sequentially, and this one owns
+// the migration + seeding — nothing else may touch the schema before it.
 builder.Services.AddSingleton<WatcherHostService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
+builder.Services.AddHostedService<RetentionService>();
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
@@ -70,6 +72,7 @@ api.MapConfig();
 api.MapStatus();
 api.MapHistory();
 api.MapTraceroute();
+api.MapSettings();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {
