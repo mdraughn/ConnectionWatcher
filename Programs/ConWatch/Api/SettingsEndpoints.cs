@@ -10,6 +10,9 @@ public static class SettingsEndpoints
     {
         api.MapGet("/settings", async (SettingsStore store) => await store.GetAllAsync());
 
+        api.MapGet("/config/health", async (ConfigHealth health) =>
+            new { warnings = await health.EvaluateAsync() });
+
         api.MapPut("/settings", async (Dictionary<string, string?> values, SettingsStore store,
             IDbContextFactory<ConWatchDbContext> dbFactory) =>
         {

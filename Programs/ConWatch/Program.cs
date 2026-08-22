@@ -33,6 +33,7 @@ builder.Services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddSingleton<ConfigService>();
 builder.Services.AddSingleton<SettingsStore>();
+builder.Services.AddSingleton<ConfigHealth>();
 builder.Services.AddSingleton<TransitionRecorder>();
 builder.Services.AddSingleton<RollupCollector>();
 

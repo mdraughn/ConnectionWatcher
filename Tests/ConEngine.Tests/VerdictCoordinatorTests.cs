@@ -138,6 +138,51 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
+    public void Below_threshold_anchor_count_carries_limited_confidence_qualifier()
+    {
+        // Separate 1-anchor topology: Router -> Google, pool of just Google, threshold 2.
+        var graph = TargetGraph.FromOptions(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google"] }],
+        });
+        var monitors = new Dictionary<Guid, TargetMonitor>();
+        foreach (var target in graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
+                _time, NullLoggerFactory.Instance);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            monitors[target.Id] = monitor;
+        }
+        var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
+            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+        verdict.Start();
+
+        foreach (var m in monitors.Values)
+            for (int i = 0; i < 5; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+            }
+
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        Assert.Contains("only 1 anchor", verdict.CurrentDetail);
+        Assert.Contains("cannot distinguish", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void At_or_above_threshold_has_no_qualifier()
+    {
+        AllHealthy();
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.DoesNotContain("cannot distinguish", _verdict.CurrentDetail);
+    }
+
+    [Fact]
     public void Label_change_with_same_mapped_state_still_emits()
     {
         AllHealthy();

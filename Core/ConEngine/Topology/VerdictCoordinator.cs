@@ -84,12 +84,12 @@ public class VerdictCoordinator : IDisposable
         lock (_lock)
         {
             var (verdict, detail) = Classify();
+            CurrentDetail = detail; // detail carries live counts — always refresh
             if (verdict == CurrentVerdict)
                 return;
 
             var from = Map(CurrentVerdict);
             CurrentVerdict = verdict;
-            CurrentDetail = detail;
             var transition = new TargetTransition
             {
                 Kind = TransitionSubjectKind.Verdict,
@@ -131,10 +131,16 @@ public class VerdictCoordinator : IDisposable
             is HostState.Down or HostState.Faltering or HostState.Recovering).ToList();
         string List() => string.Join(", ", degraded.Select(a => $"{a.Target.Name}={a.CurrentState}"));
 
+        // With fewer determined anchors than the weather threshold, weather can
+        // never be diagnosed — say so rather than implying full confidence.
+        var qualifier = determined.Count < _weatherThreshold
+            ? $" (only {determined.Count} anchor(s) — cannot distinguish a site incident from internet weather)"
+            : "";
+
         if (degraded.Count == 0)
-            return (VerdictState.Healthy, $"Healthy: {determined.Count} anchors responding");
+            return (VerdictState.Healthy, $"Healthy: {determined.Count} anchors responding{qualifier}");
         if (degraded.Count < _weatherThreshold)
-            return (VerdictState.SiteIncident, $"SiteIncident: {List()}");
+            return (VerdictState.SiteIncident, $"SiteIncident: {List()}{qualifier}");
         return (VerdictState.InternetWeather,
             $"InternetWeather: {degraded.Count} of {determined.Count} anchors degraded ({List()})");
     }
