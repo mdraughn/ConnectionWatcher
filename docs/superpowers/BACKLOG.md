@@ -33,6 +33,9 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
 - **Phase 4** — deployment + notifications:
   - Docker packaging for Synology (traceroute needs NET_RAW; `data/` volume).
   - **Windows Service** for always-on operation on a Windows box
-    (AddWindowsService + install script, fixed listen URL, firewall rule,
-    restart-on-failure) — added 2026-08-22.
+    (AddWindowsService + install script, restart-on-failure) — added 2026-08-22.
+    Install script probes for a free port ONCE (default 8080, then walk
+    candidates or -Port override), persists it, creates the matching firewall
+    rule, and prints the final URL; runtime bind failure logs a clear
+    port-in-use message instead of crash-looping mutely.
   - Webhooks + MQTT toward Home Assistant (MQTT discovery).
