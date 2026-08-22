@@ -28,6 +28,9 @@ builder.Services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcm
 builder.Services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
 builder.Services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
 builder.Services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
+builder.Services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery, ConInfrastructure.Discovery.GatewayDiscovery>();
+builder.Services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
+builder.Services.AddSingleton<SetupService>();
 
 // Persistence services
 builder.Services.AddSingleton<ConfigStore>();
@@ -75,6 +78,7 @@ api.MapHistory();
 api.MapTraceroute();
 api.MapSettings();
 api.MapAdmin();
+api.MapSetup();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {
