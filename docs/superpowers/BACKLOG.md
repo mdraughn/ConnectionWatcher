@@ -38,4 +38,11 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
     candidates or -Port override), persists it, creates the matching firewall
     rule, and prints the final URL; runtime bind failure logs a clear
     port-in-use message instead of crash-looping mutely.
+    Discoverability: installer creates a Start Menu shortcut to the dashboard
+    and opens it once at install end. Plus a **tray companion** (separate
+    user-session app — services can't own tray icons): verdict-colored icon
+    (green/orange/red, gray = service down), left-click opens dashboard,
+    right-click menu (Dashboard/History/Report/Admin, start service, exit),
+    auto-start at login. Optional later: toast notifications on verdict
+    changes (decide alongside MQTT/webhooks, not by accident).
   - Webhooks + MQTT toward Home Assistant (MQTT discovery).
