@@ -4,9 +4,10 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages.Config;
 
-public class TargetsModel(ConfigStore store) : PageModel
+public class TargetsModel(ConfigStore store, ConfigHealth health) : PageModel
 {
     public ConfigDocument Config { get; private set; } = new();
+    public IReadOnlyList<HealthWarning> Warnings { get; private set; } = [];
 
     // Prefill support for the traceroute assist's "add as target".
     public string? PrefillAddress => Request.Query["address"];
@@ -16,5 +17,6 @@ public class TargetsModel(ConfigStore store) : PageModel
     public async Task OnGetAsync()
     {
         Config = await store.ExportAsync();
+        Warnings = await health.EvaluateAsync();
     }
 }

@@ -64,3 +64,9 @@ main.container { padding-bottom: 4rem; }
 .cw-stat b { display: block; font-size: 1.3rem; }
 .cw-ribbon { width: 100%; height: 34px; }
 .form-errors { color: var(--cw-down); }
+
+/* Config health warnings */
+.cw-health { border: 1px solid var(--cw-warn); border-left: 6px solid var(--cw-warn);
+             border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
+.cw-health ul { margin: 0.3rem 0 0; }
+.cw-health-hint { color: var(--cw-warn); font-size: 0.85rem; margin: 0.2rem 0 0.6rem; }

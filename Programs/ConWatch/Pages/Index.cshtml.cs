@@ -4,18 +4,20 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-public class IndexModel(WatcherHostService host) : PageModel
+public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth health) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public string InitialDataJson { get; private set; } = "{}";
+    public int WarningCount { get; private set; }
 
     /// <summary>Root monitors for the server-rendered fallback tree.</summary>
     public List<TargetMonitor> Roots { get; } = new();
     public Dictionary<Guid, List<TargetMonitor>> Children { get; } = new();
 
-    public void OnGet()
+    public async Task OnGetAsync()
     {
+        WarningCount = (await health.EvaluateAsync()).Count;
         var engine = host.Engine;
         var parents = new Dictionary<string, string?>();
         var poolMembers = new Dictionary<string, string[]>();

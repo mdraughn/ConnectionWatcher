@@ -27,6 +27,13 @@
     }
 }
 
+@if (Model.WarningCount > 0)
+{
+    <p class="cw-health-hint">
+        ⚠ @Model.WarningCount configuration warning@(Model.WarningCount == 1 ? "" : "s") —
+        <a href="/Config/Targets">review on the Config page</a>
+    </p>
+}
 <script id="initial-data" type="application/json">@Html.Raw(Model.InitialDataJson)</script>
 
 <div id="dashboard-root">

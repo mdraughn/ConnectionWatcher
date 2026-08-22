@@ -13,7 +13,14 @@ export function VerdictBanner({ verdict, connected }: {
   verdict: VerdictStatus | null;
   connected: boolean;
 }) {
-  if (!verdict) return null;
+  if (!verdict) {
+    return (
+      <div className={`verdict-banner unknown ${connected ? "" : "reconnecting"}`}>
+        &#9675; VERDICT OFF — configure an anchor pool to enable internet-weather detection
+        {!connected && <span className="pill">reconnecting…</span>}
+      </div>
+    );
+  }
   const cls = verdict.state.toLowerCase();
   return (
     <div className={`verdict-banner ${cls} ${connected ? "" : "reconnecting"}`}>

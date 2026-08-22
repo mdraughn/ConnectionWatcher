@@ -4,12 +4,14 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages.Config;
 
-public class ProfilesModel(ConfigStore store) : PageModel
+public class ProfilesModel(ConfigStore store, ConfigHealth health) : PageModel
 {
     public ConfigDocument Config { get; private set; } = new();
+    public IReadOnlyList<HealthWarning> Warnings { get; private set; } = [];
 
     public async Task OnGetAsync()
     {
         Config = await store.ExportAsync();
+        Warnings = await health.EvaluateAsync();
     }
 }
