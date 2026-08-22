@@ -23,12 +23,15 @@
     <Content Remove="ClientApp\**" />
   </ItemGroup>
 
-  <Target Name="EnsureClientBuild" BeforeTargets="Build" Condition="!Exists('wwwroot\js\dashboard.js')">
+  <!-- SkipClientBuild=true lets Docker build the bundles in a Node stage. -->
+  <Target Name="EnsureClientBuild" BeforeTargets="Build"
+          Condition="!Exists('wwwroot\js\dashboard.js') AND '$(SkipClientBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" Condition="!Exists('ClientApp\node_modules')" />
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
   </Target>
 
-  <Target Name="PublishClientBuild" BeforeTargets="ComputeFilesToPublish">
+  <Target Name="PublishClientBuild" BeforeTargets="ComputeFilesToPublish"
+          Condition="'$(SkipClientBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" />
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
   </Target>

@@ -1,0 +1,24 @@
+# ConnectionWatcher on Docker / Synology Container Manager.
+#
+#   cd deploy/docker && docker compose up -d
+#
+# The image runs as root by default, so ICMP ping works out of the box.
+# If you harden it with a non-root user, keep cap_add: NET_RAW so ping and
+# the TTL-stepped traceroute keep working.
+#
+# NOTE (Synology): not yet verified on-device — built and smoke-tested on
+# Docker Desktop. The host-side port (left of the colon) is yours to choose.
+
+services:
+  conwatch:
+    image: conwatch:latest
+    build:
+      context: ../..
+    container_name: conwatch
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    cap_add:
+      - NET_RAW

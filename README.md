@@ -64,4 +64,24 @@ Frontend dev loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside
 `dotnet run`; `npm test` runs the Vitest suite. `dotnet publish` builds the
 bundles automatically.
 
+## Running unattended
+
+**Windows service** — publish, then run the installer elevated:
+
+```powershell
+dotnet publish Programs/ConWatch -c Release -o C:\ConWatch
+dotnet publish Programs/ConTray -c Release -o C:\ConWatch
+powershell -ExecutionPolicy Bypass -File deploy/windows/install-service.ps1 -AppDir C:\ConWatch
+```
+
+The installer picks a free port once (default 8080; `-Port` to choose), pins
+it, opens the firewall, sets restart-on-failure, creates a Start Menu
+shortcut, starts the verdict-colored tray companion (green/orange/red at a
+glance; click for the dashboard), and opens the dashboard.
+`uninstall-service.ps1` removes everything except your data.
+
+**Docker** — `deploy/docker/compose.yaml` (data in `./data`, port 8080,
+`NET_RAW` for ping/traceroute when running non-root). Built and smoke-tested
+on Docker Desktop; not yet verified on Synology hardware.
+
 Design specs and implementation plans live in `docs/superpowers/`.
