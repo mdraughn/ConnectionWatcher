@@ -147,6 +147,20 @@ namespace ConPersistence.Migrations
                     b.ToTable("Rollups");
                 });
 
+            modelBuilder.Entity("ConPersistence.Entities.SettingRow", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("Settings");
+                });
+
             modelBuilder.Entity("ConPersistence.Entities.TargetRow", b =>
                 {
                     b.Property<Guid>("Id")

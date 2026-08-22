@@ -12,6 +12,7 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
     public DbSet<PoolMemberRow> PoolMembers => Set<PoolMemberRow>();
     public DbSet<TransitionRow> Transitions => Set<TransitionRow>();
     public DbSet<RollupRow> Rollups => Set<RollupRow>();
+    public DbSet<SettingRow> Settings => Set<SettingRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,6 +54,11 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
         modelBuilder.Entity<RollupRow>(e =>
         {
             e.HasIndex(r => new { r.TargetId, r.Resolution, r.PeriodStartUtc }).IsUnique();
+        });
+
+        modelBuilder.Entity<SettingRow>(e =>
+        {
+            e.HasKey(s => s.Key);
         });
     }
 }
