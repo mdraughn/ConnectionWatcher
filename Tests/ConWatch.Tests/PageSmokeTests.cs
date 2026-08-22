@@ -24,6 +24,16 @@ public class PageSmokeTests : IDisposable
     }
 
     [Fact]
+    public async Task Targets_page_renders_pipeline_for_anchor_pool()
+    {
+        await ConfigApiTests.SeedHomeAsync(_factory.CreateClient());
+        var html = await _factory.CreateClient().GetStringAsync("/Config/Targets");
+        Assert.Contains("Path to the internet", html);
+        Assert.Contains("data-insert-children", html);
+        Assert.Contains("Internet anchors", html);
+    }
+
+    [Fact]
     public async Task Config_page_shows_health_banner_for_thin_anchor_pool()
     {
         // SeedHome makes a 2-member pool with threshold 2 -> below-recommended fires.

@@ -70,3 +70,12 @@ main.container { padding-bottom: 4rem; }
              border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
 .cw-health ul { margin: 0.3rem 0 0; }
 .cw-health-hint { color: var(--cw-warn); font-size: 0.85rem; margin: 0.2rem 0 0.6rem; }
+
+/* Path-to-internet pipeline */
+.cw-pipeline { border-left: 3px solid var(--cw-unreach); padding-left: 1rem; margin-bottom: 1.2rem; }
+.cw-stage { padding: 0.35rem 0; }
+.cw-stage small { color: var(--cw-unreach); margin-left: 0.5rem; }
+.cw-stage .cw-branches { display: block; margin-left: 1rem; }
+.cw-insert { padding: 0.1rem 0 0.1rem 1.2rem; }
+.cw-insert button { font-size: 0.75rem; padding: 0.1rem 0.6rem; }
+.cw-anchors { border-top: 1px dotted var(--cw-unreach); }
