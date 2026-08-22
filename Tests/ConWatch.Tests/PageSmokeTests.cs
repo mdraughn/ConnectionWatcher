@@ -7,13 +7,14 @@ public class PageSmokeTests : IDisposable
     public void Dispose() => _factory.Dispose();
 
     [Theory]
-    [InlineData("/", "dashboard-root")]
+    [InlineData("/", "Quick setup")] // empty config redirects to the wizard
     [InlineData("/History", "history-root")]
     [InlineData("/Config/Targets", "Targets")]
     [InlineData("/Config/Profiles", "Profiles")]
     [InlineData("/Config/Pools", "Pools")]
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Admin", "Danger zone")]
+    [InlineData("/Setup", "Quick setup")]
     public async Task Page_renders(string url, string marker)
     {
         var client = _factory.CreateClient();

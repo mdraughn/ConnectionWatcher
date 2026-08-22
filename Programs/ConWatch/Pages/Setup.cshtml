@@ -1,0 +1,57 @@
+@page
+@model ConWatch.Pages.SetupModel
+@{
+    ViewData["Title"] = "Quick setup — ConnectionWatcher";
+}
+
+<h2>Quick setup</h2>
+<p>
+    Three steps and ConnectionWatcher is watching your internet connection —
+    no typing required unless you want to change something.
+    <a href="/Config/Targets">Skip setup and configure manually</a>.
+</p>
+<ul class="form-errors" id="errors"></ul>
+
+<section id="step-router">
+    <h4>1 · Your router</h4>
+    <p>
+        Detected gateway candidates are listed below — confirm the right one.
+        (Inside a container the detected gateway can be the container's bridge,
+        not your router; if unsure, check your computer's network settings.)
+    </p>
+    <div id="gateway-list" aria-busy="true">searching…</div>
+    <div class="grid">
+        <label>Name <input id="router-name" value="Router" /></label>
+        <label>Address <input id="router-address" placeholder="192.168.1.1" /></label>
+    </div>
+</section>
+
+<section id="step-anchors">
+    <h4>2 · Internet anchors</h4>
+    <p>
+        These public anycast DNS resolvers are built for public traffic; at the
+        polite External cadence each sees about six pings per minute from you.
+        Several anchors let ConnectionWatcher tell "one site is having a bad
+        day" apart from real internet weather.
+    </p>
+    <div id="anchor-list" aria-busy="true">loading…</div>
+</section>
+
+<section id="step-wan">
+    <h4>3 · Your router's public address <small>(optional)</small></h4>
+    <p>
+        Monitoring the router's outside (WAN) address separates "my Wi-Fi/router
+        works" from "my internet line works".
+    </p>
+    <button id="wan-probe" class="outline" type="button">Find my router's public address</button>
+    <div id="wan-result"></div>
+</section>
+
+<p>
+    <button id="apply" type="button">Start monitoring</button>
+</p>
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script src="~/lib/site-setup.js" asp-append-version="true"></script>
+}

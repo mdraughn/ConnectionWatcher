@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ConEngine.Tracking;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
@@ -15,8 +16,12 @@ public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth hea
     public List<TargetMonitor> Roots { get; } = new();
     public Dictionary<Guid, List<TargetMonitor>> Children { get; } = new();
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
+        // First boot: nothing configured yet -> hand the user to the wizard.
+        if (host.Engine is { } runningEngine && runningEngine.Graph.Targets.Count == 0)
+            return Redirect("/Setup");
+
         WarningCount = (await health.EvaluateAsync()).Count;
         var engine = host.Engine;
         var parents = new Dictionary<string, string?>();
@@ -50,5 +55,6 @@ public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth hea
             Parents = parents,
             PoolMembers = poolMembers,
         }, JsonOptions);
+        return Page();
     }
 }

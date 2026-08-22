@@ -120,6 +120,24 @@ public class SetupApiTests : IDisposable
     }
 
     [Fact]
+    public async Task First_boot_redirects_dashboard_to_wizard_until_setup_runs()
+    {
+        // Client follows the redirect: empty config lands on the wizard.
+        var beforeHtml = await _client.GetStringAsync("/");
+        Assert.Contains("Quick setup", beforeHtml);
+
+        var apply = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8", "1.1.1.1"]));
+        Assert.Equal(HttpStatusCode.NoContent, apply.StatusCode);
+
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var html = await _client.GetStringAsync("/");
+            return html.Contains("dashboard-root");
+        });
+    }
+
+    [Fact]
     public async Task Apply_without_router_address_is_400()
     {
         var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
