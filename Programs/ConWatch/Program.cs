@@ -74,6 +74,7 @@ api.MapStatus();
 api.MapHistory();
 api.MapTraceroute();
 api.MapSettings();
+api.MapAdmin();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {

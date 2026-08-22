@@ -13,6 +13,7 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Config/Profiles", "Profiles")]
     [InlineData("/Config/Pools", "Pools")]
     [InlineData("/Traceroute", "Traceroute")]
+    [InlineData("/Admin", "Danger zone")]
     public async Task Page_renders(string url, string marker)
     {
         var client = _factory.CreateClient();

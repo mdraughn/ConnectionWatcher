@@ -1,0 +1,70 @@
+@page
+@using ConPersistence
+@model ConWatch.Pages.AdminModel
+@{
+    ViewData["Title"] = "Administration — ConnectionWatcher";
+}
+
+<h2>Administration</h2>
+
+<h3>Database</h3>
+<div class="cw-stats-row" id="db-stats" aria-busy="true">loading…</div>
+
+<h3>Settings</h3>
+<ul class="form-errors" id="settings-errors"></ul>
+<form id="settings-form">
+    <div class="grid">
+        <label>Verdict anchor pool
+            <select name="@SettingKeys.AnchorPool">
+                <option value="">(none — verdict off)</option>
+                @foreach (var pool in Model.Pools)
+                {
+                    <option selected="@(pool.Name == Model.Setting(SettingKeys.AnchorPool))">@pool.Name</option>
+                }
+            </select>
+        </label>
+        <label>Weather threshold
+            <input name="@SettingKeys.WeatherThreshold" type="number" min="1"
+                   value="@Model.Setting(SettingKeys.WeatherThreshold, "2")" />
+        </label>
+    </div>
+    <div class="grid">
+        <label>Minute rollups kept (days)
+            <input name="@SettingKeys.MinuteRetentionDays" type="number" min="1" max="3650"
+                   value="@Model.Setting(SettingKeys.MinuteRetentionDays, "90")" />
+        </label>
+        <label>Hourly rollups kept (months)
+            <input name="@SettingKeys.HourlyRetentionMonths" type="number" min="1" max="120"
+                   value="@Model.Setting(SettingKeys.HourlyRetentionMonths, "13")" />
+        </label>
+        <label>Retention run hour (UTC)
+            <input name="@SettingKeys.RetentionRunHourUtc" type="number" min="0" max="23"
+                   value="@Model.Setting(SettingKeys.RetentionRunHourUtc, "3")" />
+        </label>
+    </div>
+    <button type="submit">Save settings</button>
+</form>
+
+<h3>Danger zone</h3>
+<article style="border-color: var(--cw-down)">
+    <ul class="form-errors" id="danger-errors"></ul>
+    <div class="grid">
+        <div>
+            <h5>Clear measurement history</h5>
+            <p>Deletes all transitions and rollups. Configuration and settings are kept.</p>
+            <input id="clear-confirm" placeholder="type CLEAR to enable" autocomplete="off" />
+            <button id="clear-btn" class="secondary" disabled>Clear history</button>
+        </div>
+        <div>
+            <h5>Factory reset</h5>
+            <p>Deletes everything — configuration, settings, and history — and returns to setup.</p>
+            <input id="reset-confirm" placeholder="type RESET to enable" autocomplete="off" />
+            <button id="reset-btn" class="secondary" disabled>Factory reset</button>
+        </div>
+    </div>
+</article>
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script src="~/lib/site-admin.js" asp-append-version="true"></script>
+}
