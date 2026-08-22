@@ -30,5 +30,9 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
 
 ## Still on the roadmap
 
-- **Phase 4** — Docker packaging for Synology (traceroute needs NET_RAW),
-  webhooks + MQTT toward Home Assistant (MQTT discovery).
+- **Phase 4** — deployment + notifications:
+  - Docker packaging for Synology (traceroute needs NET_RAW; `data/` volume).
+  - **Windows Service** for always-on operation on a Windows box
+    (AddWindowsService + install script, fixed listen URL, firewall rule,
+    restart-on-failure) — added 2026-08-22.
+  - Webhooks + MQTT toward Home Assistant (MQTT discovery).
