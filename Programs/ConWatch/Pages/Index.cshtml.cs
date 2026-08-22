@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth health) : PageModel
+public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth health,
+    Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -19,8 +20,14 @@ public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth hea
     public async Task<IActionResult> OnGetAsync()
     {
         // First boot: nothing configured yet -> hand the user to the wizard.
-        if (host.Engine is { } runningEngine && runningEngine.Graph.Targets.Count == 0)
-            return Redirect("/Setup");
+        // Checked against the DATABASE, not the engine: right after the wizard
+        // applies, the engine may still be mid-rebuild with the old empty graph.
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            if (!await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                    .AnyAsync(db.Targets))
+                return Redirect("/Setup");
+        }
 
         WarningCount = (await health.EvaluateAsync()).Count;
         var engine = host.Engine;

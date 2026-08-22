@@ -35,6 +35,15 @@ dotnet run --project Programs/ConWatch
   internet anchors; with intermediates healthy, one degraded anchor is a
   SiteIncident, two or more (configurable) is InternetWeather.
 
+## First run
+
+With an empty configuration, ConWatch opens the **quick-setup wizard**: it
+detects your router (confirm it — inside a container the detected gateway may
+be the container bridge), offers four public anycast DNS anchors, optionally
+discovers your router's WAN address via UPnP, and starts monitoring with one
+click. The **Admin** page holds database stats, retention/verdict settings,
+and the danger zone (clear history / factory reset, type-to-confirm).
+
 ## Web UI
 
 ConWatch serves its UI at the root:
