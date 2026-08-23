@@ -30,6 +30,11 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
 
 ## Still on the roadmap
 
+- **Container build smoke test** — the Dockerfile is authored (Phase 4a) but
+  unbuilt: Docker Desktop's engine failed to start locally (error dialog +
+  stopped WSL distro, 2026-08-22). Once Docker works again: `docker build`,
+  run, hit /api/v1/health, add 8.8.8.8, confirm Responding (ICMP inside the
+  container). Then Synology verification when Mark has setup time.
 - **Phase 4** — deployment + notifications:
   - Docker packaging for Synology (traceroute needs NET_RAW; `data/` volume).
   - **Windows Service** for always-on operation on a Windows box

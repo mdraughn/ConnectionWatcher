@@ -81,7 +81,9 @@ glance; click for the dashboard), and opens the dashboard.
 `uninstall-service.ps1` removes everything except your data.
 
 **Docker** — `deploy/docker/compose.yaml` (data in `./data`, port 8080,
-`NET_RAW` for ping/traceroute when running non-root). Built and smoke-tested
-on Docker Desktop; not yet verified on Synology hardware.
+`NET_RAW` for ping/traceroute when running non-root). The Dockerfile is
+authored but not yet built or run anywhere — local Docker Desktop was unable
+to start its engine at authoring time — and Synology deployment is likewise
+unverified. Treat the first `docker build` as part of the test.
 
 Design specs and implementation plans live in `docs/superpowers/`.
