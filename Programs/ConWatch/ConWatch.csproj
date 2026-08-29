@@ -4,6 +4,7 @@
     <ProjectReference Include="..\..\Core\ConEngine\ConEngine.csproj" />
     <ProjectReference Include="..\..\ConInfrastructure\ConInfrastructure.csproj" />
     <ProjectReference Include="..\..\ConPersistence\ConPersistence.csproj" />
+    <ProjectReference Include="..\..\ConNotify\ConNotify.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,14 +27,12 @@
   </ItemGroup>
 
   <!-- SkipClientBuild=true lets Docker build the bundles in a Node stage. -->
-  <Target Name="EnsureClientBuild" BeforeTargets="Build"
-          Condition="!Exists('wwwroot\js\dashboard.js') AND '$(SkipClientBuild)' != 'true'">
+  <Target Name="EnsureClientBuild" BeforeTargets="Build" Condition="!Exists('wwwroot\js\dashboard.js') AND '$(SkipClientBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" Condition="!Exists('ClientApp\node_modules')" />
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
   </Target>
 
-  <Target Name="PublishClientBuild" BeforeTargets="ComputeFilesToPublish"
-          Condition="'$(SkipClientBuild)' != 'true'">
+  <Target Name="PublishClientBuild" BeforeTargets="ComputeFilesToPublish" Condition="'$(SkipClientBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" />
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
   </Target>

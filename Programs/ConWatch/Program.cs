@@ -59,6 +59,14 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
 builder.Services.AddHostedService<RetentionService>();
 
+// Notifiers: idle until Mqtt.Enabled / Webhook.Enabled; reconfigured live via
+// NotifierSettingsChanged, re-attached by WatcherHostService on every rebuild.
+builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton<ConNotify.MqttNotifier>();
+builder.Services.AddSingleton<ConNotify.WebhookNotifier>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.WebhookNotifier>());
+
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
 builder.Services.AddSignalR();

@@ -27,7 +27,9 @@ public class WatcherHostService(
     IConfiguration configuration,
     TransitionRecorder recorder,
     RollupCollector collector,
-    StatusBroadcaster broadcaster) : IHostedService
+    StatusBroadcaster broadcaster,
+    ConNotify.MqttNotifier mqttNotifier,
+    ConNotify.WebhookNotifier webhookNotifier) : IHostedService
 {
     private readonly ILogger<WatcherHostService> _log = loggerFactory.CreateLogger<WatcherHostService>();
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
@@ -120,6 +122,8 @@ public class WatcherHostService(
         recorder.Attach(engine.TransitionSource);
         collector.Attach(engine.PingSampleSource);
         broadcaster.Attach(engine);
+        mqttNotifier.Attach(engine);
+        webhookNotifier.Attach(engine);
         await engine.StartAsync(_appStopping);
         Engine = engine;
         _log.LogInformation("Engine started with {Count} targets", options.Targets.Count);
