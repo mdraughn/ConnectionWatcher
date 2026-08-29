@@ -86,6 +86,26 @@ public class SettingsApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Mqtt_test_requires_a_host()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/admin/mqtt-test",
+            new { host = (string?)null, port = 1883 });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Mqtt_test_reports_unreachable_broker_as_ok_false()
+    {
+        // A closed local port refuses instantly — no broker needed.
+        var response = await _client.PostAsJsonAsync("/api/v1/admin/mqtt-test",
+            new { host = "127.0.0.1", port = 1 });
+        response.EnsureSuccessStatusCode();
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.False(body.GetProperty("ok").GetBoolean());
+        Assert.True(body.GetProperty("message").GetString()!.Length > 0);
+    }
+
     [Theory]
     [InlineData("Verdict.WeatherThreshold", "0")]
     [InlineData("Verdict.WeatherThreshold", "banana")]

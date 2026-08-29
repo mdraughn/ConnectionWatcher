@@ -14,6 +14,8 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Config/Pools", "Pools")]
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Admin", "Danger zone")]
+    [InlineData("/Admin", "MQTT / Home Assistant")]
+    [InlineData("/Admin", "Webhook URLs")]
     [InlineData("/Setup", "Quick setup")]
     [InlineData("/Report", "Internet connection report")]
     public async Task Page_renders(string url, string marker)

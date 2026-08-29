@@ -53,6 +53,69 @@
     <button type="submit">Save settings</button>
 </form>
 
+<h3>Notifications</h3>
+<ul class="form-errors" id="notify-errors"></ul>
+<form id="notify-form">
+    <h5>MQTT / Home Assistant</h5>
+    <div class="grid">
+        <label>Enabled
+            <select name="@SettingKeys.MqttEnabled">
+                <option value="false" selected="@(Model.Setting(SettingKeys.MqttEnabled, "false") != "true")">off</option>
+                <option value="true" selected="@(Model.Setting(SettingKeys.MqttEnabled) == "true")">on</option>
+            </select>
+        </label>
+        <label>Broker host
+            <input name="@SettingKeys.MqttHost" placeholder="homeassistant.local"
+                   value="@Model.Setting(SettingKeys.MqttHost)" />
+        </label>
+        <label>Port
+            <input name="@SettingKeys.MqttPort" type="number" min="1" max="65535"
+                   value="@Model.Setting(SettingKeys.MqttPort, "1883")" />
+        </label>
+    </div>
+    <div class="grid">
+        <label>Username <small>(optional)</small>
+            <input name="@SettingKeys.MqttUsername" autocomplete="off"
+                   value="@Model.Setting(SettingKeys.MqttUsername)" />
+        </label>
+        <label>Password <small>(optional)</small>
+            <input name="@SettingKeys.MqttPassword" type="password" autocomplete="new-password"
+                   value="@Model.Setting(SettingKeys.MqttPassword)" />
+        </label>
+        <label>Base topic
+            <input name="@SettingKeys.MqttBaseTopic" placeholder="conwatch"
+                   value="@Model.Setting(SettingKeys.MqttBaseTopic)" />
+        </label>
+        <label>Discovery prefix
+            <input name="@SettingKeys.MqttDiscoveryPrefix" placeholder="homeassistant"
+                   value="@Model.Setting(SettingKeys.MqttDiscoveryPrefix)" />
+        </label>
+    </div>
+    <p><button type="button" id="mqtt-test-btn" class="outline">Test connection</button>
+        <span id="mqtt-test-result"></span></p>
+
+    <h5>Webhooks</h5>
+    <div class="grid">
+        <label>Enabled
+            <select name="@SettingKeys.WebhookEnabled">
+                <option value="false" selected="@(Model.Setting(SettingKeys.WebhookEnabled, "false") != "true")">off</option>
+                <option value="true" selected="@(Model.Setting(SettingKeys.WebhookEnabled) == "true")">on</option>
+            </select>
+        </label>
+        <label>Verdict changes only
+            <select name="@SettingKeys.WebhookVerdictOnly">
+                <option value="false" selected="@(Model.Setting(SettingKeys.WebhookVerdictOnly, "false") != "true")">no — every transition</option>
+                <option value="true" selected="@(Model.Setting(SettingKeys.WebhookVerdictOnly) == "true")">yes — verdict only</option>
+            </select>
+        </label>
+    </div>
+    <label>Webhook URLs <small>(one per line)</small>
+        <textarea name="@SettingKeys.WebhookUrls" rows="3"
+                  placeholder="https://example.com/hook">@Model.Setting(SettingKeys.WebhookUrls)</textarea>
+    </label>
+    <button type="submit">Save notifications</button>
+</form>
+
 <h3>Danger zone</h3>
 <article style="border-color: var(--cw-down)">
     <ul class="form-errors" id="danger-errors"></ul>

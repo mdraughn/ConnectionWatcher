@@ -9,6 +9,8 @@ public static class AdminEndpoints
 {
     public record ConfirmRequest(string? Confirm);
 
+    public record MqttTestRequest(string? Host, int? Port, string? Username, string? Password);
+
     public static void MapAdmin(this RouteGroupBuilder api)
     {
         api.MapGet("/admin/stats", async (IDbContextFactory<ConWatchDbContext> dbFactory,
@@ -38,6 +40,20 @@ public static class AdminEndpoints
                 OldestRollupUtc = oldestRollup,
                 LastRetentionRunUtc = await settings.GetAsync(SettingKeys.RetentionLastRunUtc),
             });
+        });
+
+        // Tests the broker with the values in the form, saved or not.
+        api.MapPost("/admin/mqtt-test", async (MqttTestRequest request, CancellationToken ct) =>
+        {
+            if (request.Host is not { Length: > 0 })
+                return Results.BadRequest(new { errors = new[] { "Host is required." } });
+            var port = request.Port ?? 1883;
+            if (port is < 1 or > 65535)
+                return Results.BadRequest(new { errors = new[] { "Port must be 1–65535." } });
+
+            var (ok, message) = await ConNotify.MqttTester.TestAsync(
+                request.Host, port, request.Username, request.Password, ct);
+            return Results.Ok(new { ok, message });
         });
 
         api.MapPost("/admin/clear-history", async (ConfirmRequest request,

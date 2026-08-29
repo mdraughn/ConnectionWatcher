@@ -21,17 +21,36 @@ async function loadStats() {
         stat(s.lastRetentionRunUtc ? new Date(s.lastRetentionRunUtc).toLocaleString() : "—", "last retention run");
 }
 
-document.getElementById("settings-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const errors = document.getElementById("settings-errors");
-    clearErrors(errors);
-    const form = e.target;
-    const values = {};
-    for (const field of form.querySelectorAll("[name]"))
-        values[field.name] = field.value === "" ? null : field.value;
-    const result = await apiFetch("PUT", "/api/v1/settings", values);
-    if (result.ok) location.reload();
-    else showErrors(errors, result);
+function wireSettingsForm(formId, errorsId) {
+    document.getElementById(formId).addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const errors = document.getElementById(errorsId);
+        clearErrors(errors);
+        const values = {};
+        for (const field of e.target.querySelectorAll("[name]"))
+            values[field.name] = field.value === "" ? null : field.value;
+        const result = await apiFetch("PUT", "/api/v1/settings", values);
+        if (result.ok) location.reload();
+        else showErrors(errors, result);
+    });
+}
+wireSettingsForm("settings-form", "settings-errors");
+wireSettingsForm("notify-form", "notify-errors");
+
+document.getElementById("mqtt-test-btn").addEventListener("click", async () => {
+    const form = document.getElementById("notify-form");
+    const value = (name) => form.querySelector(`[name="Mqtt.${name}"]`).value;
+    const out = document.getElementById("mqtt-test-result");
+    out.textContent = "testing…";
+    const result = await apiFetch("POST", "/api/v1/admin/mqtt-test", {
+        host: value("Host") || null,
+        port: value("Port") ? Number(value("Port")) : null,
+        username: value("Username") || null,
+        password: value("Password") || null,
+    });
+    if (result.ok && result.body.ok) out.textContent = `✓ ${result.body.message}`;
+    else if (result.ok) out.textContent = `✗ ${result.body.message}`;
+    else out.textContent = `✗ ${(result.body?.errors ?? ["request failed"]).join("; ")}`;
 });
 
 function wireDanger(inputId, buttonId, word, url) {
