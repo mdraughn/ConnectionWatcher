@@ -12,6 +12,18 @@ public static class SettingKeys
     public const string HourlyRetentionMonths = "Retention.HourlyRetentionMonths";
     public const string RetentionRunHourUtc = "Retention.RetentionRunHourUtc";
     public const string RetentionLastRunUtc = "Retention.LastRunUtc";
+
+    public const string MqttEnabled = "Mqtt.Enabled";
+    public const string MqttHost = "Mqtt.Host";
+    public const string MqttPort = "Mqtt.Port";
+    public const string MqttUsername = "Mqtt.Username";
+    public const string MqttPassword = "Mqtt.Password";
+    public const string MqttBaseTopic = "Mqtt.BaseTopic";
+    public const string MqttDiscoveryPrefix = "Mqtt.DiscoveryPrefix";
+
+    public const string WebhookEnabled = "Webhook.Enabled";
+    public const string WebhookUrls = "Webhook.Urls";
+    public const string WebhookVerdictOnly = "Webhook.VerdictOnly";
 }
 
 /// <summary>
@@ -22,6 +34,9 @@ public static class SettingKeys
 public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
 {
     public event Action? SettingsChanged;
+
+    /// <summary>Raised on Mqtt.*/Webhook.* writes; notifiers reconfigure live.</summary>
+    public event Action? NotifierSettingsChanged;
 
     public async Task SeedMissingAsync(IReadOnlyDictionary<string, string> defaults)
     {
@@ -74,5 +89,9 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
 
         if (values.Keys.Any(k => k.StartsWith("Verdict.", StringComparison.OrdinalIgnoreCase)))
             SettingsChanged?.Invoke();
+        if (values.Keys.Any(k =>
+                k.StartsWith("Mqtt.", StringComparison.OrdinalIgnoreCase) ||
+                k.StartsWith("Webhook.", StringComparison.OrdinalIgnoreCase)))
+            NotifierSettingsChanged?.Invoke();
     }
 }

@@ -48,6 +48,30 @@ public static class SettingsEndpoints
                     case SettingKeys.RetentionLastRunUtc:
                         errors.Add("Retention.LastRunUtc is read-only.");
                         break;
+                    case SettingKeys.MqttPort:
+                        if (!int.TryParse(value, out var mqttPort) || mqttPort < 1 || mqttPort > 65535)
+                            errors.Add("Mqtt.Port must be 1–65535.");
+                        break;
+                    case SettingKeys.MqttEnabled:
+                    case SettingKeys.WebhookEnabled:
+                    case SettingKeys.WebhookVerdictOnly:
+                        if (value is not (null or "true" or "false"))
+                            errors.Add($"{key} must be 'true' or 'false'.");
+                        break;
+                    case SettingKeys.MqttHost:
+                    case SettingKeys.MqttUsername:
+                    case SettingKeys.MqttPassword:
+                    case SettingKeys.MqttBaseTopic:
+                    case SettingKeys.MqttDiscoveryPrefix:
+                        break; // free text; null clears
+                    case SettingKeys.WebhookUrls:
+                        foreach (var line in (value ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            if (!Uri.TryCreate(line, UriKind.Absolute, out var uri) ||
+                                uri.Scheme is not ("http" or "https"))
+                                errors.Add($"Webhook URL '{line}' is not a valid http(s) URL.");
+                        }
+                        break;
                     default:
                         errors.Add($"Unknown setting '{key}'.");
                         break;

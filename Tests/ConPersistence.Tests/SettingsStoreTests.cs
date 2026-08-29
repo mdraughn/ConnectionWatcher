@@ -54,6 +54,23 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Notifier_keys_raise_their_own_signal_only()
+    {
+        int notifierSignals = 0;
+        _store.NotifierSettingsChanged += () => notifierSignals++;
+
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.MqttHost] = "nas" });
+        Assert.Equal(1, notifierSignals);
+        Assert.Equal(0, _changeSignals); // not a verdict signal
+
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.WebhookEnabled] = "true" });
+        Assert.Equal(2, notifierSignals);
+
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.MinuteRetentionDays] = "60" });
+        Assert.Equal(2, notifierSignals);
+    }
+
+    [Fact]
     public async Task Null_value_deletes_key()
     {
         await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.AnchorPool] = "Internet" });

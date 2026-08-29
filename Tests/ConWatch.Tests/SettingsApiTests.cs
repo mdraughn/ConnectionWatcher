@@ -61,6 +61,32 @@ public class SettingsApiTests : IDisposable
     }
 
     [Theory]
+    [InlineData("Mqtt.Host", "homeassistant.local")]
+    [InlineData("Mqtt.Port", "1883")]
+    [InlineData("Mqtt.Enabled", "false")]
+    [InlineData("Webhook.Urls", "http://example.com/hook\nhttps://other.example/x")]
+    [InlineData("Webhook.VerdictOnly", "true")]
+    public async Task Valid_notifier_settings_are_accepted(string key, string value)
+    {
+        var response = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { [key] = value });
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(value, (await GetSettings())[key]);
+    }
+
+    [Theory]
+    [InlineData("Mqtt.Port", "70000")]
+    [InlineData("Mqtt.Enabled", "yes")]
+    [InlineData("Webhook.Urls", "not-a-url")]
+    [InlineData("Webhook.Urls", "ftp://example.com/x")]
+    public async Task Invalid_notifier_settings_are_400(string key, string value)
+    {
+        var response = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { [key] = value });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("Verdict.WeatherThreshold", "0")]
     [InlineData("Verdict.WeatherThreshold", "banana")]
     [InlineData("Retention.MinuteRetentionDays", "0")]
