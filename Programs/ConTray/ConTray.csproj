@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyTitle>ConnectionWatcher Tray</AssemblyTitle>
+    <Company>DSoftCo</Company>
+    <Product>ConnectionWatcher</Product>
   </PropertyGroup>
 
 </Project>

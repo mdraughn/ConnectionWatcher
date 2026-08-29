@@ -16,6 +16,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Company>DSoftCo</Company>
+    <Product>ConnectionWatcher</Product>
   </PropertyGroup>
 
   <ItemGroup>

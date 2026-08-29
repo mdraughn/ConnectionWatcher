@@ -23,7 +23,7 @@ public sealed class TraySettings
     {
         _userSettingsPath = userSettingsPath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ConnectionWatcher", "contray-settings.json");
+            "DSoftCo", "ConnectionWatcher", "contray-settings.json");
         _installedDefaultPath = installedDefaultPath ??
             Path.Combine(AppContext.BaseDirectory, "contray.json");
         Load();

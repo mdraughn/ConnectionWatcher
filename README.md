@@ -66,11 +66,28 @@ bundles automatically.
 
 ## Running unattended
 
-**Windows service** — publish, then run the installer elevated:
+**The easy way** — from the repo root, no parameters, self-elevating:
+
+```powershell
+.\Install-Watcher.ps1
+```
+
+```powershell
+.\Install-Tray.ps1
+```
+
+`Install-Watcher` publishes to `C:\Program Files\DSoftCo\ConnectionWatcher\Watcher`,
+installs the service (data in `C:\ProgramData\DSoftCo\ConnectionWatcher\data`),
+and opens the dashboard. `Install-Tray` publishes the dot and points it at the
+installed service automatically. `Publish-*` re-deploys after changes
+(stopping/restarting the service or tray around the copy), `Build-*` is a
+quick compile check, and `Uninstall-*` removes service/autostart while leaving
+files and data in place.
+
+**By hand** — publish anywhere and run the deploy scripts with parameters:
 
 ```powershell
 dotnet publish Programs/ConWatch -c Release -o C:\ConWatch
-dotnet publish Programs/ConTray -c Release -o C:\ConWatch
 powershell -ExecutionPolicy Bypass -File deploy/windows/install-service.ps1 -AppDir C:\ConWatch
 ```
 

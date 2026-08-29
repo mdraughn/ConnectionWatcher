@@ -13,7 +13,7 @@ Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" 
     -Name "ConnectionWatcherTray" -ErrorAction SilentlyContinue
 Remove-Item (Join-Path ([Environment]::GetFolderPath("Programs")) "ConnectionWatcher Tray.lnk") `
     -ErrorAction SilentlyContinue
-Remove-Item (Join-Path ([Environment]::GetFolderPath("ApplicationData")) "ConnectionWatcher\contray-settings.json") `
+Remove-Item (Join-Path ([Environment]::GetFolderPath("ApplicationData")) "DSoftCo\ConnectionWatcher\contray-settings.json") `
     -ErrorAction SilentlyContinue
 
 Write-Host "Tray companion removed (application files left in place)."

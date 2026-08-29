@@ -18,7 +18,10 @@
 param(
     [string]$AppDir = $PSScriptRoot,
     [int]$Port = 0,
-    [string]$ServiceName = "ConnectionWatcher"
+    [string]$ServiceName = "ConnectionWatcher",
+    # Where the SQLite database lives. Default keeps data beside the app;
+    # Windows-like installs pass a ProgramData path instead.
+    [string]$DataDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,7 +57,10 @@ if ($existing) {
     & sc.exe delete $ServiceName | Out-Null
     Start-Sleep -Seconds 2
 }
-$binPath = "`"$exe`" --urls $url"
+if (-not $DataDir) { $DataDir = Join-Path $AppDir "data" }
+New-Item -ItemType Directory -Force $DataDir | Out-Null
+$dbPath = Join-Path $DataDir "conwatch.db"
+$binPath = "`"$exe`" --urls $url --Persistence:DbPath `"$dbPath`""
 & sc.exe create $ServiceName binPath= $binPath start= auto DisplayName= "ConnectionWatcher" | Out-Null
 & sc.exe description $ServiceName "Home internet connectivity monitor (dashboard at $dashboard)" | Out-Null
 # Restart on failure: 5s, 30s, 60s; reset the failure counter daily.
@@ -89,7 +95,7 @@ Start-Service $ServiceName
 Write-Host ""
 Write-Host "ConnectionWatcher is installed and running at $dashboard" -ForegroundColor Green
 Write-Host "  Service:  $ServiceName (auto-start, restart-on-failure)"
-Write-Host "  Data:     $(Join-Path $AppDir 'data\conwatch.db')"
+Write-Host "  Data:     $dbPath"
 Write-Host "  Firewall: TCP $Port (Private/Domain profiles)"
 Write-Host "  Change the port later: re-run this script with -Port <n>"
 Start-Process $dashboard
