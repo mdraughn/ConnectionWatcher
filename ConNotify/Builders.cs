@@ -1,0 +1,138 @@
+using System.Text;
+using System.Text.Json;
+using ConEngine.Events;
+using ConEngine.Tracking;
+
+namespace ConNotify;
+
+/// <summary>MQTT/HA-safe slugs: lowercase, [a-z0-9] kept, runs of anything else → one '_', collisions suffixed.</summary>
+public class Slugger
+{
+    private readonly HashSet<string> _used = new(StringComparer.Ordinal);
+
+    public string Slug(string name)
+    {
+        var sb = new StringBuilder();
+        var lastWasSeparator = true;
+        foreach (var c in name.ToLowerInvariant())
+        {
+            if (char.IsAsciiLetterOrDigit(c))
+            {
+                sb.Append(c);
+                lastWasSeparator = false;
+            }
+            else if (!lastWasSeparator)
+            {
+                sb.Append('_');
+                lastWasSeparator = true;
+            }
+        }
+        var slug = sb.ToString().Trim('_');
+        if (slug.Length == 0)
+            slug = "target";
+
+        var candidate = slug;
+        for (int i = 2; !_used.Add(candidate); i++)
+            candidate = $"{slug}_{i}";
+        return candidate;
+    }
+}
+
+/// <summary>State payloads: HA connectivity semantics.</summary>
+public static class StateMapping
+{
+    /// <summary>ON = reachable-ish (incl. degraded); OFF = Down/Unreachable.</summary>
+    public static string TargetPayload(HostState state) =>
+        state is HostState.Down or HostState.Unreachable ? "OFF" : "ON";
+
+    /// <summary>The headline binary: ON unless the verdict says the LINK is down.</summary>
+    public static string InternetPayload(string verdict) =>
+        verdict == "LinkDown" ? "OFF" : "ON";
+}
+
+/// <summary>All topic strings derive from here — one source of truth.</summary>
+public class MqttTopics(string baseTopic, string discoveryPrefix)
+{
+    public string Base { get; } = baseTopic.Trim('/');
+    public string Availability => $"{Base}/availability";
+    public string VerdictState => $"{Base}/verdict/state";
+    public string VerdictAttributes => $"{Base}/verdict/attributes";
+    public string InternetState => $"{Base}/internet/state";
+    public string Transitions => $"{Base}/transitions";
+    public string TargetState(string slug) => $"{Base}/target/{slug}/state";
+
+    private string Prefix { get; } = discoveryPrefix.Trim('/');
+    public string VerdictDiscovery => $"{Prefix}/sensor/{Base}_verdict/config";
+    public string InternetDiscovery => $"{Prefix}/binary_sensor/{Base}_internet/config";
+    public string TargetDiscovery(string slug) => $"{Prefix}/binary_sensor/{Base}_{slug}/config";
+}
+
+/// <summary>Home Assistant MQTT discovery documents.</summary>
+public static class HaDiscovery
+{
+    private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
+
+    private static object Device(MqttTopics topics) => new
+    {
+        identifiers = new[] { topics.Base },
+        name = "ConnectionWatcher",
+        manufacturer = "DSoftCo",
+    };
+
+    public static string TargetConfig(MqttTopics topics, string name, string slug, Guid targetId) =>
+        JsonSerializer.Serialize(new
+        {
+            name,
+            unique_id = $"{topics.Base}_{targetId:N}",
+            state_topic = topics.TargetState(slug),
+            device_class = "connectivity",
+            availability_topic = topics.Availability,
+            device = Device(topics),
+        }, Options);
+
+    public static string VerdictConfig(MqttTopics topics) =>
+        JsonSerializer.Serialize(new
+        {
+            name = "Internet verdict",
+            unique_id = $"{topics.Base}_verdict",
+            state_topic = topics.VerdictState,
+            json_attributes_topic = topics.VerdictAttributes,
+            icon = "mdi:weather-partly-cloudy",
+            availability_topic = topics.Availability,
+            device = Device(topics),
+        }, Options);
+
+    public static string InternetConfig(MqttTopics topics) =>
+        JsonSerializer.Serialize(new
+        {
+            name = "Internet",
+            unique_id = $"{topics.Base}_internet",
+            state_topic = topics.InternetState,
+            device_class = "connectivity",
+            availability_topic = topics.Availability,
+            device = Device(topics),
+        }, Options);
+}
+
+/// <summary>Webhook + MQTT transition-event body.</summary>
+public static class WebhookPayload
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+
+    public static string ToJson(TargetTransition t) =>
+        JsonSerializer.Serialize(new
+        {
+            Timestamp = t.Timestamp.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'"),
+            SubjectKind = t.Kind.ToString(),
+            SubjectId = t.TargetId,
+            SubjectName = t.TargetName,
+            From = t.From.ToString(),
+            To = t.To.ToString(),
+            Trigger = t.Reason.Trigger.ToString(),
+            Verdict = t.Reason.Verdict,
+            Detail = t.Reason.Detail,
+            SuccessRate = t.Reason.SuccessRate,
+            SampleSize = t.Reason.SampleSize,
+            BurstLossRate = t.Reason.BurstLossRate,
+        }, Options);
+}
