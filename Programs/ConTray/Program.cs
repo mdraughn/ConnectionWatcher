@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace ConTray;
 
@@ -8,34 +7,42 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // One dot is plenty: a second launch (login autostart + manual start)
+        // exits quietly.
+        using var mutex = new Mutex(initiallyOwned: true, "ConnectionWatcherTray", out var isFirst);
+        if (!isFirst)
+            return;
+
         ApplicationConfiguration.Initialize();
         Application.Run(new TrayContext());
     }
 }
 
 /// <summary>
-/// The tray companion: a verdict-colored icon polling the ConnectionWatcher
-/// service. The service itself cannot own a tray icon (session 0), so this
-/// little user-session app is the face of it.
+/// The tray companion: a verdict-colored icon polling a ConnectionWatcher
+/// server. Standalone-installable — the server can be anywhere; see
+/// TraySettings for how the URL is chosen.
 /// </summary>
 internal sealed class TrayContext : ApplicationContext
 {
     private readonly NotifyIcon _icon;
     private readonly System.Windows.Forms.Timer _timer;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(3) };
-    private readonly string _dashboardUrl;
+    private readonly TraySettings _settings = new();
     private readonly Dictionary<TrayState, Icon> _icons = new();
     private TrayState _state = TrayState.Unreachable;
+    private bool _firstPoll = true;
 
     public TrayContext()
     {
-        _dashboardUrl = ReadConfiguredUrl();
-
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Dashboard", null, (_, _) => Open(""));
+        var open = menu.Items.Add("Open ConnectionWatcher", null, (_, _) => Open(""));
+        open.Font = new Font(open.Font, FontStyle.Bold);
         menu.Items.Add("History", null, (_, _) => Open("/History"));
         menu.Items.Add("ISP report", null, (_, _) => Open("/Report"));
         menu.Items.Add("Admin", null, (_, _) => Open("/Admin"));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -46,7 +53,7 @@ internal sealed class TrayContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = menu,
         };
-        _icon.MouseClick += (_, e) =>
+        _icon.MouseDoubleClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
                 Open("");
@@ -58,58 +65,82 @@ internal sealed class TrayContext : ApplicationContext
         _ = RefreshAsync();
     }
 
-    private static string ReadConfiguredUrl()
-    {
-        try
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "contray.json");
-            if (File.Exists(path))
-            {
-                var config = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(path));
-                if (config.TryGetProperty("url", out var url) && url.GetString() is { Length: > 0 } value)
-                    return value.TrimEnd('/');
-            }
-        }
-        catch
-        {
-            // fall through to default
-        }
-        return "http://localhost:8080";
-    }
-
     private async Task RefreshAsync()
     {
-        TrayState next;
+        TrayInfo next;
         try
         {
-            var response = await _http.GetAsync($"{_dashboardUrl}/api/v1/status");
+            var response = await _http.GetAsync($"{_settings.EffectiveUrl}/api/v1/status");
             next = response.IsSuccessStatusCode
                 ? TrayStatus.FromStatusJson(await response.Content.ReadAsStringAsync())
-                : TrayState.Unreachable;
+                : new TrayInfo(TrayState.Unreachable, null);
         }
         catch (Exception)
         {
-            next = TrayState.Unreachable;
+            next = new TrayInfo(TrayState.Unreachable, null);
         }
-        if (next != _state)
+
+        if (next.State != _state)
         {
-            _state = next;
-            _icon.Icon = IconFor(next);
-            _icon.Text = TrayStatus.Describe(next);
+            var previous = _state;
+            _state = next.State;
+            _icon.Icon = IconFor(next.State);
+            _icon.Text = Truncate($"{TrayStatus.Describe(next.State)}" +
+                (next.Detail is { Length: > 0 } ? $"\n{next.Detail}" : ""), 127);
+            MaybeToast(previous, next);
         }
+        _firstPoll = false;
+    }
+
+    /// <summary>
+    /// Toast on changes a person would act on: down, degraded, recovered,
+    /// monitor lost/back. Never on startup, never for measuring churn.
+    /// </summary>
+    private void MaybeToast(TrayState previous, TrayInfo next)
+    {
+        if (_firstPoll || !_settings.NotificationsEnabled)
+            return;
+        if (next.State == TrayState.Measuring || previous == TrayState.Measuring)
+            return;
+
+        (string? title, ToolTipIcon icon) = next.State switch
+        {
+            TrayState.Down => ("Internet DOWN", ToolTipIcon.Error),
+            TrayState.Degraded => ("Internet degraded", ToolTipIcon.Warning),
+            TrayState.Healthy => ("Internet healthy again", ToolTipIcon.Info),
+            TrayState.Unreachable => ("ConnectionWatcher unreachable", ToolTipIcon.Warning),
+            _ => (null, ToolTipIcon.None),
+        };
+        if (title is null)
+            return;
+
+        var body = next.State == TrayState.Unreachable
+            ? $"The monitor at {_settings.EffectiveUrl} is not answering."
+            : next.Detail is { Length: > 0 } ? next.Detail : TrayStatus.Describe(next.State);
+        _icon.ShowBalloonTip(5000, title, Truncate(body, 250), icon);
+    }
+
+    private void ShowSettings()
+    {
+        using var dialog = new SettingsForm(_settings, _http);
+        if (dialog.ShowDialog() == DialogResult.OK)
+            _ = RefreshAsync(); // apply immediately
     }
 
     private void Open(string path)
     {
         try
         {
-            Process.Start(new ProcessStartInfo($"{_dashboardUrl}{path}") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo($"{_settings.EffectiveUrl}{path}") { UseShellExecute = true });
         }
         catch (Exception)
         {
             // Browser launch failed; nothing sensible to do from the tray.
         }
     }
+
+    private static string Truncate(string text, int max) =>
+        text.Length <= max ? text : text[..(max - 1)] + "…";
 
     /// <summary>Runtime-drawn colored dot — no icon assets to ship.</summary>
     private Icon IconFor(TrayState state)

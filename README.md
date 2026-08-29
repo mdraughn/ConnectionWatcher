@@ -76,9 +76,21 @@ powershell -ExecutionPolicy Bypass -File deploy/windows/install-service.ps1 -App
 
 The installer picks a free port once (default 8080; `-Port` to choose), pins
 it, opens the firewall, sets restart-on-failure, creates a Start Menu
-shortcut, starts the verdict-colored tray companion (green/orange/red at a
-glance; click for the dashboard), and opens the dashboard.
+shortcut, starts the verdict-colored tray companion, and opens the dashboard.
 `uninstall-service.ps1` removes everything except your data.
+
+**Tray companion (standalone)** — the dot also installs on machines that
+*aren't* running the server (point it at the NAS or another box):
+
+```powershell
+dotnet publish Programs/ConTray -c Release -o C:\ConTray
+powershell -ExecutionPolicy Bypass -File deploy/windows/install-tray.ps1 -AppDir C:\ConTray -Url http://nas:8080
+```
+
+No elevation needed. Green/orange/red/gray at a glance; double-click opens the
+dashboard; right-click for History, the ISP report, Admin, and **Settings**
+(override the server URL, test the connection, return to the installed
+default, toggle toast notifications on state changes).
 
 **Docker** — `deploy/docker/compose.yaml` (data in `./data`, port 8080,
 `NET_RAW` for ping/traceroute when running non-root). Built and smoke-tested

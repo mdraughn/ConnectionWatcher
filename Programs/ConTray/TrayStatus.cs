@@ -11,13 +11,16 @@ public enum TrayState
     Down           // link down / a target hard-down (no-verdict fallback)
 }
 
+/// <summary>State plus the human-readable evidence line, for tooltips and toasts.</summary>
+public record TrayInfo(TrayState State, string? Detail);
+
 /// <summary>
 /// Pure mapping from the /api/v1/status JSON to a tray state. Verdict wins
 /// when present; otherwise the worst target state decides.
 /// </summary>
 public static class TrayStatus
 {
-    public static TrayState FromStatusJson(string json)
+    public static TrayInfo FromStatusJson(string json)
     {
         try
         {
@@ -25,33 +28,40 @@ public static class TrayStatus
             if (status.TryGetProperty("verdict", out var verdict) &&
                 verdict.ValueKind == JsonValueKind.Object)
             {
-                return verdict.GetProperty("state").GetString() switch
+                var detail = verdict.TryGetProperty("detail", out var d) ? d.GetString() : null;
+                var state = verdict.GetProperty("state").GetString() switch
                 {
                     "Healthy" or "SiteIncident" => TrayState.Healthy,
                     "InternetWeather" or "LinkDegraded" => TrayState.Degraded,
                     "LinkDown" => TrayState.Down,
                     _ => TrayState.Measuring,
                 };
+                return new TrayInfo(state, detail);
             }
 
             // No verdict configured: derive from target states.
             if (!status.TryGetProperty("targets", out var targets) ||
                 targets.GetArrayLength() == 0)
-                return TrayState.Measuring;
+                return new TrayInfo(TrayState.Measuring, null);
             var states = targets.EnumerateArray()
-                .Select(t => t.GetProperty("state").GetString() ?? "")
+                .Select(t => (Name: t.GetProperty("name").GetString() ?? "",
+                              State: t.GetProperty("state").GetString() ?? ""))
                 .ToList();
-            if (states.Any(s => s is "Down" or "Unreachable"))
-                return TrayState.Down;
-            if (states.Any(s => s is "Faltering" or "Recovering"))
-                return TrayState.Degraded;
-            if (states.All(s => s is "Starting" or "Initializing"))
-                return TrayState.Measuring;
-            return TrayState.Healthy;
+            var bad = states.Where(s => s.State is "Down" or "Unreachable").ToList();
+            if (bad.Count > 0)
+                return new TrayInfo(TrayState.Down,
+                    string.Join(", ", bad.Select(b => $"{b.Name}={b.State}")));
+            var shaky = states.Where(s => s.State is "Faltering" or "Recovering").ToList();
+            if (shaky.Count > 0)
+                return new TrayInfo(TrayState.Degraded,
+                    string.Join(", ", shaky.Select(b => $"{b.Name}={b.State}")));
+            if (states.All(s => s.State is "Starting" or "Initializing"))
+                return new TrayInfo(TrayState.Measuring, null);
+            return new TrayInfo(TrayState.Healthy, null);
         }
         catch (JsonException)
         {
-            return TrayState.Unreachable;
+            return new TrayInfo(TrayState.Unreachable, null);
         }
     }
 
