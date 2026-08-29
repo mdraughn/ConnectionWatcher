@@ -60,6 +60,34 @@ ConWatch serves its UI at the root:
 - **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
   monitored targets with the right parent pre-filled.
 
+## Notifications (Home Assistant MQTT + webhooks)
+
+Configured on the **Admin** page under *Notifications*; both are off by
+default and reconfigure live — no restart needed.
+
+**MQTT / Home Assistant** — enter your broker (host, port, optional
+credentials), press *Test connection*, and enable. ConWatch publishes Home
+Assistant discovery documents, so entities appear automatically under one
+"ConnectionWatcher" device:
+
+- a **verdict sensor** (`Healthy` / `SiteIncident` / `InternetWeather` /
+  `LinkDown`, with the detail text as an attribute),
+- an **internet up/down binary sensor** (OFF only when the verdict is
+  LinkDown — the simplest summary),
+- a **connectivity binary sensor per target** (ON while Responding, Faltering,
+  or Recovering; OFF when Down or Unreachable).
+
+State topics are retained under the base topic (default `conwatch/…`), with a
+last-will `availability` topic so entities show *unavailable* if ConWatch
+stops. Every transition is also published as JSON to `conwatch/transitions`
+for automations that want the raw events. Publishes happen only on state
+changes and reconnects — never per ping.
+
+**Webhooks** — one URL per line; each transition is POSTed as JSON
+(`subjectKind`, `subjectName`, `from`, `to`, `trigger`, verdict/evidence
+fields). Set *Verdict changes only* to be notified just when your internet
+weather changes rather than on every target flap.
+
 Frontend dev loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside
 `dotnet run`; `npm test` runs the Vitest suite. `dotnet publish` builds the
 bundles automatically.

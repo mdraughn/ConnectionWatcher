@@ -48,4 +48,9 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
     right-click menu (Dashboard/History/Report/Admin, start service, exit),
     auto-start at login. Optional later: toast notifications on verdict
     changes (decide alongside MQTT/webhooks, not by accident).
-  - Webhooks + MQTT toward Home Assistant (MQTT discovery).
+  - ~~**Webhooks + MQTT toward Home Assistant**~~ — DONE 2026-08-29 (phase 4b):
+    ConNotify library; HA MQTT discovery (verdict sensor, internet up/down
+    binary, per-target connectivity binaries, LWT availability), transitions
+    JSON topic, generic webhooks with verdict-only filter; Admin Notifications
+    section with broker Test button; verified end-to-end against Mosquitto in
+    Docker. Remaining user-side: point it at the real HA broker.
