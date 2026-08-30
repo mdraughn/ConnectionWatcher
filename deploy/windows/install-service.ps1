@@ -61,10 +61,15 @@ if (-not $DataDir) { $DataDir = Join-Path $AppDir "data" }
 New-Item -ItemType Directory -Force $DataDir | Out-Null
 $dbPath = Join-Path $DataDir "conwatch.db"
 $binPath = "`"$exe`" --urls $url --Persistence:DbPath `"$dbPath`""
-& sc.exe create $ServiceName binPath= $binPath start= auto DisplayName= "ConnectionWatcher" | Out-Null
-& sc.exe description $ServiceName "Home internet connectivity monitor (dashboard at $dashboard)" | Out-Null
+# New-Service passes the path string straight to the service API. sc.exe create
+# cannot be used here: PowerShell re-quotes arguments containing spaces without
+# escaping the embedded quotes, and sc.exe receives a mangled binPath.
+New-Service -Name $ServiceName -BinaryPathName $binPath -StartupType Automatic `
+    -DisplayName "ConnectionWatcher" `
+    -Description "Home internet connectivity monitor (dashboard at $dashboard)" | Out-Null
 # Restart on failure: 5s, 30s, 60s; reset the failure counter daily.
 & sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000/restart/60000 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "sc.exe failure configuration failed (exit $LASTEXITCODE)." }
 
 # --- Firewall: one rule, tied to this port; replace any previous one. ---
 Get-NetFirewallRule -DisplayName "ConnectionWatcher" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
