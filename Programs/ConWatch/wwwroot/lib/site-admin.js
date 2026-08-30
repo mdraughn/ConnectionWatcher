@@ -66,6 +66,33 @@ function wireDanger(inputId, buttonId, word, url) {
     });
 }
 
+const passwordForm = document.getElementById("password-form");
+if (passwordForm) {
+    passwordForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const errors = document.getElementById("password-errors");
+        clearErrors(errors);
+        const f = new FormData(passwordForm);
+        if (f.get("password") !== f.get("confirm")) {
+            showErrors(errors, { body: { errors: ["Passwords do not match."] } });
+            return;
+        }
+        const result = await apiFetch("POST", "/api/v1/auth/set-password",
+            { current: f.get("current") || null, password: f.get("password") });
+        if (result.ok) location.reload();
+        else showErrors(errors, result.status === 401
+            ? { body: { errors: ["Current password is wrong."] } } : result);
+    });
+    document.getElementById("password-remove-btn")?.addEventListener("click", async () => {
+        const errors = document.getElementById("password-errors");
+        clearErrors(errors);
+        const current = new FormData(passwordForm).get("current");
+        const result = await apiFetch("POST", "/api/v1/auth/remove-password", { current });
+        if (result.ok) location.reload();
+        else showErrors(errors, { body: { errors: ["Enter the current password above, then click Remove."] } });
+    });
+}
+
 wireDanger("clear-confirm", "clear-btn", "CLEAR", "/api/v1/admin/clear-history");
 wireDanger("reset-confirm", "reset-btn", "RESET", "/api/v1/admin/factory-reset");
 loadStats();

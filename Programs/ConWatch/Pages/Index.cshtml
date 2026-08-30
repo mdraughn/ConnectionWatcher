@@ -50,6 +50,44 @@
     }
 </div>
 
+@if (Model.ShowLock)
+{
+    <p style="text-align:right">
+        <button id="admin-lock-btn" class="outline secondary"
+                onclick="document.getElementById('admin-dialog').showModal()">🔒 Admin</button>
+    </p>
+    <dialog id="admin-dialog">
+        <article>
+            <h4>Enter admin password</h4>
+            <ul class="form-errors" id="admin-dialog-errors"></ul>
+            <form id="admin-login-form">
+                <input type="password" id="admin-password" autocomplete="current-password" autofocus />
+                <button type="submit">Enable admin mode</button>
+                <button type="button" class="secondary outline"
+                        onclick="document.getElementById('admin-dialog').close()">Cancel</button>
+            </form>
+            <details>
+                <summary>Forgot the password?</summary>
+                <p>On the machine running ConnectionWatcher, delete this file and reload the page:
+                   <code>@Model.ResetPath</code></p>
+            </details>
+        </article>
+    </dialog>
+    <script>
+        document.getElementById("admin-login-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const r = await fetch("/api/v1/auth/login", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password: document.getElementById("admin-password").value }),
+            });
+            if (r.ok) location.href = "/";
+            else document.getElementById("admin-dialog-errors").innerHTML = "<li>Wrong password.</li>";
+        });
+        if (new URLSearchParams(location.search).get("admin") === "1")
+            document.getElementById("admin-dialog").showModal();
+    </script>
+}
+
 @section Scripts {
     <script type="module" src="~/js/dashboard.js" asp-append-version="true"></script>
 }

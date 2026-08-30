@@ -88,6 +88,34 @@ public class AdminLockTests : IDisposable
     }
 
     [Fact]
+    public async Task Dashboard_shows_lock_button_only_when_locked()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client); // non-empty config: no wizard redirect
+        var html = await _client.GetStringAsync("/");
+        Assert.DoesNotContain("admin-lock-btn", html);
+
+        await EnableGateAsync();
+        await LogoutAsync();
+        html = await _client.GetStringAsync("/");
+        Assert.Contains("admin-lock-btn", html);
+        Assert.Contains("delete this file", html); // forgot-password message with path
+        Assert.Contains("admin-password.txt", html);
+    }
+
+    [Fact]
+    public async Task Admin_page_shows_set_card_when_off_and_change_cards_when_admin()
+    {
+        var html = await _client.GetStringAsync("/Admin");
+        Assert.Contains("Set admin password", html);
+        Assert.Contains("not internet-grade security", html);
+
+        await EnableGateAsync(); // admin mode
+        html = await _client.GetStringAsync("/Admin");
+        Assert.Contains("Change password", html);
+        Assert.Contains("Remove password", html);
+    }
+
+    [Fact]
     public async Task Factory_reset_keeps_the_password()
     {
         await EnableGateAsync(); // admin mode

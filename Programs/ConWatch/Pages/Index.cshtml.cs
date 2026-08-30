@@ -6,12 +6,16 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace ConWatch.Pages;
 
 public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth health,
-    Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory) : PageModel
+    Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
+    ConWatch.Auth.AdminGate gate) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public string InitialDataJson { get; private set; } = "{}";
     public int WarningCount { get; private set; }
+
+    public bool ShowLock => gate.IsLocked(User);
+    public string ResetPath => gate.FilePath;
 
     /// <summary>Root monitors for the server-rendered fallback tree.</summary>
     public List<TargetMonitor> Roots { get; } = new();
@@ -22,8 +26,10 @@ public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth hea
         // First boot: nothing configured yet -> hand the user to the wizard.
         // Checked against the DATABASE, not the engine: right after the wizard
         // applies, the engine may still be mid-rebuild with the old empty graph.
-        await using (var db = await dbFactory.CreateDbContextAsync())
+        // Never while locked: Setup would bounce straight back here (loop).
+        if (!gate.IsLocked(User))
         {
+            await using var db = await dbFactory.CreateDbContextAsync();
             if (!await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
                     .AnyAsync(db.Targets))
                 return Redirect("/Setup");

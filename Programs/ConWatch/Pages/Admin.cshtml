@@ -116,6 +116,34 @@
     <button type="submit">Save notifications</button>
 </form>
 
+<h3>Admin password</h3>
+<ul class="form-errors" id="password-errors"></ul>
+<p><small>This prevents casual tinkering with your configuration. It is not
+internet-grade security &mdash; the password is sent over plain HTTP on your
+network, and anyone with access to the server's files can remove it.</small></p>
+@if (!Model.PasswordSet)
+{
+    <form id="password-form" data-mode="set">
+        <div class="grid">
+            <label>New password <input type="password" name="password" autocomplete="new-password" /></label>
+            <label>Confirm <input type="password" name="confirm" autocomplete="new-password" /></label>
+        </div>
+        <button type="submit">Set admin password</button>
+    </form>
+}
+else
+{
+    <form id="password-form" data-mode="change">
+        <div class="grid">
+            <label>Current password <input type="password" name="current" autocomplete="current-password" /></label>
+            <label>New password <input type="password" name="password" autocomplete="new-password" /></label>
+            <label>Confirm <input type="password" name="confirm" autocomplete="new-password" /></label>
+        </div>
+        <button type="submit">Change password</button>
+        <button type="button" id="password-remove-btn" class="secondary">Remove password</button>
+    </form>
+}
+
 <h3>Danger zone</h3>
 <article style="border-color: var(--cw-down)">
     <ul class="form-errors" id="danger-errors"></ul>
