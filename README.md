@@ -88,6 +88,14 @@ changes and reconnects — never per ping.
 fields). Set *Verdict changes only* to be notified just when your internet
 weather changes rather than on every target flap.
 
+**Admin password** (optional) — set one on the Admin page to lock Config,
+Admin, Traceroute, and Setup (pages and APIs) behind a single site password.
+Watching stays open. A 🔒 button on the dashboard enters admin mode for the
+browser session. It stops casual tinkering, not attackers: forgot the
+password? Delete `admin-password.txt` next to the database
+(`C:\ProgramData\DSoftCo\ConnectionWatcher\data\` on Windows, the mapped
+`data/` folder on Docker/Synology) and reload.
+
 Frontend dev loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside
 `dotnet run`; `npm test` runs the Vitest suite. `dotnet publish` builds the
 bundles automatically.
