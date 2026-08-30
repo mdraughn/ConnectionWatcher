@@ -1,10 +1,12 @@
 using ConPersistence;
 using ConPersistence.Dto;
+using ConWatch.Auth;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages.Config;
 
-public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore settings) : PageModel
+public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore settings, AdminGate gate) : PageModel
 {
     public ConfigDocument Config { get; private set; } = new();
     public IReadOnlyList<HealthWarning> Warnings { get; private set; } = [];
@@ -19,11 +21,14 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public string? PrefillName => Request.Query["name"];
     public string? PrefillParent => Request.Query["parent"];
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
+        if (gate.IsLocked(User))
+            return Redirect("/?admin=1");
         Config = await store.ExportAsync();
         Warnings = await health.EvaluateAsync();
         ComputePipeline(await settings.GetAsync(SettingKeys.AnchorPool));
+        return Page();
     }
 
     private void ComputePipeline(string? anchorPoolName)

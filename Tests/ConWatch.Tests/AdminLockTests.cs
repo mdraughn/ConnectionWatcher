@@ -55,6 +55,39 @@ public class AdminLockTests : IDisposable
     }
 
     [Fact]
+    public async Task Locked_pages_redirect_to_dashboard_prompt()
+    {
+        await EnableGateAsync();
+        await LogoutAsync();
+        var noRedirect = _factory.CreateClient(
+            new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        foreach (var url in new[] { "/Admin", "/Config/Targets", "/Config/Profiles", "/Config/Pools", "/Traceroute", "/Setup" })
+        {
+            var response = await noRedirect.GetAsync(url);
+            Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+            Assert.Equal("/?admin=1", response.Headers.Location!.ToString());
+        }
+    }
+
+    [Fact]
+    public async Task Nav_hides_locked_links_and_shows_exit_when_admin()
+    {
+        var html = await _client.GetStringAsync("/History");
+        Assert.Contains("/Config/Targets", html); // gate off: everything visible
+
+        await EnableGateAsync(); // now in admin mode
+        html = await _client.GetStringAsync("/History");
+        Assert.Contains("/Config/Targets", html);
+        Assert.Contains("exit admin mode", html);
+
+        await LogoutAsync();
+        html = await _client.GetStringAsync("/History");
+        Assert.DoesNotContain("/Config/Targets", html);
+        Assert.DoesNotContain("/Traceroute", html);
+        Assert.DoesNotContain("/Admin", html);
+    }
+
+    [Fact]
     public async Task Factory_reset_keeps_the_password()
     {
         await EnableGateAsync(); // admin mode

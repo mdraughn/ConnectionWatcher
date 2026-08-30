@@ -1,3 +1,4 @@
+@inject ConWatch.Auth.AdminGate Gate
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,9 +14,18 @@
         <ul>
             <li><a href="/">Dashboard</a></li>
             <li><a href="/History">History</a></li>
-            <li><a href="/Config/Targets">Config</a></li>
-            <li><a href="/Traceroute">Traceroute</a></li>
-            <li><a href="/Admin">Admin</a></li>
+            @if (!Gate.IsLocked(User))
+            {
+                <li><a href="/Config/Targets">Config</a></li>
+                <li><a href="/Traceroute">Traceroute</a></li>
+                <li><a href="/Admin">Admin</a></li>
+                @if (Gate.IsEnabled)
+                {
+                    <li><a href="#" id="nav-exit-admin"
+                           onclick="fetch('/api/v1/auth/logout',{method:'POST'}).then(()=>location.href='/');return false;">
+                           exit admin mode</a></li>
+                }
+            }
         </ul>
     </nav>
     <main class="container">
