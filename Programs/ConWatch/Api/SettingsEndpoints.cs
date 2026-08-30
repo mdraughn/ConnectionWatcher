@@ -6,14 +6,16 @@ namespace ConWatch.Api;
 /// <summary>Read/write the UI-editable settings (verdict + retention).</summary>
 public static class SettingsEndpoints
 {
-    public static void MapSettings(this RouteGroupBuilder api)
+    public static void MapSettings(RouteGroupBuilder locked, RouteGroupBuilder open)
     {
-        api.MapGet("/settings", async (SettingsStore store) => await store.GetAllAsync());
-
-        api.MapGet("/config/health", async (ConfigHealth health) =>
+        // Health warnings feed banners on open pages; settings themselves are
+        // admin-only (the GET includes the MQTT broker password).
+        open.MapGet("/config/health", async (ConfigHealth health) =>
             new { warnings = await health.EvaluateAsync() });
 
-        api.MapPut("/settings", async (Dictionary<string, string?> values, SettingsStore store,
+        locked.MapGet("/settings", async (SettingsStore store) => await store.GetAllAsync());
+
+        locked.MapPut("/settings", async (Dictionary<string, string?> values, SettingsStore store,
             IDbContextFactory<ConWatchDbContext> dbFactory) =>
         {
             var errors = new List<string>();

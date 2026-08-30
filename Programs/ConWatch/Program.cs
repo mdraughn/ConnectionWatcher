@@ -114,15 +114,20 @@ app.MapRazorPages();
 app.MapHub<StatusHub>("/hubs/status");
 
 var api = app.MapGroup("/api/v1");
-api.MapConfig();
+// Watching is always open; changing requires admin mode when a password is set.
+var locked = api.MapGroup("");
+locked.AddEndpointFilter<ConWatch.Auth.RequireAdminFilter>();
+
 api.MapStatus();
 api.MapHistory();
-api.MapTraceroute();
-api.MapSettings();
-api.MapAdmin();
-api.MapSetup();
 api.MapExport();
 api.MapAuth();
+
+locked.MapConfig();
+locked.MapTraceroute();
+locked.MapAdmin();
+locked.MapSetup();
+SettingsEndpoints.MapSettings(locked, open: api);
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {

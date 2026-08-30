@@ -131,7 +131,10 @@ public class SettingsApiTests : IDisposable
     [Fact]
     public async Task Retention_edit_survives_restart()
     {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"conwatch-restart-{Guid.NewGuid():N}.db");
+        // Own directory: the app keeps sibling files (admin-password.txt,
+        // keys) beside the DB, and bare %TEMP% is shared with everything.
+        var dir = Directory.CreateTempSubdirectory("conwatch-restart").FullName;
+        var dbPath = Path.Combine(dir, "conwatch.db");
         try
         {
             // A real restart: the first instance is fully stopped before the
@@ -149,7 +152,7 @@ public class SettingsApiTests : IDisposable
         }
         finally
         {
-            try { File.Delete(dbPath); } catch (IOException) { }
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
         }
     }
 }
