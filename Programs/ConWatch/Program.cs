@@ -5,6 +5,7 @@ using ConPersistence;
 using ConPersistence.Services;
 using ConWatch;
 using ConWatch.Api;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 // Under the Windows Service Control Manager the working directory is
@@ -67,6 +68,27 @@ builder.Services.AddSingleton<ConNotify.WebhookNotifier>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.WebhookNotifier>());
 
+// Admin gate: password file lives beside the database; cookies mark a
+// browser as admin for the session. Keys persisted so cookies survive a
+// service restart.
+builder.Services.AddSingleton(sp => new ConWatch.Auth.AdminGate(
+    Path.Combine(dbDir is { Length: > 0 } ? dbDir : ".", "admin-password.txt"),
+    sp.GetRequiredService<ILogger<ConWatch.Auth.AdminGate>>()));
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.Combine(dbDir is { Length: > 0 } ? dbDir : ".", "keys")));
+builder.Services.AddAuthentication(
+        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(o =>
+    {
+        o.Cookie.Name = "conwatch.admin";
+        o.Cookie.HttpOnly = true;
+        o.Cookie.SameSite = SameSiteMode.Lax;
+        // APIs get plain status codes, never login-page redirects.
+        o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; };
+        o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
+    });
+
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
 builder.Services.AddSignalR();
@@ -76,6 +98,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>
 var app = builder.Build();
 
 app.UseStaticFiles();
+app.UseAuthentication();
 
 app.MapOpenApi();
 if (app.Environment.IsDevelopment())
@@ -99,6 +122,7 @@ api.MapSettings();
 api.MapAdmin();
 api.MapSetup();
 api.MapExport();
+api.MapAuth();
 
 api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
 {

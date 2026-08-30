@@ -16,10 +16,22 @@ public class ConWatchFactory : WebApplicationFactory<Program>
 {
     public FakePingTransceiverFactory Pings { get; } = new();
     public string DbPath { get; }
+    private readonly string? _ownedDir;
 
     public ConWatchFactory(string? dbPath = null)
     {
-        DbPath = dbPath ?? Path.Combine(Path.GetTempPath(), $"conwatch-test-{Guid.NewGuid():N}.db");
+        if (dbPath is null)
+        {
+            // Own directory per instance: the app puts sibling files beside
+            // the database (admin-password.txt, Data Protection keys), and a
+            // shared temp dir would leak them between parallel tests.
+            _ownedDir = Directory.CreateTempSubdirectory("conwatch-test").FullName;
+            DbPath = Path.Combine(_ownedDir, "conwatch.db");
+        }
+        else
+        {
+            DbPath = dbPath;
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,7 +52,9 @@ public class ConWatchFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         try
         {
-            if (File.Exists(DbPath))
+            if (_ownedDir is not null)
+                Directory.Delete(_ownedDir, recursive: true);
+            else if (File.Exists(DbPath))
                 File.Delete(DbPath);
         }
         catch (IOException)
