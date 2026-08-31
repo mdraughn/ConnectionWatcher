@@ -28,6 +28,27 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
   internet last night?" from the actual database, or triage a slow-feeling
   connection on request.
 
+## Distribution (planned 2026-08-31; not a money-making project — MIT licensed)
+
+Three public artifacts cover essentially everyone:
+
+- ~~**Windows installer**~~ — DONE 2026-08-31: `Build-Installer.ps1` →
+  Inno Setup `ConnectionWatcher-Setup-<ver>.exe`, self-contained win-x64,
+  component choice (service+tray / tray-only with server-URL page), familiar
+  install/uninstall, data in ProgramData always preserved.
+- **Multi-arch container publish** — one image tag for linux/amd64 +
+  linux/arm64 via `docker buildx`, pushed to a registry (GHCR when the repo
+  goes to GitHub). Covers Intel/ARM Synology, Pi, any Linux, Docker on Mac.
+- **Release pipeline** — GitHub Actions on version tag: build installer,
+  build+push image, attach to a GitHub Release. Version scheme shared between
+  installer and image tag.
+- **Code signing** (when going public) — unsigned installers trip
+  SmartScreen; cert costs ~$100-400/yr. The single biggest polish item for
+  strangers; irrelevant while it's just Mark.
+- Later if asked: win-arm64, .deb + systemd unit, Homebrew, Synology SPK,
+  Home Assistant add-on, in-app "update available" check against GitHub
+  releases.
+
 ## Still on the roadmap
 
 - ~~**Container build smoke test**~~ — DONE 2026-08-24: image builds, boots

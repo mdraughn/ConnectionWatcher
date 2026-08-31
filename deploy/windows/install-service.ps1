@@ -21,7 +21,9 @@ param(
     [string]$ServiceName = "ConnectionWatcher",
     # Where the SQLite database lives. Default keeps data beside the app;
     # Windows-like installs pass a ProgramData path instead.
-    [string]$DataDir = ""
+    [string]$DataDir = "",
+    # Set by the Setup.exe installer: it owns shortcuts, tray, and launching.
+    [switch]$NoLaunch
 )
 
 $ErrorActionPreference = "Stop"
@@ -86,7 +88,9 @@ $shortcut.Save()
 
 # --- Tray companion: point it at the service and start it at login. ---
 $tray = Join-Path $AppDir "ConTray.exe"
-if (Test-Path $tray) {
+if ($NoLaunch) {
+    # Setup.exe runs configure-tray.ps1 itself.
+} elseif (Test-Path $tray) {
     @{ url = $dashboard } | ConvertTo-Json | Set-Content (Join-Path $AppDir "contray.json") -Encoding utf8
     Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
         -Name "ConnectionWatcherTray" -Value "`"$tray`""
@@ -103,4 +107,6 @@ Write-Host "  Service:  $ServiceName (auto-start, restart-on-failure)"
 Write-Host "  Data:     $dbPath"
 Write-Host "  Firewall: TCP $Port (Private/Domain profiles)"
 Write-Host "  Change the port later: re-run this script with -Port <n>"
-Start-Process $dashboard
+if (-not $NoLaunch) {
+    Start-Process $dashboard
+}

@@ -366,3 +366,6 @@ data/
 
 Programs/ConWatch/ClientApp/node_modules/
 Programs/ConWatch/wwwroot/js/
+
+staging/
+dist/
