@@ -148,6 +148,9 @@ default, toggle toast notifications on state changes).
 **Docker** — `deploy/docker/compose.yaml` (data in `./data`, port 8080,
 `NET_RAW` for ping/traceroute when running non-root). Built and smoke-tested
 locally on Docker Desktop (health endpoint + real in-container ICMP verified);
-not yet verified on Synology hardware.
+not yet verified on Synology hardware. `Build-Images.ps1` builds the image
+for both `linux/amd64` and `linux/arm64` (Intel and ARM Synology/Pi) via
+cross-compilation, and with `-Push` publishes both as a single multi-arch
+tag to a registry.
 
 Design specs and implementation plans live in `docs/superpowers/`.

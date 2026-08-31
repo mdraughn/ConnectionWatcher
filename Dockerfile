@@ -1,9 +1,15 @@
 # ConnectionWatcher container: engine + SQLite + web UI in one process.
-# Build:  docker build -t conwatch .
+# Build:  docker build -t conwatch .           (current architecture)
+#         .\Build-Images.ps1                   (amd64 + arm64, see script)
 # Run:    see deploy/docker/compose.yaml (data volume + NET_RAW note)
+#
+# Multi-arch: the build stages are pinned to the BUILD machine's architecture
+# and cross-compile for TARGETARCH, so an arm64 image (Synology/Pi) builds at
+# native speed instead of under QEMU emulation. Only the runtime stage is the
+# target architecture.
 
-# --- Stage 1: build the JS islands with Vite ---
-FROM node:22-alpine AS client
+# --- Stage 1: build the JS islands with Vite (arch-independent output) ---
+FROM --platform=$BUILDPLATFORM node:22-alpine AS client
 WORKDIR /src/ClientApp
 COPY Programs/ConWatch/ClientApp/package*.json ./
 RUN npm ci
@@ -12,11 +18,14 @@ RUN npm run build
 # vite outDir is ../wwwroot/js -> /src/wwwroot/js
 
 # --- Stage 2: publish the .NET app (client build skipped; bundles copied in) ---
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG TARGETARCH
 WORKDIR /src
 COPY . .
 COPY --from=client /src/wwwroot/js Programs/ConWatch/wwwroot/js
-RUN dotnet publish Programs/ConWatch -c Release -o /app /p:SkipClientBuild=true
+# -a maps docker arch names (amd64/arm64) to .NET RIDs; framework-dependent,
+# the aspnet base image below supplies the matching runtime.
+RUN dotnet publish Programs/ConWatch -c Release -a $TARGETARCH -o /app /p:SkipClientBuild=true
 
 # --- Stage 3: runtime ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
