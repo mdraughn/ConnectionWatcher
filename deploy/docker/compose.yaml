@@ -6,8 +6,9 @@
 # If you harden it with a non-root user, keep cap_add: NET_RAW so ping and
 # the TTL-stepped traceroute keep working.
 #
-# NOTE (Synology): not yet verified on-device — built and smoke-tested on
-# Docker Desktop. The host-side port (left of the colon) is yours to choose.
+# NOTE (Synology): create the ./data folder yourself before first start —
+# Synology's Docker does not auto-create bind-mount folders ("Bind mount
+# failed"). The host-side port (left of the colon) is yours to choose.
 
 services:
   conwatch:
