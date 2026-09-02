@@ -83,6 +83,12 @@ stops. Every transition is also published as JSON to `conwatch/transitions`
 for automations that want the raw events. Publishes happen only on state
 changes and reconnects — never per ping.
 
+**Heartbeat** — point `Heartbeat.Url` at a dead-man's-switch service
+(healthchecks.io or self-hosted) and ConnectionWatcher GETs it every few
+minutes to say "still alive"; the service alerts you when the pings stop —
+a dead NAS, a crashed container, or a full internet outage. Watches the
+watchman.
+
 **Webhooks** — one URL per line; each transition is POSTed as JSON
 (`subjectKind`, `subjectName`, `from`, `to`, `trigger`, verdict/evidence
 fields). Set *Verdict changes only* to be notified just when your internet

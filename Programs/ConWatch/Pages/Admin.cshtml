@@ -113,6 +113,22 @@
         <textarea name="@SettingKeys.WebhookUrls" rows="3"
                   placeholder="https://example.com/hook">@Model.Setting(SettingKeys.WebhookUrls)</textarea>
     </label>
+
+    <h5>Heartbeat (watch the watchman)</h5>
+    <p><small>While set, ConnectionWatcher GETs this URL on the interval to say
+    "still alive". Point it at a dead-man's-switch service (e.g. healthchecks.io)
+    and you get alerted when the pings <em>stop</em> &mdash; a dead NAS, a crashed
+    container, or a full internet outage. Leave empty to disable.</small></p>
+    <div class="grid">
+        <label>Ping URL
+            <input name="@SettingKeys.HeartbeatUrl" placeholder="https://hc-ping.com/your-uuid"
+                   value="@Model.Setting(SettingKeys.HeartbeatUrl)" />
+        </label>
+        <label>Interval (minutes)
+            <input name="@SettingKeys.HeartbeatIntervalMinutes" type="number" min="1" max="1440"
+                   value="@Model.Setting(SettingKeys.HeartbeatIntervalMinutes, "5")" />
+        </label>
+    </div>
     <button type="submit">Save notifications</button>
 </form>
 

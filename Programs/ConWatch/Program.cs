@@ -67,6 +67,7 @@ builder.Services.AddSingleton<ConNotify.MqttNotifier>();
 builder.Services.AddSingleton<ConNotify.WebhookNotifier>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.WebhookNotifier>());
+builder.Services.AddHostedService<ConNotify.HeartbeatNotifier>();
 
 // Admin gate: password file lives beside the database; cookies mark a
 // browser as admin for the session. Keys persisted so cookies survive a

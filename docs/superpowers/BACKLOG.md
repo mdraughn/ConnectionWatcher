@@ -17,10 +17,10 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
   target state, success rate, RTT gauges, plus the verdict as a labeled gauge.
   Grafana (containerized on the NAS) dashboards it alongside the rest of the
   homelab. Makes ConnectionWatcher a citizen of a broader monitoring stack.
-- **Healthchecks heartbeat (watch the watchman)** — ping a dead-man's-switch
-  (healthchecks.io or self-hosted) every few minutes so a dead NAS/container/
-  app produces an alert instead of silence. Small effort, closes a real blind
-  spot: today, monitor-down looks identical to all-healthy.
+- ~~**Healthchecks heartbeat (watch the watchman)**~~ — DONE 2026-08-31:
+  `HeartbeatNotifier` GETs `Heartbeat.Url` every `Heartbeat.IntervalMinutes`
+  (default 5) while set; immediate ping on (re)configure; Admin Notifications
+  section. The receiving service alerts when pings stop.
 - ~~**ISP evidence report**~~ — DONE 2026-08-22 (`/Report`, printable,
   verdict-attributed; SiteIncident excluded by design).
 - **MCP server** — expose query tools (`current_status`, `outages_since`,

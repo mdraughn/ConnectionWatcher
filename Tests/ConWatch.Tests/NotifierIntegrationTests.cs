@@ -116,6 +116,54 @@ public class NotifierIntegrationTests
         await pump;
     }
 
+    [Fact]
+    public async Task Heartbeat_pings_immediately_when_configured_and_follows_url_changes()
+    {
+        var port = FreePort();
+        int hits = 0;
+        string lastPath = "";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        var pump = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                try
+                {
+                    var ctx = await listener.GetContextAsync();
+                    Interlocked.Increment(ref hits);
+                    Volatile.Write(ref lastPath, ctx.Request.Url!.AbsolutePath);
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.Close();
+                }
+                catch (Exception) when (!listener.IsListening) { return; }
+            }
+        });
+
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+
+        // Configuring the URL wakes the notifier; the first ping is immediate.
+        await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+        {
+            ["Heartbeat.Url"] = $"http://127.0.0.1:{port}/check-a",
+        });
+        await ConfigApiTests.Eventually(() => Task.FromResult(Volatile.Read(ref hits) > 0));
+        Assert.Equal("/check-a", Volatile.Read(ref lastPath));
+
+        // A URL change re-pings the new target without waiting out the interval.
+        await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+        {
+            ["Heartbeat.Url"] = $"http://127.0.0.1:{port}/check-b",
+        });
+        await ConfigApiTests.Eventually(() =>
+            Task.FromResult(Volatile.Read(ref lastPath) == "/check-b"));
+
+        listener.Stop();
+        await pump;
+    }
+
     // ---------------- MQTT (Mosquitto in Docker) ----------------
 
     private static bool DockerAvailable()
