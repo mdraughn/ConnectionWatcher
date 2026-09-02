@@ -66,8 +66,11 @@ public class SettingsStoreTests : IDisposable
         await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.WebhookEnabled] = "true" });
         Assert.Equal(2, notifierSignals);
 
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.HeartbeatUrl] = "http://x" });
+        Assert.Equal(3, notifierSignals);
+
         await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.MinuteRetentionDays] = "60" });
-        Assert.Equal(2, notifierSignals);
+        Assert.Equal(3, notifierSignals);
     }
 
     [Fact]

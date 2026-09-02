@@ -66,6 +66,16 @@ public static class SettingsEndpoints
                     case SettingKeys.MqttBaseTopic:
                     case SettingKeys.MqttDiscoveryPrefix:
                         break; // free text; null clears
+                    case SettingKeys.HeartbeatUrl:
+                        if (value is { Length: > 0 } &&
+                            (!Uri.TryCreate(value, UriKind.Absolute, out var hbUri) ||
+                             hbUri.Scheme is not ("http" or "https")))
+                            errors.Add("Heartbeat.Url must be an absolute http(s) URL.");
+                        break;
+                    case SettingKeys.HeartbeatIntervalMinutes:
+                        if (!int.TryParse(value, out var hbMinutes) || hbMinutes < 1 || hbMinutes > 1440)
+                            errors.Add("Heartbeat.IntervalMinutes must be 1–1440.");
+                        break;
                     case SettingKeys.WebhookUrls:
                         foreach (var line in (value ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         {

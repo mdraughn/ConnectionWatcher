@@ -24,6 +24,9 @@ public static class SettingKeys
     public const string WebhookEnabled = "Webhook.Enabled";
     public const string WebhookUrls = "Webhook.Urls";
     public const string WebhookVerdictOnly = "Webhook.VerdictOnly";
+
+    public const string HeartbeatUrl = "Heartbeat.Url";
+    public const string HeartbeatIntervalMinutes = "Heartbeat.IntervalMinutes";
 }
 
 /// <summary>
@@ -91,7 +94,8 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
             SettingsChanged?.Invoke();
         if (values.Keys.Any(k =>
                 k.StartsWith("Mqtt.", StringComparison.OrdinalIgnoreCase) ||
-                k.StartsWith("Webhook.", StringComparison.OrdinalIgnoreCase)))
+                k.StartsWith("Webhook.", StringComparison.OrdinalIgnoreCase) ||
+                k.StartsWith("Heartbeat.", StringComparison.OrdinalIgnoreCase)))
             NotifierSettingsChanged?.Invoke();
     }
 }

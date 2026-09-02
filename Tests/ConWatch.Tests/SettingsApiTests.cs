@@ -66,6 +66,8 @@ public class SettingsApiTests : IDisposable
     [InlineData("Mqtt.Enabled", "false")]
     [InlineData("Webhook.Urls", "http://example.com/hook\nhttps://other.example/x")]
     [InlineData("Webhook.VerdictOnly", "true")]
+    [InlineData("Heartbeat.Url", "https://hc-ping.com/some-uuid")]
+    [InlineData("Heartbeat.IntervalMinutes", "5")]
     public async Task Valid_notifier_settings_are_accepted(string key, string value)
     {
         var response = await _client.PutAsJsonAsync("/api/v1/settings",
@@ -79,6 +81,9 @@ public class SettingsApiTests : IDisposable
     [InlineData("Mqtt.Enabled", "yes")]
     [InlineData("Webhook.Urls", "not-a-url")]
     [InlineData("Webhook.Urls", "ftp://example.com/x")]
+    [InlineData("Heartbeat.Url", "not-a-url")]
+    [InlineData("Heartbeat.IntervalMinutes", "0")]
+    [InlineData("Heartbeat.IntervalMinutes", "1441")]
     public async Task Invalid_notifier_settings_are_400(string key, string value)
     {
         var response = await _client.PutAsJsonAsync("/api/v1/settings",
