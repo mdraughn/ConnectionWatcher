@@ -13,6 +13,9 @@ public class FakePingTransceiverFactory : IPingTransceiverFactory
     private readonly ConcurrentDictionary<IPAddress, bool> _up = new();
     private readonly ConcurrentDictionary<IPAddress, bool> _throw = new();
 
+    /// <summary>Timeouts observed per ping, per IP (for burst-timeout assertions).</summary>
+    public ConcurrentDictionary<IPAddress, ConcurrentQueue<int>> ObservedTimeouts { get; } = new();
+
     public void SetUp(IPAddress ip, bool up) => _up[ip] = up;
     public void SetThrow(IPAddress ip, bool throwOnPing) => _throw[ip] = throwOnPing;
 
@@ -25,6 +28,7 @@ public class FakePingTransceiverFactory : IPingTransceiverFactory
 
         public Task<PingResult> PingAsync(int timeoutMs)
         {
+            owner.ObservedTimeouts.GetOrAdd(ip, _ => new()).Enqueue(timeoutMs);
             if (owner._throw.GetValueOrDefault(ip))
                 throw new InvalidOperationException("Simulated transceiver failure");
             bool up = owner._up.GetValueOrDefault(ip, true);

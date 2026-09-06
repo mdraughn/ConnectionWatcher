@@ -166,8 +166,11 @@ public class WatcherEngine
     {
         monitor.StartTracking(ip);
         _routingTable[ip] = monitor;
+        // Bursts shorten the timeout: replies arrive in well under a second,
+        // and against a dead host the steady timeout dominates burst cost.
+        var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
         _manager!.GetOrCreateController(ip, monitor.Discipline,
-            (int)monitor.Profile.PingTimeout.TotalMilliseconds);
+            () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, 1000) : steadyTimeoutMs);
         _log.LogInformation("Activated {Target} at {Ip}", monitor.Target.Name, ip);
     }
 

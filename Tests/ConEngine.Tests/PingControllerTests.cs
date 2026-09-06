@@ -32,7 +32,7 @@ public class PingControllerTests
 
         controller.Launch(IpA, channel.Writer,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
-            timeoutMs: 1000, cts.Token);
+            () => 1000, cts.Token);
 
         var results = await Collect(channel.Reader, 3);
         Assert.All(results, r => Assert.True(r.Success));
@@ -49,8 +49,8 @@ public class PingControllerTests
 
         using var controllerA = new PingController(TimeProvider.System, factory, NullLogger.Instance);
         using var controllerB = new PingController(TimeProvider.System, factory, NullLogger.Instance);
-        controllerA.Launch(IpA, channel.Writer, cadence, 1000, cts.Token);
-        controllerB.Launch(IpB, channel.Writer, cadence, 1000, cts.Token);
+        controllerA.Launch(IpA, channel.Writer, cadence, () => 1000, cts.Token);
+        controllerB.Launch(IpB, channel.Writer, cadence, () => 1000, cts.Token);
 
         await Collect(channel.Reader, 2);
         controllerA.Stop();
@@ -64,6 +64,30 @@ public class PingControllerTests
     }
 
     [Fact]
+    public async Task Timeout_provider_is_read_per_ping()
+    {
+        var factory = new FakePingTransceiverFactory();
+        var channel = Channel.CreateUnbounded<PingResult>();
+        using var cts = new CancellationTokenSource();
+        using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
+
+        bool bursting = false;
+        controller.Launch(IpA, channel.Writer,
+            new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
+            () => bursting ? 1000 : 3000, cts.Token);
+
+        await Collect(channel.Reader, 2);
+        bursting = true;
+        await Collect(channel.Reader, 3);
+        cts.Cancel();
+
+        var seen = factory.ObservedTimeouts[IpA].ToArray();
+        Assert.Contains(3000, seen);
+        Assert.Contains(1000, seen);
+        Assert.Equal(3000, seen[0]); // steady first, burst later
+    }
+
+    [Fact]
     public async Task Transceiver_exception_reports_failure_and_loop_survives()
     {
         var factory = new FakePingTransceiverFactory();
@@ -74,7 +98,7 @@ public class PingControllerTests
 
         controller.Launch(IpA, channel.Writer,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
-            1000, cts.Token);
+            () => 1000, cts.Token);
 
         var failures = await Collect(channel.Reader, 2);
         Assert.All(failures, r => Assert.False(r.Success));

@@ -56,9 +56,9 @@ public class PingManager : IDisposable
     /// </summary>
     /// <param name="ipAddress">The IP address to ping.</param>
     /// <param name="cadence">Decides when each ping happens.</param>
-    /// <param name="timeoutMs">Per-ping timeout in milliseconds.</param>
+    /// <param name="timeoutMsProvider">Per-ping timeout in milliseconds, read before every ping.</param>
     /// <returns>A PingController configured for the specified IP address.</returns>
-    public PingController GetOrCreateController(IPAddress ipAddress, IPingCadence cadence, int timeoutMs)
+    public PingController GetOrCreateController(IPAddress ipAddress, IPingCadence cadence, Func<int> timeoutMsProvider)
     {
         lock (_lock)
         {
@@ -74,7 +74,7 @@ public class PingManager : IDisposable
                 controller.Launch(ipAddress,
                     _resultWriter,
                     cadence,
-                    timeoutMs,
+                    timeoutMsProvider,
                     _globalCancellationToken);
                 _pingControllers[ipAddress] = controller;
 

@@ -23,7 +23,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     private IPAddress? _ipAddress = null;
     private ChannelWriter<PingResult>? _resultWriter;
     private IPingCadence? _cadence;
-    private int _timeoutMs;
+    private Func<int>? _timeoutMsProvider;
     private readonly CancellationTokenSource _localCancellationTokenSource = new();
     private CancellationToken _cancellationToken;
 
@@ -36,11 +36,12 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     /// <param name="ipAddress">The IP address to ping.</param>
     /// <param name="resultWriter">Channel to report results.</param>
     /// <param name="cadence">Decides when each ping happens (may park indefinitely).</param>
-    /// <param name="timeoutMs">Per-ping timeout in milliseconds.</param>
+    /// <param name="timeoutMsProvider">Per-ping timeout in milliseconds, read before
+    /// every ping (bursting shortens the timeout).</param>
     /// <param name="cancellationToken"></param>
     /// <returns>A task that completes when the ping operation is stopped.</returns>
     public Task Launch(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter,
-        IPingCadence cadence, int timeoutMs, CancellationToken cancellationToken)
+        IPingCadence cadence, Func<int> timeoutMsProvider, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -52,7 +53,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
             _ipAddress = ipAddress;
             _resultWriter = resultWriter;
             _cadence = cadence;
-            _timeoutMs = timeoutMs;
+            _timeoutMsProvider = timeoutMsProvider;
 
             // Start long-running ping task
             _pingTask = Task.Run(()=>PollingLoop(ipAddress), _cancellationToken);
@@ -78,7 +79,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                     if(!IsRunnable())
                         break;
 
-                    var reply = await ping.PingAsync(_timeoutMs).ConfigureAwait(false);
+                    var reply = await ping.PingAsync(_timeoutMsProvider!()).ConfigureAwait(false);
                     log.LogTrace("Ping result for {ipAddress}: {reply}", ipAddress, reply);
                     SendMessage(ipAddress, reply);
                 }
