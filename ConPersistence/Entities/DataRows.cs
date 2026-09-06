@@ -20,6 +20,21 @@ public class TransitionRow
     public float AvgRtt { get; set; }
 }
 
+/// <summary>A sub-Faltering loss episode: trouble too small to move the state
+/// machine, recorded separately from outages. Pruned with minute rollups.</summary>
+public class GlitchRow
+{
+    public long Id { get; set; }
+    public Guid TargetId { get; set; }
+    public string TargetName { get; set; } = "";
+    public int Class { get; set; } // 0 = Target, 1 = Internet
+    public DateTime StartUtc { get; set; }
+    public DateTime EndUtc { get; set; }
+    public int LostCount { get; set; }
+    public int SampleCount { get; set; }
+    public string? Detail { get; set; }
+}
+
 /// <summary>Aggregated ping statistics for one target over one period.</summary>
 public class RollupRow
 {

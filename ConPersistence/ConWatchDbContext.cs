@@ -12,6 +12,7 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
     public DbSet<PoolMemberRow> PoolMembers => Set<PoolMemberRow>();
     public DbSet<TransitionRow> Transitions => Set<TransitionRow>();
     public DbSet<RollupRow> Rollups => Set<RollupRow>();
+    public DbSet<GlitchRow> Glitches => Set<GlitchRow>();
     public DbSet<SettingRow> Settings => Set<SettingRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -49,6 +50,12 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
         {
             e.HasIndex(t => new { t.SubjectId, t.TimestampUtc });
             e.HasIndex(t => t.TimestampUtc);
+        });
+
+        modelBuilder.Entity<GlitchRow>(e =>
+        {
+            e.HasIndex(g => g.StartUtc);
+            e.HasIndex(g => new { g.TargetId, g.StartUtc });
         });
 
         modelBuilder.Entity<RollupRow>(e =>

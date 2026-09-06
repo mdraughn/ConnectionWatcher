@@ -26,6 +26,7 @@ public class WatcherHostService(
     IOptions<PersistenceOptions> persistenceOptions,
     IConfiguration configuration,
     TransitionRecorder recorder,
+    GlitchRecorder glitchRecorder,
     RollupCollector collector,
     StatusBroadcaster broadcaster,
     ConNotify.MqttNotifier mqttNotifier,
@@ -120,6 +121,7 @@ public class WatcherHostService(
         var engine = new WatcherEngine(timeProvider, pingFactory, resolverFactory,
             loggerFactory, Options.Create(options), Options.Create(effectiveVerdict));
         recorder.Attach(engine.TransitionSource);
+        glitchRecorder.Attach(engine.GlitchSource);
         collector.Attach(engine.PingSampleSource);
         broadcaster.Attach(engine);
         mqttNotifier.Attach(engine);

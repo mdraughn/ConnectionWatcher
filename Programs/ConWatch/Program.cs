@@ -50,6 +50,7 @@ builder.Services.AddSingleton<SettingsStore>();
 builder.Services.AddSingleton<ConfigHealth>();
 builder.Services.AddSingleton<ConPersistence.Report.IspReportBuilder>();
 builder.Services.AddSingleton<TransitionRecorder>();
+builder.Services.AddSingleton<GlitchRecorder>();
 builder.Services.AddSingleton<RollupCollector>();
 
 // Engine host FIRST: hosted services start sequentially, and this one owns
@@ -57,6 +58,7 @@ builder.Services.AddSingleton<RollupCollector>();
 builder.Services.AddSingleton<WatcherHostService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GlitchRecorder>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
 builder.Services.AddHostedService<RetentionService>();
 

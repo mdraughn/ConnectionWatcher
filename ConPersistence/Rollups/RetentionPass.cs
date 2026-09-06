@@ -22,6 +22,17 @@ public class RetentionPass(ILogger log)
             nowUtc.AddDays(-options.MinuteRetentionDays), TruncateToHour, ct);
         converted += await DownsampleAsync(db, "Hour", "Day",
             nowUtc.AddMonths(-options.HourlyRetentionMonths), TruncateToDay, ct);
+
+        // Glitches are fine-grained events; they age out with the minute data.
+        var glitchThreshold = nowUtc.AddDays(-options.MinuteRetentionDays);
+        var pruned = await db.Glitches.Where(g => g.StartUtc < glitchThreshold)
+            .ExecuteDeleteAsync(ct);
+        if (pruned > 0)
+        {
+            log.LogInformation("Pruned {Count} glitches older than {Days} days",
+                pruned, options.MinuteRetentionDays);
+            converted += pruned;
+        }
         return converted;
     }
 
