@@ -57,6 +57,13 @@ public class WatcherEngine
     /// <summary>The verdict layer, or null when no anchor pool is configured.</summary>
     public VerdictCoordinator? Verdict { get; private set; }
 
+    /// <summary>Suspicion bursts, corroboration sweeps, and glitch episodes.</summary>
+    public SuspicionCoordinator? Suspicion { get; private set; }
+
+    /// <summary>Sub-Faltering loss episodes worth recording.</summary>
+    public IObservable<GlitchEvent> GlitchSource => _glitchSubject;
+    private readonly System.Reactive.Subjects.Subject<GlitchEvent> _glitchSubject = new();
+
     /// <summary>Merged transition stream: every monitor and every pool.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
@@ -134,6 +141,17 @@ public class WatcherEngine
             }
         }
 
+        // Suspicion layer: works without an anchor pool (per-target glitches
+        // only); sweeps need the pool.
+        var suspicionPool = _verdictOptions.AnchorPool is { Length: > 0 } poolName
+            ? _graph.Pools.Values.FirstOrDefault(p =>
+                p.Name.Equals(poolName, StringComparison.OrdinalIgnoreCase))
+            : null;
+        Suspicion = new SuspicionCoordinator(_graph, suspicionPool, _monitors,
+            _verdictOptions.WeatherThreshold, _timeProvider,
+            _loggerFactory.CreateLogger<SuspicionCoordinator>());
+        _subscriptions.Add(Suspicion.GlitchSource.Subscribe(_glitchSubject.OnNext));
+
         // Ping plumbing: one manager, results routed by IP.
         _manager = new PingManager(_timeProvider, _pingFactory, ct, _loggerFactory);
         _subscriptions.Add(_manager.PingResultSource.Subscribe(
@@ -141,8 +159,10 @@ public class WatcherEngine
             {
                 if (_routingTable.TryGetValue(result.IpAddress, out var monitor))
                 {
+                    monitor.Discipline.OnPingResult(result.Success);
                     monitor.RecordPingResult(result);
                     _pingSampleSubject.OnNext((monitor.Target.Id, result));
+                    Suspicion?.OnPingSample(monitor.Target.Id, result);
                 }
             },
             ex => _log.LogError(ex, "Error in ping result stream"),
@@ -226,6 +246,7 @@ public class WatcherEngine
 
         _topology?.Dispose();
         Verdict?.Dispose();
+        Suspicion?.Dispose();
         foreach (var pool in _poolCoordinators)
             pool.Dispose();
         _manager?.Dispose();
