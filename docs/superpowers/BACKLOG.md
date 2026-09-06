@@ -49,6 +49,14 @@ Three public artifacts cover essentially everyone:
   Home Assistant add-on, in-app "update available" check against GitHub
   releases.
 
+## Time reporting (noted 2026-09-06)
+
+- **ISP report / History timezone clarity** — the report prints UTC with the
+  label only in the header; History renders browser-local. Cross-referencing
+  the two confused even Mark (a 10:34 PM Sep 3 local event reads as
+  "03:34 Sep 4" on the report). Label each incident row's zone explicitly,
+  or render a configurable zone with UTC alongside.
+
 ## Still on the roadmap
 
 - ~~**Container build smoke test**~~ — DONE 2026-08-24: image builds, boots

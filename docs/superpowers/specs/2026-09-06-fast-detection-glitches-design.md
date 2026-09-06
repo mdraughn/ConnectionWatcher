@@ -26,7 +26,9 @@ is a lost packet + TCP retry, so **glitches are loss-based only**. Latency
 | --- | --- |
 | Glitch classes in v1 | Loss-based only: per-target loss glitches + corroborated internet glitches. No latency baselines. |
 | Recording floor | 2+ lost pings in one suspicion episode = recorded glitch; a single stray loss stays in rollups only. (The burst + sweep always trigger on the first loss regardless.) |
-| Outage/glitch boundary | An episode that reaches `Down` is an outage (transitions own it; no glitch row). Everything milder that meets the floor is a glitch. No duration cutoffs. |
+| Outage/glitch boundary | **A glitch is trouble too small to move the state machine at all.** An episode that produces any state transition (`Faltering` or beyond) is owned by the transition ledger — no glitch row. Three tiers: glitch (no transition) → faltering episode (transitions) → outage (`Down`). A marginal connection that falters constantly generates transitions, not thousands of glitches. |
+| Glitch spam below Faltering | **Episode coalescing:** a new episode opening within 60s of the previous glitch's end on the same target extends that glitch row (span + counts accumulate) instead of creating a new one. |
+| Chronic marginality | NOT fed back into the state machine (feedback loops through burst; muddies windowed semantics; verdicts off stale history). Instead a **reporting-layer "chronically glitchy" indicator**: History marks a target that logged glitches in ≥3 distinct hours of the last 24; the ISP report words it ("22 rough patches across 6 days, clustered 02:00–04:00"). |
 | Reporting | History outage semantics unchanged. New glitch ledger + **recurrence heatmap** (hour-of-day × date) to expose nightly patterns. ISP report gains a separate glitches section. |
 
 ## Part 1: Fast detection (ConEngine)
@@ -37,7 +39,12 @@ is a lost packet + TCP retry, so **glitches are loss-based only**. Latency
 Recovering). Add: a **failed ping while the target is Responding or
 Starting** also starts the burst window (same `_burstStartedAt` mechanics,
 same `BurstMaxDuration` cap). A success while bursting does NOT extend the
-window; state-change bursts behave as today.
+window, and — politeness guard — a suspicion burst starts only when no burst
+window is active AND at least 60s have passed since the last burst window
+started; otherwise a 3–5% lossy line would keep the burst alive forever.
+State-change bursts behave as today. `ComputeDelay` bursts whenever a burst
+window is active regardless of state (a Responding target in a suspicion
+burst pings at `BurstInterval`).
 
 Effect with default External profile: Faltering in ~11s (was ~30s), Down in
 ~30s (was ~60s).
@@ -75,9 +82,13 @@ Per-target episode state machine inside `SuspicionCoordinator` (not in
 - Accumulate: lost count, total sample count, first/last loss timestamps.
 - **Close** when 5 consecutive successes arrive (recovered) — emit a
   `GlitchEvent` iff lost ≥ 2.
-- **Discard** (no glitch) if the target transitions to `Down` (the outage
-  ledger owns it) or `Unreachable` (parent's problem; the parent's own
-  episode/outage covers it).
+- **Discard** (no glitch) if the target produces ANY state transition during
+  the episode: `Faltering`+ means the transition ledger owns the event;
+  `Unreachable` means it's the parent's problem.
+- **Coalesce:** if a new episode opens within 60s of the previous glitch's
+  end on the same target, the eventual emit extends the previous glitch
+  (recorder updates the row's `EndUtc`/counts) rather than starting a new
+  one.
 
 `GlitchEvent { TargetId, TargetName, Class, StartUtc, EndUtc, LostCount,
 SampleCount, Detail }`, exposed as `WatcherEngine.GlitchSource`
@@ -123,6 +134,8 @@ also glitched (trunk involvement ⇒ "likely link/ISP" wording, else
     worst event. This is the "3 AM stripe" view — months of nightly
     misbehavior reads as a vertical line.
   - Recent-glitch list: time, subject, class, lost/sample, duration, detail.
+  - **Chronic badge**: a target with glitches in ≥3 distinct hours of the
+    last 24 is marked "chronically glitchy" beside its uptime stats.
   - Timezone: rendered in browser-local time (consistent with the rest of
     History).
 - **ISP report**: new "Brief disturbances (glitches)" section after
@@ -148,8 +161,10 @@ Engine (deterministic fake time + fake pings):
    suppresses a second sweep within 30s; non-anchor/trunk targets don't
    trigger sweeps.
 3. Episodes: 1 loss → no glitch; 2 losses + 5 recoveries → glitch with
-   correct span/counts; escalation to Down → no glitch; Unreachable →
-   discarded.
+   correct span/counts; escalation to Faltering (or beyond) → no glitch
+   (transitions own it); Unreachable → discarded; two episodes 30s apart →
+   one coalesced glitch; suspicion-burst politeness guard (no restart within
+   60s of last burst start).
 4. Internet glitch: overlapping episodes on ≥ threshold anchors emit one
    Internet glitch naming members; trunk involvement changes Detail.
 
