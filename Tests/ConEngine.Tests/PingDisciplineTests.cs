@@ -97,6 +97,98 @@ public class PingDisciplineTests
     }
 
     [Fact]
+    public async Task Failed_ping_while_responding_starts_suspicion_burst()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+
+        d.OnPingResult(success: false);
+        Assert.True(d.IsBurstActive);
+
+        // Burst cadence applies even though the state is still Responding.
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task Success_never_starts_or_extends_a_burst()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+
+        d.OnPingResult(success: true);
+        Assert.False(d.IsBurstActive);
+
+        d.OnPingResult(success: false);
+        var started = d.BurstStartedAt;
+        time.Advance(TimeSpan.FromSeconds(5));
+        d.OnPingResult(success: true);
+        Assert.Equal(started, d.BurstStartedAt);
+    }
+
+    [Fact]
+    public void Suspicion_burst_respects_politeness_guard()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+
+        d.OnPingResult(success: false);
+        var started = d.BurstStartedAt;
+
+        // Mid-burst failure: no restart (window would extend forever on a lossy line).
+        time.Advance(TimeSpan.FromSeconds(30));
+        d.OnPingResult(success: false);
+        Assert.Equal(started, d.BurstStartedAt);
+
+        // Window expired but <60s since it STARTED at this point? 30+31=61s > 60s guard,
+        // and the window (60s cap) has expired -> a fresh failure starts a new burst.
+        time.Advance(TimeSpan.FromSeconds(31));
+        d.OnPingResult(success: false);
+        Assert.NotEqual(started, d.BurstStartedAt);
+        Assert.True(d.IsBurstActive);
+    }
+
+    [Fact]
+    public void Suspicion_burst_blocked_within_60s_of_last_burst_start()
+    {
+        var time = new FakeTimeProvider();
+        var shortBurst = Profile with { BurstMaxDuration = TimeSpan.FromSeconds(10) };
+        var d = new PingDiscipline(shortBurst, time);
+        d.OnStateChanged(HostState.Responding);
+
+        d.OnPingResult(success: false);
+        time.Advance(TimeSpan.FromSeconds(30)); // window (10s) long expired, but <60s since start
+        d.OnPingResult(success: false);
+        Assert.False(d.IsBurstActive); // guard blocked the restart
+    }
+
+    [Fact]
+    public async Task TriggerBurst_starts_burst_without_state_change()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+
+        d.TriggerBurst();
+        Assert.True(d.IsBurstActive);
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public void TriggerBurst_is_ignored_while_parked()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Unreachable);
+        d.TriggerBurst();
+        Assert.False(d.IsBurstActive);
+    }
+
+    [Fact]
     public async Task Reentering_down_restarts_burst_window()
     {
         var time = new FakeTimeProvider();

@@ -6,14 +6,20 @@ namespace ConEngine.Scheduling;
 /// <summary>
 /// Adaptive per-target ping cadence: normal interval when healthy, burst interval
 /// (time-capped) while Faltering/Recovering/Down, parked while Unreachable.
+/// A lost ping (or an external TriggerBurst from the corroboration sweep) also
+/// starts a "suspicion burst" while still Responding, guarded so a chronically
+/// lossy line cannot keep the burst alive forever.
 /// </summary>
 public class PingDiscipline : IPingCadence
 {
+    private static readonly TimeSpan SuspicionGuard = TimeSpan.FromSeconds(60);
+
     private readonly PingProfile _profile;
     private readonly TimeProvider _time;
     private readonly Lock _lock = new();
     private HostState _state = HostState.Initializing;
     private DateTimeOffset? _burstStartedAt;
+    private DateTimeOffset? _lastBurstStart;
     private TimeSpan? _initialDelay;
     private TaskCompletionSource _releaseTcs = NewTcs();
 
@@ -48,15 +54,70 @@ public class PingDiscipline : IPingCadence
             _state = newState;
 
             if (newState is HostState.Faltering or HostState.Recovering or HostState.Down)
-                _burstStartedAt = _time.GetUtcNow(); // (re)start the burst window
+            {
+                // State changes always (re)start the burst window: they are
+                // rate-limited by the analysis window itself, not the guard.
+                _burstStartedAt = _time.GetUtcNow();
+                _lastBurstStart = _burstStartedAt;
+            }
             else
+            {
                 _burstStartedAt = null;
+            }
 
             if (oldState == HostState.Unreachable && newState != HostState.Unreachable)
                 _releaseTcs.TrySetResult(); // unpark any waiter
             if (newState == HostState.Unreachable && oldState != HostState.Unreachable)
                 _releaseTcs = NewTcs();
         }
+    }
+
+    /// <summary>True while a burst window is active (any state).</summary>
+    public bool IsBurstActive
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _burstStartedAt is { } start &&
+                       _time.GetUtcNow() - start < _profile.BurstMaxDuration;
+            }
+        }
+    }
+
+    /// <summary>A lost ping while healthy starts a suspicion burst; successes never do.</summary>
+    public void OnPingResult(bool success)
+    {
+        if (success)
+            return;
+        lock (_lock)
+        {
+            if (_state is not (HostState.Responding or HostState.Starting))
+                return;
+            StartSuspicionBurstLocked();
+        }
+    }
+
+    /// <summary>Commanded by the corroboration sweep: burst without a state change.</summary>
+    public void TriggerBurst()
+    {
+        lock (_lock)
+        {
+            if (_state == HostState.Unreachable)
+                return;
+            StartSuspicionBurstLocked();
+        }
+    }
+
+    private void StartSuspicionBurstLocked()
+    {
+        var now = _time.GetUtcNow();
+        if (_burstStartedAt is { } active && now - active < _profile.BurstMaxDuration)
+            return; // already bursting; never extend
+        if (_lastBurstStart is { } last && now - last < SuspicionGuard)
+            return; // politeness: a lossy line must not chain bursts forever
+        _burstStartedAt = now;
+        _lastBurstStart = now;
     }
 
     public async Task WaitForNextPingAsync(CancellationToken ct)
@@ -102,8 +163,9 @@ public class PingDiscipline : IPingCadence
 
     private TimeSpan ComputeDelay()
     {
-        bool burstEligible = _state is HostState.Faltering or HostState.Recovering or HostState.Down;
-        if (burstEligible && _burstStartedAt is { } start &&
+        // Any active burst window bursts — including a suspicion burst while
+        // the state is still Responding.
+        if (_burstStartedAt is { } start &&
             _time.GetUtcNow() - start < _profile.BurstMaxDuration)
         {
             return _profile.BurstInterval;
