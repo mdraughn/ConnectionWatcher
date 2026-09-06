@@ -123,6 +123,7 @@ locked.AddEndpointFilter<ConWatch.Auth.RequireAdminFilter>();
 
 api.MapStatus();
 api.MapHistory();
+api.MapGlitches();
 api.MapExport();
 api.MapAuth();
 

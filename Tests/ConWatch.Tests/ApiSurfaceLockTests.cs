@@ -26,6 +26,7 @@ public class ApiSurfaceLockTests : IDisposable
         "/api/v1/status",
         "/api/v1/transitions",
         "/api/v1/rollups",
+        "/api/v1/glitches",
         "/api/v1/export",
         "/api/v1/health",
         "/api/v1/config/health",

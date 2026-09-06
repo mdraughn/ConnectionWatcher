@@ -52,6 +52,24 @@ public static class CsvExport
         }
     }
 
+    public static IEnumerable<string> GlitchLines(IEnumerable<GlitchRow> rows)
+    {
+        yield return "id,targetId,targetName,class,startUtc,endUtc,lostCount,sampleCount,detail";
+        foreach (var g in rows)
+        {
+            yield return Line(
+                g.Id.ToString(CultureInfo.InvariantCulture),
+                g.TargetId.ToString(),
+                g.TargetName,
+                g.Class == 1 ? "Internet" : "Target",
+                Iso(g.StartUtc),
+                Iso(g.EndUtc),
+                g.LostCount.ToString(CultureInfo.InvariantCulture),
+                g.SampleCount.ToString(CultureInfo.InvariantCulture),
+                g.Detail ?? "");
+        }
+    }
+
     private static string Iso(DateTime utc) =>
         DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture);
 

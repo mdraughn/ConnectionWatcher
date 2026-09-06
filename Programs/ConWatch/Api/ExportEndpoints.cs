@@ -48,6 +48,25 @@ public static class ExportEndpoints
                 return Results.Json(rows, contentType: "application/json");
             return Csv(CsvExport.RollupLines(rows), $"conwatch-rollups-{stamp}.csv");
         });
+
+        api.MapGet("/export/glitches", async (IDbContextFactory<ConWatchDbContext> dbFactory,
+            TimeProvider time, string format = "csv", Guid? targetId = null,
+            DateTime? from = null, DateTime? to = null) =>
+        {
+            if (!IsValidFormat(format))
+                return BadFormat();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            IQueryable<ConPersistence.Entities.GlitchRow> query = db.Glitches.AsNoTracking();
+            if (targetId is { } tid) query = query.Where(g => g.TargetId == tid);
+            if (from is { } f) query = query.Where(g => g.StartUtc >= f.ToUniversalTime());
+            if (to is { } u) query = query.Where(g => g.StartUtc <= u.ToUniversalTime());
+            var rows = await query.OrderBy(g => g.Id).ToListAsync();
+
+            var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
+            if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+                return Results.Json(rows, contentType: "application/json");
+            return Csv(CsvExport.GlitchLines(rows), $"conwatch-glitches-{stamp}.csv");
+        });
     }
 
     private static bool IsValidFormat(string format) =>
