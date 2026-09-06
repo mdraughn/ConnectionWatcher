@@ -14,11 +14,16 @@ public record ReportEpisode(string Kind, DateTime StartUtc, DateTime EndUtc, str
 public record TargetReportRow(string Name, string Address, bool IsAnchor,
     double? UptimePercent, int OutageCount, TimeSpan LongestOutage, TimeSpan UnreachableTime);
 
+/// <summary>Brief-disturbance evidence: counts and clustering of glitches.</summary>
+public record GlitchSummary(int TotalCount, int InternetCount,
+    List<(int HourUtc, int Count)> TopHours, List<string> ChronicTargets);
+
 /// <summary>Everything the printable ISP report renders.</summary>
 public record IspReport(DateTime FromUtc, DateTime ToUtc,
     List<string> PathNames, List<string> AnchorNames,
     TimeSpan LinkDownTime, TimeSpan LinkDegradedTime, TimeSpan WeatherTime,
-    double? AnchorUptimePercent, List<ReportEpisode> Episodes, List<TargetReportRow> Targets);
+    double? AnchorUptimePercent, List<ReportEpisode> Episodes, List<TargetReportRow> Targets,
+    GlitchSummary Glitches);
 
 /// <summary>
 /// Builds the ISP evidence report. Attribution comes from the verdict history:
@@ -44,7 +49,36 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
 
         return new IspReport(fromUtc, toUtc, pathNames, anchorNames,
             totals.GetValueOrDefault("LinkDown"), totals.GetValueOrDefault("LinkDegraded"),
-            totals.GetValueOrDefault("InternetWeather"), anchorUptime, episodes, targets);
+            totals.GetValueOrDefault("InternetWeather"), anchorUptime, episodes, targets,
+            await BuildGlitchSummaryAsync(db, fromUtc, toUtc));
+    }
+
+    private static async Task<GlitchSummary> BuildGlitchSummaryAsync(
+        ConWatchDbContext db, DateTime fromUtc, DateTime toUtc)
+    {
+        var glitches = await db.Glitches.AsNoTracking()
+            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc)
+            .ToListAsync();
+
+        var topHours = glitches
+            .GroupBy(g => g.StartUtc.Hour)
+            .Select(group => (HourUtc: group.Key, Count: group.Count()))
+            .OrderByDescending(x => x.Count).ThenBy(x => x.HourUtc)
+            .Take(3)
+            .ToList();
+
+        // Chronic: target-class glitches in >= 3 distinct hours of the last
+        // 24h of the report period.
+        var chronicCutoff = toUtc.AddHours(-24);
+        var chronic = glitches
+            .Where(g => g.Class == 0 && g.StartUtc >= chronicCutoff)
+            .GroupBy(g => g.TargetName)
+            .Where(group => group.Select(g => (g.StartUtc.Date, g.StartUtc.Hour)).Distinct().Count() >= 3)
+            .Select(group => group.Key)
+            .OrderBy(name => name)
+            .ToList();
+
+        return new GlitchSummary(glitches.Count, glitches.Count(g => g.Class == 1), topHours, chronic);
     }
 
     private static async Task<(List<ReportEpisode>, Dictionary<string, TimeSpan>)> BuildEpisodesAsync(

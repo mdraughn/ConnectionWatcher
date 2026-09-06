@@ -60,6 +60,32 @@ else
     </table>
 }
 
+<h3>Brief disturbances (glitches)</h3>
+@if (r.Glitches.TotalCount == 0)
+{
+    <p>No sub-outage loss episodes were recorded in this period.</p>
+}
+else
+{
+    <p>
+        <b>@r.Glitches.TotalCount</b> brief loss episode@(r.Glitches.TotalCount == 1 ? "" : "s")
+        too short to register as outages
+        (@r.Glitches.InternetCount of them corroborated across multiple destinations).
+        @if (r.Glitches.TopHours.Count > 0)
+        {
+            var top = r.Glitches.TopHours[0];
+            var clustered = r.Glitches.TopHours.Sum(h => h.Count);
+            <text>Most frequent hours (UTC): @string.Join(", ", r.Glitches.TopHours.Select(h => $"{h.HourUtc:00}:00 ({h.Count})"))
+            — @clustered of @r.Glitches.TotalCount fall in these @r.Glitches.TopHours.Count hour@(r.Glitches.TopHours.Count == 1 ? "" : "s").</text>
+        }
+    </p>
+    @if (r.Glitches.ChronicTargets.Count > 0)
+    {
+        <p>Chronically glitchy in the final 24 h of the period:
+           <b>@string.Join(", ", r.Glitches.ChronicTargets)</b>.</p>
+    }
+}
+
 <h3>Per-target detail</h3>
 <table>
     <thead><tr><th>Target</th><th>Address</th><th>Role</th><th>Uptime</th><th>Outages</th><th>Longest outage</th><th>No-data time</th></tr></thead>

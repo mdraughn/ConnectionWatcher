@@ -150,4 +150,34 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(2, report.AnchorNames.Count);
         Assert.Contains("Google", report.AnchorNames);
     }
+
+    [Fact]
+    public async Task Glitch_summary_counts_top_hours_and_chronic_targets()
+    {
+        await using (var db = _factory.CreateDbContext())
+        {
+            // Nightly stripe: 3 glitches at 03:xx UTC across the period, one at 14:xx.
+            var day = From;
+            for (int i = 0; i < 3; i++)
+                db.Glitches.Add(new GlitchRow { TargetId = _googleId, TargetName = "Google", Class = 0,
+                    StartUtc = day.AddHours(3 + 0.1 * i), EndUtc = day.AddHours(3.2), LostCount = 2, SampleCount = 8 });
+            db.Glitches.Add(new GlitchRow { TargetId = _cloudflareId, TargetName = "Cloudflare", Class = 0,
+                StartUtc = day.AddHours(14), EndUtc = day.AddHours(14.01), LostCount = 2, SampleCount = 8 });
+            db.Glitches.Add(new GlitchRow { TargetId = Guid.NewGuid(), TargetName = "Internet", Class = 1,
+                StartUtc = day.AddHours(3.05), EndUtc = day.AddHours(3.15) });
+            // Chronic: Google glitches in 3 distinct hours within 24h of the period end.
+            db.Glitches.Add(new GlitchRow { TargetId = _googleId, TargetName = "Google", Class = 0,
+                StartUtc = To.AddHours(-2), EndUtc = To.AddHours(-2), LostCount = 2, SampleCount = 8 });
+            db.Glitches.Add(new GlitchRow { TargetId = _googleId, TargetName = "Google", Class = 0,
+                StartUtc = To.AddHours(-4), EndUtc = To.AddHours(-4), LostCount = 2, SampleCount = 8 });
+            await db.SaveChangesAsync();
+        }
+
+        var report = await _builder.BuildAsync(From, To);
+        Assert.Equal(7, report.Glitches.TotalCount);
+        Assert.Equal(1, report.Glitches.InternetCount);
+        Assert.Equal(3, report.Glitches.TopHours[0].HourUtc);   // 03:00 UTC dominates
+        Assert.Equal(4, report.Glitches.TopHours[0].Count);     // 3 target + 1 internet
+        Assert.Equal(["Google"], report.Glitches.ChronicTargets); // 03:xx + 20:00 + 22:00 of the last day
+    }
 }

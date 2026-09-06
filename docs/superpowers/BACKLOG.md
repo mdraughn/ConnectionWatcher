@@ -49,6 +49,14 @@ Three public artifacts cover essentially everyone:
   Home Assistant add-on, in-app "update available" check against GitHub
   releases.
 
+## Fast detection & glitches — DONE 2026-09-06
+
+Suspicion bursts on first loss, corroboration sweeps across anchors+trunk,
+1s burst timeout, glitch ledger (sub-Faltering episodes, 2+ losses, 60s
+coalescing), Internet-glitch correlation, recurrence heatmap on History,
+ISP-report glitch section with top-hours clustering and chronic badges.
+Explicit non-goal (Mark): latency/RTT-based glitches.
+
 ## Time reporting (noted 2026-09-06)
 
 - **ISP report / History timezone clarity** — the report prints UTC with the

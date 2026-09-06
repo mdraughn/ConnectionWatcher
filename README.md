@@ -54,7 +54,14 @@ ConWatch serves its UI at the root:
   the latest event.
 - **History** (`/History`) — uptime stats, latency band, loss chart, and a
   state-timeline ribbon per target; the "Internet (verdict)" subject shows your
-  internet-weather history.
+  internet-weather history. The **Glitches & recurrence** section records
+  sub-outage loss episodes (trouble too brief to change any state) with an
+  hour-of-day × date heatmap — recurring nightly trouble shows up as a
+  vertical stripe — plus a "chronically glitchy" badge for targets that
+  glitch across several hours of a day. Detection is aggressive: the first
+  lost ping starts a 1-second-interval burst on that target AND a
+  corroboration sweep across all anchors and the trunk, so even a few-second
+  wobble yields enough evidence to classify.
 - **Config** (`/Config/Targets`, `/Config/Profiles`, `/Config/Pools`) — CRUD
   with inline validation errors, plus whole-config export/import.
 - **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
