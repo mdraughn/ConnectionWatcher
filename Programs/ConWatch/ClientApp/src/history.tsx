@@ -5,6 +5,7 @@ import { StateRibbon } from "./components/StateRibbon";
 import { StatsRow } from "./components/StatsRow";
 import { TimeChart } from "./components/TimeChart";
 import { clipAtReset, incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
+import { bucketByHourLocal, chronicTargets, type GlitchItem } from "./lib/glitchData";
 import type { RollupPoint, TransitionEvent } from "./lib/types";
 
 interface Subject {
@@ -32,6 +33,120 @@ async function fetchTransitions(subjectId: string, from: Date, to: Date): Promis
   if (!response.ok) return [];
   const items = (await response.json()).items as TransitionEvent[];
   return items.reverse(); // API is newest-first; we want chronological
+}
+
+async function fetchGlitches(from: Date, to: Date): Promise<GlitchItem[]> {
+  const url = `/api/v1/glitches?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000`;
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  return (await response.json()).items as GlitchItem[];
+}
+
+async function fetchDownTimes(from: Date, to: Date): Promise<string[]> {
+  const url = `/api/v1/transitions?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000`;
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  const items = (await response.json()).items as TransitionEvent[];
+  return items.filter((t) => t.to === "Down").map((t) => t.timestamp);
+}
+
+function Heatmap({ glitchGrid, outageGrid, days, now }: {
+  glitchGrid: number[][]; outageGrid: number[][]; days: number; now: Date;
+}) {
+  const max = Math.max(1, ...glitchGrid.flat());
+  const dayLabel = (i: number) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i));
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `2.2rem repeat(${days}, minmax(8px, 1fr))`, gap: 1 }}>
+        {Array.from({ length: 24 }, (_, hour) => (
+          <>
+            <div key={`h${hour}`} style={{ fontSize: "0.6rem", opacity: 0.6, textAlign: "right", paddingRight: 4 }}>
+              {hour % 6 === 0 ? `${hour}:00` : ""}
+            </div>
+            {Array.from({ length: days }, (_, day) => {
+              const glitches = glitchGrid[day][hour];
+              const outages = outageGrid[day][hour];
+              const background = outages > 0
+                ? "var(--cw-down, #d33)"
+                : glitches > 0
+                  ? `rgba(230, 150, 20, ${Math.min(1, 0.25 + (0.75 * glitches) / max)})`
+                  : "rgba(128,128,128,0.12)";
+              return (
+                <div key={`c${day}-${hour}`}
+                  title={`${dayLabel(day)} ${hour}:00 — ${glitches} glitch${glitches === 1 ? "" : "es"}${outages ? `, ${outages} outage event${outages === 1 ? "" : "s"}` : ""}`}
+                  style={{ background, height: 10, borderRadius: 2 }} />
+              );
+            })}
+          </>
+        ))}
+        <div />
+        {Array.from({ length: days }, (_, day) => (
+          <div key={`d${day}`} style={{ fontSize: "0.6rem", opacity: 0.6, textAlign: "center" }}>
+            {days <= 7 || day % 5 === 0 ? dayLabel(day) : ""}
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+        Orange = glitches (sub-outage loss episodes), intensity by count; red = an hour containing
+        outage transitions. A recurring vertical stripe means trouble at the same time every day.
+      </p>
+    </div>
+  );
+}
+
+function GlitchSection({ from, to, rangeKey }: { from: Date; to: Date; rangeKey: string }) {
+  const [glitches, setGlitches] = useState<GlitchItem[]>([]);
+  const [downTimes, setDownTimes] = useState<string[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([fetchGlitches(from, to), fetchDownTimes(from, to)]).then(([g, d]) => {
+      if (!live) return;
+      setGlitches(g);
+      setDownTimes(d);
+    });
+    return () => { live = false; };
+  }, [rangeKey, from, to]);
+
+  const now = to;
+  const days = rangeKey === "30d" ? 30 : rangeKey === "7d" ? 7 : 1;
+  const glitchGrid = bucketByHourLocal(glitches.map((g) => g.startUtc), days, now);
+  const outageGrid = bucketByHourLocal(downTimes, days, now);
+  const chronic = chronicTargets(glitches, now);
+  const recent = glitches.slice(0, 15);
+
+  return (
+    <div id="glitch-section">
+      <h4>Glitches &amp; recurrence</h4>
+      {chronic.length > 0 && (
+        <p>⚠ Chronically glitchy (3+ separate hours in the last 24 h): <b>{chronic.join(", ")}</b></p>
+      )}
+      <Heatmap glitchGrid={glitchGrid} outageGrid={outageGrid} days={days} now={now} />
+      {recent.length === 0 && <p style={{ opacity: 0.7 }}>No glitches recorded in this range. Quiet is good.</p>}
+      {recent.length > 0 && (
+        <table>
+          <thead>
+            <tr><th>When</th><th>Subject</th><th>Class</th><th>Lost</th><th>Duration</th><th>Detail</th></tr>
+          </thead>
+          <tbody>
+            {recent.map((g) => (
+              <tr key={g.id}>
+                <td>{new Date(g.startUtc).toLocaleString()}</td>
+                <td>{g.targetName}</td>
+                <td>{g.class === "Internet" ? "🌐 internet" : "target"}</td>
+                <td>{g.lostCount}/{g.sampleCount}</td>
+                <td>{Math.max(1, Math.round((new Date(g.endUtc).getTime() - new Date(g.startUtc).getTime()) / 1000))}s</td>
+                <td>{g.detail ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 function App({ subjects }: { subjects: Subject[] }) {
@@ -124,6 +239,8 @@ function App({ subjects }: { subjects: Subject[] }) {
       {subject.kind !== "target" && (
         <p style={{ opacity: 0.7 }}>Pools and the verdict have no ping rollups; their story is the timeline above.</p>
       )}
+
+      <GlitchSection from={from} to={to} rangeKey={rangeKey} />
     </div>
   );
 }
