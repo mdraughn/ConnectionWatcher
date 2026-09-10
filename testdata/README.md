@@ -1,3 +1,3 @@
-Local-only real-data snapshots. NEVER commit a database here: the Settings table contains the MQTT broker password.
+Local-only real-data snapshots. NEVER commit snapshots here: they describe the home network topology.
 
-To refresh: stop the conwatch project on the NAS, download docker/conwatch/data/conwatch.db via File Station, save it here as nas-snapshot.db, restart the project. Tests in RealDataSnapshotTests pick it up automatically (they skip when it is absent).
+To refresh: run ./Get-NasSnapshot.ps1 (fetches the open, secret-sanitized /api/v1/export/snapshot endpoint from the NAS). RealDataSnapshotTests picks up nas-snapshot.json automatically and skips when it is absent.

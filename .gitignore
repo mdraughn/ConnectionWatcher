@@ -373,3 +373,4 @@ dist/
 testdata/*.db
 testdata/*.db-wal
 testdata/*.db-shm
+testdata/*.json

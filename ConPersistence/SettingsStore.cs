@@ -27,6 +27,11 @@ public static class SettingKeys
 
     public const string HeartbeatUrl = "Heartbeat.Url";
     public const string HeartbeatIntervalMinutes = "Heartbeat.IntervalMinutes";
+
+    /// <summary>Never leaves the machine via the snapshot export: credentials
+    /// and capability URLs (a webhook or heartbeat URL grants whoever holds it
+    /// the power to impersonate or silence this instance).</summary>
+    public static readonly string[] SecretKeys = [MqttPassword, WebhookUrls, HeartbeatUrl];
 }
 
 /// <summary>

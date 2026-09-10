@@ -49,6 +49,30 @@ public static class ExportEndpoints
             return Csv(CsvExport.RollupLines(rows), $"conwatch-rollups-{stamp}.csv");
         });
 
+        // Route A of real-data testing: the complete sanitized state in one
+        // document, retrievable without admin. Secrets (SettingKeys.SecretKeys)
+        // are omitted and named in redactedSettings.
+        api.MapGet("/export/snapshot", async (IDbContextFactory<ConWatchDbContext> dbFactory,
+            ConfigStore configStore, SettingsStore settingsStore, TimeProvider time) =>
+        {
+            var allSettings = await settingsStore.GetAllAsync();
+            var redacted = SettingKeys.SecretKeys
+                .Where(key => allSettings.Remove(key))
+                .ToList();
+
+            await using var db = await dbFactory.CreateDbContextAsync();
+            return Results.Ok(new ConPersistence.Dto.Snapshot
+            {
+                ExportedUtc = time.GetUtcNow(),
+                Config = await configStore.ExportAsync(),
+                Settings = allSettings,
+                RedactedSettings = redacted,
+                Transitions = await db.Transitions.AsNoTracking().OrderBy(t => t.Id).ToListAsync(),
+                Rollups = await db.Rollups.AsNoTracking().OrderBy(r => r.Id).ToListAsync(),
+                Glitches = await db.Glitches.AsNoTracking().OrderBy(g => g.Id).ToListAsync(),
+            });
+        });
+
         api.MapGet("/export/glitches", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             TimeProvider time, string format = "csv", Guid? targetId = null,
             DateTime? from = null, DateTime? to = null) =>
