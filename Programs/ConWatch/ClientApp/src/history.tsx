@@ -1,5 +1,5 @@
 // History island: subject + range pickers, stats, charts, and the ribbon.
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StateRibbon } from "./components/StateRibbon";
 import { StatsRow } from "./components/StatsRow";
@@ -47,7 +47,9 @@ async function fetchDownTimes(from: Date, to: Date): Promise<string[]> {
   const response = await fetch(url);
   if (!response.ok) return [];
   const items = (await response.json()).items as TransitionEvent[];
-  return items.filter((t) => t.to === "Down").map((t) => t.timestamp);
+  // Targets only: a Down router also downs its pool and the verdict, and one
+  // incident should mark an hour once, not three times.
+  return items.filter((t) => t.to === "Down" && t.subjectKind === "Target").map((t) => t.timestamp);
 }
 
 function Heatmap({ glitchGrid, outageGrid, days, now }: {
@@ -58,12 +60,14 @@ function Heatmap({ glitchGrid, outageGrid, days, now }: {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i));
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
+  // Fixed near-square cells: with stretchy columns a single marked hour
+  // renders as a day-wide bar and reads as a day-long event.
   return (
     <div style={{ overflowX: "auto" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `2.2rem repeat(${days}, minmax(8px, 1fr))`, gap: 1 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `2.6rem repeat(${days}, 22px)`, gap: 2, width: "max-content" }}>
         {Array.from({ length: 24 }, (_, hour) => (
-          <>
-            <div key={`h${hour}`} style={{ fontSize: "0.6rem", opacity: 0.6, textAlign: "right", paddingRight: 4 }}>
+          <Fragment key={`row${hour}`}>
+            <div style={{ fontSize: "0.6rem", opacity: 0.6, textAlign: "right", paddingRight: 4 }}>
               {hour % 6 === 0 ? `${hour}:00` : ""}
             </div>
             {Array.from({ length: days }, (_, day) => {
@@ -76,11 +80,11 @@ function Heatmap({ glitchGrid, outageGrid, days, now }: {
                   : "rgba(128,128,128,0.12)";
               return (
                 <div key={`c${day}-${hour}`}
-                  title={`${dayLabel(day)} ${hour}:00 — ${glitches} glitch${glitches === 1 ? "" : "es"}${outages ? `, ${outages} outage event${outages === 1 ? "" : "s"}` : ""}`}
-                  style={{ background, height: 10, borderRadius: 2 }} />
+                  title={`${dayLabel(day)} ${hour}:00 — ${glitches} glitch${glitches === 1 ? "" : "es"}${outages ? `, ${outages} brief outage${outages === 1 ? "" : "s"}` : ""}`}
+                  style={{ background, height: 14, borderRadius: 2 }} />
               );
             })}
-          </>
+          </Fragment>
         ))}
         <div />
         {Array.from({ length: days }, (_, day) => (
@@ -90,8 +94,11 @@ function Heatmap({ glitchGrid, outageGrid, days, now }: {
         ))}
       </div>
       <p style={{ fontSize: "0.75rem", opacity: 0.7 }}>
-        Orange = glitches (sub-outage loss episodes), intensity by count; red = an hour containing
-        outage transitions. A recurring vertical stripe means trouble at the same time every day.
+        Rows are hours of the day, columns are days, across ALL targets.
+        Orange = glitches (loss too brief to change any state), intensity by count;
+        red = an hour in which some target went Down (an outage — see its subject's
+        timeline and the transition log for detail). Trouble that recurs at the same
+        time every day forms a <b>horizontal</b> stripe along that hour's row.
       </p>
     </div>
   );
@@ -120,12 +127,24 @@ function GlitchSection({ from, to, rangeKey }: { from: Date; to: Date; rangeKey:
 
   return (
     <div id="glitch-section">
-      <h4>Glitches &amp; recurrence</h4>
+      <h4>Glitches &amp; recurrence <small>(all targets combined)</small></h4>
+      <p style={{ fontSize: "0.8rem", opacity: 0.7 }}>
+        Unlike the per-subject charts above, this section always shows every target together.
+      </p>
       {chronic.length > 0 && (
         <p>⚠ Chronically glitchy (3+ separate hours in the last 24 h): <b>{chronic.join(", ")}</b></p>
       )}
       <Heatmap glitchGrid={glitchGrid} outageGrid={outageGrid} days={days} now={now} />
-      {recent.length === 0 && <p style={{ opacity: 0.7 }}>No glitches recorded in this range. Quiet is good.</p>}
+      {recent.length === 0 && downTimes.length === 0 && (
+        <p style={{ opacity: 0.7 }}>No glitches or outages recorded in this range. Quiet is good.</p>
+      )}
+      {recent.length === 0 && downTimes.length > 0 && (
+        <p style={{ opacity: 0.7 }}>
+          No glitches recorded in this range — but the red hours above mark brief outages
+          (targets that went fully Down). Those live in the outage counts and transition log,
+          not the glitch ledger.
+        </p>
+      )}
       {recent.length > 0 && (
         <table>
           <thead>
