@@ -65,6 +65,24 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
   "03:34 Sep 4" on the report). Label each incident row's zone explicitly,
   or render a configurable zone with UTC alongside.
 
+## In design (noted 2026-09-10)
+
+- **Incident display redesign** — chosen: cause-aligned ribbons (History),
+  punchcard month (dashboard), incident ledger (shared encoding). Spec:
+  `specs/2026-09-10-incident-display-redesign-design.md`. Plan deferred
+  until dual-WAN topology settles.
+- **Dual-WAN failover groups** — twin External Router lanes; active-path
+  detection by RTT asymmetry (ping both ISPs' public edge routers; the
+  standby answers "the long way around"); trunk becomes an or-parent group;
+  LinkDown = both lanes down. Waiting on the second ISP's install.
+- **ISP naming** — `Operator` tag on trunk targets so verdicts/ledger/report
+  say "Comcast is down"; migrates onto lane entities when failover groups
+  land. Notes: `specs/2026-09-10-isp-naming-and-clone-install-notes.md`.
+- **Clone-install + master enable (switch-over)** — wizard option "copy from
+  a running node" via the snapshot API/importer; `Engine.Enabled` switch +
+  admin API; take-over choreography (disable old → final sync → enable new)
+  gives near-zero-gap migration. Same notes file.
+
 ## Still on the roadmap
 
 - ~~**Container build smoke test**~~ — DONE 2026-08-24: image builds, boots
