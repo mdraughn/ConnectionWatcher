@@ -120,6 +120,19 @@ public class SetupApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_tags_the_wan_target_with_the_isp_name()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, new SetupTarget("Outer IP", "203.0.113.23"),
+                ["8.8.8.8"], IspName: "Comcast"));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        Assert.Equal("Comcast", targets!.Single(t => t.Name == "Outer IP").Operator);
+        Assert.Null(targets.Single(t => t.Name == "Router").Operator); // Mark's own gear
+    }
+
+    [Fact]
     public async Task First_boot_redirects_dashboard_to_wizard_until_setup_runs()
     {
         // Client follows the redirect: empty config lands on the wizard.

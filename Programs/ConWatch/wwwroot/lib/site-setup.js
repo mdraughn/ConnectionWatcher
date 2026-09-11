@@ -92,6 +92,7 @@ document.getElementById("apply").addEventListener("click", async () => {
         },
         outerIp: wanOffer,
         anchorAddresses: anchors,
+        ispName: document.getElementById("isp-name").value.trim() || null,
     };
     const button = document.getElementById("apply");
     button.setAttribute("aria-busy", "true");

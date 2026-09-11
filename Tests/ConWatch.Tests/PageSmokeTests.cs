@@ -18,6 +18,8 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Admin", "Webhook URLs")]
     [InlineData("/Admin", "Heartbeat (watch the watchman)")]
     [InlineData("/Setup", "Quick setup")]
+    [InlineData("/Setup", "internet provider")]
+    [InlineData("/Config/Targets", "ISP / operator")]
     [InlineData("/Report", "Internet connection report")]
     public async Task Page_renders(string url, string marker)
     {

@@ -4,7 +4,8 @@ using ConPersistence.Dto;
 namespace ConWatch;
 
 public record SetupTarget(string Name, string Address);
-public record SetupApplyRequest(SetupTarget Router, SetupTarget? OuterIp, List<string> AnchorAddresses);
+public record SetupApplyRequest(SetupTarget Router, SetupTarget? OuterIp, List<string> AnchorAddresses,
+    string? IspName = null);
 
 /// <summary>
 /// Applies the quick-setup wizard's choices additively: existing names and
@@ -62,6 +63,8 @@ public class SetupService(ConfigService config, ConfigStore store, SettingsStore
                     Address = outer.Address,
                     Parent = routerName,
                     Profile = "Internal",
+                    // The WAN hop is where the ISP's service begins.
+                    Operator = request.IspName,
                 });
                 if (!result.Success)
                     return result;

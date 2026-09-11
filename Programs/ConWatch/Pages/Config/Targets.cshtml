@@ -89,6 +89,9 @@
         </label>
         <label>Enabled <input type="checkbox" name="enabled" checked /></label>
     </div>
+    <label>ISP / operator <small>(optional — lets reports say "Comcast is down")</small>
+        <input name="operator" placeholder="e.g. Comcast" />
+    </label>
     <button type="submit">Add target</button>
 </form>
 
@@ -169,6 +172,7 @@
                 parent: form.elements.parent.value || null,
                 profile: form.elements.profile.value,
                 enabled: form.elements.enabled.checked,
+                operator: form.elements.operator.value || null,
             }),
             fillForm: (dto) => {
                 form.dataset.originalAddress = dto.address;
@@ -177,6 +181,7 @@
                 form.elements.parent.value = dto.parent ?? "";
                 form.elements.profile.value = dto.profile;
                 form.elements.enabled.checked = dto.enabled;
+                form.elements.operator.value = dto.operator ?? "";
                 document.getElementById("form-title").textContent = `Edit ${dto.name}`;
             },
         });
