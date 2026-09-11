@@ -85,6 +85,16 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
   admin API; take-over choreography (disable old → final sync → enable new)
   gives near-zero-gap migration. Same notes file.
 
+## Small hardening candidates
+
+- **Config health warning: pool parent vs. members' parent drift** (noted
+  2026-09-11). Re-parenting a pool's members doesn't move the pool's own
+  parent; the verdict layer is immune (walks anchor chains) but the ISP
+  report's trunk walk starts at pool.ParentId and silently truncates — bit
+  us on the NAS after the Comcast Edge re-parent. Add a ConfigHealth warning
+  when the pool's parent is not on its members' shared parent chain, or make
+  UpsertTarget re-parenting drag the pool along.
+
 ## Still on the roadmap
 
 - ~~**Container build smoke test**~~ — DONE 2026-08-24: image builds, boots
