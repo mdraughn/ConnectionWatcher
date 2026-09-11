@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HATCH, markCss, markRank, RAMP } from "./encoding";
+import { HATCH, markCss, markRank, RAMP, ribbonFill } from "./encoding";
 import {
   buildLedger, glitchMark, punchcardCells, verdictWindows, windowMark,
 } from "./incidents";
@@ -83,6 +83,17 @@ describe("markRank and markCss", () => {
     expect(markCss({ shape: "bar", hue: "warm", depth: "glitch", ambiguous: true }).background)
       .toContain("linear-gradient(to bottom right");
     expect(HATCH).toContain("repeating-linear-gradient(45deg");
+  });
+});
+
+describe("ribbonFill", () => {
+  it("colors trunk rows grey, others warm, hatches Unreachable", () => {
+    expect(ribbonFill("trunk", "Down")).toBe(RAMP.grey.out);
+    expect(ribbonFill("trunk", "Faltering")).toBe(RAMP.grey.degraded);
+    expect(ribbonFill("anchor", "Down")).toBe(RAMP.warm.out);
+    expect(ribbonFill("other", "Recovering")).toBe(RAMP.warm.degraded);
+    expect(ribbonFill("anchor", "Unreachable")).toBe("hatch");
+    expect(ribbonFill("anchor", "Responding")).toBe("#eaf3ec");
   });
 });
 

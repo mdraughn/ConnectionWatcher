@@ -37,6 +37,25 @@ export function markCss(mark: Mark): { background: string } {
   return { background: RAMP[mark.hue][mark.depth] };
 }
 
+export type RowRole = "trunk" | "anchor" | "other";
+
+/** Ribbon fill for a target's state, colored by whose gear the row is:
+ *  trunk rows use the grey ramp, everything else the warm ramp. Returns
+ *  "hatch" for Unreachable (inherited, no data, no blame). */
+export function ribbonFill(role: RowRole, state: string): string {
+  const ramp = role === "trunk" ? RAMP.grey : RAMP.warm;
+  switch (state) {
+    case "Down": return ramp.out;
+    case "Faltering":
+    case "Recovering": return ramp.degraded;
+    case "Unreachable": return "hatch";
+    case "Responding": return HEALTHY;
+    case "Starting":
+    case "Initializing": return "#dfe8e2";
+    default: return "#e6e6e6"; // Unknown
+  }
+}
+
 /** Cell precedence when several marks land in one punchcard cell:
  *  your-gear outages outrank internet outages outrank degradations outrank
  *  glitches; any bar (shared path) outranks any dot (one target). */
