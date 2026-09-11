@@ -1,8 +1,10 @@
 # ISP Naming & Clone-Install / Switch-Over — Design Notes (pre-interview)
 
 **Date:** 2026-09-10
-**Status:** Thinking notes per Mark's request ("think about that while I'm
-gone"). Open questions at the end need his answers before spec/plan.
+**Status:** DECIDED (interview 2026-09-10). Answers folded in below; the
+"Open questions" section records the outcomes. Build order:
+**ISP naming → display redesign → clone/switch-over**, dual-WAN waiting on
+the second ISP's install.
 
 ---
 
@@ -112,17 +114,22 @@ Ordering notes:
 
 ---
 
-## Open questions for Mark
+## Decisions (interview 2026-09-10)
 
-1. **ISP name entry point**: per-target field only, or also a wizard
-   question? And should the ISP report title use it ("Report on Comcast
-   service")?
-2. **Disabled-node dashboard**: archive mode banner + read-only history is
-   the proposal — anything else it should still do (exports? reports?)?
-3. **Take-over auth**: disabling the OLD node needs its admin password (if
-   set). OK for the wizard to prompt for the source's password at take-over
-   time (used against the source node only), or prefer "open the gate on the
-   source first" as the documented flow?
-4. Priority order: ISP naming is small and feeds the display redesign;
-   clone/switch-over is medium and independent. Which first — or does
-   display redesign (already chosen) stay ahead of both?
+1. **ISP name entry**: Operator field on targets + wizard asks "Who is your
+   ISP?" + the ISP report titles itself with it ("Report on Comcast
+   service").
+2. **Archive mode**: everything read-only — dashboard with a prominent
+   "monitoring disabled" banner, full History, ISP report, and exports all
+   keep working; only pinging and notifying stop.
+3. **Take-over auth**: the new node's wizard prompts for the SOURCE node's
+   admin password at take-over time, used only against the source, never
+   stored. **Mark's amendment:** that authenticated channel also transfers
+   the secrets — take-over uses an admin-gated FULL snapshot variant
+   (includes Mqtt.Password etc.), so the clone arrives with MQTT working.
+   The open /export/snapshot stays sanitized forever; the full variant is a
+   separate admin-locked endpoint. Honest note: secrets cross the LAN over
+   plain HTTP during take-over — same threat model as typing them into the
+   Admin form.
+4. **Order**: ISP naming → display redesign → clone/switch-over; dual-WAN
+   waits for the install truck.
