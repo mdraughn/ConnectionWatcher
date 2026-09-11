@@ -64,14 +64,19 @@ public class OperatorFieldTests : IDisposable
         await ConfigApiTests.SeedHomeAsync(_client); // Router -> anchors + pool "Internet"
         var trunk = Assert.Single(
             (await ExportAsync()).Targets, t => t.Name == "Router");
-        await _client.PutAsJsonAsync($"/api/v1/targets/{trunk.Id}", new
+        var put = await _client.PutAsJsonAsync($"/api/v1/targets/{trunk.Id}", new
         {
             id = trunk.Id, name = trunk.Name, address = trunk.Address,
             parent = trunk.Parent, profile = trunk.Profile, @operator = "Comcast",
         });
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+        Assert.Equal("Comcast",
+            Assert.Single((await ExportAsync()).Targets, t => t.Name == "Router").Operator);
 
         var html = await _client.GetStringAsync("/Report");
-        Assert.Contains("Internet connection report — Comcast service", html);
+        // Razor entity-encodes the dash; assert on the stable parts.
+        Assert.Contains("Internet connection report", html);
+        Assert.Contains("Comcast service", html);
     }
 
     [Fact]
