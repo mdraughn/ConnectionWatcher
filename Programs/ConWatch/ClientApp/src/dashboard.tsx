@@ -1,6 +1,7 @@
 // Dashboard island: hydrates the server-rendered tree with live behavior.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
+import { Ledger } from "./components/Ledger";
 import { Punchcard } from "./components/Punchcard";
 import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
@@ -33,6 +34,8 @@ function LastThirtyDays({ initial }: { initial: InitialData }) {
     <div id="story-section" style={{ marginTop: "1.5rem" }}>
       <h4>The last 30 days</h4>
       <Punchcard cells={story.cells} days={story.days} now={story.now} />
+      <h4 style={{ marginTop: "1.2rem" }}>What happened</h4>
+      <Ledger items={story.ledger} days={story.days} moreHref="/History" />
     </div>
   );
 }
