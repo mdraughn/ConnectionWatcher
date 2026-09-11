@@ -1,20 +1,45 @@
 // Dashboard island: hydrates the server-rendered tree with live behavior.
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
+import { Punchcard } from "./components/Punchcard";
 import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
 import { startHub } from "./lib/hub";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
+import { fetchStory, type Story } from "./lib/story";
 import type { Snapshot, TransitionEvent } from "./lib/types";
 
 interface InitialData {
   snapshot: Snapshot | null;
   parents: Record<string, string | null>;
   poolMembers: Record<string, string[]>;
+  trunkNames?: string[];
+  anchorNames?: string[];
+  weatherThreshold?: number;
 }
 
-function App({ store, topology }: { store: StatusStore; topology: Topology }) {
+const STORY_DAYS = 30;
+
+function LastThirtyDays({ initial }: { initial: InitialData }) {
+  const [story, setStory] = useState<Story | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchStory(initial, STORY_DAYS).then((s) => { if (live) setStory(s); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  if (!story) return null;
+  return (
+    <div id="story-section" style={{ marginTop: "1.5rem" }}>
+      <h4>The last 30 days</h4>
+      <Punchcard cells={story.cells} days={story.days} now={story.now} />
+    </div>
+  );
+}
+
+function App({ store, topology, initial }: {
+  store: StatusStore; topology: Topology; initial: InitialData;
+}) {
   const state = useSyncExternalStore(store.subscribe, store.getState);
 
   useEffect(() => {
@@ -27,6 +52,7 @@ function App({ store, topology }: { store: StatusStore; topology: Topology }) {
       <VerdictBanner verdict={state.verdict} connected={state.connected} />
       <Tree store={store} topology={topology} targets={state.targets}
         pools={state.pools} recent={state.recentTransitions} />
+      <LastThirtyDays initial={initial} />
       <StatusBar latest={state.latestTransition} recent={state.recentTransitions}
         connected={state.connected} />
     </div>
@@ -54,5 +80,5 @@ if (el && dataEl) {
   });
 
   const topology: Topology = { parents: initial.parents, poolMembers: initial.poolMembers };
-  createRoot(el).render(<App store={store} topology={topology} />);
+  createRoot(el).render(<App store={store} topology={topology} initial={initial} />);
 }

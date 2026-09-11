@@ -7,7 +7,7 @@ namespace ConWatch.Pages;
 
 public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth health,
     Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
-    ConWatch.Auth.AdminGate gate) : PageModel
+    ConWatch.Auth.AdminGate gate, ConPersistence.SettingsStore settingsStore) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -62,11 +62,42 @@ public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth hea
             }
         }
 
+        // Topology roles for the punchcard/ledger: anchors = the verdict
+        // pool's members; trunk = the union of their ancestor chains.
+        var anchorNames = new List<string>();
+        var trunkNames = new List<string>();
+        var anchorPoolName = await settingsStore.GetAsync(ConPersistence.SettingKeys.AnchorPool);
+        if (engine is not null && anchorPoolName is { Length: > 0 })
+        {
+            var pool = engine.Graph.Pools.Values.FirstOrDefault(p =>
+                p.Name.Equals(anchorPoolName, StringComparison.OrdinalIgnoreCase));
+            if (pool is not null)
+            {
+                foreach (var memberId in pool.MemberTargetIds)
+                {
+                    if (!engine.Graph.Targets.TryGetValue(memberId, out var member))
+                        continue;
+                    anchorNames.Add(member.Name);
+                    var parentId = member.ParentId;
+                    while (parentId is { } pid && engine.Graph.Targets.TryGetValue(pid, out var ancestor))
+                    {
+                        if (!trunkNames.Contains(ancestor.Name))
+                            trunkNames.Add(ancestor.Name);
+                        parentId = ancestor.ParentId;
+                    }
+                }
+            }
+        }
+
         InitialDataJson = JsonSerializer.Serialize(new
         {
             Snapshot = StatusSnapshotBuilder.Build(engine),
             Parents = parents,
             PoolMembers = poolMembers,
+            TrunkNames = trunkNames,
+            AnchorNames = anchorNames,
+            WeatherThreshold = await settingsStore.GetIntAsync(
+                ConPersistence.SettingKeys.WeatherThreshold, 2),
         }, JsonOptions);
         return Page();
     }
