@@ -1,8 +1,9 @@
 // The event strip: "is our internet down — and what was it doing just now?"
 // One horizontal row of continuous 1-minute bins ending at this moment,
-// painted with the same encoding as everything else. Pale green = fine.
+// painted with the same encoding as everything else. Healthy bins wear the
+// VIVID green: at 10px the pale surface tint is illegible.
 import { useEffect, useRef, useState } from "react";
-import { HEALTHY, markCss, type Mark } from "../lib/encoding";
+import { HEALTHY_VIVID, markCss, type Mark } from "../lib/encoding";
 import { fetchStrip, type StoryTopology } from "../lib/story";
 import { describeMark } from "./marks";
 
@@ -56,7 +57,7 @@ export function EventStrip({ topology }: { topology: StoryTopology }) {
               if (mark?.shape === "dot") {
                 return (
                   <span key={i} title={binTitle(i, mark)}
-                    style={{ width: CELL, height: 10, borderRadius: 2, background: HEALTHY,
+                    style={{ width: CELL, height: 10, borderRadius: 2, background: HEALTHY_VIVID,
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0 }}>
                     <span style={{ width: 7, height: 7, borderRadius: "50%", ...markCss(mark) }} />
@@ -65,12 +66,12 @@ export function EventStrip({ topology }: { topology: StoryTopology }) {
               }
               return <span key={i} title={binTitle(i, mark)}
                 style={{ width: CELL, height: 10, borderRadius: 2, flexShrink: 0,
-                  ...(mark ? markCss(mark) : { background: HEALTHY }) }} />;
+                  ...(mark ? markCss(mark) : { background: HEALTHY_VIVID }) }} />;
             })}
             <span style={{ fontSize: "0.65rem", opacity: 0.55, whiteSpace: "nowrap" }}>now</span>
           </div>
           <div style={{ fontSize: "0.65rem", opacity: 0.55, marginTop: 2 }}>
-            the last {binCount} minutes — pale green is quiet; warm marks are trouble out there,
+            the last {binCount} minutes — green is quiet; warm marks are trouble out there,
             grey marks are your own gear
           </div>
         </>

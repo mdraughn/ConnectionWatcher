@@ -23,8 +23,13 @@ export const RAMP: Record<Hue, Record<Depth, string>> = {
 /** Unreachable behind a down parent: inherited, no data, no blame. */
 export const HATCH = "repeating-linear-gradient(45deg, #c9c9c9 0 3px, #f2f2f2 3px 6px)";
 
-/** Healthy ribbon baseline. */
+/** Healthy ribbon baseline — deliberately pale for large surfaces (punchcard,
+ *  ribbon boards) where a vivid green would overwhelm. */
 export const HEALTHY = "#eaf3ec";
+
+/** Healthy for SMALL marks (the event strip's 10px bins), where the pale
+ *  tint is illegible and "all green" is the whole message. */
+export const HEALTHY_VIVID = "#4fa96e";
 
 export function markCss(mark: Mark): { background: string } {
   if (mark.ambiguous) {
@@ -53,6 +58,23 @@ export function ribbonFill(role: RowRole, state: string): string {
     case "Starting":
     case "Initializing": return "#dfe8e2";
     default: return "#e6e6e6"; // Unknown
+  }
+}
+
+/** Ribbon fill for the VERDICT subject's timeline. The verdict subject logs
+ *  HostStates with the verdict NAME alongside (segment evidence), and the name
+ *  carries the attribution: Link* = your gear (grey ramp), weather = out there
+ *  (warm), a site incident = pale warm, healthy = quiet. Without a
+ *  recognizable name (e.g. the residual segment before the first in-range
+ *  transition) fall back to the plain state mapping. */
+export function verdictFill(verdictName: string | null, state: string): string {
+  switch (verdictName) {
+    case "LinkDown": return RAMP.grey.out;
+    case "LinkDegraded": return RAMP.grey.degraded;
+    case "InternetWeather": return RAMP.warm.degraded;
+    case "SiteIncident": return RAMP.warm.glitch;
+    case "Healthy": return HEALTHY;
+    default: return ribbonFill("other", state);
   }
 }
 

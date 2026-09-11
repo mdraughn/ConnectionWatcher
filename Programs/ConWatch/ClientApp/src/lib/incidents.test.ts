@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HATCH, markCss, markRank, RAMP, ribbonFill } from "./encoding";
+import { HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill, verdictFill } from "./encoding";
 import {
   buildLedger, glitchMark, punchcardCells, stripBins, verdictWindows, windowMark,
 } from "./incidents";
@@ -94,6 +94,29 @@ describe("ribbonFill", () => {
     expect(ribbonFill("other", "Recovering")).toBe(RAMP.warm.degraded);
     expect(ribbonFill("anchor", "Unreachable")).toBe("hatch");
     expect(ribbonFill("anchor", "Responding")).toBe("#eaf3ec");
+  });
+});
+
+describe("verdictFill", () => {
+  it("attributes by verdict name: link = grey, weather/site = warm, healthy = quiet", () => {
+    expect(verdictFill("LinkDown", "Down")).toBe(RAMP.grey.out);
+    expect(verdictFill("LinkDegraded", "Faltering")).toBe(RAMP.grey.degraded);
+    expect(verdictFill("InternetWeather", "Faltering")).toBe(RAMP.warm.degraded);
+    expect(verdictFill("SiteIncident", "Responding")).toBe(RAMP.warm.glitch);
+    expect(verdictFill("Healthy", "Responding")).toBe(HEALTHY);
+  });
+
+  it("falls back to the plain state mapping without a recognizable name", () => {
+    expect(verdictFill(null, "Down")).toBe(RAMP.warm.out);
+    expect(verdictFill("something else", "Responding")).toBe(HEALTHY);
+    expect(verdictFill(null, "Starting")).toBe("#dfe8e2");
+  });
+});
+
+describe("healthy tokens", () => {
+  it("keeps the pale surface tint and the vivid small-mark green distinct", () => {
+    expect(HEALTHY).not.toBe(HEALTHY_VIVID);
+    expect(HEALTHY_VIVID).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
 
