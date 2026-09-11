@@ -40,6 +40,10 @@ public class VerdictCoordinator : IDisposable
 
     public VerdictState CurrentVerdict { get; private set; } = VerdictState.Unknown;
     public string? CurrentDetail { get; private set; }
+
+    /// <summary>The ISP/operator being blamed by a Link* verdict (from the
+    /// blamed trunk target's Operator tag), else null.</summary>
+    public string? CurrentOperator { get; private set; }
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
@@ -83,8 +87,9 @@ public class VerdictCoordinator : IDisposable
     {
         lock (_lock)
         {
-            var (verdict, detail) = Classify();
+            var (verdict, detail, operatorName) = Classify();
             CurrentDetail = detail; // detail carries live counts — always refresh
+            CurrentOperator = operatorName;
             if (verdict == CurrentVerdict)
                 return;
 
@@ -110,22 +115,32 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
-    private (VerdictState, string) Classify()
+    private (VerdictState, string, string? Operator) Classify()
     {
+        // Link verdicts name the blamed hop's operator ("Comcast") when tagged.
+        static (VerdictState, string, string?) Blame(VerdictState verdict, TargetMonitor monitor, string state)
+        {
+            var op = monitor.Target.Operator;
+            var wording = op is { Length: > 0 }
+                ? $"{verdict}: {op} — {monitor.Target.Name} is {state}"
+                : $"{verdict}: {monitor.Target.Name} is {state}";
+            return (verdict, wording, op);
+        }
+
         var downAncestor = _ancestors.Where(a => a.Monitor.CurrentState == HostState.Down)
             .OrderByDescending(a => a.Depth).FirstOrDefault();
         if (downAncestor.Monitor is not null)
-            return (VerdictState.LinkDown, $"LinkDown: {downAncestor.Monitor.Target.Name} is Down");
+            return Blame(VerdictState.LinkDown, downAncestor.Monitor, "Down");
 
         var faltAncestor = _ancestors.Where(a => a.Monitor.CurrentState == HostState.Faltering)
             .OrderByDescending(a => a.Depth).FirstOrDefault();
         if (faltAncestor.Monitor is not null)
-            return (VerdictState.LinkDegraded, $"LinkDegraded: {faltAncestor.Monitor.Target.Name} is Faltering");
+            return Blame(VerdictState.LinkDegraded, faltAncestor.Monitor, "Faltering");
 
         var determined = _anchors.Where(a => a.CurrentState
             is not (HostState.Initializing or HostState.Starting)).ToList();
         if (determined.Count == 0)
-            return (VerdictState.Unknown, "No anchors determined yet");
+            return (VerdictState.Unknown, "No anchors determined yet", null);
 
         var degraded = determined.Where(a => a.CurrentState
             is HostState.Down or HostState.Faltering or HostState.Recovering).ToList();
@@ -138,11 +153,11 @@ public class VerdictCoordinator : IDisposable
             : "";
 
         if (degraded.Count == 0)
-            return (VerdictState.Healthy, $"Healthy: {determined.Count} anchors responding{qualifier}");
+            return (VerdictState.Healthy, $"Healthy: {determined.Count} anchors responding{qualifier}", null);
         if (degraded.Count < _weatherThreshold)
-            return (VerdictState.SiteIncident, $"SiteIncident: {List()}{qualifier}");
+            return (VerdictState.SiteIncident, $"SiteIncident: {List()}{qualifier}", null);
         return (VerdictState.InternetWeather,
-            $"InternetWeather: {degraded.Count} of {determined.Count} anchors degraded ({List()})");
+            $"InternetWeather: {degraded.Count} of {determined.Count} anchors degraded ({List()})", null);
     }
 
     private static HostState Map(VerdictState v) => v switch

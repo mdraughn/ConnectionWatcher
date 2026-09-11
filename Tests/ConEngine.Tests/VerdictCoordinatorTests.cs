@@ -32,7 +32,7 @@ public class VerdictCoordinatorTests
             Targets =
             [
                 new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
-                new TargetConfig { Name = "Modem", Address = "192.168.100.1", Parent = "Router", Profile = "Internal" },
+                new TargetConfig { Name = "Modem", Address = "192.168.100.1", Parent = "Router", Profile = "Internal", Operator = "Comcast" },
                 new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Modem" },
                 new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Modem" },
                 new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Modem" },
@@ -82,6 +82,31 @@ public class VerdictCoordinatorTests
         Assert.Equal("Healthy", t.Reason.Verdict);
         Assert.Equal(TransitionSubjectKind.Verdict, t.Kind);
         Assert.Equal(VerdictCoordinator.SubjectId, t.TargetId);
+    }
+
+    [Fact]
+    public void Link_verdicts_name_the_operator_when_the_blamed_hop_has_one()
+    {
+        AllHealthy();
+        Feed("Modem", 20, false); // Modem carries Operator = "Comcast"
+        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Comcast — Modem is Down", _verdict.CurrentDetail);
+        Assert.Equal("Comcast", _verdict.CurrentOperator);
+
+        Feed("Modem", 20, true);
+        AllHealthy(); // released anchors re-prove from Starting
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Null(_verdict.CurrentOperator);
+    }
+
+    [Fact]
+    public void Link_verdicts_without_an_operator_keep_plain_wording()
+    {
+        AllHealthy();
+        Feed("Router", 20, false); // Router has no operator (Mark's own gear)
+        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Router is Down", _verdict.CurrentDetail);
+        Assert.Null(_verdict.CurrentOperator);
     }
 
     [Fact]

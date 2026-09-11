@@ -171,7 +171,11 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         var verdict = engine.Verdict?.CurrentVerdict.ToString() ?? "Unknown";
         await PublishAsync(client, _topics.VerdictState, verdict, retain: true, ct);
         await PublishAsync(client, _topics.VerdictAttributes,
-            System.Text.Json.JsonSerializer.Serialize(new { detail = engine.Verdict?.CurrentDetail }), retain: true, ct);
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                detail = engine.Verdict?.CurrentDetail,
+                @operator = engine.Verdict?.CurrentOperator,
+            }), retain: true, ct);
         await PublishAsync(client, _topics.InternetState, StateMapping.InternetPayload(verdict), retain: true, ct);
 
         lock (_lock)
@@ -204,9 +208,15 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
             case TransitionSubjectKind.Verdict:
                 var verdict = t.Reason.Verdict ?? "Unknown";
+                WatcherEngine? engineForOperator;
+                lock (_lock) { engineForOperator = _engine; }
                 await PublishAsync(client, _topics.VerdictState, verdict, retain: true, ct);
                 await PublishAsync(client, _topics.VerdictAttributes,
-                    System.Text.Json.JsonSerializer.Serialize(new { detail = t.Reason.Detail }), retain: true, ct);
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        detail = t.Reason.Detail,
+                        @operator = engineForOperator?.Verdict?.CurrentOperator,
+                    }), retain: true, ct);
                 await PublishAsync(client, _topics.InternetState, StateMapping.InternetPayload(verdict), retain: true, ct);
                 break;
         }
