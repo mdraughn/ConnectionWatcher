@@ -4,7 +4,9 @@ import { createRoot } from "react-dom/client";
 import { StateRibbon } from "./components/StateRibbon";
 import { StatsRow } from "./components/StatsRow";
 import { TimeChart } from "./components/TimeChart";
+import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
+import { fetchStory, type Story, type StoryTopology } from "./lib/story";
 import { clipAtReset, incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
 import { chronicTargets, type GlitchItem } from "./lib/glitchData";
 import type { RollupPoint, TransitionEvent } from "./lib/types";
@@ -43,6 +45,27 @@ async function fetchGlitches(from: Date, to: Date): Promise<GlitchItem[]> {
   const response = await fetch(url);
   if (!response.ok) return [];
   return (await response.json()).items as GlitchItem[];
+}
+
+function RecurrenceSection({ rangeKey, to }: { rangeKey: string; to: Date }) {
+  const topology = JSON.parse(
+    document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
+  const days = rangeKey === "30d" ? 30 : rangeKey === "7d" ? 7 : 1;
+  const [story, setStory] = useState<Story | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetchStory(topology, days).then((s) => { if (live) setStory(s); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [days, to.getTime()]);
+
+  if (!story) return null;
+  return (
+    <div id="recurrence-section">
+      <h4>Recurrence punchcard <small>(all targets; hours &times; days)</small></h4>
+      <Punchcard cells={story.cells} days={story.days} now={story.now} />
+    </div>
+  );
 }
 
 function GlitchSection({ from, to, rangeKey }: { from: Date; to: Date; rangeKey: string }) {
@@ -179,6 +202,8 @@ function App({ subjects }: { subjects: Subject[] }) {
       {subject.kind !== "target" && (
         <p style={{ opacity: 0.7 }}>Pools and the verdict have no ping rollups; their story is the timeline above.</p>
       )}
+
+      <RecurrenceSection rangeKey={rangeKey} to={to} />
 
       <h4>All targets, cause-aligned</h4>
       <RibbonBoard rangeStart={from} rangeEnd={to}

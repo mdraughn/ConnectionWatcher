@@ -102,6 +102,42 @@ export function punchcardCells(windows: VerdictWindow[], windowMarks: Map<Verdic
   return cells;
 }
 
+/**
+ * The event strip: `binCount` continuous bins of `binMs` ending at `now`,
+ * oldest first. Each bin holds the highest-rank mark of any incident
+ * overlapping it, or null for healthy time. Incidents paint EVERY bin they
+ * overlap (a 4-minute outage fills 4 one-minute bins); instantaneous events
+ * still fill their bin.
+ */
+export function stripBins(windows: VerdictWindow[], windowMarks: Map<VerdictWindow, Mark>,
+  glitches: GlitchItem[], trunkNames: Set<string>, binMs: number, binCount: number,
+  now: Date): Array<Mark | null> {
+  const bins: Array<Mark | null> = new Array(binCount).fill(null);
+  const binIndex = (ms: number) =>
+    binCount - 1 - Math.floor((now.getTime() - ms) / binMs);
+
+  const paint = (fromIso: string, toIso: string, mark: Mark) => {
+    const from = Date.parse(fromIso);
+    const to = Date.parse(toIso);
+    if (Number.isNaN(from) || Number.isNaN(to)) return;
+    const first = Math.max(0, binIndex(from));
+    const last = Math.min(binCount - 1, binIndex(Math.max(from, to)));
+    for (let i = first; i <= last; i++) {
+      const existing = bins[i];
+      if (existing === null || markRank(mark) > markRank(existing))
+        bins[i] = mark;
+    }
+  };
+
+  for (const w of windows) {
+    const mark = windowMarks.get(w);
+    if (mark) paint(w.from, w.to, mark);
+  }
+  for (const g of glitches)
+    paint(g.startUtc, g.endUtc, glitchMark(g, trunkNames));
+  return bins;
+}
+
 export interface LedgerItem {
   at: string;
   endAt: string;

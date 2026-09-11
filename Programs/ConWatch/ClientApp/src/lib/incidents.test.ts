@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HATCH, markCss, markRank, RAMP, ribbonFill } from "./encoding";
 import {
-  buildLedger, glitchMark, punchcardCells, verdictWindows, windowMark,
+  buildLedger, glitchMark, punchcardCells, stripBins, verdictWindows, windowMark,
 } from "./incidents";
 import type { GlitchItem } from "./glitchData";
 import type { TransitionEvent } from "./types";
@@ -118,6 +118,42 @@ describe("punchcardCells", () => {
     expect(day9.mark).toEqual({ shape: "bar", hue: "grey", depth: "out" });
     expect(day9.count).toBe(3);
     expect(cells.get("2026-9-15-3")!.mark.shape).toBe("dot");
+  });
+});
+
+describe("stripBins", () => {
+  const MIN = 60_000;
+  const now = new Date("2026-09-11T12:00:00Z");
+  const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * MIN).toISOString();
+
+  it("paints every bin an incident overlaps, newest bin at the end", () => {
+    const w = { kind: "LinkDown" as const, from: iso(5), to: iso(2), detail: null };
+    const mark = { shape: "bar" as const, hue: "grey" as const, depth: "out" as const };
+    const bins = stripBins([w], new Map([[w, mark]]), [], TRUNK, MIN, 10, now);
+    expect(bins).toHaveLength(10);
+    // bins are oldest→newest: minutes 9..0 ago; the outage covers minutes 5..2 ago.
+    expect(bins[0]).toBeNull(); // 9 min ago: healthy
+    expect(bins[4]).toEqual(mark); // 5 min ago
+    expect(bins[7]).toEqual(mark); // 2 min ago (inclusive end bin)
+    expect(bins[9]).toBeNull(); // now: recovered
+  });
+
+  it("an ongoing incident paints through the newest bin", () => {
+    const w = { kind: "LinkDegraded" as const, from: iso(3), to: now.toISOString(), detail: null };
+    const mark = { shape: "bar" as const, hue: "grey" as const, depth: "degraded" as const };
+    const bins = stripBins([w], new Map([[w, mark]]), [], TRUNK, MIN, 10, now);
+    expect(bins[9]).toEqual(mark);
+  });
+
+  it("glitches paint at least one bin and lose to bars in the same bin", () => {
+    const w = { kind: "InternetWeather" as const, from: iso(4), to: iso(4), detail: null };
+    const weather = { shape: "bar" as const, hue: "warm" as const, depth: "degraded" as const };
+    const bins = stripBins([w], new Map([[w, weather]]),
+      [glitch({ startUtc: iso(4), endUtc: iso(4) }),      // same bin as weather: loses
+       glitch({ startUtc: iso(8), endUtc: iso(8) })],     // its own bin: dot wins
+      TRUNK, MIN, 10, now);
+    expect(bins[5]).toEqual(weather);
+    expect(bins[1]!.shape).toBe("dot");
   });
 });
 

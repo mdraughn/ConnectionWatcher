@@ -10,6 +10,7 @@ public class HistoryModel(WatcherHostService host,
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public string SubjectsJson { get; private set; } = "[]";
+    public string TopologyJson { get; private set; } = "{}";
 
     public async Task OnGetAsync()
     {
@@ -62,6 +63,13 @@ public class HistoryModel(WatcherHostService host,
                     Id = VerdictCoordinator.SubjectId, Name = "Internet (verdict)",
                     Kind = "verdict", Parent = (string?)null, Role = "other",
                 });
+            TopologyJson = JsonSerializer.Serialize(new
+            {
+                TrunkNames = trunkIds.Select(id => engine.Graph.Targets[id].Name).ToList(),
+                AnchorNames = anchorIds.Select(id => engine.Graph.Targets[id].Name).ToList(),
+                WeatherThreshold = await settingsStore.GetIntAsync(
+                    ConPersistence.SettingKeys.WeatherThreshold, 2),
+            }, JsonOptions);
         }
         SubjectsJson = JsonSerializer.Serialize(subjects, JsonOptions);
     }

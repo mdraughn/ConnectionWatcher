@@ -3,7 +3,7 @@
 import type { Mark } from "./encoding";
 import type { GlitchItem } from "./glitchData";
 import {
-  buildLedger, punchcardCells, verdictWindows, windowMark,
+  buildLedger, punchcardCells, stripBins, verdictWindows, windowMark,
   type LedgerItem, type PunchcardCell, type VerdictWindow,
 } from "./incidents";
 import type { TransitionEvent } from "./types";
@@ -21,9 +21,16 @@ export interface Story {
   now: Date;
 }
 
-export async function fetchStory(topology: StoryTopology, days: number): Promise<Story> {
+interface Derived {
+  windows: VerdictWindow[];
+  marks: Map<VerdictWindow, Mark>;
+  glitches: GlitchItem[];
+  trunk: Set<string>;
+  now: Date;
+}
+
+async function fetchAndDerive(topology: StoryTopology, from: Date): Promise<Derived> {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
   const trunk = new Set(topology.trunkNames ?? []);
   const anchors = new Set(topology.anchorNames ?? []);
   const threshold = topology.weatherThreshold ?? 2;
@@ -46,10 +53,25 @@ export async function fetchStory(topology: StoryTopology, days: number): Promise
   const marks = new Map<VerdictWindow, Mark>(
     windows.map((w) => [w, windowMark(w, anchorDowns(w), threshold)]));
 
+  return { windows, marks, glitches, trunk, now };
+}
+
+export async function fetchStory(topology: StoryTopology, days: number): Promise<Story> {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+  const d = await fetchAndDerive(topology, from);
   return {
-    cells: punchcardCells(windows, marks, glitches, trunk, days, now),
-    ledger: buildLedger(windows, marks, glitches, trunk),
+    cells: punchcardCells(d.windows, d.marks, d.glitches, d.trunk, days, d.now),
+    ledger: buildLedger(d.windows, d.marks, d.glitches, d.trunk),
     days,
-    now,
+    now: d.now,
   };
+}
+
+/** Bins for the dashboard event strip: `binCount` × `binMs` ending now. */
+export async function fetchStrip(topology: StoryTopology, binMs: number,
+  binCount: number): Promise<Array<Mark | null>> {
+  const from = new Date(Date.now() - binMs * binCount);
+  const d = await fetchAndDerive(topology, from);
+  return stripBins(d.windows, d.marks, d.glitches, d.trunk, binMs, binCount, d.now);
 }
