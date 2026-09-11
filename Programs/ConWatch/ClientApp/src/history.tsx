@@ -1,5 +1,5 @@
 // History island: subject + range pickers, stats, charts, and the ribbon.
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StateRibbon } from "./components/StateRibbon";
 import { StatsRow } from "./components/StatsRow";

@@ -67,10 +67,11 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 
 ## In design (noted 2026-09-10)
 
-- **Incident display redesign** — chosen: cause-aligned ribbons (History),
-  punchcard month (dashboard), incident ledger (shared encoding). Spec:
-  `specs/2026-09-10-incident-display-redesign-design.md`. Plan deferred
-  until dual-WAN topology settles.
+- ~~**Incident display redesign**~~ — DONE 2026-09-11: punchcard + ledger on
+  the dashboard, cause-aligned ribbon board on History, shared encoding via
+  reusable mark primitives (`marks.tsx`, `encoding.ts`) and a page-agnostic
+  story lib. Twin WAN lanes still pending failover groups. Spec:
+  `specs/2026-09-10-incident-display-redesign-design.md`.
 - **Dual-WAN failover groups** — twin External Router lanes; active-path
   detection by RTT asymmetry (ping both ISPs' public edge routers; the
   standby answers "the long way around"); trunk becomes an or-parent group;
