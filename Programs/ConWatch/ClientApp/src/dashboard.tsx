@@ -2,6 +2,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { EventStrip } from "./components/EventStrip";
+import { GlitchSection } from "./components/GlitchSection";
 import { Ledger } from "./components/Ledger";
 import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
@@ -33,7 +34,7 @@ function LastThirtyDays({ initial }: { initial: InitialData }) {
   return (
     <div id="story-section" style={{ marginTop: "1.5rem" }}>
       <h4>What happened — the last 30 days</h4>
-      <Ledger items={story.ledger} days={story.days} moreHref="/History" />
+      <Ledger items={story.ledger} days={story.days} maxItems={10} moreHref="/History" />
     </div>
   );
 }
@@ -48,6 +49,12 @@ function App({ store, topology, initial }: {
     return () => clearInterval(timer);
   }, [store]);
 
+  // Recent glitches cover the last 24 h, fixed at page load.
+  const [glitchRange] = useState(() => {
+    const to = new Date();
+    return { from: new Date(to.getTime() - 24 * 3_600_000), to };
+  });
+
   return (
     <div>
       <VerdictBanner verdict={state.verdict} connected={state.connected} />
@@ -55,6 +62,10 @@ function App({ store, topology, initial }: {
       <Tree store={store} topology={topology} targets={state.targets}
         pools={state.pools} recent={state.recentTransitions} />
       <LastThirtyDays initial={initial} />
+      <div style={{ marginTop: "1.5rem" }}>
+        <GlitchSection from={glitchRange.from} to={glitchRange.to}
+          subtitle="all targets, last 24 h" />
+      </div>
       <StatusBar latest={state.latestTransition} recent={state.recentTransitions}
         connected={state.connected} />
     </div>

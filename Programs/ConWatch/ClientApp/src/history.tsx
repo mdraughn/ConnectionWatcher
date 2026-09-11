@@ -1,6 +1,7 @@
 // History island: subject + range pickers, stats, charts, and the ribbon.
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Ledger } from "./components/Ledger";
 import { StateRibbon } from "./components/StateRibbon";
 import { StatsRow } from "./components/StatsRow";
 import { TimeChart } from "./components/TimeChart";
@@ -8,7 +9,6 @@ import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
 import { fetchStory, type Story, type StoryTopology } from "./lib/story";
 import { clipAtReset, incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
-import { chronicTargets, type GlitchItem } from "./lib/glitchData";
 import type { RollupPoint, TransitionEvent } from "./lib/types";
 
 interface Subject {
@@ -40,13 +40,6 @@ async function fetchTransitions(subjectId: string, from: Date, to: Date): Promis
   return items.reverse(); // API is newest-first; we want chronological
 }
 
-async function fetchGlitches(from: Date, to: Date): Promise<GlitchItem[]> {
-  const url = `/api/v1/glitches?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000`;
-  const response = await fetch(url);
-  if (!response.ok) return [];
-  return (await response.json()).items as GlitchItem[];
-}
-
 function RecurrenceSection({ rangeKey, to }: { rangeKey: string; to: Date }) {
   const topology = JSON.parse(
     document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
@@ -68,46 +61,24 @@ function RecurrenceSection({ rangeKey, to }: { rangeKey: string; to: Date }) {
   );
 }
 
-function GlitchSection({ from, to, rangeKey }: { from: Date; to: Date; rangeKey: string }) {
-  const [glitches, setGlitches] = useState<GlitchItem[]>([]);
+const LEDGER_DAYS = 90;
+
+function LedgerSection() {
+  const topology = JSON.parse(
+    document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
+  const [story, setStory] = useState<Story | null>(null);
 
   useEffect(() => {
     let live = true;
-    fetchGlitches(from, to).then((g) => { if (live) setGlitches(g); });
+    fetchStory(topology, LEDGER_DAYS).then((s) => { if (live) setStory(s); }).catch(() => undefined);
     return () => { live = false; };
-  }, [rangeKey, from, to]);
+  }, []);
 
-  const chronic = chronicTargets(glitches, to);
-  const recent = glitches.slice(0, 15);
-
+  if (!story) return null;
   return (
-    <div id="glitch-section">
-      <h4>Recent glitches <small>(all targets; the recurrence punchcard lives on the dashboard)</small></h4>
-      {chronic.length > 0 && (
-        <p>⚠ Chronically glitchy (3+ separate hours in the last 24 h): <b>{chronic.join(", ")}</b></p>
-      )}
-      {recent.length === 0 && (
-        <p style={{ opacity: 0.7 }}>No glitches recorded in this range. Quiet is good.</p>
-      )}
-      {recent.length > 0 && (
-        <table>
-          <thead>
-            <tr><th>When</th><th>Subject</th><th>Class</th><th>Lost</th><th>Duration</th><th>Detail</th></tr>
-          </thead>
-          <tbody>
-            {recent.map((g) => (
-              <tr key={g.id}>
-                <td>{new Date(g.startUtc).toLocaleString()}</td>
-                <td>{g.targetName}</td>
-                <td>{g.class === "Internet" ? "🌐 internet" : "target"}</td>
-                <td>{g.lostCount}/{g.sampleCount}</td>
-                <td>{Math.max(1, Math.round((new Date(g.endUtc).getTime() - new Date(g.startUtc).getTime()) / 1000))}s</td>
-                <td>{g.detail ?? ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    <div id="ledger-section">
+      <h4>What happened — the last {story.days} days</h4>
+      <Ledger items={story.ledger} days={story.days} maxItems={500} />
     </div>
   );
 }
@@ -185,7 +156,8 @@ function App({ subjects }: { subjects: Subject[] }) {
         longestOutageMs={stats.longestOutageMs} unreachableMs={stats.unreachableMs} avgRtt={avgRtt} />
 
       <h4>State timeline</h4>
-      <StateRibbon segments={segments} rangeStart={from} rangeEnd={to} resetAt={resetAt} />
+      <StateRibbon segments={segments} rangeStart={from} rangeEnd={to} resetAt={resetAt}
+        kind={subject.kind} role={subject.role} />
 
       {subject.kind === "target" && (
         <>
@@ -213,7 +185,7 @@ function App({ subjects }: { subjects: Subject[] }) {
             parent: s.parent ?? null, role: s.role ?? "other",
           }))} />
 
-      <GlitchSection from={from} to={to} rangeKey={rangeKey} />
+      <LedgerSection />
     </div>
   );
 }
