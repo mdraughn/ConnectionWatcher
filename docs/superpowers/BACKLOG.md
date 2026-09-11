@@ -75,9 +75,11 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
   detection by RTT asymmetry (ping both ISPs' public edge routers; the
   standby answers "the long way around"); trunk becomes an or-parent group;
   LinkDown = both lanes down. Waiting on the second ISP's install.
-- **ISP naming** — `Operator` tag on trunk targets so verdicts/ledger/report
-  say "Comcast is down"; migrates onto lane entities when failover groups
-  land. Notes: `specs/2026-09-10-isp-naming-and-clone-install-notes.md`.
+- ~~**ISP naming**~~ — DONE 2026-09-11: `Operator` tag end to end (schema,
+  CRUD/import/snapshot, Targets form, wizard question, Link-verdict wording,
+  report title, MQTT operator attribute). Migrates onto lane entities when
+  failover groups land. Notes:
+  `specs/2026-09-10-isp-naming-and-clone-install-notes.md`.
 - **Clone-install + master enable (switch-over)** — wizard option "copy from
   a running node" via the snapshot API/importer; `Engine.Enabled` switch +
   admin API; take-over choreography (disable old → final sync → enable new)

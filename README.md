@@ -63,7 +63,11 @@ ConWatch serves its UI at the root:
   corroboration sweep across all anchors and the trunk, so even a few-second
   wobble yields enough evidence to classify.
 - **Config** (`/Config/Targets`, `/Config/Profiles`, `/Config/Pools`) — CRUD
-  with inline validation errors, plus whole-config export/import.
+  with inline validation errors, plus whole-config export/import. Targets can
+  carry an optional **ISP/operator name** ("Comcast"): link verdicts then say
+  "LinkDown: Comcast — External Router is Down", the ISP report titles itself
+  with the provider, and the MQTT verdict attributes carry it. The setup
+  wizard asks once ("Who is your internet provider?") and tags the WAN hop.
 - **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
   monitored targets with the right parent pre-filled.
 
