@@ -87,7 +87,17 @@ public class HistoryApiTests : IDisposable
     {
         await ConfigApiTests.SeedHomeAsync(_client);
         await ConfigApiTests.Eventually(async () => await StateOf("Google") == "Responding");
-        await _factory.Services.GetRequiredService<TransitionRecorder>().FlushAsync();
+
+        // Recording is asynchronous (background loop + our flush can race on
+        // the channel), so poll for the precondition rather than assuming one
+        // flush settles the world.
+        var recorder = _factory.Services.GetRequiredService<TransitionRecorder>();
+        await ConfigApiTests.Eventually(async () =>
+        {
+            await recorder.FlushAsync();
+            var p = await GetJson("/api/v1/transitions?limit=2");
+            return p.GetProperty("items").GetArrayLength() == 2;
+        });
 
         var page = await GetJson("/api/v1/transitions?limit=2");
         Assert.Equal(2, page.GetProperty("items").GetArrayLength());

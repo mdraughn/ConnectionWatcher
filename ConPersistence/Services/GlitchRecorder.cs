@@ -17,6 +17,7 @@ public class GlitchRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
 {
     private readonly Channel<GlitchEvent> _channel = Channel.CreateBounded<GlitchEvent>(
         new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.DropOldest });
+    private readonly SemaphoreSlim _flushLock = new(1, 1);
     private IDisposable? _subscription;
 
     /// <summary>Subscribes to a glitch stream, replacing any prior subscription.</summary>
@@ -56,8 +57,23 @@ public class GlitchRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
         }
     }
 
-    /// <summary>Drains everything currently in the channel into the database.</summary>
+    /// <summary>Drains everything currently in the channel into the database.
+    /// Serialized like TransitionRecorder.FlushAsync (coalescing also depends
+    /// on batches staying whole).</summary>
     public async Task FlushAsync(CancellationToken ct = default)
+    {
+        await _flushLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await FlushCoreAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _flushLock.Release();
+        }
+    }
+
+    private async Task FlushCoreAsync(CancellationToken ct)
     {
         var batch = new List<GlitchEvent>();
         while (batch.Count < 500 && _channel.Reader.TryRead(out var g))

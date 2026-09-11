@@ -16,6 +16,7 @@ public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
 {
     private readonly Channel<TargetTransition> _channel = Channel.CreateBounded<TargetTransition>(
         new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.DropOldest });
+    private readonly SemaphoreSlim _flushLock = new(1, 1);
     private IDisposable? _subscription;
 
     /// <summary>Subscribes to a transition stream, replacing any prior subscription.</summary>
@@ -56,19 +57,29 @@ public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
         }
     }
 
-    /// <summary>Drains everything currently in the channel into the database.</summary>
+    /// <summary>Drains everything currently in the channel into the database.
+    /// Serialized: the background loop and a test-driven flush must not split
+    /// one batch between them (the loser would see a half-written log).</summary>
     public async Task FlushAsync(CancellationToken ct = default)
     {
-        var batch = new List<TargetTransition>();
-        while (batch.Count < 500 && _channel.Reader.TryRead(out var t))
-            batch.Add(t);
-        if (batch.Count == 0)
-            return;
+        await _flushLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var batch = new List<TargetTransition>();
+            while (batch.Count < 500 && _channel.Reader.TryRead(out var t))
+                batch.Add(t);
+            if (batch.Count == 0)
+                return;
 
-        await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
-        db.Transitions.AddRange(batch.Select(ToRow));
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        log.LogDebug("Recorded {Count} transitions", batch.Count);
+            await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+            db.Transitions.AddRange(batch.Select(ToRow));
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            log.LogDebug("Recorded {Count} transitions", batch.Count);
+        }
+        finally
+        {
+            _flushLock.Release();
+        }
     }
 
     private static TransitionRow ToRow(TargetTransition t) => new()

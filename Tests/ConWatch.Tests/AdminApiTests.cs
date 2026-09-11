@@ -44,15 +44,26 @@ public class AdminApiTests : IDisposable
             return stats.GetProperty("tables").GetProperty("transitions").GetInt32() > 0;
         });
 
+        // The engine keeps running during this test, so new rows may land the
+        // instant the clear finishes. The promise is: everything RECORDED SO
+        // FAR is gone (and config survives) — assert by id watermark, not by
+        // expecting the world to hold still.
+        var lastBefore = (await _client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            "/api/v1/transitions?limit=1")).GetProperty("items")[0].GetProperty("id").GetInt64();
+
         var wrong = await _client.PostAsJsonAsync("/api/v1/admin/clear-history", new { confirm = "clear" });
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
 
         var ok = await _client.PostAsJsonAsync("/api/v1/admin/clear-history", new { confirm = "CLEAR" });
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
 
+        var afterItems = (await _client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            "/api/v1/transitions?limit=500")).GetProperty("items").EnumerateArray().ToList();
+        Assert.DoesNotContain(afterItems, i => i.GetProperty("id").GetInt64() <= lastBefore);
+
         var after = await Stats();
-        Assert.Equal(0, after.GetProperty("tables").GetProperty("transitions").GetInt32());
-        Assert.Equal(0, after.GetProperty("tables").GetProperty("rollups").GetInt32());
+        // Rollups: at most the freshly-flushed current minute since the clear.
+        Assert.True(after.GetProperty("tables").GetProperty("rollups").GetInt32() <= 1);
         Assert.Equal(3, after.GetProperty("tables").GetProperty("targets").GetInt32());
     }
 
