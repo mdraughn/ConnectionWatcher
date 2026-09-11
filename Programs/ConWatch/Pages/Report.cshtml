@@ -14,7 +14,7 @@
     <button onclick="window.print()">Print / save as PDF</button>
 </div>
 
-<h2>Internet connection report</h2>
+<h2>Internet connection report@(r.OperatorName is { Length: > 0 } ? $" — {r.OperatorName} service" : "")</h2>
 <p>
     <b>Period:</b> @r.FromUtc.ToString("yyyy-MM-dd HH:mm") — @r.ToUtc.ToString("yyyy-MM-dd HH:mm") UTC<br />
     <b>Monitored path:</b> @(r.PathNames.Count > 0 ? string.Join(" → ", r.PathNames) : "—")

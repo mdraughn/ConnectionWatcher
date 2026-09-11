@@ -18,12 +18,13 @@ public record TargetReportRow(string Name, string Address, bool IsAnchor,
 public record GlitchSummary(int TotalCount, int InternetCount,
     List<(int HourUtc, int Count)> TopHours, List<string> ChronicTargets);
 
-/// <summary>Everything the printable ISP report renders.</summary>
+/// <summary>Everything the printable ISP report renders. OperatorName is the
+/// distinct Operator tag(s) on the trunk targets ("Comcast", or "A / B").</summary>
 public record IspReport(DateTime FromUtc, DateTime ToUtc,
     List<string> PathNames, List<string> AnchorNames,
     TimeSpan LinkDownTime, TimeSpan LinkDegradedTime, TimeSpan WeatherTime,
     double? AnchorUptimePercent, List<ReportEpisode> Episodes, List<TargetReportRow> Targets,
-    GlitchSummary Glitches);
+    GlitchSummary Glitches, string? OperatorName = null);
 
 /// <summary>
 /// Builds the ISP evidence report. Attribution comes from the verdict history:
@@ -41,7 +42,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         await using var db = await dbFactory.CreateDbContextAsync();
 
         var (episodes, totals) = await BuildEpisodesAsync(db, fromUtc, toUtc);
-        var (pathNames, anchorNames) = await BuildTopologyAsync(db);
+        var (pathNames, anchorNames, operatorName) = await BuildTopologyAsync(db);
         var targets = await BuildTargetRowsAsync(db, fromUtc, toUtc, anchorNames);
 
         var anchorRows = targets.Where(t => t.IsAnchor).ToList();
@@ -50,7 +51,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         return new IspReport(fromUtc, toUtc, pathNames, anchorNames,
             totals.GetValueOrDefault("LinkDown"), totals.GetValueOrDefault("LinkDegraded"),
             totals.GetValueOrDefault("InternetWeather"), anchorUptime, episodes, targets,
-            await BuildGlitchSummaryAsync(db, fromUtc, toUtc));
+            await BuildGlitchSummaryAsync(db, fromUtc, toUtc), operatorName);
     }
 
     private static async Task<GlitchSummary> BuildGlitchSummaryAsync(
@@ -117,7 +118,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         return (episodes, totals);
     }
 
-    private async Task<(List<string> Path, List<string> Anchors)> BuildTopologyAsync(ConWatchDbContext db)
+    private async Task<(List<string> Path, List<string> Anchors, string? OperatorName)> BuildTopologyAsync(ConWatchDbContext db)
     {
         var anchorPoolName = await settings.GetAsync(SettingKeys.AnchorPool);
         var pool = anchorPoolName is { Length: > 0 }
@@ -125,7 +126,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
                 .SingleOrDefaultAsync(p => p.Name == anchorPoolName)
             : null;
         if (pool is null)
-            return ([], []);
+            return ([], [], null);
 
         var targets = await db.Targets.AsNoTracking().ToDictionaryAsync(t => t.Id);
         var anchors = pool.Members
@@ -138,14 +139,17 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
             .Select(m => targets.GetValueOrDefault(m.TargetId)?.ParentId)
             .Distinct().SingleOrDefault();
         var path = new List<string>();
+        var operators = new List<string>();
         var guard = new HashSet<Guid>();
         while (leafId is { } id && targets.TryGetValue(id, out var node) && guard.Add(id))
         {
             path.Add(node.Name);
+            if (node.Operator is { Length: > 0 } op && !operators.Contains(op))
+                operators.Add(op);
             leafId = node.ParentId;
         }
         path.Reverse();
-        return (path, anchors);
+        return (path, anchors, operators.Count > 0 ? string.Join(" / ", operators) : null);
     }
 
     private static async Task<List<TargetReportRow>> BuildTargetRowsAsync(ConWatchDbContext db,

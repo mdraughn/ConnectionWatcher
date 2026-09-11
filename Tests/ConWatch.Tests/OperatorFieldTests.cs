@@ -59,6 +59,22 @@ public class OperatorFieldTests : IDisposable
     }
 
     [Fact]
+    public async Task Report_title_names_the_trunk_operator()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client); // Router -> anchors + pool "Internet"
+        var trunk = Assert.Single(
+            (await ExportAsync()).Targets, t => t.Name == "Router");
+        await _client.PutAsJsonAsync($"/api/v1/targets/{trunk.Id}", new
+        {
+            id = trunk.Id, name = trunk.Name, address = trunk.Address,
+            parent = trunk.Parent, profile = trunk.Profile, @operator = "Comcast",
+        });
+
+        var html = await _client.GetStringAsync("/Report");
+        Assert.Contains("Internet connection report — Comcast service", html);
+    }
+
+    [Fact]
     public async Task Operator_survives_config_import_and_snapshot_round_trip()
     {
         await _client.PostAsJsonAsync("/api/v1/targets", new

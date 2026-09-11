@@ -1,6 +1,7 @@
 using ConEngine.Topology;
 using ConPersistence.Entities;
 using ConPersistence.Report;
+using Microsoft.EntityFrameworkCore;
 
 namespace ConPersistence.Tests;
 
@@ -149,6 +150,23 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(["Router", "Modem"], report.PathNames);
         Assert.Equal(2, report.AnchorNames.Count);
         Assert.Contains("Google", report.AnchorNames);
+    }
+
+    [Fact]
+    public async Task Report_names_the_operator_from_the_trunk()
+    {
+        var before = await _builder.BuildAsync(From, To);
+        Assert.Null(before.OperatorName); // no tags yet
+
+        await using (var db = _factory.CreateDbContext())
+        {
+            var modem = await db.Targets.SingleAsync(t => t.Name == "Modem");
+            modem.Operator = "Comcast";
+            await db.SaveChangesAsync();
+        }
+
+        var report = await _builder.BuildAsync(From, To);
+        Assert.Equal("Comcast", report.OperatorName);
     }
 
     [Fact]
