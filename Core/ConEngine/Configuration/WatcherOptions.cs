@@ -25,6 +25,8 @@ public class TargetConfig
     public string? Parent { get; set; }
     public string Profile { get; set; } = "External";
     public bool Enabled { get; set; } = true;
+    /// <summary>Optional operator/ISP name for attribution wording.</summary>
+    public string? Operator { get; set; }
 }
 
 /// <summary>A rotation pool, as authored in configuration.</summary>

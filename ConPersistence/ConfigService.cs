@@ -140,6 +140,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         row.ParentId = parentId;
         row.ProfileId = profile.Id;
         row.Enabled = dto.Enabled;
+        row.Operator = dto.Operator?.Trim() is { Length: > 0 } op ? op : null;
         return ConfigResult.Ok(row.Id);
     });
 
@@ -174,6 +175,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             ParentId = parents[0],
             ProfileId = profile.Id,
             Enabled = newTarget.Enabled,
+            Operator = newTarget.Operator?.Trim() is { Length: > 0 } op ? op : null,
         };
         db.Targets.Add(row);
         foreach (var child in children)
@@ -266,6 +268,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         {
             Id = t.Id, Name = t.Name, Address = t.Address,
             Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
+            Operator = t.Operator,
         }));
         options.Pools.AddRange(doc.Pools.Select(p => new PoolConfig
         {
@@ -311,6 +314,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             {
                 Id = id, Name = t.Name, Address = t.Address,
                 ProfileId = profileIds[t.Profile], Enabled = t.Enabled,
+                Operator = t.Operator?.Trim() is { Length: > 0 } op ? op : null,
             });
         }
         await db.SaveChangesAsync();

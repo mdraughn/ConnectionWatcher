@@ -26,6 +26,8 @@ public class TargetRow
     public Guid? ParentId { get; set; }
     public Guid ProfileId { get; set; }
     public bool Enabled { get; set; } = true;
+    /// <summary>Optional operator/ISP name for attribution wording.</summary>
+    public string? Operator { get; set; }
 }
 
 /// <summary>A rotation pool as stored.</summary>

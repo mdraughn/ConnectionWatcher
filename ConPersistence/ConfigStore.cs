@@ -67,6 +67,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             {
                 Id = id, Name = t.Name, Address = t.Address,
                 ProfileId = profileIdsByName[t.Profile], Enabled = t.Enabled,
+                Operator = t.Operator,
             });
         }
         await db.SaveChangesAsync();
@@ -137,6 +138,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
                 Id = t.Id, Name = t.Name, Address = t.Address,
                 Parent = t.ParentId is { } pid ? targetNamesById[pid] : null,
                 Profile = profileNamesById[t.ProfileId], Enabled = t.Enabled,
+                Operator = t.Operator,
             });
         }
         foreach (var p in pools)
@@ -178,6 +180,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             {
                 Id = t.Id, Name = t.Name, Address = t.Address,
                 Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
+                Operator = t.Operator,
             }).ToList(),
             Pools = options.Pools.Select(p => new PoolDto
             {

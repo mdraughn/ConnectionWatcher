@@ -26,6 +26,8 @@ public record TargetDto
     public string? Parent { get; init; }
     public string Profile { get; init; } = "External";
     public bool Enabled { get; init; } = true;
+    /// <summary>Optional operator/ISP name ("Comcast") for attribution wording.</summary>
+    public string? Operator { get; init; }
 }
 
 /// <summary>Pool for API/CRUD and export. Members/Parent referenced by name.</summary>

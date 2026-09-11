@@ -55,6 +55,7 @@ public class TargetGraph
                 ParentId = t.Parent is { Length: > 0 } p ? idsByName[p] : null,
                 ProfileName = t.Profile,
                 Enabled = t.Enabled,
+                Operator = t.Operator,
             });
 
         var poolDefs = options.Pools

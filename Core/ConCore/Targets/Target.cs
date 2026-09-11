@@ -13,4 +13,7 @@ public record Target
     public Guid? ParentId { get; init; }
     public required string ProfileName { get; init; }
     public bool Enabled { get; init; } = true;
+    /// <summary>Who runs this hop: an ISP name for trunk targets ("Comcast"),
+    /// so attribution can name names. Optional, display-only.</summary>
+    public string? Operator { get; init; }
 }
