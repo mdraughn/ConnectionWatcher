@@ -1,0 +1,126 @@
+import { describe, expect, it } from "vitest";
+import { HATCH, markCss, markRank, RAMP } from "./encoding";
+import {
+  buildLedger, glitchMark, punchcardCells, verdictWindows, windowMark,
+} from "./incidents";
+import type { GlitchItem } from "./glitchData";
+import type { TransitionEvent } from "./types";
+
+function vt(timestamp: string, from: string, to: string, verdict: string, detail = ""): TransitionEvent {
+  return {
+    timestamp, from, to, verdict, detail,
+    subjectId: "v", subjectName: "Internet", subjectKind: "Verdict",
+    trigger: "VerdictChanged", successRate: null, sampleSize: null, burstLossRate: null,
+  };
+}
+
+function glitch(over: Partial<GlitchItem>): GlitchItem {
+  return {
+    id: 1, targetId: "t", targetName: "Google DNS", class: "Target",
+    startUtc: "2026-09-08T08:42:00Z", endUtc: "2026-09-08T08:42:20Z",
+    lostCount: 2, sampleCount: 8, detail: null, ...over,
+  };
+}
+
+const TRUNK = new Set(["Router", "External Router", "Comcast Edge"]);
+
+describe("verdictWindows", () => {
+  it("derives attributed windows and closes the last at range end", () => {
+    const windows = verdictWindows([
+      vt("2026-09-09T05:38:00Z", "Responding", "Down", "LinkDown", "LinkDown: Comcast — Comcast Edge is Down"),
+      vt("2026-09-09T05:42:00Z", "Down", "Responding", "Healthy", "Healthy: 4 anchors responding"),
+      vt("2026-09-09T06:00:00Z", "Responding", "Faltering", "InternetWeather", "2 of 4 anchors degraded"),
+    ], "2026-09-09T06:30:00Z");
+    expect(windows).toEqual([
+      { kind: "LinkDown", from: "2026-09-09T05:38:00Z", to: "2026-09-09T05:42:00Z", detail: "LinkDown: Comcast — Comcast Edge is Down" },
+      { kind: "InternetWeather", from: "2026-09-09T06:00:00Z", to: "2026-09-09T06:30:00Z", detail: "2 of 4 anchors degraded" },
+    ]);
+  });
+});
+
+describe("windowMark", () => {
+  it("maps link verdicts to grey bars and weather to warm bars by anchor damage", () => {
+    const down = { kind: "LinkDown" as const, from: "", to: "", detail: null };
+    expect(windowMark(down, 0, 2)).toEqual({ shape: "bar", hue: "grey", depth: "out" });
+    const degraded = { ...down, kind: "LinkDegraded" as const };
+    expect(windowMark(degraded, 0, 2)).toEqual({ shape: "bar", hue: "grey", depth: "degraded" });
+    const weather = { ...down, kind: "InternetWeather" as const };
+    expect(windowMark(weather, 1, 2)).toEqual({ shape: "bar", hue: "warm", depth: "degraded" });
+    expect(windowMark(weather, 3, 2)).toEqual({ shape: "bar", hue: "warm", depth: "out" });
+  });
+});
+
+describe("glitchMark", () => {
+  it("distinguishes internet, trunk, and single-target glitches", () => {
+    expect(glitchMark(glitch({ class: "Internet", targetName: "Internet" }), TRUNK))
+      .toEqual({ shape: "bar", hue: "warm", depth: "glitch", ambiguous: false });
+    expect(glitchMark(glitch({
+      class: "Internet", targetName: "Internet",
+      detail: "anchors: Google, Quad9; trunk affected (likely link/ISP)",
+    }), TRUNK).ambiguous).toBe(true);
+    expect(glitchMark(glitch({ targetName: "Comcast Edge" }), TRUNK))
+      .toEqual({ shape: "bar", hue: "grey", depth: "glitch", ambiguous: false });
+    expect(glitchMark(glitch({}), TRUNK))
+      .toEqual({ shape: "dot", hue: "warm", depth: "glitch", ambiguous: false });
+  });
+});
+
+describe("markRank and markCss", () => {
+  it("ranks trunk-out above weather-out above degradations above glitches above dots", () => {
+    const ranks = [
+      markRank({ shape: "bar", hue: "grey", depth: "out" }),
+      markRank({ shape: "bar", hue: "warm", depth: "out" }),
+      markRank({ shape: "bar", hue: "grey", depth: "degraded" }),
+      markRank({ shape: "bar", hue: "warm", depth: "degraded" }),
+      markRank({ shape: "bar", hue: "warm", depth: "glitch" }),
+      markRank({ shape: "dot", hue: "warm", depth: "out" }),
+    ];
+    expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
+  });
+
+  it("renders solid fills, ambiguous gradients, and exposes the hatch", () => {
+    expect(markCss({ shape: "bar", hue: "warm", depth: "out" }).background).toBe(RAMP.warm.out);
+    expect(markCss({ shape: "bar", hue: "warm", depth: "glitch", ambiguous: true }).background)
+      .toContain("linear-gradient(to bottom right");
+    expect(HATCH).toContain("repeating-linear-gradient(45deg");
+  });
+});
+
+describe("punchcardCells", () => {
+  it("buckets locally and keeps one winning mark per cell with counts", () => {
+    // Build times FROM local components so hour mapping is TZ-proof.
+    const at = (d: number, h: number) => new Date(2026, 8, d, h, 30).toISOString();
+    const now = new Date(2026, 8, 30, 12);
+    const windows = [
+      { kind: "LinkDown" as const, from: at(9, 0), to: at(9, 0), detail: null },
+      { kind: "InternetWeather" as const, from: at(9, 0), to: at(9, 0), detail: null }, // same cell: loses to LinkDown
+    ];
+    const cells = punchcardCells(windows, new Map([
+      [windows[0], { shape: "bar" as const, hue: "grey" as const, depth: "out" as const }],
+      [windows[1], { shape: "bar" as const, hue: "warm" as const, depth: "degraded" as const }],
+    ]), [
+      glitch({ startUtc: at(9, 0), endUtc: at(9, 0) }),      // dot loses to bars in same cell
+      glitch({ startUtc: at(15, 3), endUtc: at(15, 3) }),    // its own cell: dot wins there
+    ], TRUNK, 30, now);
+
+    const day9 = cells.get("2026-9-9-0")!;
+    expect(day9.mark).toEqual({ shape: "bar", hue: "grey", depth: "out" });
+    expect(day9.count).toBe(3);
+    expect(cells.get("2026-9-15-3")!.mark.shape).toBe("dot");
+  });
+});
+
+describe("buildLedger", () => {
+  it("writes leads by kind, passes operator detail through, humanizes durations", () => {
+    const w: any = { kind: "LinkDown", from: "2026-09-09T05:38:00Z", to: "2026-09-09T05:42:00Z",
+      detail: "LinkDown: Comcast — Comcast Edge is Down" };
+    const items = buildLedger([w],
+      new Map([[w, { shape: "bar" as const, hue: "grey" as const, depth: "out" as const }]]),
+      [glitch({ startUtc: "2026-09-10T01:00:00Z", endUtc: "2026-09-10T01:00:45Z" })], TRUNK);
+    expect(items[0].at).toBe("2026-09-10T01:00:00Z"); // newest first
+    expect(items[0].lead).toBe("Google DNS dropped 2 pings (45 s).");
+    expect(items[1].lead).toBe("Your link went down for 4 min.");
+    expect(items[1].body).toContain("Comcast");
+    expect(items[1].mark.hue).toBe("grey");
+  });
+});
