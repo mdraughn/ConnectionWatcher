@@ -158,6 +158,17 @@ dashboard; right-click for History, the ISP report, Admin, and **Settings**
 (override the server URL, test the connection, return to the installed
 default, toggle toast notifications on state changes).
 
+**Reverse proxy / HTTPS** — ConWatch is proxy-friendly by construction: it
+emits only relative URLs and never reads scheme, host, or client IP, so an
+HTTPS-terminating proxy (e.g. Synology DSM's reverse proxy with the existing
+cert) needs no app-side configuration. Two rules: proxy it at the **root of
+its own hostname** (sub-path mounting is unsupported), and enable the
+proxy's **WebSocket** headers or the dashboard's live updates stall. If a
+future feature consumes client IPs or the original scheme, add
+`UseForwardedHeaders` then — noting that inside Docker the proxy's requests
+arrive from the bridge gateway, not loopback, so the trusted-proxy config
+must name the bridge network.
+
 **Docker** — `deploy/docker/compose.yaml` (data in `./data`, port 8080,
 `NET_RAW` for ping/traceroute when running non-root). Built and smoke-tested
 locally on Docker Desktop (health endpoint + real in-container ICMP verified);
