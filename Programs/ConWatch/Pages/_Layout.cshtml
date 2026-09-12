@@ -10,7 +10,14 @@
 </head>
 <body>
     <nav class="container">
-        <ul><li><strong>ConnectionWatcher</strong></li></ul>
+        <ul><li class="cw-brand">
+            <strong>ConnectionWatcher</strong>
+            <small id="cw-build" class="cw-build"
+                   data-version="@ConWatch.BuildInfo.Version"
+                   data-built-utc="@(ConWatch.BuildInfo.BuiltUtc?.ToString("o") ?? "")"
+                   title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">
+                v@(ConWatch.BuildInfo.Version)</small>
+        </li></ul>
         <ul>
             <li><a href="/">Dashboard</a></li>
             <li><a href="/History">History</a></li>
@@ -26,11 +33,6 @@
                            exit admin mode</a></li>
                 }
             }
-            <li class="cw-build-item"><small id="cw-build"
-                       data-version="@ConWatch.BuildInfo.Version"
-                       data-built-utc="@(ConWatch.BuildInfo.BuiltUtc?.ToString("o") ?? "")"
-                       title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">
-                v@(ConWatch.BuildInfo.Version)</small></li>
         </ul>
     </nav>
     <main class="container">

@@ -80,6 +80,8 @@ main.container { padding-bottom: 4rem; }
 .cw-insert button { font-size: 0.75rem; padding: 0.1rem 0.6rem; }
 .cw-anchors { border-top: 1px dotted var(--cw-unreach); }
 
-/* Header build stamp: subtle, and never worth a horizontal scrollbar. */
-.cw-build-item small { opacity: 0.4; font-size: 0.68rem; white-space: nowrap; }
-@media (max-width: 900px) { .cw-build-item { display: none; } }
+/* Header build stamp: a quiet line under the brand. Absolutely positioned so
+   its width never pushes the menu around at narrow widths. */
+.cw-brand { position: relative; }
+.cw-build { position: absolute; left: 0; top: 100%; margin-top: -0.5rem;
+    opacity: 0.4; font-size: 0.68rem; line-height: 1.2; white-space: nowrap; }

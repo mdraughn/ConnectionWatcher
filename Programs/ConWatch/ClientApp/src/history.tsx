@@ -40,22 +40,26 @@ async function fetchTransitions(subjectId: string, from: Date, to: Date): Promis
   return items.reverse(); // API is newest-first; we want chronological
 }
 
-function RecurrenceSection({ rangeKey, to }: { rangeKey: string; to: Date }) {
+// The recurrence punchcard and the cause-aligned board always cover 30 days,
+// independent of the range picker: recurrence needs columns to compare, and
+// short spans stretch both into mush.
+const OVERVIEW_DAYS = 30;
+
+function RecurrenceSection({ to }: { to: Date }) {
   const topology = JSON.parse(
     document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
-  const days = rangeKey === "30d" ? 30 : rangeKey === "7d" ? 7 : 1;
   const [story, setStory] = useState<Story | null>(null);
 
   useEffect(() => {
     let live = true;
-    fetchStory(topology, days).then((s) => { if (live) setStory(s); }).catch(() => undefined);
+    fetchStory(topology, OVERVIEW_DAYS).then((s) => { if (live) setStory(s); }).catch(() => undefined);
     return () => { live = false; };
-  }, [days, to.getTime()]);
+  }, [to.getTime()]);
 
   if (!story) return null;
   return (
     <div id="recurrence-section">
-      <h4>Recurrence punchcard <small>(all targets; hours &times; days)</small></h4>
+      <h4>Recurrence punchcard <small>(all targets; hours &times; days, last {OVERVIEW_DAYS} days)</small></h4>
       <Punchcard cells={story.cells} days={story.days} now={story.now} />
     </div>
   );
@@ -175,10 +179,10 @@ function App({ subjects }: { subjects: Subject[] }) {
         <p style={{ opacity: 0.7 }}>Pools and the verdict have no ping rollups; their story is the timeline above.</p>
       )}
 
-      <RecurrenceSection rangeKey={rangeKey} to={to} />
+      <RecurrenceSection to={to} />
 
-      <h4>All targets, cause-aligned</h4>
-      <RibbonBoard rangeStart={from} rangeEnd={to}
+      <h4>All targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
+      <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * 24 * 3_600_000)} rangeEnd={to}
         subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target")
           .map((s): BoardSubject => ({
             id: s.id, name: s.name, kind: s.kind,

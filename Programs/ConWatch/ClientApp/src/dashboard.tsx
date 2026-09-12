@@ -21,9 +21,12 @@ interface InitialData {
   weatherThreshold?: number;
 }
 
-const STORY_DAYS = 30;
+// The dashboard ledger is the 10 most recent events, looked for across the
+// last 90 days (the glitch retention window); the History page has the rest.
+const STORY_DAYS = 90;
+const STORY_EVENTS = 10;
 
-function LastThirtyDays({ initial }: { initial: InitialData }) {
+function RecentEvents({ initial }: { initial: InitialData }) {
   const [story, setStory] = useState<Story | null>(null);
   useEffect(() => {
     let live = true;
@@ -33,8 +36,8 @@ function LastThirtyDays({ initial }: { initial: InitialData }) {
   if (!story) return null;
   return (
     <div id="story-section" style={{ marginTop: "1.5rem" }}>
-      <h4>What happened — the last 30 days</h4>
-      <Ledger items={story.ledger} days={story.days} maxItems={10} moreHref="/History" />
+      <h4>What happened — the last {STORY_EVENTS} events</h4>
+      <Ledger items={story.ledger} days={story.days} maxItems={STORY_EVENTS} moreHref="/History" />
     </div>
   );
 }
@@ -61,7 +64,7 @@ function App({ store, topology, initial }: {
       <EventStrip topology={initial} />
       <Tree store={store} topology={topology} targets={state.targets}
         pools={state.pools} recent={state.recentTransitions} />
-      <LastThirtyDays initial={initial} />
+      <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}
           subtitle="all targets, last 24 h" />
