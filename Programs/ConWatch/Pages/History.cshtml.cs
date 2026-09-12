@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace ConWatch.Pages;
 
 public class HistoryModel(WatcherHostService host,
-    ConPersistence.SettingsStore settingsStore) : PageModel
+    ConPersistence.SettingsStore settingsStore,
+    ConPersistence.ConfigStore configStore) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -15,6 +16,14 @@ public class HistoryModel(WatcherHostService host,
     public async Task OnGetAsync()
     {
         var subjects = new List<object>();
+        if (host.Engine is null)
+        {
+            // Archive mode: the history must stay browsable without an
+            // engine — subjects and roles come from the stored config.
+            await BuildFromConfigAsync(subjects);
+            SubjectsJson = JsonSerializer.Serialize(subjects, JsonOptions);
+            return;
+        }
         if (host.Engine is { } engine)
         {
             // Topology roles for the cause-aligned ribbon board: anchors are
@@ -72,5 +81,46 @@ public class HistoryModel(WatcherHostService host,
             }, JsonOptions);
         }
         SubjectsJson = JsonSerializer.Serialize(subjects, JsonOptions);
+    }
+
+    private async Task BuildFromConfigAsync(List<object> subjects)
+    {
+        var names = await TopologyNames.FromConfigAsync(configStore, settingsStore);
+        var trunk = names.TrunkNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var anchors = names.AnchorNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        subjects.AddRange(names.Config.Targets
+            .Where(t => t.Id is not null)
+            .OrderBy(t => t.Name)
+            .Select(t => new
+            {
+                Id = t.Id!.Value,
+                Name = t.Name,
+                Kind = "target",
+                Parent = t.Parent,
+                Role = trunk.Contains(t.Name) ? "trunk"
+                    : anchors.Contains(t.Name) ? "anchor" : "other",
+            }));
+        subjects.AddRange(names.Config.Pools
+            .Where(p => p.Id is not null)
+            .OrderBy(p => p.Name)
+            .Select(p => new
+            {
+                Id = p.Id!.Value, Name = p.Name, Kind = "pool",
+                Parent = (string?)null, Role = "other",
+            }));
+        if (anchors.Count > 0)
+            subjects.Add(new
+            {
+                Id = VerdictCoordinator.SubjectId, Name = "Internet (verdict)",
+                Kind = "verdict", Parent = (string?)null, Role = "other",
+            });
+        TopologyJson = JsonSerializer.Serialize(new
+        {
+            TrunkNames = names.TrunkNames,
+            AnchorNames = names.AnchorNames,
+            WeatherThreshold = await settingsStore.GetIntAsync(
+                ConPersistence.SettingKeys.WeatherThreshold, 2),
+        }, JsonOptions);
     }
 }

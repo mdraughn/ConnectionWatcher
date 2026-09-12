@@ -18,6 +18,10 @@ public class ConWatchFactory : WebApplicationFactory<Program>
     public string DbPath { get; }
     private readonly string? _ownedDir;
 
+    /// <summary>Extra test-only service configuration (e.g. routing the
+    /// clone HttpClient at another in-memory app). Set before CreateClient.</summary>
+    public Action<IServiceCollection>? TestServices { get; set; }
+
     public ConWatchFactory(string? dbPath = null)
     {
         if (dbPath is null)
@@ -44,6 +48,7 @@ public class ConWatchFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IPingTransceiverFactory>();
             services.AddSingleton<IPingTransceiverFactory>(Pings);
+            TestServices?.Invoke(services);
         });
     }
 

@@ -18,6 +18,44 @@
     &nbsp;·&nbsp; <a href="/Report">ISP report</a>
 </p>
 
+<h3>Monitoring</h3>
+<ul class="form-errors" id="engine-errors"></ul>
+@if (Model.EngineEnabled)
+{
+    <p>Monitoring is <b>on</b> — this node pings, records, and notifies.</p>
+    <p><button type="button" id="engine-toggle-btn" class="secondary outline" data-enable="false">
+        Disable monitoring (archive mode)</button>
+        <small> The dashboard, History, report, and exports keep working read-only;
+        pinging and notifications stop, and MQTT reads offline in Home Assistant.</small></p>
+}
+else
+{
+    <p>Monitoring is <b>off — archive mode</b>. History, the report, and exports
+       stay available; nothing is pinged or notified.</p>
+    <p><button type="button" id="engine-toggle-btn" data-enable="true">Enable monitoring</button></p>
+}
+
+@if (Model.CloneSource is { Length: > 0 })
+{
+    <h3>Migration</h3>
+    <article>
+        <ul class="form-errors" id="takeover-errors"></ul>
+        <p>This node was cloned from <b>@Model.CloneSource</b>.
+        When it looks right (targets, history, charts), take over: the source is
+        disabled, one final snapshot closes the data gap to seconds, and this
+        node goes live. The source remains a browsable archive.</p>
+        <div class="grid">
+            <label>Source admin password <small>(leave empty if the source has none)</small>
+                <input type="password" id="takeover-password" autocomplete="off" />
+            </label>
+            <div style="align-self: end">
+                <button type="button" id="takeover-btn">Take over from source</button>
+            </div>
+        </div>
+        <p id="takeover-result"></p>
+    </article>
+}
+
 <h3>Settings</h3>
 <ul class="form-errors" id="settings-errors"></ul>
 <form id="settings-form">

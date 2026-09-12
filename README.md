@@ -130,6 +130,26 @@ Frontend dev loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside
 `dotnet run`; `npm test` runs the Vitest suite. `dotnet publish` builds the
 bundles automatically.
 
+## Moving to a new machine (clone + take over)
+
+The setup wizard on a fresh install offers **"Copy everything from a running
+ConnectionWatcher"**: enter the old node's URL (and its admin password, if
+set) and the new node arrives with the full configuration, history, and —
+over the authenticated channel — the notification secrets. It starts as a
+**disabled read-only archive** while the old node keeps monitoring; verify it
+looks right, then press **Take over** on its Admin page: the old node is
+disabled, one final snapshot closes the data gap to seconds, and the new node
+goes live (warm-started, so the timeline stays continuous). The old node
+remains a browsable archive until you decommission it.
+
+Transport honesty: cloning over plain HTTP to a non-local address sends the
+password and receives secrets unencrypted — the wizard stops and offers the
+HTTPS address, an explicit "send it anyway", or a secret-less clone. The
+master switch behind all this is the **Monitoring** toggle on the Admin page
+(`Engine.Enabled`): off = archive mode — history, reports, and exports keep
+serving; pinging and notifications stop, and MQTT reads offline in Home
+Assistant.
+
 ## Running unattended
 
 **The easy way** — from the repo root, no parameters, self-elevating:

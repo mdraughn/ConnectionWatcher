@@ -102,8 +102,23 @@ public class WatcherHostService(
         }
     }
 
+    /// <summary>True when the master enable switch says monitor (the default).</summary>
+    public async Task<bool> EngineEnabledAsync() =>
+        await settingsStore.GetAsync(SettingKeys.EngineEnabled) != "false";
+
     private async Task StartEngineAsync(EngineSeed? seed = null)
     {
+        if (!await EngineEnabledAsync())
+        {
+            // Archive mode: no engine, but everything recorded so far must be
+            // on disk — a take-over snapshots this node right after disabling.
+            await recorder.FlushAsync();
+            await glitchRecorder.FlushAsync();
+            await collector.FlushAllAsync();
+            _log.LogInformation("Monitoring disabled (Engine.Enabled=false); serving as archive");
+            return;
+        }
+
         var options = await store.LoadWatcherOptionsAsync();
         var validation = new WatcherOptionsValidator().Validate(null, options);
         if (validation.Failed)

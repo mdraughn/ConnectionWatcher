@@ -104,3 +104,55 @@ document.getElementById("apply").addEventListener("click", async () => {
 
 loadGateways();
 loadAnchors();
+
+// --- Clone from a running node -------------------------------------------
+// Transport policy lives on THIS (requesting) node: plain HTTP to a
+// non-loopback host with secrets involved needs the explicit override below.
+function cloneNeedsWarning(url, password) {
+    let parsed;
+    try { parsed = new URL(url); } catch { return false; } // server rejects it
+    if (parsed.protocol === "https:") return false;
+    const host = parsed.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1")
+        return false;
+    return true; // secrets are requested by default; password may also be set
+}
+
+async function runClone(includeSecrets, allowInsecure) {
+    const errors = document.getElementById("clone-errors");
+    const progress = document.getElementById("clone-progress");
+    clearErrors(errors);
+    document.getElementById("clone-insecure").hidden = true;
+    progress.textContent = "cloning…";
+    const result = await apiFetch("POST", "/api/v1/setup/clone", {
+        sourceUrl: document.getElementById("clone-url").value.trim(),
+        sourcePassword: document.getElementById("clone-password").value || null,
+        includeSecrets,
+        allowInsecure,
+    });
+    progress.textContent = "";
+    if (result.ok) {
+        progress.textContent = "Cloned. Opening the dashboard…";
+        location.href = "/";
+        return;
+    }
+    if (result.body?.code === "insecure-transport") {
+        document.getElementById("clone-insecure").hidden = false;
+        return;
+    }
+    showErrors(errors, result);
+}
+
+document.getElementById("clone-btn").addEventListener("click", () => {
+    const url = document.getElementById("clone-url").value.trim();
+    const password = document.getElementById("clone-password").value;
+    if (cloneNeedsWarning(url, password)) {
+        document.getElementById("clone-insecure").hidden = false;
+        return;
+    }
+    runClone(true, false);
+});
+document.getElementById("clone-insecure-anyway").addEventListener("click",
+    () => runClone(true, true));
+document.getElementById("clone-no-secrets").addEventListener("click",
+    () => runClone(false, false));

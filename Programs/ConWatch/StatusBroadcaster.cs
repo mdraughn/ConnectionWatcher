@@ -67,7 +67,10 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
             try
             {
                 await Task.Delay(Cadence, timeProvider, stoppingToken).ConfigureAwait(false);
-                await SendSnapshotAsync(respectGap: false).ConfigureAwait(false);
+                // Cadence ticks honor the same minimum spacing as transition
+                // sends: a tick right after a transition-triggered snapshot
+                // carries nothing new, and clients are promised MinGap.
+                await SendSnapshotAsync(respectGap: true).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

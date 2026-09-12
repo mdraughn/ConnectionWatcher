@@ -11,6 +11,34 @@ public static class AdminEndpoints
 
     public record MqttTestRequest(string? Host, int? Port, string? Username, string? Password);
 
+    public record EngineControlRequest(bool Enabled, string? Password);
+
+    /// <summary>
+    /// Machine-to-machine master enable control for the take-over
+    /// choreography: mapped on the OPEN group with the admin password
+    /// verified inline (like /auth/login — no cross-node cookie dance).
+    /// Applies the setting and rebuilds immediately, so a snapshot taken
+    /// right after a disable already contains every flushed row.
+    /// </summary>
+    public static void MapEngineControl(this RouteGroupBuilder openApi)
+    {
+        openApi.MapPost("/admin/engine", async (EngineControlRequest request,
+            ConWatch.Auth.AdminGate gate, SettingsStore settings, WatcherHostService host) =>
+        {
+            if (gate.IsEnabled && !gate.Verify(request.Password ?? ""))
+            {
+                await Task.Delay(1000); // same brute-force friction as login
+                return Results.Unauthorized();
+            }
+            await settings.SetManyAsync(new Dictionary<string, string?>
+            {
+                [SettingKeys.EngineEnabled] = request.Enabled ? "true" : "false",
+            });
+            await host.RebuildAsync(); // effective before we answer
+            return Results.NoContent();
+        });
+    }
+
     public static void MapAdmin(this RouteGroupBuilder api)
     {
         api.MapGet("/admin/stats", async (IDbContextFactory<ConWatchDbContext> dbFactory,

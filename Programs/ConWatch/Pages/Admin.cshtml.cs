@@ -12,6 +12,8 @@ public class AdminModel(ConfigStore store, SettingsStore settingsStore, AdminGat
     public List<PoolDto> Pools { get; private set; } = new();
 
     public bool PasswordSet => gate.IsEnabled;
+    public bool EngineEnabled => Setting(SettingKeys.EngineEnabled, "true") != "false";
+    public string CloneSource => Setting(SettingKeys.CloneSourceUrl);
 
     public async Task<IActionResult> OnGetAsync()
     {

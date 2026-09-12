@@ -53,7 +53,11 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             {
                 var enabled = await settings.GetAsync(SettingKeys.MqttEnabled) == "true";
                 var host = await settings.GetAsync(SettingKeys.MqttHost);
-                if (!enabled || host is not { Length: > 0 })
+                // Master enable: a disabled node must read offline in HA, not
+                // hold stale retained states — the session end below publishes
+                // availability=offline before disconnecting.
+                var engineEnabled = await settings.GetAsync(SettingKeys.EngineEnabled) != "false";
+                if (!enabled || !engineEnabled || host is not { Length: > 0 })
                 {
                     await _wake.WaitAsync(stoppingToken).ConfigureAwait(false);
                     continue;

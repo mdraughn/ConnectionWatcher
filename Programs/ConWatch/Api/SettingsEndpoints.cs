@@ -10,8 +10,14 @@ public static class SettingsEndpoints
     {
         // Health warnings feed banners on open pages; settings themselves are
         // admin-only (the GET includes the MQTT broker password).
-        open.MapGet("/config/health", async (ConfigHealth health) =>
-            new { warnings = await health.EvaluateAsync() });
+        open.MapGet("/config/health", async (ConfigHealth health,
+            ConWatch.Clone.CloneHealth cloneHealth) =>
+        {
+            var warnings = (await health.EvaluateAsync()).ToList();
+            if (await cloneHealth.EvaluateAsync() is { } cloneWarning)
+                warnings.Add(cloneWarning);
+            return new { warnings };
+        });
 
         locked.MapGet("/settings", async (SettingsStore store) => await store.GetAllAsync());
 
@@ -57,8 +63,12 @@ public static class SettingsEndpoints
                     case SettingKeys.MqttEnabled:
                     case SettingKeys.WebhookEnabled:
                     case SettingKeys.WebhookVerdictOnly:
+                    case SettingKeys.EngineEnabled:
                         if (value is not (null or "true" or "false"))
                             errors.Add($"{key} must be 'true' or 'false'.");
+                        break;
+                    case SettingKeys.CloneSourceUrl:
+                        errors.Add("Clone.SourceUrl is set by the clone wizard, not edited.");
                         break;
                     case SettingKeys.MqttHost:
                     case SettingKeys.MqttUsername:
