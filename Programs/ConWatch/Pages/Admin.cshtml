@@ -6,17 +6,8 @@
 }
 
 <h2>Administration</h2>
-
-<h3>Database</h3>
-<div class="cw-stats-row" id="db-stats" aria-busy="true">loading…</div>
-<p>
-    Export data:
-    <a href="/api/v1/export/transitions?format=csv" role="button" class="outline">Transitions CSV</a>
-    <a href="/api/v1/export/transitions?format=json" role="button" class="outline">Transitions JSON</a>
-    <a href="/api/v1/export/rollups?format=csv" role="button" class="outline">Rollups CSV</a>
-    <a href="/api/v1/export/rollups?format=json" role="button" class="outline">Rollups JSON</a>
-    &nbsp;·&nbsp; <a href="/Report">ISP report</a>
-</p>
+<p><small>Database statistics, exports, and retention live on the
+<a href="/Data">Data</a> page.</small></p>
 
 <h3>Monitoring</h3>
 <ul class="form-errors" id="engine-errors"></ul>
@@ -72,20 +63,6 @@ else
         <label>Weather threshold
             <input name="@SettingKeys.WeatherThreshold" type="number" min="1"
                    value="@Model.Setting(SettingKeys.WeatherThreshold, "2")" />
-        </label>
-    </div>
-    <div class="grid">
-        <label>Minute rollups kept (days)
-            <input name="@SettingKeys.MinuteRetentionDays" type="number" min="1" max="3650"
-                   value="@Model.Setting(SettingKeys.MinuteRetentionDays, "90")" />
-        </label>
-        <label>Hourly rollups kept (months)
-            <input name="@SettingKeys.HourlyRetentionMonths" type="number" min="1" max="120"
-                   value="@Model.Setting(SettingKeys.HourlyRetentionMonths, "13")" />
-        </label>
-        <label>Retention run hour (UTC)
-            <input name="@SettingKeys.RetentionRunHourUtc" type="number" min="0" max="23"
-                   value="@Model.Setting(SettingKeys.RetentionRunHourUtc, "3")" />
         </label>
     </div>
     <button type="submit">Save settings</button>

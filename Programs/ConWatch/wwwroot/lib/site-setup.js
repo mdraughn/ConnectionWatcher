@@ -56,7 +56,7 @@ document.getElementById("wan-probe").addEventListener("click", async () => {
     const probe = result.body;
     if (!result.ok || !probe?.address) {
         out.textContent = `Skipped: ${probe?.failureReason ?? "probe failed"}. ` +
-            "You can add it later from the Traceroute or Config pages.";
+            "You can add it later from the Traceroute or Targets pages.";
         wanOffer = null;
         return;
     }

@@ -23,7 +23,8 @@
             <li><a href="/History">History</a></li>
             @if (!Gate.IsLocked(User))
             {
-                <li><a href="/Config/Targets">Config</a></li>
+                <li><a href="/Data">Data</a></li>
+                <li><a href="/Config/Targets">Targets</a></li>
                 <li><a href="/Traceroute">Traceroute</a></li>
                 <li><a href="/Admin">Admin</a></li>
                 @if (Gate.IsEnabled)

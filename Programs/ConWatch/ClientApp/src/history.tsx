@@ -114,7 +114,7 @@ function App({ subjects }: { subjects: Subject[] }) {
     return () => { live = false; };
   }, [subject, from, to]);
 
-  if (!subject) return <p>No subjects yet — add targets on the Config page.</p>;
+  if (!subject) return <p>No subjects yet — add targets on the Targets page.</p>;
 
   // Attribution stops at the latest HistoryReset (address correction/repoint):
   // stats and charts use only the current data history; the ribbon still shows
