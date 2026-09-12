@@ -28,6 +28,11 @@ public static class SettingKeys
     public const string HeartbeatUrl = "Heartbeat.Url";
     public const string HeartbeatIntervalMinutes = "Heartbeat.IntervalMinutes";
 
+    /// <summary>Warm restart: seed presumed states from the DB when the gap
+    /// since the watcher was last alive is at most this many minutes; 0 or
+    /// less disables all seeding (process start AND config rebuilds).</summary>
+    public const string WarmRestartMaxGapMinutes = "Engine.WarmRestartMaxGapMinutes";
+
     /// <summary>Never leaves the machine via the snapshot export: credentials
     /// and capability URLs (a webhook or heartbeat URL grants whoever holds it
     /// the power to impersonate or silence this instance).</summary>

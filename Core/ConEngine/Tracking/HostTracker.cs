@@ -45,6 +45,18 @@ namespace ConEngine.Tracking
         /// <summary>Current state of the host state machine.</summary>
         public HostState CurrentState => _analysisEngine.CurrentState;
 
+        /// <summary>True while running on an unconfirmed warm-restart presumption.</summary>
+        public bool Assumed => _analysisEngine.Assumed;
+
+        /// <summary>Warm restart: adopt a presumed state silently (no transition).</summary>
+        public void Seed(HostState state)
+        {
+            lock (_lock)
+            {
+                _analysisEngine.Seed(state);
+            }
+        }
+
         /// <summary>Stream of periodic status snapshots.</summary>
         public IObservable<HostStatus> HostStatusSource => _analysisEngine.HostStatusSource;
 

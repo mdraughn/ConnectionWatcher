@@ -40,6 +40,17 @@ public class PoolCoordinator : IDisposable
     public static TimeSpan PhaseOffset(int memberIndex, int memberCount, TimeSpan interval) =>
         interval * memberIndex / memberCount;
 
+    /// <summary>Warm restart: adopt a presumed aggregate state silently — no
+    /// transition. Member transitions recalculate (and correct) it as usual.</summary>
+    public void Seed(HostState state)
+    {
+        lock (_lock)
+        {
+            if (CurrentState == HostState.Initializing)
+                CurrentState = state;
+        }
+    }
+
     public void Start()
     {
         foreach (var member in _members)

@@ -3,6 +3,8 @@ export interface TargetStatus {
   name: string;
   address: string | null;
   state: string;
+  /** Warm-restart presumption not yet confirmed by fresh pings. */
+  assumed?: boolean;
   successRate: number;
   avgRtt: number;
   sampleSize: number;

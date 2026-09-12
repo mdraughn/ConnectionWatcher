@@ -44,6 +44,13 @@ discovers your router's WAN address via UPnP, and starts monitoring with one
 click. The **Admin** page holds database stats, retention/verdict settings,
 and the danger zone (clear history / factory reset, type-to-confirm).
 
+Restarts are warm: after an update, reboot, or config change, ConWatch resumes
+its last known states immediately (shown as *assumed* and burst-confirmed by
+fresh pings within seconds) instead of re-measuring the world from scratch —
+the timelines stay continuous and no restart noise is recorded. Seeding from
+the database applies only when the watcher was down briefly (the
+`Engine.WarmRestartMaxGapMinutes` setting, default 10 minutes; 0 disables).
+
 ## Web UI
 
 ConWatch serves its UI at the root:

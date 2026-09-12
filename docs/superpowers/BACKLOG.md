@@ -86,6 +86,22 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
   admin API; take-over choreography (disable old → final sync → enable new)
   gives near-zero-gap migration. Same notes file.
 
+## Warm restart follow-ons (noted 2026-09-11)
+
+- ~~**Warm restart (options 2+1)**~~ — DONE 2026-09-11: seeded presumed states
+  (DB on process start, live-engine capture on config rebuilds) + startup
+  warm-up burst; `Engine.WarmRestartMaxGapMinutes` setting (default 10, ≤0
+  disables); `assumed` flag through status/UI. Spec:
+  `specs/2026-09-11-warm-restart-design.md`.
+- **Redis-backed blue-green handoff** — Mark's idea, parked as overkill for
+  now: shared hot state in Redis would let a NEW container take over mid-flight
+  (zero-gap deploys) without violating SQLite's single-writer constraint.
+  Only worth it if deploy gaps ever matter again; pairs with the clone-install
+  take-over choreography.
+- **Burst on parent recovery** — after a Down parent recovers, released
+  children re-prove at normal cadence (~100 s). A TriggerBurst on Release
+  would settle them in seconds; deliberately left out of warm-restart scope.
+
 ## Small hardening candidates
 
 - **Config health warning: pool parent vs. members' parent drift** (noted

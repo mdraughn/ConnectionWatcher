@@ -22,6 +22,7 @@ public static class StatusSnapshotBuilder
             Name = m.Target.Name,
             Address = m.ResolvedAddress?.ToString() ?? m.Target.Address,
             State = m.CurrentState.ToString(),
+            Assumed = m.IsAssumed,
             SuccessRate = (double)(m.LastStatus?.Host.SuccessRate ?? 0f),
             AvgRtt = (double)(m.LastStatus?.Host.AverageRoundtripTime ?? 0f),
             SampleSize = m.LastStatus?.Host.SampleSize ?? 0,

@@ -76,14 +76,37 @@ public class VerdictCoordinator : IDisposable
             .Select(kv => (monitors[kv.Key], kv.Value)).ToList();
     }
 
+    private bool _seeded;
+
+    /// <summary>Warm restart: adopt the last known verdict silently — no
+    /// transition. Start() then reclassifies once from the (seeded) monitor
+    /// states, emitting only if they contradict this presumption.</summary>
+    public void Seed(VerdictState verdict)
+    {
+        lock (_lock)
+        {
+            if (CurrentVerdict != VerdictState.Unknown)
+                return;
+            CurrentVerdict = verdict;
+            _seeded = true;
+        }
+    }
+
     /// <summary>Subscribes to anchors and their ancestors. Call once after monitors exist.</summary>
     public void Start()
     {
         foreach (var m in _anchors.Concat(_ancestors.Select(a => a.Monitor)).Distinct())
             _subscriptions.Add(m.TransitionSource.Subscribe(_ => Recalculate()));
+
+        // A fully confirmed warm start emits no monitor transitions at all, so
+        // a seeded verdict must classify once now rather than wait for one.
+        bool seeded;
+        lock (_lock) { seeded = _seeded; _seeded = false; }
+        if (seeded)
+            Recalculate(ignoreUnknown: true);
     }
 
-    private void Recalculate()
+    private void Recalculate(bool ignoreUnknown = false)
     {
         lock (_lock)
         {
@@ -92,6 +115,8 @@ public class VerdictCoordinator : IDisposable
             CurrentOperator = operatorName;
             if (verdict == CurrentVerdict)
                 return;
+            if (ignoreUnknown && verdict == VerdictState.Unknown)
+                return; // a seeded verdict outranks "no anchors determined yet"
 
             var from = Map(CurrentVerdict);
             CurrentVerdict = verdict;
