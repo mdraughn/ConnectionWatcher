@@ -79,3 +79,7 @@ main.container { padding-bottom: 4rem; }
 .cw-insert { padding: 0.1rem 0 0.1rem 1.2rem; }
 .cw-insert button { font-size: 0.75rem; padding: 0.1rem 0.6rem; }
 .cw-anchors { border-top: 1px dotted var(--cw-unreach); }
+
+/* Header build stamp: subtle, and never worth a horizontal scrollbar. */
+.cw-build-item small { opacity: 0.4; font-size: 0.68rem; white-space: nowrap; }
+@media (max-width: 900px) { .cw-build-item { display: none; } }

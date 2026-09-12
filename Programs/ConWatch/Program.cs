@@ -142,6 +142,8 @@ api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
         EngineRunning = engine is not null,
         TargetCount = engine?.Monitors.Count ?? 0,
         TimestampUtc = time.GetUtcNow(),
+        Version = BuildInfo.Version,
+        BuiltUtc = BuildInfo.BuiltUtc,
     };
     return engine is not null ? Results.Ok(body) : Results.Json(body, statusCode: 503);
 });
