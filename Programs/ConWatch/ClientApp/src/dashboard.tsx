@@ -19,6 +19,9 @@ interface InitialData {
   trunkNames?: string[];
   anchorNames?: string[];
   weatherThreshold?: number;
+  /** Master enable switch off: archive mode — history serves, nothing pings. */
+  engineDisabled?: boolean;
+  cloneSource?: string | null;
 }
 
 // The dashboard ledger is the 10 most recent events, looked for across the
@@ -57,6 +60,31 @@ function App({ store, topology, initial }: {
     const to = new Date();
     return { from: new Date(to.getTime() - 24 * 3_600_000), to };
   });
+
+  if (initial.engineDisabled) {
+    // Archive mode: everything DB-backed keeps working; no live states, no
+    // pretense of them.
+    return (
+      <div>
+        <div className="verdict-banner unknown">
+          &#9208; MONITORING DISABLED — archive mode
+          <span style={{ fontWeight: 400 }}>
+            {" "}— history, the report, and exports stay available; nothing is
+            pinged or notified. {initial.cloneSource
+              ? "Finish the migration or re-enable on the "
+              : "Re-enable on the "}
+            <a href="/Admin">Admin page</a>.
+          </span>
+        </div>
+        <EventStrip topology={initial} />
+        <RecentEvents initial={initial} />
+        <div style={{ marginTop: "1.5rem" }}>
+          <GlitchSection from={glitchRange.from} to={glitchRange.to}
+            subtitle="all targets, last 24 h" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

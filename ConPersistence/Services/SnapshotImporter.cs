@@ -44,6 +44,14 @@ public static class SnapshotImporter
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
+        // Per-node keys are THIS node's identity (Engine.Enabled,
+        // Clone.SourceUrl): keep the local values and ignore any that a
+        // snapshot might carry — a take-over's final sync from a
+        // just-disabled source must not import Enabled=false.
+        var perNode = await db.Settings
+            .Where(s => SettingKeys.PerNodeKeys.Contains(s.Key))
+            .ToDictionaryAsync(s => s.Key, s => s.Value, ct);
+
         db.Transitions.RemoveRange(db.Transitions);
         db.Rollups.RemoveRange(db.Rollups);
         db.Glitches.RemoveRange(db.Glitches);
@@ -55,6 +63,11 @@ public static class SnapshotImporter
         db.Rollups.AddRange(snapshot.Rollups);
         db.Glitches.AddRange(snapshot.Glitches);
         foreach (var (key, value) in snapshot.Settings)
+        {
+            if (!SettingKeys.PerNodeKeys.Contains(key))
+                db.Settings.Add(new Entities.SettingRow { Key = key, Value = value });
+        }
+        foreach (var (key, value) in perNode)
             db.Settings.Add(new Entities.SettingRow { Key = key, Value = value });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

@@ -62,6 +62,12 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<GlitchRecorder>())
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
 builder.Services.AddHostedService<RetentionService>();
 
+// Cross-node clone/take-over: outbound calls to the source node.
+builder.Services.AddHttpClient(ConWatch.Clone.CloneService.HttpClientName,
+    c => c.Timeout = TimeSpan.FromSeconds(60)); // a full snapshot can be MBs
+builder.Services.AddSingleton<ConWatch.Clone.CloneService>();
+builder.Services.AddSingleton<ConWatch.Clone.CloneHealth>();
+
 // Notifiers: idle until Mqtt.Enabled / Webhook.Enabled; reconfigured live via
 // NotifierSettingsChanged, re-attached by WatcherHostService on every rebuild.
 builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));
@@ -126,6 +132,7 @@ api.MapHistory();
 api.MapGlitches();
 api.MapExport();
 api.MapAuth();
+api.MapEngineControl(); // open route, password verified inline (take-over M2M)
 
 locked.MapConfig();
 locked.MapTraceroute();
@@ -133,19 +140,23 @@ locked.MapAdmin();
 locked.MapSetup();
 SettingsEndpoints.MapSettings(locked, open: api);
 
-api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>
+api.MapGet("/health", async (WatcherHostService host, TimeProvider time) =>
 {
     var engine = host.Engine;
+    var enabled = await host.EngineEnabledAsync();
     var body = new
     {
-        Status = engine is not null ? "Healthy" : "EngineDown",
+        // A deliberately disabled node is a healthy archive (200) — container
+        // healthchecks must not flag it; 503 stays for enabled-but-down.
+        Status = engine is not null ? "Healthy" : enabled ? "EngineDown" : "Disabled",
+        Enabled = enabled,
         EngineRunning = engine is not null,
         TargetCount = engine?.Monitors.Count ?? 0,
         TimestampUtc = time.GetUtcNow(),
         Version = BuildInfo.Version,
         BuiltUtc = BuildInfo.BuiltUtc,
     };
-    return engine is not null ? Results.Ok(body) : Results.Json(body, statusCode: 503);
+    return engine is not null || !enabled ? Results.Ok(body) : Results.Json(body, statusCode: 503);
 });
 
 try

@@ -33,10 +33,24 @@ public static class SettingKeys
     /// less disables all seeding (process start AND config rebuilds).</summary>
     public const string WarmRestartMaxGapMinutes = "Engine.WarmRestartMaxGapMinutes";
 
+    /// <summary>Master enable: "false" parks the engine (no pings, rollups,
+    /// verdicts, or notifications) while the web UI and APIs keep serving as
+    /// a read-only archive. Anything else (including absent) means enabled.</summary>
+    public const string EngineEnabled = "Engine.Enabled";
+
+    /// <summary>Set by the clone wizard: the node this one was cloned from.
+    /// Drives the take-over card and the both-active health warning.</summary>
+    public const string CloneSourceUrl = "Clone.SourceUrl";
+
     /// <summary>Never leaves the machine via the snapshot export: credentials
     /// and capability URLs (a webhook or heartbeat URL grants whoever holds it
     /// the power to impersonate or silence this instance).</summary>
     public static readonly string[] SecretKeys = [MqttPassword, WebhookUrls, HeartbeatUrl];
+
+    /// <summary>Node identity, not configuration: excluded from snapshot
+    /// export AND preserved locally across snapshot import — a take-over's
+    /// final sync from a just-disabled source must not import Enabled=false.</summary>
+    public static readonly string[] PerNodeKeys = [EngineEnabled, CloneSourceUrl];
 }
 
 /// <summary>
@@ -100,12 +114,15 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
         }
         await db.SaveChangesAsync();
 
-        if (values.Keys.Any(k => k.StartsWith("Verdict.", StringComparison.OrdinalIgnoreCase)))
+        if (values.Keys.Any(k =>
+                k.StartsWith("Verdict.", StringComparison.OrdinalIgnoreCase) ||
+                k.StartsWith("Engine.", StringComparison.OrdinalIgnoreCase)))
             SettingsChanged?.Invoke();
         if (values.Keys.Any(k =>
                 k.StartsWith("Mqtt.", StringComparison.OrdinalIgnoreCase) ||
                 k.StartsWith("Webhook.", StringComparison.OrdinalIgnoreCase) ||
-                k.StartsWith("Heartbeat.", StringComparison.OrdinalIgnoreCase)))
+                k.StartsWith("Heartbeat.", StringComparison.OrdinalIgnoreCase) ||
+                k.StartsWith("Engine.", StringComparison.OrdinalIgnoreCase)))
             NotifierSettingsChanged?.Invoke();
     }
 }

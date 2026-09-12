@@ -31,12 +31,17 @@ public class ApiSurfaceLockTests : IDisposable
         "/api/v1/health",
         "/api/v1/config/health",
         "/api/v1/auth/",
+        "/api/v1/admin/engine", // take-over M2M control, password verified inline
     ];
 
     // Open, but legitimately return 401 on bad credentials — probing them
-    // with a junk body would be a false positive. Covered by AuthApiTests.
+    // with a junk body would be a false positive. Covered by AuthApiTests
+    // (auth routes) and CloneTests (the inline-verified take-over surfaces).
     private static readonly string[] SkipProbe =
-        ["/api/v1/auth/login", "/api/v1/auth/remove-password", "/api/v1/auth/set-password"];
+    [
+        "/api/v1/auth/login", "/api/v1/auth/remove-password", "/api/v1/auth/set-password",
+        "/api/v1/export/snapshot/full", "/api/v1/admin/engine",
+    ];
 
     // Bodies that survive model binding for DTOs with `required` members;
     // binding runs BEFORE endpoint filters, so an unbindable body would 400

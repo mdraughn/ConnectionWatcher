@@ -96,3 +96,42 @@ if (passwordForm) {
 wireDanger("clear-confirm", "clear-btn", "CLEAR", "/api/v1/admin/clear-history");
 wireDanger("reset-confirm", "reset-btn", "RESET", "/api/v1/admin/factory-reset");
 loadStats();
+
+// Monitoring toggle (master enable switch).
+const engineToggle = document.getElementById("engine-toggle-btn");
+if (engineToggle) {
+    engineToggle.addEventListener("click", async () => {
+        const errors = document.getElementById("engine-errors");
+        clearErrors(errors);
+        engineToggle.setAttribute("aria-busy", "true");
+        const result = await apiFetch("PUT", "/api/v1/settings", {
+            "Engine.Enabled": engineToggle.dataset.enable,
+        });
+        engineToggle.removeAttribute("aria-busy");
+        if (result.ok) location.reload();
+        else showErrors(errors, result);
+    });
+}
+
+// Take-over from the clone source.
+const takeoverBtn = document.getElementById("takeover-btn");
+if (takeoverBtn) {
+    takeoverBtn.addEventListener("click", async () => {
+        const errors = document.getElementById("takeover-errors");
+        const out = document.getElementById("takeover-result");
+        clearErrors(errors);
+        out.textContent = "taking over — disabling source, final sync…";
+        takeoverBtn.setAttribute("aria-busy", "true");
+        const result = await apiFetch("POST", "/api/v1/setup/takeover", {
+            sourcePassword: document.getElementById("takeover-password").value || null,
+        });
+        takeoverBtn.removeAttribute("aria-busy");
+        if (result.ok) {
+            out.textContent = "Done — this node is live; the source is a disabled archive.";
+            setTimeout(() => location.href = "/", 1500);
+        } else {
+            out.textContent = "";
+            showErrors(errors, result);
+        }
+    });
+}

@@ -81,10 +81,13 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
   report title, MQTT operator attribute). Migrates onto lane entities when
   failover groups land. Notes:
   `specs/2026-09-10-isp-naming-and-clone-install-notes.md`.
-- **Clone-install + master enable (switch-over)** — wizard option "copy from
-  a running node" via the snapshot API/importer; `Engine.Enabled` switch +
-  admin API; take-over choreography (disable old → final sync → enable new)
-  gives near-zero-gap migration. Same notes file.
+- ~~**Clone-install + master enable (switch-over)**~~ — DONE 2026-09-12:
+  wizard "copy from a running node" (full snapshot over the authenticated
+  single-shot channel; requester-side transport policy with insecure-HTTP
+  override or secret-less fallback), `Engine.Enabled` archive mode (MQTT
+  offline, heartbeat paused, health "Disabled", read-only UI), take-over
+  choreography with final sync + warm-started hand-off, both-active health
+  warning. Spec: `specs/2026-09-12-clone-takeover-design.md`.
 
 ## Warm restart follow-ons (noted 2026-09-11)
 

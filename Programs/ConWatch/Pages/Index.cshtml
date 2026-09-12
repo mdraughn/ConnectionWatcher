@@ -44,7 +44,12 @@
             RenderNode(root);
         }
     </ul>
-    @if (Model.Roots.Count == 0)
+    @if (Model.EngineDisabled)
+    {
+        <p>⏸ Monitoring is disabled (archive mode) — history and reports stay
+           available; re-enable on the <a href="/Admin">Admin</a> page.</p>
+    }
+    else if (Model.Roots.Count == 0)
     {
         <p>No targets configured yet — add some on the <a href="/Config/Targets">Config</a> page.</p>
     }

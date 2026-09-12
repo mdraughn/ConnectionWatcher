@@ -54,23 +54,26 @@ public static class ExportEndpoints
         // are omitted and named in redactedSettings.
         api.MapGet("/export/snapshot", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             ConfigStore configStore, SettingsStore settingsStore, TimeProvider time) =>
-        {
-            var allSettings = await settingsStore.GetAllAsync();
-            var redacted = SettingKeys.SecretKeys
-                .Where(key => allSettings.Remove(key))
-                .ToList();
+                Results.Ok(await BuildSnapshotAsync(dbFactory, configStore, settingsStore, time,
+                    includeSecrets: false)));
 
-            await using var db = await dbFactory.CreateDbContextAsync();
-            return Results.Ok(new ConPersistence.Dto.Snapshot
+        // Take-over channel: the SAME document with secrets included, guarded
+        // by the source's admin password verified inline (single shot, no
+        // cookie dance; open while the gate is disabled, like the rest of the
+        // locked surface). Transport policy is the REQUESTER's job — the spec
+        // explains why a server behind a TLS-terminating proxy cannot enforce
+        // it: docs/superpowers/specs/2026-09-12-clone-takeover-design.md.
+        api.MapPost("/export/snapshot/full", async (FullSnapshotRequest request,
+            ConWatch.Auth.AdminGate gate, IDbContextFactory<ConWatchDbContext> dbFactory,
+            ConfigStore configStore, SettingsStore settingsStore, TimeProvider time) =>
+        {
+            if (gate.IsEnabled && !gate.Verify(request.Password ?? ""))
             {
-                ExportedUtc = time.GetUtcNow(),
-                Config = await configStore.ExportAsync(),
-                Settings = allSettings,
-                RedactedSettings = redacted,
-                Transitions = await db.Transitions.AsNoTracking().OrderBy(t => t.Id).ToListAsync(),
-                Rollups = await db.Rollups.AsNoTracking().OrderBy(r => r.Id).ToListAsync(),
-                Glitches = await db.Glitches.AsNoTracking().OrderBy(g => g.Id).ToListAsync(),
-            });
+                await Task.Delay(1000); // same brute-force friction as login
+                return Results.Unauthorized();
+            }
+            return Results.Ok(await BuildSnapshotAsync(dbFactory, configStore, settingsStore, time,
+                includeSecrets: true));
         });
 
         api.MapGet("/export/glitches", async (IDbContextFactory<ConWatchDbContext> dbFactory,
@@ -91,6 +94,32 @@ public static class ExportEndpoints
                 return Results.Json(rows, contentType: "application/json");
             return Csv(CsvExport.GlitchLines(rows), $"conwatch-glitches-{stamp}.csv");
         });
+    }
+
+    public record FullSnapshotRequest(string? Password);
+
+    private static async Task<ConPersistence.Dto.Snapshot> BuildSnapshotAsync(
+        IDbContextFactory<ConWatchDbContext> dbFactory, ConfigStore configStore,
+        SettingsStore settingsStore, TimeProvider time, bool includeSecrets)
+    {
+        var allSettings = await settingsStore.GetAllAsync();
+        foreach (var key in SettingKeys.PerNodeKeys)
+            allSettings.Remove(key); // node identity never travels
+        var redacted = includeSecrets
+            ? new List<string>()
+            : SettingKeys.SecretKeys.Where(key => allSettings.Remove(key)).ToList();
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return new ConPersistence.Dto.Snapshot
+        {
+            ExportedUtc = time.GetUtcNow(),
+            Config = await configStore.ExportAsync(),
+            Settings = allSettings,
+            RedactedSettings = redacted,
+            Transitions = await db.Transitions.AsNoTracking().OrderBy(t => t.Id).ToListAsync(),
+            Rollups = await db.Rollups.AsNoTracking().OrderBy(r => r.Id).ToListAsync(),
+            Glitches = await db.Glitches.AsNoTracking().OrderBy(g => g.Id).ToListAsync(),
+        };
     }
 
     private static bool IsValidFormat(string format) =>

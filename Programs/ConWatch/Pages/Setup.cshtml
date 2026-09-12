@@ -12,6 +12,38 @@
 </p>
 <ul class="form-errors" id="errors"></ul>
 
+<details id="clone-section">
+    <summary>Moving from another ConnectionWatcher? Copy everything from it</summary>
+    <p><small>Clones the source node's configuration, full history, and (with its
+    admin password) its notification secrets. This node arrives as a read-only
+    copy while the source keeps monitoring; when it looks right, press
+    <b>Take over</b> on the Admin page for a seconds-long hand-off.</small></p>
+    <ul class="form-errors" id="clone-errors"></ul>
+    <div class="grid">
+        <label>Source URL
+            <input id="clone-url" placeholder="https://conwatch.example.com/ or http://192.168.1.5:8080" />
+        </label>
+        <label>Source admin password <small>(leave empty if none is set)</small>
+            <input id="clone-password" type="password" autocomplete="off" />
+        </label>
+    </div>
+    <p><button id="clone-btn" type="button">Clone from this node</button>
+       <span id="clone-progress"></span></p>
+    <div id="clone-insecure" hidden>
+        <article style="border-color: var(--cw-warn)">
+            <p>⚠ <b>This would cross your network unencrypted.</b> The source's admin
+            password would be sent — and its MQTT password and webhook URLs received —
+            over plain HTTP. If the source has an HTTPS address, use that instead.</p>
+            <p>
+                <button id="clone-insecure-anyway" type="button" class="secondary">I understand — send it over HTTP</button>
+                <button id="clone-no-secrets" type="button" class="secondary outline">Clone without secrets</button>
+            </p>
+            <p><small>"Without secrets" copies everything except the MQTT password and
+            webhook/heartbeat URLs; you re-enter those on the Admin page before taking over.</small></p>
+        </article>
+    </div>
+</details>
+
 <section id="step-router">
     <h4>1 · Your router</h4>
     <p>
