@@ -31,7 +31,7 @@
 {
     <p class="cw-health-hint">
         ⚠ @Model.WarningCount configuration warning@(Model.WarningCount == 1 ? "" : "s") —
-        <a href="/Config/Targets">review on the Config page</a>
+        <a href="/Config/Targets">review on the Targets page</a>
     </p>
 }
 <script id="initial-data" type="application/json">@Html.Raw(Model.InitialDataJson)</script>
@@ -51,7 +51,7 @@
     }
     else if (Model.Roots.Count == 0)
     {
-        <p>No targets configured yet — add some on the <a href="/Config/Targets">Config</a> page.</p>
+        <p>No targets configured yet — add some on the <a href="/Config/Targets">Targets</a> page.</p>
     }
 </div>
 

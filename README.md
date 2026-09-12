@@ -59,23 +59,29 @@ ConWatch serves its UI at the root:
   Misbehaving targets expand in place into tiles with a 60-minute chart and the
   transition evidence; click any row to pin it open. Bottom status bar shows
   the latest event.
-- **Dashboard story** — under the live tree, **the last 30 days**: a
-  punchcard month (hours × days; ink only for trouble; a nightly gremlin
-  reads as a horizontal run) and the **incident ledger** — each incident as
-  one plain-English sentence ("Your link went down for 4 min. LinkDown:
-  Comcast — Comcast Edge is Down"). Both use one shared encoding: shape =
-  scope (bar = shared path, dot = one site), hue = whose gear (warm = out
-  there, grey = yours), depth = severity (glitch → degraded → out).
+- **Dashboard story** — around the live tree: the **event strip** (the last
+  N minutes as one row of minute bins right under the verdict banner), the
+  **incident ledger** (the 10 most recent events, each as one plain-English
+  sentence — "Your link went down for 4 min. LinkDown: Comcast — Comcast
+  Edge is Down"), and the recent-glitch list. All displays share one
+  encoding: shape = scope (bar = shared path, dot = one site), hue = whose
+  gear (warm = out there, grey = yours), depth = severity (glitch →
+  degraded → out).
 - **History** (`/History`) — the evidence: uptime stats, latency band, loss
-  chart, per-subject state ribbon, and the **cause-aligned ribbon board** —
-  every target on one shared axis, trunk rows in grey, hatching for
-  "unreachable behind a down parent", so one incident reads as a vertical
-  stripe across exactly the rows it touched. Plus the recent-glitch list and
-  a "chronically glitchy" badge. Detection is aggressive: the first lost
+  chart, per-subject state ribbon, the **recurrence punchcard** (hours ×
+  days over 30 days; a nightly gremlin reads as a horizontal run), the
+  **cause-aligned ribbon board** — every target on one shared axis, trunk
+  rows in grey, hatching for "unreachable behind a down parent", so one
+  incident reads as a vertical stripe across exactly the rows it touched —
+  and a 90-day incident ledger. Detection is aggressive: the first lost
   ping starts a 1-second-interval burst on that target AND a corroboration
   sweep across all anchors and the trunk, so even a few-second wobble yields
   enough evidence to classify.
-- **Config** (`/Config/Targets`, `/Config/Profiles`, `/Config/Pools`) — CRUD
+- **Data** (`/Data`) — the record: database statistics, all exports
+  (transitions/rollups/glitches as CSV or JSON, the sanitized snapshot
+  document), the ISP report link, and the retention settings that keep the
+  database from growing forever (minute rollups → hourly → daily).
+- **Targets** (`/Config/Targets`, `/Config/Profiles`, `/Config/Pools`) — CRUD
   with inline validation errors, plus whole-config export/import. Targets can
   carry an optional **ISP/operator name** ("Comcast"): link verdicts then say
   "LinkDown: Comcast — External Router is Down", the ISP report titles itself

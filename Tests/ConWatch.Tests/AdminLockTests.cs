@@ -61,7 +61,7 @@ public class AdminLockTests : IDisposable
         await LogoutAsync();
         var noRedirect = _factory.CreateClient(
             new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        foreach (var url in new[] { "/Admin", "/Config/Targets", "/Config/Profiles", "/Config/Pools", "/Traceroute", "/Setup" })
+        foreach (var url in new[] { "/Admin", "/Data", "/Config/Targets", "/Config/Profiles", "/Config/Pools", "/Traceroute", "/Setup" })
         {
             var response = await noRedirect.GetAsync(url);
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -83,6 +83,7 @@ public class AdminLockTests : IDisposable
         await LogoutAsync();
         html = await _client.GetStringAsync("/History");
         Assert.DoesNotContain("/Config/Targets", html);
+        Assert.DoesNotContain("href=\"/Data\"", html);
         Assert.DoesNotContain("/Traceroute", html);
         Assert.DoesNotContain("/Admin", html);
     }
