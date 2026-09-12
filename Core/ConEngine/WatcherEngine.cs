@@ -73,10 +73,20 @@ public class WatcherEngine
     public IReadOnlyList<PoolCoordinator> PoolCoordinators => _poolCoordinators;
     public TargetGraph Graph => _graph ?? throw new InvalidOperationException("Engine not started");
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    private bool _warmStart;
+
+    /// <summary>
+    /// Starts the engine, optionally warm: <paramref name="seed"/> carries
+    /// presumed subject states (from the last recorded transitions or a
+    /// predecessor engine) that are adopted silently, shown as assumed, and
+    /// burst-confirmed by fresh pings. A target seed applies only when its
+    /// address still matches configuration.
+    /// </summary>
+    public Task StartAsync(CancellationToken cancellationToken, EngineSeed? seed = null)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var ct = _cts.Token;
+        _warmStart = seed is not null && !seed.IsEmpty;
 
         _graph = TargetGraph.FromOptions(_options);
         _log.LogInformation("WatcherEngine starting: {TargetCount} targets, {PoolCount} pools",
@@ -97,6 +107,13 @@ public class WatcherEngine
                 : TimeSpan.Zero;
             var discipline = new PingDiscipline(profile, _timeProvider, initialDelay);
             var monitor = new TargetMonitor(target, profile, discipline, _timeProvider, _loggerFactory);
+            if (seed?.Targets.TryGetValue(target.Id, out var targetSeed) == true &&
+                targetSeed.Address == target.Address)
+            {
+                monitor.Seed(targetSeed.State);
+                _log.LogInformation("Warm start: {Target} presumed {State}",
+                    target.Name, targetSeed.State);
+            }
             _monitors[target.Id] = monitor;
             _subscriptions.Add(monitor.TransitionSource.Subscribe(_transitionSubject.OnNext));
         }
@@ -117,6 +134,8 @@ public class WatcherEngine
                 continue;
             var coordinator = new PoolCoordinator(pool, members, _timeProvider,
                 _loggerFactory.CreateLogger<PoolCoordinator>());
+            if (seed?.Pools.TryGetValue(pool.Id, out var poolSeed) == true)
+                coordinator.Seed(poolSeed);
             _subscriptions.Add(coordinator.TransitionSource.Subscribe(_transitionSubject.OnNext));
             coordinator.Start();
             _poolCoordinators.Add(coordinator);
@@ -136,6 +155,8 @@ public class WatcherEngine
                 Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
                     _verdictOptions.WeatherThreshold, _timeProvider,
                     _loggerFactory.CreateLogger<VerdictCoordinator>());
+                if (seed?.Verdict is { } verdictSeed)
+                    Verdict.Seed(verdictSeed);
                 _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
                 Verdict.Start();
             }
@@ -191,6 +212,11 @@ public class WatcherEngine
         var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
         _manager!.GetOrCreateController(ip, monitor.Discipline,
             () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, 1000) : steadyTimeoutMs);
+        // Warm starts burst everything so presumed states confirm in seconds
+        // (seeded Faltering/Down already burst via the discipline; this covers
+        // Responding/Starting, and no-ops on parked or already-bursting ones).
+        if (_warmStart)
+            monitor.Discipline.TriggerBurst();
         _log.LogInformation("Activated {Target} at {Ip}", monitor.Target.Name, ip);
     }
 

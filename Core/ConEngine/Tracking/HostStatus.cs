@@ -20,6 +20,9 @@ public record HostStatus
 {
     public required IPAddress HostAddress { get; init; }
     public HostState State { get; init; }
+    /// <summary>True while the state is a warm-restart presumption that fresh
+    /// samples have not yet confirmed.</summary>
+    public bool Assumed { get; init; }
     public DateTimeOffset TrackingStarted { get; init; }
     public int SampleSize { get; init; }
     public float SuccessRate { get; init; }

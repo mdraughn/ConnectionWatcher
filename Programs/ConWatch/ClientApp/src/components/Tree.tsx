@@ -26,10 +26,14 @@ function Row({ target, store, recent }: {
         pinned={false} onTogglePin={() => store.togglePin(target.id)} />
     );
   }
+  const assumedTitle = target.assumed
+    ? "assumed from before the restart — confirming with fresh pings" : null;
   return (
-    <div className="cw-row" onClick={() => store.togglePin(target.id)} title={target.address ?? ""}>
-      <span className={`dot ${target.state.toLowerCase()}`}></span>
-      <span>{target.name}</span>
+    <div className="cw-row" onClick={() => store.togglePin(target.id)}
+      title={assumedTitle ?? target.address ?? ""}>
+      <span className={`dot ${target.state.toLowerCase()}`}
+        style={target.assumed ? { opacity: 0.45 } : undefined}></span>
+      <span>{target.name}{target.assumed && <small style={{ opacity: 0.5 }}> (assumed)</small>}</span>
       <span className="stats">{statsText}</span>
     </div>
   );

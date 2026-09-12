@@ -27,6 +27,7 @@ public class TargetMonitor : IDisposable
     private HostState _preTrackerState = HostState.Initializing;
     private Guid? _pendingUnreachableAncestor;
     private bool _resolutionFailureReported;
+    private HostState? _seedState;
 
     private readonly ReplaySubject<TargetTransition> _transitionSubject = new(bufferSize: 1);
     private readonly ReplaySubject<TargetStatus> _statusSubject = new(bufferSize: 1);
@@ -58,6 +59,30 @@ public class TargetMonitor : IDisposable
         get { lock (_lock) { return _tracker?.CurrentState ?? _preTrackerState; } }
     }
 
+    /// <summary>True while running on an unconfirmed warm-restart presumption.</summary>
+    public bool IsAssumed
+    {
+        get { lock (_lock) { return _tracker?.Assumed ?? _seedState is not null; } }
+    }
+
+    /// <summary>
+    /// Warm restart: adopt a presumed state silently — no transition. Shows
+    /// immediately (marked assumed); applied to the tracker at StartTracking
+    /// and confirmed or corrected by fresh samples. Valid only before any
+    /// tracking or topology command has touched this monitor.
+    /// </summary>
+    public void Seed(HostState state)
+    {
+        lock (_lock)
+        {
+            if (_tracker is not null || _preTrackerState != HostState.Initializing)
+                return;
+            _seedState = state;
+            _preTrackerState = state;
+            Discipline.OnStateChanged(state);
+        }
+    }
+
     /// <summary>Creates the tracker once the address is known. Idempotent.</summary>
     public void StartTracking(IPAddress resolvedAddress)
     {
@@ -69,6 +94,8 @@ public class TargetMonitor : IDisposable
             ResolvedAddress = resolvedAddress;
             _tracker = new HostTracker(resolvedAddress, Profile, _timeProvider,
                 _loggerFactory.CreateLogger<HostTracker>());
+            if (_seedState is { } seed)
+                _tracker.Seed(seed);
 
             _transitionSubscription = _tracker.HostStateChangeSource.Subscribe(OnAnalysisTransition);
             _statusSubscription = _tracker.HostStatusSource.Subscribe(status =>
@@ -103,6 +130,7 @@ public class TargetMonitor : IDisposable
             }
             if (_preTrackerState == HostState.Unreachable)
                 return;
+            _seedState = null; // topology has spoken; the presumption is void
             _pendingUnreachableAncestor = ancestorId;
             EmitPreTrackerTransition(HostState.Unreachable, new TransitionReason
             {
@@ -122,6 +150,7 @@ public class TargetMonitor : IDisposable
             }
             if (_preTrackerState != HostState.Unreachable)
                 return;
+            _seedState = null; // released: re-prove from Starting, not the presumption
             _pendingUnreachableAncestor = null;
             EmitPreTrackerTransition(HostState.Starting,
                 new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
