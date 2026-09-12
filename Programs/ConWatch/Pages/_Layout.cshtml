@@ -26,11 +26,27 @@
                            exit admin mode</a></li>
                 }
             }
+            <li class="cw-build-item"><small id="cw-build"
+                       data-version="@ConWatch.BuildInfo.Version"
+                       data-built-utc="@(ConWatch.BuildInfo.BuiltUtc?.ToString("o") ?? "")"
+                       title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">
+                v@(ConWatch.BuildInfo.Version)</small></li>
         </ul>
     </nav>
     <main class="container">
         @RenderBody()
     </main>
     @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        // Localize the header build stamp; without JS it stays version-only.
+        (function () {
+            var el = document.getElementById("cw-build");
+            if (!el || !el.dataset.builtUtc) return;
+            var d = new Date(el.dataset.builtUtc);
+            if (isNaN(d)) return;
+            el.textContent = "v" + el.dataset.version + " · built " + d.toLocaleString(undefined,
+                { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        })();
+    </script>
 </body>
 </html>

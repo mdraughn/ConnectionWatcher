@@ -19,6 +19,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Company>DSoftCo</Company>
     <Product>ConnectionWatcher</Product>
+    <!-- Shown in the header and /api/v1/health; keep in step with the
+         installer's default (Build-Installer.ps1 -Version). -->
+    <Version>0.9.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
