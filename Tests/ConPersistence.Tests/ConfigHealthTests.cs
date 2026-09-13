@@ -73,4 +73,39 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
         await _settings.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.AnchorPool] = "Ghost" });
         Assert.Equal(["anchor-pool-missing"], await Codes());
     }
+
+    [Fact]
+    public async Task Reparenting_members_without_the_pool_warns_drift()
+    {
+        // The NAS incident: a new hop appears under Modem, the members move
+        // behind it, the pool's parent silently stays Modem.
+        await _service.UpsertTargetAsync(new TargetDto
+        {
+            Name = "Edge", Address = "198.51.100.201", Parent = "Modem",
+        });
+        var doc = await _store.ExportAsync();
+        foreach (var name in new[] { "Google", "Cloudflare" })
+            await _service.UpsertTargetAsync(
+                doc.Targets.Single(t => t.Name == name) with { Parent = "Edge" });
+
+        var warnings = await _health.EvaluateAsync();
+        var drift = Assert.Single(warnings, w => w.Code == "pool-parent-drift");
+        Assert.Contains("'Edge'", drift.Message);
+        Assert.Contains("'Modem'", drift.Message);
+
+        // Re-parenting the pool clears it.
+        var pool = (await _store.ExportAsync()).Pools.Single();
+        await _service.UpsertPoolAsync(pool with { Parent = "Edge" });
+        Assert.DoesNotContain("pool-parent-drift", await Codes());
+    }
+
+    [Fact]
+    public async Task Unparented_pool_with_parented_members_warns_drift()
+    {
+        var pool = (await _store.ExportAsync()).Pools.Single();
+        await _service.UpsertPoolAsync(pool with { Parent = null });
+        var warnings = await _health.EvaluateAsync();
+        var drift = Assert.Single(warnings, w => w.Code == "pool-parent-drift");
+        Assert.Contains("not parented", drift.Message);
+    }
 }
