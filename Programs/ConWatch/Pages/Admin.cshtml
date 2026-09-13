@@ -191,6 +191,16 @@ else
             <input id="reset-confirm" placeholder="type RESET to enable" autocomplete="off" />
             <button id="reset-btn" class="secondary" disabled>Factory reset</button>
         </div>
+        <div>
+            <h5>Prune old history</h5>
+            <p>Deletes measurement data recorded before the date — configuration,
+               settings, and each target's latest state are kept. Compacts the
+               database file afterwards.</p>
+            <input id="prune-date" type="date" autocomplete="off" />
+            <input id="prune-confirm" placeholder="type PRUNE to enable" autocomplete="off" />
+            <button id="prune-btn" class="secondary" disabled>Prune</button>
+            <p id="prune-result"></p>
+        </div>
     </div>
 </article>
 
