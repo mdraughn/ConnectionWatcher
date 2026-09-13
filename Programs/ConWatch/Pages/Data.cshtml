@@ -28,8 +28,10 @@ clone wizard use.</small></p>
 <h3>Retention</h3>
 <p><small>Data downsamples instead of growing forever: per-minute statistics
 are kept for the window below, then survive as hourly rollups, then daily
-rollups (kept indefinitely). Glitches are pruned with the minute window;
-state transitions are never pruned. The pass runs nightly.</small></p>
+rollups (kept indefinitely). Glitches are pruned with the minute window.
+State transitions — the incident history — are kept for the months below;
+each subject's most recent transition always survives (warm restart resumes
+from it). The pass runs nightly.</small></p>
 <ul class="form-errors" id="retention-errors"></ul>
 <form id="retention-form">
     <div class="grid">
@@ -40,6 +42,10 @@ state transitions are never pruned. The pass runs nightly.</small></p>
         <label>Hourly rollups kept (months)
             <input name="@SettingKeys.HourlyRetentionMonths" type="number" min="1" max="120"
                    value="@Model.Setting(SettingKeys.HourlyRetentionMonths, "13")" />
+        </label>
+        <label>Transitions kept (months)
+            <input name="@SettingKeys.TransitionRetentionMonths" type="number" min="1" max="120"
+                   value="@Model.Setting(SettingKeys.TransitionRetentionMonths, "24")" />
         </label>
         <label>Retention run hour (UTC)
             <input name="@SettingKeys.RetentionRunHourUtc" type="number" min="0" max="23"

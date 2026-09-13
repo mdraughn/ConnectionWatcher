@@ -14,6 +14,10 @@ public class PersistenceOptions
     /// <summary>Hourly rollups older than this are downsampled to daily.</summary>
     public int HourlyRetentionMonths { get; set; } = 13;
 
+    /// <summary>State transitions older than this are pruned (each subject's
+    /// most recent transition always survives — warm restart seeds from it).</summary>
+    public int TransitionRetentionMonths { get; set; } = 24;
+
     /// <summary>UTC hour of day at which the daily retention pass runs.</summary>
     public int RetentionRunHourUtc { get; set; } = 3;
 

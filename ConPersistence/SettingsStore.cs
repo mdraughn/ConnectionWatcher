@@ -10,6 +10,7 @@ public static class SettingKeys
     public const string WeatherThreshold = "Verdict.WeatherThreshold";
     public const string MinuteRetentionDays = "Retention.MinuteRetentionDays";
     public const string HourlyRetentionMonths = "Retention.HourlyRetentionMonths";
+    public const string TransitionRetentionMonths = "Retention.TransitionMonths";
     public const string RetentionRunHourUtc = "Retention.RetentionRunHourUtc";
     public const string RetentionLastRunUtc = "Retention.LastRunUtc";
 

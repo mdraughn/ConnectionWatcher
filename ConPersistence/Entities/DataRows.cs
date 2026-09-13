@@ -1,6 +1,8 @@
 namespace ConPersistence.Entities;
 
-/// <summary>A recorded state transition with its evidence. Never pruned.</summary>
+/// <summary>A recorded state transition with its evidence. Pruned after
+/// Retention.TransitionMonths (default 24), except each subject's most
+/// recent row, which warm restart seeds from.</summary>
 public class TransitionRow
 {
     public long Id { get; set; }
