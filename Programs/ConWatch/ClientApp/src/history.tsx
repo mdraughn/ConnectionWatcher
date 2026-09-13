@@ -152,6 +152,10 @@ function App({ subjects }: { subjects: Subject[] }) {
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
         </select>
+        <small style={{ alignSelf: "center", opacity: 0.55 }}>
+          times in {Intl.DateTimeFormat().resolvedOptions().timeZone} (your browser&apos;s zone);
+          the ISP report shows UTC alongside
+        </small>
       </div>
 
       {loading && <p aria-busy="true">loading…</p>}
