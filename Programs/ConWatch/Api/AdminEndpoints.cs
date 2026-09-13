@@ -9,6 +9,8 @@ public static class AdminEndpoints
 {
     public record ConfirmRequest(string? Confirm);
 
+    public record PruneRequest(DateTime? BeforeUtc, string? Confirm);
+
     public record MqttTestRequest(string? Host, int? Port, string? Username, string? Password);
 
     public record EngineControlRequest(bool Enabled, string? Password);
@@ -82,6 +84,26 @@ public static class AdminEndpoints
             var (ok, message) = await ConNotify.MqttTester.TestAsync(
                 request.Host, port, request.Username, request.Password, ct);
             return Results.Ok(new { ok, message });
+        });
+
+        api.MapPost("/admin/prune", async (PruneRequest request,
+            IDbContextFactory<ConWatchDbContext> dbFactory, IOptions<PersistenceOptions> options,
+            ILoggerFactory loggerFactory) =>
+        {
+            if (request.Confirm != "PRUNE")
+                return Results.BadRequest(new { errors = new[] { "Confirmation must be exactly 'PRUNE'." } });
+            if (request.BeforeUtc is not { } before || before == default(DateTime))
+                return Results.BadRequest(new { errors = new[] { "A cutoff date is required." } });
+
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var result = await ConPersistence.Services.DataPruner.PruneBeforeAsync(
+                db, options.Value.DbPath, before.ToUniversalTime());
+            loggerFactory.CreateLogger("Admin").LogWarning(
+                "History PRUNED before {Before:u}: {Transitions} transitions, {Rollups} rollups, " +
+                "{Glitches} glitches; file {Before2} -> {After} bytes",
+                before, result.Transitions, result.Rollups, result.Glitches,
+                result.FileSizeBefore, result.FileSizeAfter);
+            return Results.Ok(result);
         });
 
         api.MapPost("/admin/clear-history", async (ConfirmRequest request,

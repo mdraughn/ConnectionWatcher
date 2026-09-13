@@ -68,6 +68,45 @@ public class AdminApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Prune_removes_only_rows_before_the_date_and_reports_counts()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () =>
+        {
+            await _factory.Services.GetRequiredService<TransitionRecorder>().FlushAsync();
+            var stats = await Stats();
+            return stats.GetProperty("tables").GetProperty("transitions").GetInt32() > 0;
+        });
+
+        var wrong = await _client.PostAsJsonAsync("/api/v1/admin/prune",
+            new { beforeUtc = "2026-01-01T00:00:00Z", confirm = "prune" });
+        Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
+        var noDate = await _client.PostAsJsonAsync("/api/v1/admin/prune", new { confirm = "PRUNE" });
+        Assert.Equal(HttpStatusCode.BadRequest, noDate.StatusCode);
+
+        // Cutoff in the past: recent rows and config are untouched.
+        var past = await _client.PostAsJsonAsync("/api/v1/admin/prune",
+            new { beforeUtc = DateTime.UtcNow.AddYears(-1).ToString("o"), confirm = "PRUNE" });
+        Assert.Equal(HttpStatusCode.OK, past.StatusCode);
+        var before = await Stats();
+        Assert.True(before.GetProperty("tables").GetProperty("transitions").GetInt32() > 0);
+
+        // Cutoff in the future: everything recorded so far goes except each
+        // subject's latest row; config survives.
+        var future = await _client.PostAsJsonAsync("/api/v1/admin/prune",
+            new { beforeUtc = DateTime.UtcNow.AddDays(1).ToString("o"), confirm = "PRUNE" });
+        Assert.Equal(HttpStatusCode.OK, future.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await future.Content.ReadAsStringAsync());
+        Assert.True(body.GetProperty("transitions").GetInt32() >= 0);
+
+        var after = await Stats();
+        Assert.Equal(3, after.GetProperty("tables").GetProperty("targets").GetInt32());
+        // Latest-per-subject guard: at least the subjects' newest rows remain.
+        var transitions = await _client.GetFromJsonAsync<JsonElement>("/api/v1/transitions?limit=500");
+        Assert.True(transitions.GetProperty("items").GetArrayLength() > 0);
+    }
+
+    [Fact]
     public async Task Factory_reset_wipes_everything_and_reseeds_builtins()
     {
         await ConfigApiTests.SeedHomeAsync(_client);

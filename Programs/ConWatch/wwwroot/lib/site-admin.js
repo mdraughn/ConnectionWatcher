@@ -77,6 +77,36 @@ if (passwordForm) {
 wireDanger("clear-confirm", "clear-btn", "CLEAR", "/api/v1/admin/clear-history");
 wireDanger("reset-confirm", "reset-btn", "RESET", "/api/v1/admin/factory-reset");
 
+// Prune-by-date: the confirm-word pattern plus a cutoff date and an inline
+// result (rows removed, space returned) instead of a redirect.
+{
+    const input = document.getElementById("prune-confirm");
+    const button = document.getElementById("prune-btn");
+    input.addEventListener("input", () => { button.disabled = input.value !== "PRUNE"; });
+    button.addEventListener("click", async () => {
+        const errors = document.getElementById("danger-errors");
+        const out = document.getElementById("prune-result");
+        clearErrors(errors);
+        const date = document.getElementById("prune-date").value;
+        if (!date) {
+            showErrors(errors, { body: { errors: ["Pick a cutoff date first."] } });
+            return;
+        }
+        button.setAttribute("aria-busy", "true");
+        const result = await apiFetch("POST", "/api/v1/admin/prune",
+            { beforeUtc: date + "T00:00:00Z", confirm: input.value });
+        button.removeAttribute("aria-busy");
+        if (!result.ok) { showErrors(errors, result); return; }
+        const r = result.body;
+        const freed = Math.max(0, r.fileSizeBefore - r.fileSizeAfter) / 1048576;
+        out.textContent = `Removed ${r.transitions.toLocaleString()} transitions, ` +
+            `${r.rollups.toLocaleString()} rollup rows, ${r.glitches.toLocaleString()} glitches; ` +
+            `freed ${freed.toFixed(1)} MB.`;
+        input.value = "";
+        button.disabled = true;
+    });
+}
+
 // Monitoring toggle (master enable switch).
 const engineToggle = document.getElementById("engine-toggle-btn");
 if (engineToggle) {
