@@ -156,6 +156,23 @@ master switch behind all this is the **Monitoring** toggle on the Admin page
 serving; pinging and notifications stop, and MQTT reads offline in Home
 Assistant.
 
+## Ask Claude about your internet (MCP)
+
+ConnectionWatcher exposes a Model Context Protocol endpoint at `/mcp`, so an
+MCP host can query the node directly:
+
+```bash
+claude mcp add --transport http conwatch http://nas.example.com:8080/mcp
+```
+
+Then just ask — "how was my internet last night?", "any glitches today?",
+"what did the verdict blame on Tuesday?" — and Claude answers from the actual
+database via four read-only tools: `get_current_status`,
+`get_connection_report`, `get_transitions`, and `get_glitches`. The endpoint
+is open like the rest of the watching surface and serves nothing the open
+APIs don't already serve; it never touches settings, secrets, or admin
+actions.
+
 ## Running unattended
 
 **The easy way** — from the repo root, no parameters, self-elevating:

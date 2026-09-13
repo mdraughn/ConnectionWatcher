@@ -98,6 +98,17 @@ builder.Services.AddAuthentication(
         o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
     });
 
+// MCP endpoint (/mcp): read-only tools over the open watching surface, so an
+// MCP host can query status and history directly. Stateless HTTP keeps it
+// session-free and reverse-proxy-friendly.
+builder.Services.AddMcpServer(o => o.ServerInfo = new()
+    {
+        Name = "ConnectionWatcher",
+        Version = BuildInfo.Version,
+    })
+    .WithHttpTransport(o => o.Stateless = true)
+    .WithTools<ConWatch.Mcp.ConWatchMcpTools>();
+
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
 builder.Services.AddSignalR();
@@ -121,6 +132,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapRazorPages();
 app.MapHub<StatusHub>("/hubs/status");
+app.MapMcp("/mcp"); // open, read-only (see the MCP design spec)
 
 var api = app.MapGroup("/api/v1");
 // Watching is always open; changing requires admin mode when a password is set.
