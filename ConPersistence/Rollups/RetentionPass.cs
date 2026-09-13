@@ -33,6 +33,21 @@ public class RetentionPass(ILogger log)
                 pruned, options.MinuteRetentionDays);
             converted += pruned;
         }
+
+        // Transitions age out too — the one otherwise-unbounded table. Each
+        // subject's MOST RECENT transition always survives: warm restart
+        // seeds the presumed state from it, however old it is.
+        var transitionThreshold = nowUtc.AddMonths(-options.TransitionRetentionMonths);
+        var latestIds = db.Transitions.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
+        var prunedTransitions = await db.Transitions
+            .Where(t => t.TimestampUtc < transitionThreshold && !latestIds.Contains(t.Id))
+            .ExecuteDeleteAsync(ct);
+        if (prunedTransitions > 0)
+        {
+            log.LogInformation("Pruned {Count} transitions older than {Months} months",
+                prunedTransitions, options.TransitionRetentionMonths);
+            converted += prunedTransitions;
+        }
         return converted;
     }
 

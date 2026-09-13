@@ -49,6 +49,10 @@ public static class SettingsEndpoints
                         if (!int.TryParse(value, out var months) || months < 1 || months > 120)
                             errors.Add("HourlyRetentionMonths must be 1–120.");
                         break;
+                    case SettingKeys.TransitionRetentionMonths:
+                        if (!int.TryParse(value, out var trMonths) || trMonths < 1 || trMonths > 120)
+                            errors.Add("Retention.TransitionMonths must be 1–120.");
+                        break;
                     case SettingKeys.RetentionRunHourUtc:
                         if (!int.TryParse(value, out var hour) || hour < 0 || hour > 23)
                             errors.Add("RetentionRunHourUtc must be 0–23.");

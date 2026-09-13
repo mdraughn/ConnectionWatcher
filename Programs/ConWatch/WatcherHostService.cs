@@ -67,6 +67,7 @@ public class WatcherHostService(
             [SettingKeys.WeatherThreshold] = verdictOptions.Value.WeatherThreshold.ToString(),
             [SettingKeys.MinuteRetentionDays] = persistenceOptions.Value.MinuteRetentionDays.ToString(),
             [SettingKeys.HourlyRetentionMonths] = persistenceOptions.Value.HourlyRetentionMonths.ToString(),
+            [SettingKeys.TransitionRetentionMonths] = persistenceOptions.Value.TransitionRetentionMonths.ToString(),
             [SettingKeys.RetentionRunHourUtc] = persistenceOptions.Value.RetentionRunHourUtc.ToString(),
             [SettingKeys.WarmRestartMaxGapMinutes] = "10",
         };

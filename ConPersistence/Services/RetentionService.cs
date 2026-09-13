@@ -27,6 +27,8 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
                 SettingKeys.MinuteRetentionDays, effective.MinuteRetentionDays),
             HourlyRetentionMonths = await settingsStore.GetIntAsync(
                 SettingKeys.HourlyRetentionMonths, effective.HourlyRetentionMonths),
+            TransitionRetentionMonths = await settingsStore.GetIntAsync(
+                SettingKeys.TransitionRetentionMonths, effective.TransitionRetentionMonths),
             RetentionRunHourUtc = await settingsStore.GetIntAsync(
                 SettingKeys.RetentionRunHourUtc, effective.RetentionRunHourUtc),
         };

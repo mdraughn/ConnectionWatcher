@@ -105,21 +105,49 @@ public class RetentionTests : IDisposable
         Assert.Equal(0, await check.Rollups.CountAsync(r => r.Resolution == "Hour"));
     }
 
+    private TransitionRow Transition(Guid subject, DateTime at, string to = "Down") => new()
+    {
+        TimestampUtc = at, SubjectId = subject, SubjectName = "T",
+        SubjectKind = "Target", FromState = "Responding", ToState = to,
+        Trigger = "ThresholdCrossed",
+    };
+
     [Fact]
-    public async Task Transitions_are_never_touched()
+    public async Task Old_transitions_prune_but_each_subjects_latest_survives()
+    {
+        var other = Guid.NewGuid();
+        await using (var db = _factory.CreateDbContext())
+        {
+            // _target: two ancient rows and one recent — ancient ones prune.
+            db.Transitions.Add(Transition(_target, Now.AddYears(-3)));
+            db.Transitions.Add(Transition(_target, Now.AddMonths(-30), "Responding"));
+            db.Transitions.Add(Transition(_target, Now.AddDays(-5)));
+            // other: ONLY ancient rows — the newest of them must survive
+            // (warm restart seeds each subject from its latest transition).
+            db.Transitions.Add(Transition(other, Now.AddYears(-4)));
+            db.Transitions.Add(Transition(other, Now.AddYears(-3), "Responding"));
+            await db.SaveChangesAsync();
+            await _pass.RunAsync(db, Now, _options, CancellationToken.None); // default 24 months
+        }
+
+        await using var check = _factory.CreateDbContext();
+        var remaining = await check.Transitions.ToListAsync();
+        Assert.Equal(2, remaining.Count);
+        Assert.Contains(remaining, t => t.SubjectId == _target && t.TimestampUtc == Now.AddDays(-5));
+        Assert.Contains(remaining, t => t.SubjectId == other && t.TimestampUtc == Now.AddYears(-3));
+    }
+
+    [Fact]
+    public async Task Transitions_within_the_window_are_untouched()
     {
         await using (var db = _factory.CreateDbContext())
         {
-            db.Transitions.Add(new TransitionRow
-            {
-                TimestampUtc = Now.AddYears(-3), SubjectId = _target, SubjectName = "Old",
-                SubjectKind = "Target", FromState = "Responding", ToState = "Down",
-                Trigger = "ThresholdCrossed",
-            });
+            db.Transitions.Add(Transition(_target, Now.AddMonths(-23)));
+            db.Transitions.Add(Transition(_target, Now.AddDays(-1), "Responding"));
             await db.SaveChangesAsync();
             await _pass.RunAsync(db, Now, _options, CancellationToken.None);
         }
         await using var check = _factory.CreateDbContext();
-        Assert.Equal(1, await check.Transitions.CountAsync());
+        Assert.Equal(2, await check.Transitions.CountAsync());
     }
 }
