@@ -19,6 +19,8 @@ export interface PoolStatus {
 export interface VerdictStatus {
   state: string;
   detail: string | null;
+  /** ISP blamed by a Link* verdict ("Comcast"), else null. */
+  operator?: string | null;
 }
 
 export interface Snapshot {

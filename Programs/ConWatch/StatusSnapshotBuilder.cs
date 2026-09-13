@@ -14,7 +14,12 @@ public static class StatusSnapshotBuilder
             return null;
 
         var verdict = engine.Verdict is { } v
-            ? new { State = v.CurrentVerdict.ToString(), Detail = v.CurrentDetail }
+            ? new
+            {
+                State = v.CurrentVerdict.ToString(),
+                Detail = v.CurrentDetail,
+                Operator = v.CurrentOperator,
+            }
             : null;
         var targets = engine.Monitors.Values.Select(m => new
         {
