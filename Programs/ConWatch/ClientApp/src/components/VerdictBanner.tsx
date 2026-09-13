@@ -1,13 +1,60 @@
+// The verdict slab answers ONE question at a glance: is my internet up?
+// The big line is always one of three plain answers (UP / STRUGGLING / DOWN);
+// the diagnosis is a smaller caveat line in plain language — no anchors, no
+// probe counts — wearing the shared encoding's mark so it rhymes with the
+// ledger. The technical detail survives as a hover tooltip.
+import type { Mark } from "../lib/encoding";
 import type { VerdictStatus } from "../lib/types";
+import { MarkSwatch } from "./marks";
 
-const LABELS: Record<string, string> = {
-  Healthy: "INTERNET: HEALTHY",
-  SiteIncident: "INTERNET: SITE INCIDENT",
-  InternetWeather: "INTERNET: WEATHER",
-  LinkDegraded: "INTERNET: LINK DEGRADED",
-  LinkDown: "INTERNET: LINK DOWN",
-  Unknown: "INTERNET: MEASURING…",
-};
+interface Slab {
+  cls: string;          // reuses the existing color classes
+  icon: string;
+  headline: string;
+  caveat: string | null;
+  mark: Mark | null;    // whose-gear chip beside the caveat
+}
+
+export function slabFor(verdict: VerdictStatus): Slab {
+  switch (verdict.state) {
+    case "Healthy":
+      return {
+        cls: "healthy", icon: "●", headline: "Your internet is UP",
+        caveat: "no trouble in sight", mark: null,
+      };
+    case "SiteIncident":
+      return {
+        cls: "healthy", icon: "●", headline: "Your internet is UP",
+        caveat: "one site out there is having trouble — not your connection",
+        mark: { shape: "dot", hue: "warm", depth: "glitch" },
+      };
+    case "InternetWeather":
+      return {
+        cls: "healthy", icon: "●", headline: "Your internet is UP",
+        caveat: "but parts of the internet look unreachable right now — the trouble isn't on your end",
+        mark: { shape: "bar", hue: "warm", depth: "degraded" },
+      };
+    case "LinkDegraded":
+      return {
+        cls: "linkdegraded", icon: "▲", headline: "Your internet is STRUGGLING",
+        caveat: "your connection is losing some traffic — pages may stall or feel slow",
+        mark: { shape: "bar", hue: "grey", depth: "degraded" },
+      };
+    case "LinkDown":
+      return {
+        cls: "linkdown", icon: "■", headline: "Your internet is DOWN",
+        caveat: verdict.operator
+          ? `${verdict.operator} is not carrying your traffic`
+          : "your connection to the internet is not carrying traffic",
+        mark: { shape: "bar", hue: "grey", depth: "out" },
+      };
+    default:
+      return {
+        cls: "unknown", icon: "○", headline: "Checking your internet…",
+        caveat: "measuring — an answer arrives within a minute or two", mark: null,
+      };
+  }
+}
 
 export function VerdictBanner({ verdict, connected }: {
   verdict: VerdictStatus | null;
@@ -16,17 +63,27 @@ export function VerdictBanner({ verdict, connected }: {
   if (!verdict) {
     return (
       <div className={`verdict-banner unknown ${connected ? "" : "reconnecting"}`}>
-        &#9675; VERDICT OFF — configure an anchor pool to enable internet-weather detection
+        &#9675; VERDICT OFF — pick internet check sites (an anchor pool) on the Admin page
         {!connected && <span className="pill">reconnecting…</span>}
       </div>
     );
   }
-  const cls = verdict.state.toLowerCase();
+  const slab = slabFor(verdict);
   return (
-    <div className={`verdict-banner ${cls} ${connected ? "" : "reconnecting"}`}>
-      &#9679; {LABELS[verdict.state] ?? verdict.state}
-      {verdict.detail ? <span style={{ fontWeight: 400 }}> — {verdict.detail}</span> : null}
+    <div className={`verdict-banner ${slab.cls} ${connected ? "" : "reconnecting"}`}
+      title={verdict.detail ?? undefined}>
       {!connected && <span className="pill">reconnecting…</span>}
+      <div style={{ fontSize: "1.25rem", lineHeight: 1.3 }}>
+        {slab.icon} {slab.headline}
+      </div>
+      {slab.caveat && (
+        <div style={{ fontSize: "0.8rem", fontWeight: 400, opacity: 0.92, marginTop: 2 }}>
+          {slab.mark && <span style={{ marginRight: 6, verticalAlign: "baseline" }}>
+            <MarkSwatch mark={slab.mark} barWidth={13} size={8} />
+          </span>}
+          {slab.caveat}
+        </div>
+      )}
     </div>
   );
 }
