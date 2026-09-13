@@ -59,11 +59,10 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 
 ## Time reporting (noted 2026-09-06)
 
-- **ISP report / History timezone clarity** — the report prints UTC with the
-  label only in the header; History renders browser-local. Cross-referencing
-  the two confused even Mark (a 10:34 PM Sep 3 local event reads as
-  "03:34 Sep 4" on the report). Label each incident row's zone explicitly,
-  or render a configurable zone with UTC alongside.
+- ~~**ISP report / History timezone clarity**~~ — DONE 2026-09-13: report
+  timestamps render browser-local (zone named at the top) with the fixed UTC
+  value beneath each for provider-log correlation; no-JS shows UTC only.
+  History labels its zone next to the range picker.
 
 ## In design (noted 2026-09-10)
 
@@ -107,13 +106,13 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 
 ## Small hardening candidates
 
-- **Config health warning: pool parent vs. members' parent drift** (noted
-  2026-09-11). Re-parenting a pool's members doesn't move the pool's own
-  parent; the verdict layer is immune (walks anchor chains) but the ISP
-  report's trunk walk starts at pool.ParentId and silently truncates — bit
-  us on the NAS after the Comcast Edge re-parent. Add a ConfigHealth warning
-  when the pool's parent is not on its members' shared parent chain, or make
-  UpsertTarget re-parenting drag the pool along.
+- ~~**Config health warning: pool parent vs. members' parent drift**~~ —
+  DONE 2026-09-13: ConfigHealth computes the members' deepest shared
+  ancestor and warns (with the exact re-parent to make) when the pool's
+  parent is not it, including the unparented-pool case.
+- ~~**Transitions retention**~~ — DONE 2026-09-13: `Retention.TransitionMonths`
+  (default 24) in the nightly pass; each subject's latest transition always
+  survives for warm-restart seeding. Editable on the Data page.
 
 ## Still on the roadmap
 
