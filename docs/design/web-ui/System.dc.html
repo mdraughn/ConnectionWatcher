@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, Helvetica, Arial, sans-serif; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: var(--primary); text-decoration: underline; }
+    table { border-collapse: collapse; width: 100%; }
+  </style>
+</helmet>
+<div style="width:1440px;min-height:1460px;background:var(--bg);color:var(--text);font-family:system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.5;display:flex;flex-direction:column;
+    --bg:#ffffff; --surface:#fbfcfd; --surface-2:#f4f6f9; --surface-3:#eef1f5;
+    --text:#373c44; --muted:#646b79; --faint:#8b93a1;
+    --border:#e7eaf0; --border-strong:#d6dbe4;
+    --primary:#0172ad; --primary-soft:rgba(1,114,173,0.10);
+    --ok:#2e9e52; --warn:#e08a00; --down:#cc3333; --unreach:#999999;
+    --warm-glitch:#eda94f; --warm-degraded:#e08a00; --warm-out:#cc3333;
+    --grey-glitch:#d4d4d4; --grey-degraded:#7d7d7d; --grey-out:#2b2b2b;
+    --healthy:#eaf3ec; --healthy-vivid:#4fa96e;
+    --shadow:0 1px 2px rgba(28,35,50,0.05), 0 1px 1px rgba(28,35,50,0.04);
+">
+<header style="flex-shrink:0;height:56px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:26px;padding:0 26px">
+    <div style="display:flex;align-items:center;gap:9px;flex-shrink:0">
+      <span style="color:var(--primary);display:flex"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="2" fill="currentColor" stroke="none"></circle><path d="M15.1 6.9a5.8 5.8 0 0 1 0 8.2"></path><path d="M6.9 15.1a5.8 5.8 0 0 1 0-8.2"></path><path d="M17.9 4.1a9.7 9.7 0 0 1 0 13.8" opacity="0.4"></path><path d="M4.1 17.9a9.7 9.7 0 0 1 0-13.8" opacity="0.4"></path></svg></span>
+      <span style="font-size:0.97rem;font-weight:640;letter-spacing:-0.012em;color:var(--text)">ConnectionWatcher</span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.66rem;color:var(--faint);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px">v1.4.2</span>
+    </div>
+    <nav style="display:flex;align-items:center;gap:22px">
+      <a href="#" style="display:flex;align-items:center;gap:7px;height:56px;padding:0 3px;text-decoration:none;font-size:0.855rem;font-weight:450;color:var(--muted);box-shadow:none"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 14.2a7.6 7.6 0 1 1 13.2 0"></path><path d="M10 11.4 13.1 7.6"></path><circle cx="10" cy="12.4" r="1.3" fill="currentColor" stroke="none"></circle></svg><span>Dashboard</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:7px;height:56px;padding:0 3px;text-decoration:none;font-size:0.855rem;font-weight:450;color:var(--muted);box-shadow:none"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 9.4a6.8 6.8 0 1 0 1.9-4.6"></path><path d="M3 3.4v3.6h3.6"></path><path d="M10 6.6V10l2.5 1.5"></path></svg><span>History</span></a>
+      <span style="width:1px;height:20px;background:var(--border-strong)"></span>
+      <a href="#" style="display:flex;align-items:center;gap:7px;height:56px;padding:0 3px;text-decoration:none;font-size:0.855rem;font-weight:450;color:var(--muted);box-shadow:none"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="10" cy="5.4" rx="5.8" ry="2.4"></ellipse><path d="M4.2 5.4v9.2c0 1.33 2.6 2.4 5.8 2.4s5.8-1.07 5.8-2.4V5.4"></path><path d="M4.2 10c0 1.33 2.6 2.4 5.8 2.4s5.8-1.07 5.8-2.4"></path></svg><span>Data</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:7px;height:56px;padding:0 3px;text-decoration:none;font-size:0.855rem;font-weight:450;color:var(--muted);box-shadow:none"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.6" cy="10" r="2.1"></circle><circle cx="15.4" cy="5.2" r="2.1"></circle><circle cx="15.4" cy="14.8" r="2.1"></circle><path d="M6.6 9.1 13.4 6"></path><path d="M6.6 10.9 13.4 14"></path></svg><span>Targets</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:7px;height:56px;padding:0 3px;text-decoration:none;font-size:0.855rem;font-weight:450;color:var(--muted);box-shadow:none"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.4" cy="15.6" r="1.9"></circle><circle cx="15.6" cy="4.4" r="1.9"></circle><circle cx="10" cy="10" r="1.2" fill="currentColor" stroke="none"></circle><path d="M6.3 15.6h2.2a3.2 3.2 0 0 0 3.2-3.2V8.2a3.2 3.2 0 0 1 2-2.9"></path></svg><span>Traceroute</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:7px;height:56px;padding:0 3px;text-decoration:none;font-size:0.855rem;font-weight:600;color:var(--text);box-shadow:inset 0 -2px 0 var(--primary)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 6.2h13.2M3.4 10h13.2M3.4 13.8h13.2"></path><circle cx="7.6" cy="6.2" r="1.9" fill="var(--surface)"></circle><circle cx="13" cy="10" r="1.9" fill="var(--surface)"></circle><circle cx="6.6" cy="13.8" r="1.9" fill="var(--surface)"></circle></svg><span>Admin</span></a>
+    </nav>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <span style="display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 11px 4px 9px">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0"></span>
+      <span style="font-size:0.775rem;font-weight:600;color:var(--text)">Healthy</span>
+    </span>
+      <button style="width:31px;height:31px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);border-radius:5px;cursor:pointer;padding:0"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15.6 11.9A6.4 6.4 0 0 1 8.1 4.4a6.4 6.4 0 1 0 7.5 7.5z"></path></svg></button>
+      <button style="width:31px;height:31px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);border-radius:5px;cursor:pointer;padding:0"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.6" y="8.6" width="10.8" height="7.8" rx="2"></rect><path d="M7.2 8.6V6.4a2.8 2.8 0 0 1 5.6 0v2.2"></path></svg></button>
+    </div>
+  </header>
+<div style="flex-shrink:0;padding:20px 26px 16px;display:flex;align-items:flex-end;gap:24px">
+    <div style="flex:1;min-width:0">
+      <h1 style="margin:0 0 3px;font-size:1.33rem;font-weight:650;letter-spacing:-0.015em;color:var(--text);line-height:1.2">Design language</h1>
+      <p style="margin:0;font-size:0.825rem;color:var(--muted);line-height:1.4">The tokens, marks, icons and controls every ConnectionWatcher page is built from.</p>
+    </div>
+    
+  </div>
+<main style="flex:1;padding:0 26px 30px">
+    <div style="max-width:1250px;margin:0 auto;display:flex;flex-direction:column;gap:24px">
+
+      <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:24px;align-items:start">
+
+        <div style="display:flex;flex-direction:column;gap:24px">
+          <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Surfaces and ink</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div>
+            <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:14px">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:16px 18px"><div style="font-size:0.72rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin-bottom:12px">Light</div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#ffffff;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">page</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#ffffff</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#fbfcfd;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">surface</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#fbfcfd</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#f4f6f9;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">raised</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#f4f6f9</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#eef1f5;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">well</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#eef1f5</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#e7eaf0;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">hairline</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#e7eaf0</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#d6dbe4;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">border</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#d6dbe4</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#373c44;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">ink</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#373c44</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#646b79;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">ink muted</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#646b79</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#8b93a1;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">ink faint</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#8b93a1</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#0172ad;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">accent</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#0172ad</span>
+    </div></div>
+              <div style="    --bg:#13161f; --surface:#181c26; --surface-2:#1e2331; --surface-3:#252b3a;
+    --text:#c2c7d0; --muted:#7b8495; --faint:#68707f;
+    --border:#262d3b; --border-strong:#323a4b;
+    --primary:#01aaff; --primary-soft:rgba(1,170,255,0.13);
+    --ok:#3fb567; --warn:#f0a02a; --down:#e8544b; --unreach:#6d7585;
+    --warm-glitch:#c98a3c; --warm-degraded:#f0a02a; --warm-out:#e8544b;
+    --grey-glitch:#39404f; --grey-degraded:#8c94a6; --grey-out:#e2e6ee;
+    --healthy:#1b2620; --healthy-vivid:#46a86c;
+    --shadow:0 1px 2px rgba(0,0,0,0.35), 0 1px 1px rgba(0,0,0,0.25);background:var(--bg);color:var(--text);border:1px solid #2a3140;border-radius:8px;padding:16px 18px"><div style="font-size:0.72rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin-bottom:12px">Dark</div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#13161f;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">page</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#13161f</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#181c26;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">surface</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#181c26</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#1e2331;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">raised</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#1e2331</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#252b3a;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">well</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#252b3a</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#262d3b;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">hairline</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#262d3b</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#323a4b;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">border</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#323a4b</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#c2c7d0;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">ink</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#c2c7d0</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#7b8495;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">ink muted</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#7b8495</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#68707f;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">ink faint</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#68707f</span>
+    </div><div style="display:flex;align-items:center;gap:11px;height:29px">
+      <span style="width:26px;height:19px;border-radius:4px;background:#01aaff;border:1px solid var(--border-strong);flex-shrink:0"></span>
+      <span style="font-size:0.8rem;color:var(--text)">accent</span>
+      <span style="flex:1"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.73rem;color:var(--muted)">#01aaff</span>
+    </div></div>
+            </div>
+          </div>
+
+          <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Verdict states</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">tinted card + accent edge</span>
+    </div>
+            <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:14px;align-items:start">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:16px 18px"><div style="font-size:0.72rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin-bottom:12px">Light</div><div style="border:1px solid var(--border);border-left:4px solid var(--ok);border-radius:7px;background:color-mix(in srgb, var(--ok) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--ok)">Internet: healthy</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">All anchors responding.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:4px solid var(--warm-glitch);border-radius:7px;background:color-mix(in srgb, var(--warm-glitch) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--warm-glitch)">Internet: site incident</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">One anchor degraded; the path is fine.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:4px solid var(--warn);border-radius:7px;background:color-mix(in srgb, var(--warn) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--warn)">Internet: weather</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">Two or more anchors degraded at once.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:6px solid var(--warn);border-radius:7px;background:color-mix(in srgb, var(--warn) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--warn)">Internet: link degraded</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">Your trunk is losing pings.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:6px solid var(--down);border-radius:7px;background:color-mix(in srgb, var(--down) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--down)">Internet: link down</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">LinkDown: Comcast — Comcast Edge is Down.</div>
+    </div></div>
+              <div style="    --bg:#13161f; --surface:#181c26; --surface-2:#1e2331; --surface-3:#252b3a;
+    --text:#c2c7d0; --muted:#7b8495; --faint:#68707f;
+    --border:#262d3b; --border-strong:#323a4b;
+    --primary:#01aaff; --primary-soft:rgba(1,170,255,0.13);
+    --ok:#3fb567; --warn:#f0a02a; --down:#e8544b; --unreach:#6d7585;
+    --warm-glitch:#c98a3c; --warm-degraded:#f0a02a; --warm-out:#e8544b;
+    --grey-glitch:#39404f; --grey-degraded:#8c94a6; --grey-out:#e2e6ee;
+    --healthy:#1b2620; --healthy-vivid:#46a86c;
+    --shadow:0 1px 2px rgba(0,0,0,0.35), 0 1px 1px rgba(0,0,0,0.25);background:var(--bg);color:var(--text);border:1px solid #2a3140;border-radius:8px;padding:16px 18px"><div style="font-size:0.72rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin-bottom:12px">Dark</div><div style="border:1px solid var(--border);border-left:4px solid var(--ok);border-radius:7px;background:color-mix(in srgb, var(--ok) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--ok)">Internet: healthy</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">All anchors responding.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:4px solid var(--warm-glitch);border-radius:7px;background:color-mix(in srgb, var(--warm-glitch) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--warm-glitch)">Internet: site incident</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">One anchor degraded; the path is fine.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:4px solid var(--warn);border-radius:7px;background:color-mix(in srgb, var(--warn) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--warn)">Internet: weather</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">Two or more anchors degraded at once.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:6px solid var(--warn);border-radius:7px;background:color-mix(in srgb, var(--warn) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--warn)">Internet: link degraded</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">Your trunk is losing pings.</div>
+    </div><div style="height:8px"></div><div style="border:1px solid var(--border);border-left:6px solid var(--down);border-radius:7px;background:color-mix(in srgb, var(--down) 7%, var(--surface));padding:9px 13px">
+      <div style="font-size:0.83rem;font-weight:650;color:var(--down)">Internet: link down</div>
+      <div style="font-size:0.765rem;color:var(--muted);margin-top:2px">LinkDown: Comcast — Comcast Edge is Down.</div>
+    </div></div>
+            </div>
+          </div>
+
+          <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Controls</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:20px"><div style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button style="height:32px;padding:0 14px;border:1px solid var(--primary);background:var(--primary);color:#fff;border-radius:5px;font-size:0.815rem;font-weight:560;cursor:pointer;font-family:inherit">Save target</button>
+      <button style="height:32px;padding:0 14px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:5px;font-size:0.815rem;font-weight:520;font-family:inherit">Cancel</button>
+      <button style="height:32px;padding:0 14px;border:1px solid color-mix(in srgb, var(--down) 40%, var(--border));background:var(--surface);color:var(--down);border-radius:5px;font-size:0.815rem;font-weight:520;font-family:inherit">Delete</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:0.69rem;font-weight:640;color:var(--warn);background:color-mix(in srgb, var(--warn) 14%, transparent);border-radius:4px;padding:2px 8px">Faltering</span><span style="font-size:0.69rem;font-weight:640;color:var(--down);background:color-mix(in srgb, var(--down) 14%, transparent);border-radius:4px;padding:2px 8px">Down</span><span style="font-size:0.69rem;font-weight:640;color:var(--unreach);background:color-mix(in srgb, var(--unreach) 14%, transparent);border-radius:4px;padding:2px 8px">Unreachable</span><span style="font-size:0.69rem;font-weight:640;color:var(--warm-degraded);background:color-mix(in srgb, var(--warm-degraded) 14%, transparent);border-radius:4px;padding:2px 8px">Comcast</span>
+      <span style="display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 11px 4px 9px">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span>
+        <span style="font-size:0.775rem;font-weight:600;color:var(--text)">Healthy</span>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="display:flex;border:1px solid var(--border-strong);border-radius:5px;overflow:hidden;background:var(--surface)">
+        <span style="padding:0 14px;height:31px;display:flex;align-items:center;font-size:0.815rem;font-weight:600;color:var(--primary);background:var(--primary-soft);">24 h</span><span style="padding:0 14px;height:31px;display:flex;align-items:center;font-size:0.815rem;font-weight:450;color:var(--muted);background:transparent;border-left:1px solid var(--border-strong);">7 days</span><span style="padding:0 14px;height:31px;display:flex;align-items:center;font-size:0.815rem;font-weight:450;color:var(--muted);background:transparent;border-left:1px solid var(--border-strong);">30 days</span>
+      </div>
+      <span style="width:34px;height:20px;border-radius:999px;background:var(--primary);display:flex;align-items:center;padding:0 2px;justify-content:flex-end"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+      <span style="width:34px;height:20px;border-radius:999px;background:var(--surface-3);display:flex;align-items:center;padding:0 2px"><span style="width:16px;height:16px;border-radius:50%;background:var(--surface)"></span></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;height:35px;padding:0 11px;border:1px solid var(--border-strong);background:var(--bg);border-radius:5px;max-width:280px">
+      <span style="flex:1;font-size:0.845rem;color:var(--faint);font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace">IP or hostname</span>
+    </div>
+  </div></div></div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:24px">
+          <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Incident encoding</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">shape = scope · hue = whose gear · depth = severity</span>
+    </div>
+            <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:14px;align-items:start">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:16px 18px"><div style="font-size:0.72rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin-bottom:12px">Light</div><div style="display:grid;grid-template-columns:auto repeat(3, 74px);gap:9px 14px;align-items:center">
+      <div></div><div style="font-size:0.7rem;color:var(--faint);text-align:center">glitch</div><div style="font-size:0.7rem;color:var(--faint);text-align:center">degraded</div><div style="font-size:0.7rem;color:var(--faint);text-align:center">fully out</div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">the internet <span style="color:var(--faint)">(bar)</span></div><div style="height:13px;border-radius:2px;background:#eda94f"></div><div style="height:13px;border-radius:2px;background:#e08a00"></div><div style="height:13px;border-radius:2px;background:#cc3333"></div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">one site <span style="color:var(--faint)">(dot)</span></div><div style="display:flex;justify-content:center"><span style="width:11px;height:11px;border-radius:50%;background:#eda94f"></span></div><div style="display:flex;justify-content:center"><span style="width:11px;height:11px;border-radius:50%;background:#e08a00"></span></div><div style="display:flex;justify-content:center"><span style="width:11px;height:11px;border-radius:50%;background:#cc3333"></span></div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">your equipment <span style="color:var(--faint)">(bar)</span></div><div style="height:13px;border-radius:2px;background:#d4d4d4"></div><div style="height:13px;border-radius:2px;background:#7d7d7d"></div><div style="height:13px;border-radius:2px;background:#2b2b2b"></div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">quiet <span style="color:var(--faint)">(surface)</span></div><div style="grid-column:span 3;height:13px;border-radius:2px;background:#eaf3ec"></div>
+    </div></div>
+              <div style="    --bg:#13161f; --surface:#181c26; --surface-2:#1e2331; --surface-3:#252b3a;
+    --text:#c2c7d0; --muted:#7b8495; --faint:#68707f;
+    --border:#262d3b; --border-strong:#323a4b;
+    --primary:#01aaff; --primary-soft:rgba(1,170,255,0.13);
+    --ok:#3fb567; --warn:#f0a02a; --down:#e8544b; --unreach:#6d7585;
+    --warm-glitch:#c98a3c; --warm-degraded:#f0a02a; --warm-out:#e8544b;
+    --grey-glitch:#39404f; --grey-degraded:#8c94a6; --grey-out:#e2e6ee;
+    --healthy:#1b2620; --healthy-vivid:#46a86c;
+    --shadow:0 1px 2px rgba(0,0,0,0.35), 0 1px 1px rgba(0,0,0,0.25);background:var(--bg);color:var(--text);border:1px solid #2a3140;border-radius:8px;padding:16px 18px"><div style="font-size:0.72rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin-bottom:12px">Dark</div><div style="display:grid;grid-template-columns:auto repeat(3, 74px);gap:9px 14px;align-items:center">
+      <div></div><div style="font-size:0.7rem;color:var(--faint);text-align:center">glitch</div><div style="font-size:0.7rem;color:var(--faint);text-align:center">degraded</div><div style="font-size:0.7rem;color:var(--faint);text-align:center">fully out</div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">the internet <span style="color:var(--faint)">(bar)</span></div><div style="height:13px;border-radius:2px;background:#c98a3c"></div><div style="height:13px;border-radius:2px;background:#f0a02a"></div><div style="height:13px;border-radius:2px;background:#e8544b"></div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">one site <span style="color:var(--faint)">(dot)</span></div><div style="display:flex;justify-content:center"><span style="width:11px;height:11px;border-radius:50%;background:#c98a3c"></span></div><div style="display:flex;justify-content:center"><span style="width:11px;height:11px;border-radius:50%;background:#f0a02a"></span></div><div style="display:flex;justify-content:center"><span style="width:11px;height:11px;border-radius:50%;background:#e8544b"></span></div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">your equipment <span style="color:var(--faint)">(bar)</span></div><div style="height:13px;border-radius:2px;background:#39404f"></div><div style="height:13px;border-radius:2px;background:#8c94a6"></div><div style="height:13px;border-radius:2px;background:#e2e6ee"></div>
+      <div style="font-size:0.775rem;color:var(--text);white-space:nowrap">quiet <span style="color:var(--faint)">(surface)</span></div><div style="grid-column:span 3;height:13px;border-radius:2px;background:#1b2620"></div>
+    </div></div>
+            </div>
+            <div style="display:flex;gap:11px;align-items:flex-start;border:1px solid var(--border);border-left:4px solid var(--primary);border-radius:7px;background:var(--surface-2);padding:12px 15px;margin-top:14px">
+              <span style="color:var(--primary);display:flex;flex-shrink:0;margin-top:1px"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4 17.4 16.2H2.6z"></path><path d="M10 8.2v3.4"></path><circle cx="10" cy="13.9" r="0.85" fill="currentColor" stroke="none"></circle></svg></span>
+              <p style="margin:0;font-size:0.79rem;color:var(--text);line-height:1.55">
+                <b style="font-weight:600">The grey ramp has to invert in dark.</b> In light it runs pale
+                <span style="display:inline-block;width:13px;height:9px;border-radius:2px;background:#d4d4d4;vertical-align:middle"></span>
+                &rarr; black
+                <span style="display:inline-block;width:13px;height:9px;border-radius:2px;background:#2b2b2b;vertical-align:middle"></span>,
+                and <code style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.75rem">#2b2b2b</code> is invisible on a
+                <code style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.75rem">#13161f</code> page. In dark it runs dark &rarr; near-white, so
+                &ldquo;deeper = worse&rdquo; still holds &mdash; it just runs toward light. The warm ramp keeps its
+                direction in both themes, so warm-vs-grey separation survives.
+              </p>
+            </div>
+          </div>
+
+          <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Icons</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">20px grid · 1.6px stroke · round caps</span>
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:20px"><div style="display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));gap:16px 10px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 14.2a7.6 7.6 0 1 1 13.2 0"></path><path d="M10 11.4 13.1 7.6"></path><circle cx="10" cy="12.4" r="1.3" fill="currentColor" stroke="none"></circle></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Dashboard</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 9.4a6.8 6.8 0 1 0 1.9-4.6"></path><path d="M3 3.4v3.6h3.6"></path><path d="M10 6.6V10l2.5 1.5"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">History</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="10" cy="5.4" rx="5.8" ry="2.4"></ellipse><path d="M4.2 5.4v9.2c0 1.33 2.6 2.4 5.8 2.4s5.8-1.07 5.8-2.4V5.4"></path><path d="M4.2 10c0 1.33 2.6 2.4 5.8 2.4s5.8-1.07 5.8-2.4"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Data</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.6" cy="10" r="2.1"></circle><circle cx="15.4" cy="5.2" r="2.1"></circle><circle cx="15.4" cy="14.8" r="2.1"></circle><path d="M6.6 9.1 13.4 6"></path><path d="M6.6 10.9 13.4 14"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Targets</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.4" cy="15.6" r="1.9"></circle><circle cx="15.6" cy="4.4" r="1.9"></circle><circle cx="10" cy="10" r="1.2" fill="currentColor" stroke="none"></circle><path d="M6.3 15.6h2.2a3.2 3.2 0 0 0 3.2-3.2V8.2a3.2 3.2 0 0 1 2-2.9"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Traceroute</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 6.2h13.2M3.4 10h13.2M3.4 13.8h13.2"></path><circle cx="7.6" cy="6.2" r="1.9" fill="var(--surface)"></circle><circle cx="13" cy="10" r="1.9" fill="var(--surface)"></circle><circle cx="6.6" cy="13.8" r="1.9" fill="var(--surface)"></circle></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Admin</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.6" y="8.6" width="10.8" height="7.8" rx="2"></rect><path d="M7.2 8.6V6.4a2.8 2.8 0 0 1 5.6 0v2.2"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Admin mode</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4 17.4 16.2H2.6z"></path><path d="M10 8.2v3.4"></path><circle cx="10" cy="13.9" r="0.85" fill="currentColor" stroke="none"></circle></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Warning</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.8h6.6L15.6 6.8v10.4H5z"></path><path d="M11.4 2.8v4.2h4.2"></path><path d="M7.6 11.2h5M7.6 14h3.4"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">ISP report</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4v8.8"></path><path d="M6.6 9.2 10 12.6l3.4-3.4"></path><path d="M4.2 16.2h11.6"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Export</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.4 2.8 17.2 7.6l-2.6 1-1.1 4.1-5.2-5.2 4.1-1.1z"></path><path d="M8.3 11.7 3.6 16.4"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Pin row</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4.4v11.2M4.4 10h11.2"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Add</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.8" cy="8.8" r="5.2"></circle><path d="M12.6 12.6 16.6 16.6"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Find</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8.2 10 11.8l3.6-3.6"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Expand</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15.6 11.9A6.4 6.4 0 0 1 8.1 4.4a6.4 6.4 0 1 0 7.5 7.5z"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Dark</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3.5"></circle><path d="M10 2.6v1.9M10 15.5v1.9M2.6 10h1.9M15.5 10h1.9M4.8 4.8l1.35 1.35M13.85 13.85 15.2 15.2M15.2 4.8l-1.35 1.35M6.15 13.85 4.8 15.2"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Light</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 6h13.2M3.4 10h13.2M3.4 14h13.2"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Menu</span>
+    </div><div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+      <span style="width:38px;height:38px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 5.2l9.6 9.6M14.8 5.2l-9.6 9.6"></path></svg></span>
+      <span style="font-size:0.685rem;color:var(--muted);text-align:center;line-height:1.25">Close</span>
+    </div>
+  </div></div></div>
+
+          <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Type</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">system-ui for text · tabular mono for every number</span>
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:16px 18px"><div style="margin-top:-9px">
+  <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-top:1px solid var(--border)">
+    <span style="flex:1;color:var(--text);font-size:1.33rem;font-weight:650;letter-spacing:-0.015em">Dashboard</span>
+    <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint);white-space:nowrap">1.33rem / 650 / -0.015em</span>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-top:1px solid var(--border)">
+    <span style="flex:1;color:var(--text);font-size:0.70rem;font-weight:650;letter-spacing:0.09em;color:var(--faint)">REACHABILITY</span>
+    <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint);white-space:nowrap">0.70rem / 650 / 0.09em</span>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-top:1px solid var(--border)">
+    <span style="flex:1;color:var(--text);font-size:0.855rem;font-weight:600">Your link went down for 4 min.</span>
+    <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint);white-space:nowrap">0.855rem / 600</span>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-top:1px solid var(--border)">
+    <span style="flex:1;color:var(--text);font-size:0.825rem;color:var(--muted)">LinkDown: Comcast — Comcast Edge is Down.</span>
+    <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint);white-space:nowrap">0.825rem / 450 muted</span>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-top:1px solid var(--border)">
+    <span style="flex:1;color:var(--text);font-size:0.72rem;color:var(--muted)">the last 96 minutes — green is quiet</span>
+    <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint);white-space:nowrap">0.72rem / 450 muted</span>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-top:1px solid var(--border)">
+    <span style="flex:1;color:var(--text);font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.765rem;color:var(--muted)">99.72%&nbsp;&nbsp;21.4 ms&nbsp;&nbsp;9.9.9.9</span>
+    <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint);white-space:nowrap">0.765rem mono tabular</span>
+  </div></div></div></div>
+        </div>
+      </div>
+
+      <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Layout and breakpoints</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:20px"><div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:22px">
+          <div>
+            <div style="font-size:0.84rem;font-weight:600;color:var(--text);margin-bottom:5px">&ge; 900px &mdash; full bar</div>
+            <p style="margin:0;font-size:0.79rem;color:var(--muted);line-height:1.5">Brand, both nav groups split by a hairline, then the verdict pip, theme and admin-mode buttons. Content centres at 1250px with 26px gutters.</p>
+          </div>
+          <div>
+            <div style="font-size:0.84rem;font-weight:600;color:var(--text);margin-bottom:5px">&lt; 900px &mdash; drawer</div>
+            <p style="margin:0;font-size:0.79rem;color:var(--muted);line-height:1.5">Nav collapses to a hamburger; the verdict pip stays in the bar, because knowing the verdict is why the page is open. Gutters drop to 16px, rows grow to 44px, tables restack as cards.</p>
+          </div>
+          <div>
+            <div style="font-size:0.84rem;font-weight:600;color:var(--text);margin-bottom:5px">Wayfinding</div>
+            <p style="margin:0;font-size:0.79rem;color:var(--muted);line-height:1.5">Every page opens with a title and one sentence saying what it is for. Sections are named by a hairline rule, never a bare heading. The active page is marked in the bar and the drawer.</p>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":1460}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

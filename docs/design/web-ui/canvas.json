@@ -1,0 +1,35 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Dashboard — light", "x": 0, "y": 0, "w": 1440, "h": 1360 },
+    { "file": "DashboardDark.dc.html", "title": "Dashboard — dark, link down", "x": 1560, "y": 0, "w": 1440, "h": 1360 },
+    { "file": "History.dc.html", "title": "History — dark", "x": 0, "y": 1520, "w": 1440, "h": 2260 },
+    { "file": "Targets.dc.html", "title": "Targets — light", "x": 1560, "y": 1520, "w": 1440, "h": 1540 },
+    { "file": "Mobile.dc.html", "title": "Dashboard — phone, 390px", "x": 0, "y": 3920, "w": 390, "h": 1660 },
+    { "file": "MobileNav.dc.html", "title": "Phone — nav drawer", "x": 510, "y": 3920, "w": 390, "h": 844 },
+    { "file": "System.dc.html", "title": "Design language", "x": 1020, "y": 3920, "w": 1440, "h": 1460 }
+  ],
+  "annotations": [
+    {
+      "id": "what-changed",
+      "x": -660,
+      "y": 0,
+      "w": 560,
+      "text": "Same pages, same order, same minimalism — a coherent shell around them.\n\nWhat's new:\n• A real app bar: grouped nav (Watch / Manage), active-page marker, and the verdict pip carried on EVERY page.\n• Page bands: a title plus one sentence saying what the page is for.\n• Section rules instead of a run of h3/h4.\n• Tabular mono for every number.\n• Cards on surfaces, hairlines everywhere else.\n\nThe one real departure: the verdict banner is now a tinted card with an accent edge rather than a full-bleed colour slab. Compare the two dashboards — if you want the slab back it's a one-line change."
+    },
+    {
+      "id": "dark-ramp",
+      "x": -660,
+      "y": 1520,
+      "w": 560,
+      "text": "Dark mode is chosen, not flipped.\n\nThe chrome takes Pico's own dark tokens. The incident ramp could not just be inverted: your grey ramp ends at #2b2b2b, which is invisible on a #13161f page.\n\nSo in dark the grey ramp runs dark → near-white instead of pale → black. 'Deeper = worse' still holds, it just runs toward light. The warm ramp keeps its direction, so warm-vs-grey separation survives at every tier.\n\nHistory is shown in dark on purpose: the punchcard and the ribbon board are where that decision either works or doesn't."
+    },
+    {
+      "id": "phone-notes",
+      "x": -660,
+      "y": 3920,
+      "w": 560,
+      "text": "Phone: 390px, the full scrolling page (not a viewport crop).\n\n• Nav collapses to the drawer; the verdict pip stays in the bar, because knowing the verdict is why the page is open.\n• Tree rows grow to 44px and drop the address — it lives on Targets.\n• The glitch table restacks as cards; tables don't survive 390px.\n• Theme choice (Light / Dark / System) lives in the drawer footer with the build stamp.\n\nOne thing to decide: I surfaced each target's IP next to its name on the desktop tree, where today it's only a tooltip. Easy to drop if it's noise."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

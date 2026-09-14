@@ -1,0 +1,9 @@
+    --bg:#ffffff; --surface:#fbfcfd; --surface-2:#f4f6f9; --surface-3:#eef1f5;
+    --text:#373c44; --muted:#646b79; --faint:#8b93a1;
+    --border:#e7eaf0; --border-strong:#d6dbe4;
+    --primary:#0172ad; --primary-soft:rgba(1,114,173,0.10);
+    --ok:#2e9e52; --warn:#e08a00; --down:#cc3333; --unreach:#999999;
+    --warm-glitch:#eda94f; --warm-degraded:#e08a00; --warm-out:#cc3333;
+    --grey-glitch:#d4d4d4; --grey-degraded:#7d7d7d; --grey-out:#2b2b2b;
+    --healthy:#eaf3ec; --healthy-vivid:#4fa96e;
+    --shadow:0 1px 2px rgba(28,35,50,0.05), 0 1px 1px rgba(28,35,50,0.04);

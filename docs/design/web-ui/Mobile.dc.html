@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, Helvetica, Arial, sans-serif; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: var(--primary); text-decoration: underline; }
+    table { border-collapse: collapse; width: 100%; }
+  </style>
+</helmet>
+<div style="width:390px;min-height:1660px;background:var(--bg);color:var(--text);font-family:system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.5;display:flex;flex-direction:column;
+    --bg:#ffffff; --surface:#fbfcfd; --surface-2:#f4f6f9; --surface-3:#eef1f5;
+    --text:#373c44; --muted:#646b79; --faint:#8b93a1;
+    --border:#e7eaf0; --border-strong:#d6dbe4;
+    --primary:#0172ad; --primary-soft:rgba(1,114,173,0.10);
+    --ok:#2e9e52; --warn:#e08a00; --down:#cc3333; --unreach:#999999;
+    --warm-glitch:#eda94f; --warm-degraded:#e08a00; --warm-out:#cc3333;
+    --grey-glitch:#d4d4d4; --grey-degraded:#7d7d7d; --grey-out:#2b2b2b;
+    --healthy:#eaf3ec; --healthy-vivid:#4fa96e;
+    --shadow:0 1px 2px rgba(28,35,50,0.05), 0 1px 1px rgba(28,35,50,0.04);
+">
+<header style="flex-shrink:0;height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 12px">
+      <button style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--text);border-radius:6px;cursor:pointer;padding:0;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 6h13.2M3.4 10h13.2M3.4 14h13.2"></path></svg></button>
+      <span style="color:var(--primary);display:flex;flex-shrink:0"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="2" fill="currentColor" stroke="none"></circle><path d="M15.1 6.9a5.8 5.8 0 0 1 0 8.2"></path><path d="M6.9 15.1a5.8 5.8 0 0 1 0-8.2"></path><path d="M17.9 4.1a9.7 9.7 0 0 1 0 13.8" opacity="0.4"></path><path d="M4.1 17.9a9.7 9.7 0 0 1 0-13.8" opacity="0.4"></path></svg></span>
+      <span style="font-size:0.885rem;font-weight:640;letter-spacing:-0.015em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ConnectionWatcher</span>
+      <span style="flex:1"></span>
+      <span style="display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 11px 4px 9px">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--warm-glitch);flex-shrink:0"></span>
+      <span style="font-size:0.775rem;font-weight:600;color:var(--text)">Site incident</span>
+    </span>
+    </header>
+<div style="flex-shrink:0;padding:16px 16px 12px">
+      <h1 style="margin:0 0 3px;font-size:1.16rem;font-weight:650;letter-spacing:-0.015em;color:var(--text);line-height:1.2">Dashboard</h1>
+      <p style="margin:0;font-size:0.795rem;color:var(--muted);line-height:1.4">Live reachability &mdash; what your connection is doing right now.</p>
+    </div>
+<main style="flex:1;padding:0 16px 26px;display:flex;flex-direction:column;gap:20px">
+    <div style="border:1px solid var(--border);border-left:4px solid var(--warm-glitch);border-radius:8px;background:color-mix(in srgb, var(--warm-glitch) 7%, var(--surface));box-shadow:var(--shadow);padding:13px 14px 14px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="color:var(--warm-glitch);display:flex;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.4 17.4 16.2H2.6z"></path><path d="M10 8.2v3.4"></path><circle cx="10" cy="13.9" r="0.85" fill="currentColor" stroke="none"></circle></svg></span>
+        <span style="font-size:0.925rem;font-weight:660;color:var(--warm-glitch);letter-spacing:-0.008em">Internet: site incident</span>
+        <span style="flex:1"></span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:0.71rem;color:var(--muted)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ok)"></span>live</span>
+      </div>
+      <p style="margin:7px 0 0;font-size:0.825rem;color:var(--text);opacity:0.82;line-height:1.45">Quad9 is degraded &mdash; your equipment and the rest of the path are healthy.</p>
+      <div style="height:1px;background:var(--border);margin:13px 0 12px"></div>
+      <div>
+      <div style="display:flex;gap:2px;align-items:center">
+        <span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid);display:inline-flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:var(--warm-glitch)"></span></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid);display:inline-flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:var(--warm-degraded)"></span></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:var(--healthy-vivid)"></span>
+        <span style="font-size:0.66rem;color:var(--faint);white-space:nowrap;margin-left:8px">now</span>
+      </div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:7px">
+        The last 24 minutes &mdash; green is quiet; warm marks are trouble out there, grey marks are your own gear.
+      </div>
+    </div>
+    </div>
+    <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Reachability</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div style="padding:6px 4px"><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 12px;border-radius:5px;background:transparent">
+        
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:580;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Router</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 1 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 27px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Synology NAS</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 1 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 27px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Home Assistant</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 2 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 27px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cable Modem</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 8 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 42px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Comcast Edge</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 14 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 57px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Comcast Core</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">99% &middot; 21 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 72px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Google DNS</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 19 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 72px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cloudflare DNS</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 17 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 72px;border-radius:5px;background:var(--surface-2)">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--warn)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Quad9</span>
+        <span style="flex:1"></span>
+        <span style="font-size:0.69rem;font-weight:640;color:var(--warn);background:color-mix(in srgb, var(--warn) 14%, transparent);border-radius:4px;padding:2px 7px;white-space:nowrap">Faltering</span>
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">85% &middot; 31 ms</span>
+      </div><div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 12px 0 72px;border-radius:5px;background:transparent">
+        <span style="width:9px;height:1px;background:var(--border-strong);flex-shrink:0;margin-left:-9px"></span>
+        <span style="width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ok)"></span>
+        <span style="font-size:0.85rem;font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">OpenDNS</span>
+        <span style="flex:1"></span>
+        
+        <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.735rem;color:var(--muted);white-space:nowrap">100% &middot; 23 ms</span>
+      </div></div></div></div>
+    <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">What happened</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">most recent</span>
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div style="padding:4px 14px"><div style="display:flex;gap:11px;align-items:flex-start;padding:11px 0">
+      <span style="flex-shrink:0;width:15px;display:flex;justify-content:center;margin-top:4px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warm-glitch)"></span></span>
+      <span style="font-size:0.83rem;line-height:1.5;color:var(--text)">
+        <b style="font-weight:600">Quad9 glitched for 8 s.</b><span style="color:var(--muted);font-weight:400"> 3 of 20 pings lost — no other anchor saw it.</span>
+        <span style="display:block;font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.715rem;color:var(--faint);margin-top:3px">Sat, Sep 12, 9:14 PM</span>
+      </span>
+    </div><div style="height:1px;background:var(--border)"></div><div style="display:flex;gap:11px;align-items:flex-start;padding:11px 0">
+      <span style="flex-shrink:0;width:15px;display:flex;justify-content:center;margin-top:4px"><span style="display:inline-block;width:14px;height:9px;border-radius:2px;background:var(--grey-out)"></span></span>
+      <span style="font-size:0.83rem;line-height:1.5;color:var(--text)">
+        <b style="font-weight:600">Your link went down for 4 min.</b><span style="color:var(--muted);font-weight:400"> LinkDown: Comcast — Comcast Edge is Down.</span>
+        <span style="display:block;font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.715rem;color:var(--faint);margin-top:3px">Fri, Sep 11, 3:02 AM</span>
+      </span>
+    </div><div style="height:1px;background:var(--border)"></div><div style="display:flex;gap:11px;align-items:flex-start;padding:11px 0">
+      <span style="flex-shrink:0;width:15px;display:flex;justify-content:center;margin-top:4px"><span style="display:inline-block;width:14px;height:9px;border-radius:2px;background:var(--warm-degraded)"></span></span>
+      <span style="font-size:0.83rem;line-height:1.5;color:var(--text)">
+        <b style="font-weight:600">Internet weather for 11 min.</b><span style="color:var(--muted);font-weight:400"> Two anchors degraded at once; your own gear stayed healthy.</span>
+        <span style="display:block;font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.715rem;color:var(--faint);margin-top:3px">Thu, Sep 10, 8:47 PM</span>
+      </span>
+    </div></div></div></div>
+    <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Recent glitches</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">last 24 h</span>
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div><div style="padding:11px 14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:0.845rem;font-weight:570;color:var(--text)">Quad9</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:0.715rem;font-weight:600;color:var(--warm-degraded)">
+          <span style="width:11px;height:7px;border-radius:2px;background:var(--warm-glitch)"></span>internet
+        </span>
+      </div>
+      <div style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.725rem;color:var(--muted);margin-top:4px">9/12 21:14 &middot; lost 3/20 &middot; 8 s</div>
+      <div style="font-size:0.78rem;color:var(--faint);margin-top:2px">burst loss 15%</div>
+    </div><div style="height:1px;background:var(--border)"></div><div style="padding:11px 14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:0.845rem;font-weight:570;color:var(--text)">Comcast Edge</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:0.715rem;font-weight:600;color:var(--muted)">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--warm-glitch)"></span>target
+        </span>
+      </div>
+      <div style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.725rem;color:var(--muted);margin-top:4px">9/12 18:02 &middot; lost 2/20 &middot; 5 s</div>
+      <div style="font-size:0.78rem;color:var(--faint);margin-top:2px">single-hop wobble</div>
+    </div><div style="height:1px;background:var(--border)"></div><div style="padding:11px 14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:0.845rem;font-weight:570;color:var(--text)">Quad9</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:0.715rem;font-weight:600;color:var(--warm-degraded)">
+          <span style="width:11px;height:7px;border-radius:2px;background:var(--warm-glitch)"></span>internet
+        </span>
+      </div>
+      <div style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.725rem;color:var(--muted);margin-top:4px">9/12 11:37 &middot; lost 4/20 &middot; 11 s</div>
+      <div style="font-size:0.78rem;color:var(--faint);margin-top:2px">burst loss 20%</div>
+    </div></div></div></div>
+  </main>
+<footer style="flex-shrink:0;height:44px;border-top:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:10px;padding:0 16px">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0"></span>
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">21:14:07 Quad9: Responding &rarr; Faltering</span>
+      <span style="flex:1"></span>
+      <span style="display:flex;color:var(--muted);transform:rotate(180deg)"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8.2 10 11.8l3.6-3.6"></path></svg></span>
+    </footer>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":390,"height":1660}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>
