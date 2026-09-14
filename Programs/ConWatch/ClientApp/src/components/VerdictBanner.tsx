@@ -9,40 +9,71 @@ import { MarkSwatch } from "./marks";
 
 interface Slab {
   cls: string;          // reuses the existing color classes
-  icon: string;
+  icon: "up" | "struggling" | "down" | "checking";
   headline: string;
   caveat: string | null;
   mark: Mark | null;    // whose-gear chip beside the caveat
+}
+
+/** The Signal glyphs (docs/design/web-ui/lib-icons.mjs, direction A): the
+ *  brand mark carrying state — reach shrinks as things get worse, and down
+ *  is the dimmed glyph under a slash so it survives greyscale. */
+function SignalIcon({ state, size = 26 }: { state: Slab["icon"]; size?: number }) {
+  const dot = <circle cx="12" cy="12" r="2.6" />;
+  const inner = <>
+    <path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none" />
+    <path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none" />
+  </>;
+  const outer = <>
+    <path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none" />
+    <path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none" />
+  </>;
+  const g = (children: React.ReactNode, opacity?: number) => (
+    <g stroke="currentColor" fill="currentColor" strokeWidth={2}
+      strokeLinecap="round" strokeLinejoin="round" opacity={opacity}>{children}</g>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: "block", flexShrink: 0 }}>
+      {state === "up" && g(<>{dot}{inner}{outer}</>)}
+      {state === "struggling" && g(<>{dot}{inner}</>)}
+      {state === "checking" && g(<>{dot}{inner}{outer}</>, 0.55)}
+      {state === "down" && <>
+        {g(<>{dot}{inner}{outer}</>, 0.32)}
+        <path d="M5 19 19 5" stroke="currentColor" strokeWidth={2.6}
+          strokeLinecap="round" fill="none" />
+      </>}
+    </svg>
+  );
 }
 
 export function slabFor(verdict: VerdictStatus): Slab {
   switch (verdict.state) {
     case "Healthy":
       return {
-        cls: "healthy", icon: "●", headline: "Your internet is UP",
+        cls: "healthy", icon: "up", headline: "Your internet is UP",
         caveat: "no trouble in sight", mark: null,
       };
     case "SiteIncident":
       return {
-        cls: "healthy", icon: "●", headline: "Your internet is UP",
+        cls: "healthy", icon: "up", headline: "Your internet is UP",
         caveat: "one site out there is having trouble — not your connection",
         mark: { shape: "dot", hue: "warm", depth: "glitch" },
       };
     case "InternetWeather":
       return {
-        cls: "healthy", icon: "●", headline: "Your internet is UP",
+        cls: "healthy", icon: "up", headline: "Your internet is UP",
         caveat: "but parts of the internet look unreachable right now — the trouble isn't on your end",
         mark: { shape: "bar", hue: "warm", depth: "degraded" },
       };
     case "LinkDegraded":
       return {
-        cls: "linkdegraded", icon: "▲", headline: "Your internet is STRUGGLING",
+        cls: "linkdegraded", icon: "struggling", headline: "Your internet is STRUGGLING",
         caveat: "your connection is losing some traffic — pages may stall or feel slow",
         mark: { shape: "bar", hue: "grey", depth: "degraded" },
       };
     case "LinkDown":
       return {
-        cls: "linkdown", icon: "■", headline: "Your internet is DOWN",
+        cls: "linkdown", icon: "down", headline: "Your internet is DOWN",
         caveat: verdict.operator
           ? `${verdict.operator} is not carrying your traffic`
           : "your connection to the internet is not carrying traffic",
@@ -50,7 +81,7 @@ export function slabFor(verdict: VerdictStatus): Slab {
       };
     default:
       return {
-        cls: "unknown", icon: "○", headline: "Checking your internet…",
+        cls: "unknown", icon: "checking", headline: "Checking your internet…",
         caveat: "measuring — an answer arrives within a minute or two", mark: null,
       };
   }
@@ -77,7 +108,7 @@ export function VerdictBanner({ verdict, connected }: {
       title={verdict.detail ?? undefined}>
       {!connected && <span className="pill">reconnecting…</span>}
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <span style={{ fontSize: "1.25rem", lineHeight: 1.3, flexShrink: 0 }}>{slab.icon}</span>
+        <span style={{ flexShrink: 0, marginTop: 2 }}><SignalIcon state={slab.icon} /></span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: "1.25rem", lineHeight: 1.3 }}>{slab.headline}</div>
           {slab.caveat && (
