@@ -147,11 +147,12 @@ function App({ subjects }: { subjects: Subject[] }) {
             </option>
           ))}
         </select>
-        <select value={rangeKey} onChange={(e) => setRangeKey(e.target.value)} style={{ maxWidth: "8rem" }}>
-          <option value="24h">Last 24 h</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-        </select>
+        <div className="cw-segmented" style={{ alignSelf: "center" }}>
+          {[["24h", "24 h"], ["7d", "7 days"], ["30d", "30 days"]].map(([key, label]) => (
+            <button key={key} type="button" className={rangeKey === key ? "active" : ""}
+              onClick={() => setRangeKey(key)}>{label}</button>
+          ))}
+        </div>
         <small style={{ alignSelf: "center", opacity: 0.55 }}>
           times in {Intl.DateTimeFormat().resolvedOptions().timeZone} (your browser&apos;s zone);
           the ISP report shows UTC alongside

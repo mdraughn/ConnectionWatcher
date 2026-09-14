@@ -6,7 +6,13 @@
     var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
-<h2>Pools</h2>
+<div class="cw-pageband">
+    <div class="titles">
+        <h2>Pools</h2>
+        <p>Rotation groups that share the pinging load and anchor the verdict.</p>
+    </div>
+</div>
+<partial name="_ConfigTabs" model="@("pools")" />
 <partial name="_HealthBanner" model="Model.Warnings" />
 <p>Rotation pools: members share the pinging load by phase-stagger; pool state is derived (any member responding → responding). Member order sets the stagger offsets.</p>
 

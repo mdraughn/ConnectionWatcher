@@ -93,7 +93,7 @@ describe("ribbonFill", () => {
     expect(ribbonFill("anchor", "Down")).toBe(RAMP.warm.out);
     expect(ribbonFill("other", "Recovering")).toBe(RAMP.warm.degraded);
     expect(ribbonFill("anchor", "Unreachable")).toBe("hatch");
-    expect(ribbonFill("anchor", "Responding")).toBe("#eaf3ec");
+    expect(ribbonFill("anchor", "Responding")).toBe("var(--healthy)");
   });
 });
 
@@ -109,14 +109,16 @@ describe("verdictFill", () => {
   it("falls back to the plain state mapping without a recognizable name", () => {
     expect(verdictFill(null, "Down")).toBe(RAMP.warm.out);
     expect(verdictFill("something else", "Responding")).toBe(HEALTHY);
-    expect(verdictFill(null, "Starting")).toBe("#dfe8e2");
+    expect(verdictFill(null, "Starting")).toBe("var(--ribbon-starting)");
   });
 });
 
 describe("healthy tokens", () => {
   it("keeps the pale surface tint and the vivid small-mark green distinct", () => {
     expect(HEALTHY).not.toBe(HEALTHY_VIVID);
-    expect(HEALTHY_VIVID).toMatch(/^#[0-9a-f]{6}$/);
+    // Theme-aware: colors are CSS variables so dark mode can re-point them.
+    expect(HEALTHY_VIVID).toMatch(/^var\(--[a-z-]+\)$/);
+    expect(RAMP.grey.out).toMatch(/^var\(--[a-z-]+\)$/);
   });
 });
 

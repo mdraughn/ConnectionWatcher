@@ -1,10 +1,116 @@
+/* ConnectionWatcher design tokens (docs/design/2026-09-14-web-ui-redesign).
+   Light is :root; dark comes from an explicit [data-theme="dark"] override or
+   from the OS preference when no explicit choice is stored. Pico reads the
+   same data-theme attribute, so both systems flip together. */
 :root {
-    --cw-ok: #2e9e52;
-    --cw-warn: #e08a00;
-    --cw-down: #cc3333;
-    --cw-unreach: #999;
-    --cw-quiet: #6a8;
+    --bg: #ffffff; --surface: #fbfcfd; --surface-2: #f4f6f9; --surface-3: #eef1f5;
+    --text: #373c44; --muted: #646b79; --faint: #8b93a1;
+    --border: #e7eaf0; --border-strong: #d6dbe4;
+    --primary: #0172ad; --primary-soft: rgba(1, 114, 173, 0.10);
+    --cw-ok: #2e9e52; --cw-warn: #e08a00; --cw-down: #cc3333;
+    --cw-unreach: #999999; --cw-quiet: #6a8;
+
+    /* Incident encoding (shape = scope, hue = whose gear, depth = severity).
+       Consumed by ClientApp/src/lib/encoding.ts via var() so dark mode can
+       re-point the ramps. */
+    --warm-glitch: #eda94f; --warm-degraded: #e08a00; --warm-out: #cc3333;
+    --grey-glitch: #d4d4d4; --grey-degraded: #7d7d7d; --grey-out: #2b2b2b;
+    --healthy: #eaf3ec; --healthy-vivid: #4fa96e;
+    --ribbon-starting: #dfe8e2; --ribbon-unknown: #e6e6e6;
+    --shadow: 0 1px 2px rgba(28, 35, 50, 0.05), 0 1px 1px rgba(28, 35, 50, 0.04);
+    --mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
 }
+
+/* Dark tokens. THE substantive decision (design §2.3): the grey ramp INVERTS —
+   #2b2b2b is invisible on a #13161f page, so in dark "deeper = worse" runs
+   toward light instead. The warm ramp keeps its direction, so warm-vs-grey
+   separation survives at every tier. */
+[data-theme="dark"] {
+    --bg: #13161f; --surface: #181c26; --surface-2: #1e2331; --surface-3: #252b3a;
+    --text: #c2c7d0; --muted: #7b8495; --faint: #68707f;
+    --border: #262d3b; --border-strong: #323a4b;
+    --primary: #01aaff; --primary-soft: rgba(1, 170, 255, 0.13);
+    --cw-ok: #3fb567; --cw-warn: #f0a02a; --cw-down: #e8544b; --cw-unreach: #6d7585;
+    --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
+    --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
+    --healthy: #1b2620; --healthy-vivid: #46a86c;
+    --ribbon-starting: #1c2a24; --ribbon-unknown: #222836;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="dark"]) {
+        --bg: #13161f; --surface: #181c26; --surface-2: #1e2331; --surface-3: #252b3a;
+        --text: #c2c7d0; --muted: #7b8495; --faint: #68707f;
+        --border: #262d3b; --border-strong: #323a4b;
+        --primary: #01aaff; --primary-soft: rgba(1, 170, 255, 0.13);
+        --cw-ok: #3fb567; --cw-warn: #f0a02a; --cw-down: #e8544b; --cw-unreach: #6d7585;
+        --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
+        --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
+        --healthy: #1b2620; --healthy-vivid: #46a86c;
+        --ribbon-starting: #1c2a24; --ribbon-unknown: #222836;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+    }
+}
+
+body { background: var(--bg); }
+
+/* ------------------------------------------------------------- app bar */
+.cw-appbar { height: 56px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 26px; padding: 0 26px; }
+.cw-appbar .brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+    color: var(--text); text-decoration: none; }
+.cw-appbar .brand:hover { text-decoration: none; }
+.cw-appbar .brand .mark { color: var(--primary); display: flex; }
+.cw-appbar .brand .word { font-size: 0.97rem; font-weight: 640; letter-spacing: -0.012em; }
+.cw-chip { font-family: var(--mono); font-size: 0.66rem; color: var(--faint);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; white-space: nowrap; }
+.cw-nav { display: flex; align-items: center; gap: 22px; }
+.cw-nav .divider { width: 1px; height: 20px; background: var(--border-strong); }
+.cw-navitem { display: flex; align-items: center; gap: 7px; height: 56px; padding: 0 3px;
+    text-decoration: none; font-size: 0.855rem; font-weight: 450; color: var(--muted); }
+.cw-navitem:hover { color: var(--text); text-decoration: none; }
+.cw-navitem.active { font-weight: 600; color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--primary); }
+.cw-navitem svg { flex-shrink: 0; }
+.cw-appbar .spacer { flex: 1; }
+.cw-appbar .cluster { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+/* Verdict pip: the answer to "is it up?" carried on EVERY page. */
+.cw-pip { display: flex; align-items: center; gap: 7px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px 4px 9px;
+    text-decoration: none; }
+.cw-pip:hover { text-decoration: none; border-color: var(--border-strong); }
+.cw-pip .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cw-pip .label { font-size: 0.775rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+
+.cw-iconbtn { width: 31px; height: 31px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+    border-radius: 5px; cursor: pointer; padding: 0; margin: 0; }
+.cw-iconbtn:hover { color: var(--text); border-color: var(--border-strong); }
+.cw-burger { display: none; }
+
+/* ------------------------------------------------------------ page band */
+.cw-pageband { padding: 20px 0 4px; display: flex; align-items: flex-end; gap: 24px; }
+.cw-pageband .titles { flex: 1; min-width: 0; }
+.cw-pageband h2 { margin: 0 0 3px; font-size: 1.33rem; font-weight: 650;
+    letter-spacing: -0.015em; line-height: 1.2; }
+.cw-pageband p { margin: 0; font-size: 0.825rem; color: var(--muted); line-height: 1.4; }
+
+/* Section rules: h3/h4 become uppercase micro-labels with a hairline. */
+main.container h3, main.container h4 {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 0.7rem; font-weight: 650; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--faint); margin: 1.6rem 0 0.7rem; }
+main.container h3 small, main.container h4 small {
+    font-size: 0.7rem; letter-spacing: 0.02em; text-transform: none; color: var(--muted);
+    font-weight: 400; }
+main.container h3::after, main.container h4::after {
+    content: ""; flex: 1; height: 1px; background: var(--border); }
+main.container h5 { font-size: 0.85rem; }
+
+/* Numbers are mono everywhere they line up. */
+.cw-row .stats, .cw-stat b, .cw-statusbar, .cw-chip, .cw-mono { font-family: var(--mono); }
 
 /* Status dots */
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
@@ -14,43 +120,56 @@
 .dot.unreachable { background: var(--cw-unreach); }
 .dot.starting, .dot.initializing { background: var(--cw-quiet); }
 
-/* Verdict banner */
-.verdict-banner { padding: 0.7rem 1rem; border-radius: 8px; font-weight: 700; color: #fff; margin-bottom: 1rem; }
+/* Verdict slab: kept FULL-BLEED deliberately (overrides design §6.1) — the
+   at-a-glance answer is the product; see plans/2026-09-14-design-refresh.md. */
+.verdict-banner { padding: 0.75rem 1.1rem; border-radius: 8px; font-weight: 700; color: #fff;
+    margin-bottom: 1rem; box-shadow: var(--shadow); }
 .verdict-banner.healthy, .verdict-banner.siteincident { background: var(--cw-ok); }
-.verdict-banner.internetweather, .verdict-banner.linkdegraded { background: var(--cw-warn); }
+.verdict-banner.internetweather { background: var(--cw-ok); }
+.verdict-banner.linkdegraded { background: var(--cw-warn); }
 .verdict-banner.linkdown { background: var(--cw-down); }
 .verdict-banner.unknown { background: var(--cw-unreach); }
 .verdict-banner .pill { float: right; font-size: 0.75rem; font-weight: 400; opacity: 0.9; }
 
 /* Tree */
 .cw-tree, .cw-tree ul { list-style: none; padding-left: 0; margin: 0.2rem 0; }
-.cw-tree ul { padding-left: 1.4rem; border-left: 1px dotted var(--cw-unreach); margin-left: 0.3rem; }
-.cw-tree li { padding: 0.15rem 0; }
-.cw-row { cursor: pointer; display: flex; align-items: baseline; gap: 0.5rem; }
-.cw-row .stats { margin-left: auto; color: var(--pico-muted-color, #777); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.cw-tree ul { padding-left: 1.4rem; border-left: 1px dotted var(--border-strong); margin-left: 0.3rem; }
+.cw-tree li { padding: 0.1rem 0; }
+.cw-row { cursor: pointer; display: flex; align-items: center; gap: 10px;
+    min-height: 33px; padding: 0 10px; border-radius: 5px; }
+.cw-row:hover { background: var(--surface-2); }
+.cw-row .addr { font-family: var(--mono); font-size: 0.735rem; color: var(--faint); white-space: nowrap; }
+.cw-row .statechip { font-size: 0.69rem; font-weight: 640; border-radius: 4px;
+    padding: 2px 7px; white-space: nowrap; }
+.cw-row .stats { margin-left: auto; color: var(--muted); font-size: 0.78rem;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cw-row .pin { font-size: 0.75rem; opacity: 0.6; }
 
 /* Expanded tile */
-.cw-tile { border: 1px solid var(--cw-warn); border-radius: 10px; padding: 0.6rem 0.9rem; margin: 0.3rem 0;
+.cw-tile { border: 1px solid var(--cw-warn); border-radius: 8px; padding: 0.6rem 0.9rem; margin: 0.3rem 0;
            background: color-mix(in srgb, var(--cw-warn) 8%, transparent);
            overflow: hidden; }
-.cw-tile.pinned-only { border-color: var(--cw-unreach); background: color-mix(in srgb, var(--cw-unreach) 8%, transparent); }
+.cw-tile.pinned-only { border-color: var(--border-strong); background: var(--surface-2); }
 .cw-tile .why { color: var(--cw-warn); font-size: 0.8rem; margin: 0.2rem 0; }
 .cw-tile .chart-box { height: 70px; margin-top: 0.4rem; }
-.cw-tile .axis { display: flex; justify-content: space-between; color: var(--cw-unreach); font-size: 0.7rem; }
+.cw-tile .axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 0.7rem; }
 
 /* Expansion animation */
 .cw-expandable { display: grid; transition: grid-template-rows 0.35s ease; grid-template-rows: 0fr; }
 .cw-expandable.open { grid-template-rows: 1fr; }
 .cw-expandable > div { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+    .cw-expandable { transition: none; }
+}
 
 /* Status bar */
-.cw-statusbar { position: fixed; bottom: 0; left: 0; right: 0; border-top: 1px solid var(--cw-unreach);
-                background: var(--pico-background-color, #fff); padding: 0.4rem 1.2rem; font-size: 0.85rem;
+.cw-statusbar { position: fixed; bottom: 0; left: 0; right: 0; border-top: 1px solid var(--border);
+                background: var(--surface); padding: 0.4rem 1.2rem; font-size: 0.78rem;
+                color: var(--muted);
                 display: flex; justify-content: space-between; align-items: center; z-index: 10; }
 .cw-statusbar .events-toggle { cursor: pointer; text-decoration: underline; }
 .cw-events-panel { position: fixed; bottom: 2.4rem; left: 0; right: 0; max-height: 40vh; overflow-y: auto;
-                   background: var(--pico-background-color, #fff); border-top: 2px solid var(--cw-unreach);
+                   background: var(--surface); border-top: 2px solid var(--border-strong);
                    padding: 0.6rem 1.2rem; z-index: 9; }
 .cw-events-panel table { font-size: 0.8rem; margin: 0; }
 main.container { padding-bottom: 4rem; }
@@ -59,29 +178,67 @@ main.container { padding-bottom: 4rem; }
 .reconnecting { opacity: 0.65; }
 
 /* History */
-.cw-stats-row { display: flex; gap: 1.2rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
-.cw-stat { border: 1px solid var(--cw-unreach); border-radius: 8px; padding: 0.5rem 1rem; }
-.cw-stat b { display: block; font-size: 1.3rem; }
+.cw-stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px; margin: 0.6rem 0 1rem; }
+.cw-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 14px 16px; }
+.cw-stat b { display: block; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
 .cw-ribbon { width: 100%; height: 34px; }
 .form-errors { color: var(--cw-down); }
 
+/* Segmented control (History range, Targets sub-nav). */
+.cw-segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px;
+    overflow: hidden; background: var(--surface); }
+.cw-segmented a, .cw-segmented button { border: 0; border-radius: 0; margin: 0; background: transparent;
+    color: var(--muted); font-size: 0.815rem; font-weight: 520; padding: 0 14px; height: 32px;
+    line-height: 32px; cursor: pointer; text-decoration: none; box-shadow: none; }
+.cw-segmented a + a, .cw-segmented button + button { border-left: 1px solid var(--border); }
+.cw-segmented .active { background: var(--primary-soft); color: var(--primary); font-weight: 620; }
+.cw-segmented a:hover, .cw-segmented button:hover { color: var(--text); text-decoration: none; }
+
 /* Config health warnings */
 .cw-health { border: 1px solid var(--cw-warn); border-left: 6px solid var(--cw-warn);
-             border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem; }
+             border-radius: 6px; padding: 0.5rem 1rem; margin-bottom: 1rem;
+             background: color-mix(in srgb, var(--cw-warn) 7%, var(--surface)); }
 .cw-health ul { margin: 0.3rem 0 0; }
 .cw-health-hint { color: var(--cw-warn); font-size: 0.85rem; margin: 0.2rem 0 0.6rem; }
 
 /* Path-to-internet pipeline */
-.cw-pipeline { border-left: 3px solid var(--cw-unreach); padding-left: 1rem; margin-bottom: 1.2rem; }
+.cw-pipeline { border-left: 3px solid var(--border-strong); padding-left: 1rem; margin-bottom: 1.2rem; }
 .cw-stage { padding: 0.35rem 0; }
-.cw-stage small { color: var(--cw-unreach); margin-left: 0.5rem; }
+.cw-stage small { color: var(--faint); margin-left: 0.5rem; }
 .cw-stage .cw-branches { display: block; margin-left: 1rem; }
 .cw-insert { padding: 0.1rem 0 0.1rem 1.2rem; }
 .cw-insert button { font-size: 0.75rem; padding: 0.1rem 0.6rem; }
-.cw-anchors { border-top: 1px dotted var(--cw-unreach); }
+.cw-anchors { border-top: 1px dotted var(--border-strong); }
 
-/* Header build stamp: a quiet line under the brand. Absolutely positioned so
-   its width never pushes the menu around at narrow widths. */
-.cw-brand { position: relative; }
-.cw-build { position: absolute; left: 0; top: 100%; margin-top: -0.5rem;
-    opacity: 0.4; font-size: 0.68rem; line-height: 1.2; white-space: nowrap; }
+/* --------------------------------------------------------- mobile shell */
+.cw-drawer { display: none; }
+@media (max-width: 899px) {
+    .cw-appbar { gap: 14px; padding: 0 16px; }
+    .cw-appbar .cw-nav { display: none; }
+    .cw-burger { display: flex; }
+    .cw-appbar .brand .word { font-size: 0.9rem; }
+    .cw-appbar .cw-chip { display: none; }
+    main.container { padding-left: 16px; padding-right: 16px; }
+    .cw-row { min-height: 44px; }
+    .cw-row .addr { display: none; }
+    .cw-drawer.open { display: block; position: fixed; inset: 0; z-index: 50; }
+    .cw-drawer .backdrop { position: absolute; inset: 0; background: rgba(10, 12, 18, 0.45); }
+    .cw-drawer .panel { position: absolute; top: 0; left: 0; bottom: 0; width: 280px;
+        background: var(--surface); border-right: 1px solid var(--border);
+        padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; }
+    .cw-drawer .group { font-size: 0.68rem; font-weight: 650; letter-spacing: 0.09em;
+        text-transform: uppercase; color: var(--faint); margin: 14px 0 4px; }
+    .cw-drawer a.item { display: flex; align-items: center; gap: 10px; padding: 10px 8px;
+        border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.9rem; }
+    .cw-drawer a.item:hover { background: var(--surface-2); }
+    .cw-drawer a.item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+    .cw-drawer .foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between; }
+    /* Tables restack as cards on phones (glitch table etc.). */
+    .cw-stack-cards thead { display: none; }
+    .cw-stack-cards tr { display: block; border: 1px solid var(--border); border-radius: 8px;
+        margin-bottom: 10px; padding: 8px 12px; background: var(--surface); }
+    .cw-stack-cards td { display: block; border: 0; padding: 2px 0; }
+}

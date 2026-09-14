@@ -28,13 +28,26 @@ function Row({ target, store, recent }: {
   }
   const assumedTitle = target.assumed
     ? "assumed from before the restart — confirming with fresh pings" : null;
+  const chipColor: Record<string, string> = {
+    Faltering: "var(--cw-warn)", Recovering: "var(--cw-warn)",
+    Down: "var(--cw-down)", Unreachable: "var(--cw-unreach)",
+    Starting: "var(--cw-quiet)", Initializing: "var(--cw-quiet)",
+  };
+  const chip = chipColor[target.state];
   return (
     <div className="cw-row" onClick={() => store.togglePin(target.id)}
-      title={assumedTitle ?? target.address ?? ""}>
+      title={assumedTitle ?? undefined}>
       <span className={`dot ${target.state.toLowerCase()}`}
         style={target.assumed ? { opacity: 0.45 } : undefined}></span>
       <span>{target.name}{target.assumed && <small style={{ opacity: 0.5 }}> (assumed)</small>}</span>
-      <span className="stats">{statsText}</span>
+      <span className="addr">{target.address}</span>
+      <span className="stats">
+        {chip && <span className="statechip" style={{
+          color: chip, background: `color-mix(in srgb, ${chip} 14%, transparent)`,
+          marginRight: 10,
+        }}>{target.state}</span>}
+        {statsText}
+      </span>
     </div>
   );
 }

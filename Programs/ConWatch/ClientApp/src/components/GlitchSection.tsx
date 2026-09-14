@@ -36,7 +36,7 @@ export function GlitchSection({ from, to, subtitle }: {
         <p style={{ opacity: 0.7 }}>No glitches recorded in this range. Quiet is good.</p>
       )}
       {recent.length > 0 && (
-        <table>
+        <table className="cw-stack-cards">
           <thead>
             <tr><th>When</th><th>Subject</th><th>Class</th><th>Lost</th><th>Duration</th><th>Detail</th></tr>
           </thead>
