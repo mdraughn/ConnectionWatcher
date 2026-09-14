@@ -114,6 +114,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<StatusBroadcaster>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());
+builder.Services.AddSingleton<ConWatch.Metrics.MetricsCounters>();
 
 var app = builder.Build();
 
@@ -133,6 +134,7 @@ if (app.Environment.IsDevelopment())
 app.MapRazorPages();
 app.MapHub<StatusHub>("/hubs/status");
 app.MapMcp("/mcp"); // open, read-only (see the MCP design spec)
+ConWatch.Api.MetricsEndpoint.MapMetrics(app); // open, like the watching surface
 
 var api = app.MapGroup("/api/v1");
 // Watching is always open; changing requires admin mode when a password is set.

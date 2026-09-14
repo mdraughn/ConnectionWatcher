@@ -194,6 +194,33 @@ is open like the rest of the watching surface and serves nothing the open
 APIs don't already serve; it never touches settings, secrets, or admin
 actions.
 
+## Grafana / Prometheus (metrics)
+
+ConnectionWatcher exposes Prometheus metrics at `/metrics` — open like the
+rest of the watching surface, and serving nothing `/api/v1/status` doesn't.
+Scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: conwatch
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["nas.example.com:8080"]
+```
+
+What you get: `conwatch_verdict{state=...}` (one-hot — feed it straight to a
+Grafana state-timeline panel), per-target `conwatch_target_up`,
+`conwatch_target_loss_ratio` (packet loss, 0..1) and
+`conwatch_target_rtt_seconds`, `conwatch_pool_up`, plus
+`conwatch_transitions_total` and `conwatch_glitches_total` counters for
+`rate()` panels. Useful starters:
+
+```promql
+conwatch_target_rtt_seconds * 1000            # per-target latency in ms
+avg(conwatch_target_loss_ratio) * 100         # overall packet loss %
+increase(conwatch_transitions_total[1h])      # instability by target
+```
+
 ## Running unattended
 
 **The easy way** — from the repo root, no parameters, self-elevating:

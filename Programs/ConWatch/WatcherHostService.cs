@@ -30,6 +30,7 @@ public class WatcherHostService(
     GlitchRecorder glitchRecorder,
     RollupCollector collector,
     StatusBroadcaster broadcaster,
+    Metrics.MetricsCounters metricsCounters,
     ConNotify.MqttNotifier mqttNotifier,
     ConNotify.WebhookNotifier webhookNotifier) : IHostedService
 {
@@ -144,6 +145,7 @@ public class WatcherHostService(
         glitchRecorder.Attach(engine.GlitchSource);
         collector.Attach(engine.PingSampleSource);
         broadcaster.Attach(engine);
+        metricsCounters.Attach(engine);
         mqttNotifier.Attach(engine);
         webhookNotifier.Attach(engine);
         await engine.StartAsync(_appStopping, seed);
