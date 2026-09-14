@@ -54,10 +54,11 @@
 </head>
 <body>
     <header class="cw-appbar">
+        <button class="cw-iconbtn cw-burger" id="cw-burger" type="button" aria-label="Menu">@Html.Raw(icons["menu"])</button>
         <a class="brand" href="/" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">
             <span class="mark">@Html.Raw(brand)</span>
             <span class="word">ConnectionWatcher</span>
-            <span class="cw-chip">v@(ConWatch.BuildInfo.Version)</span>
+            <span class="cw-chip" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">v@(ConWatch.BuildInfo.ShortVersion)</span>
         </a>
         <nav class="cw-nav">
             @foreach (var (key, href, label, prefix) in watchNav)
@@ -90,7 +91,6 @@
             {
                 <a class="cw-iconbtn" href="/?admin=1" title="Enter admin mode">@Html.Raw(icons["lock"])</a>
             }
-            <button class="cw-iconbtn cw-burger" id="cw-burger" type="button" aria-label="Menu">@Html.Raw(icons["menu"])</button>
         </div>
     </header>
 
@@ -117,7 +117,7 @@
                 }
             }
             <div class="foot">
-                <span class="cw-chip">v@(ConWatch.BuildInfo.Version)</span>
+                <span class="cw-chip" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">v@(ConWatch.BuildInfo.ShortVersion)</span>
                 <button class="cw-iconbtn" id="cw-theme-btn-drawer" type="button" title="Change theme">@Html.Raw(icons["moon"])</button>
             </div>
         </div>

@@ -214,15 +214,12 @@ main.container { padding-bottom: 4rem; }
 
 /* --------------------------------------------------------- mobile shell */
 .cw-drawer { display: none; }
-@media (max-width: 899px) {
-    .cw-appbar { gap: 14px; padding: 0 16px; }
+
+/* Nav collapse: BEFORE the bar can squeeze the pip/theme controls off-edge
+   the whole nav folds into the (left-hand, matching the drawer) hamburger. */
+@media (max-width: 1149px) {
     .cw-appbar .cw-nav { display: none; }
     .cw-burger { display: flex; }
-    .cw-appbar .brand .word { font-size: 0.9rem; }
-    .cw-appbar .cw-chip { display: none; }
-    main.container { padding-left: 16px; padding-right: 16px; }
-    .cw-row { min-height: 44px; }
-    .cw-row .addr { display: none; }
     .cw-drawer.open { display: block; position: fixed; inset: 0; z-index: 50; }
     .cw-drawer .backdrop { position: absolute; inset: 0; background: rgba(10, 12, 18, 0.45); }
     .cw-drawer .panel { position: absolute; top: 0; left: 0; bottom: 0; width: 280px;
@@ -236,6 +233,16 @@ main.container { padding-bottom: 4rem; }
     .cw-drawer a.item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
     .cw-drawer .foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border);
         display: flex; align-items: center; justify-content: space-between; }
+}
+
+/* Phone accommodations. */
+@media (max-width: 899px) {
+    .cw-appbar { gap: 14px; padding: 0 16px; }
+    .cw-appbar .brand .word { font-size: 0.9rem; }
+    .cw-appbar .cw-chip { display: none; }
+    main.container { padding-left: 16px; padding-right: 16px; }
+    .cw-row { min-height: 44px; }
+    .cw-row .addr { display: none; }
     /* Tables restack as cards on phones (glitch table etc.). */
     .cw-stack-cards thead { display: none; }
     .cw-stack-cards tr { display: block; border: 1px solid var(--border); border-radius: 8px;

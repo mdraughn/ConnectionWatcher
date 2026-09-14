@@ -69,21 +69,27 @@ export function VerdictBanner({ verdict, connected }: {
     );
   }
   const slab = slabFor(verdict);
+  // The icon sits in its own left column so the headline and the caveat
+  // share one text edge: icon, "Your internet is UP", and directly under
+  // the Y, "no trouble in sight".
   return (
     <div className={`verdict-banner ${slab.cls} ${connected ? "" : "reconnecting"}`}
       title={verdict.detail ?? undefined}>
       {!connected && <span className="pill">reconnecting…</span>}
-      <div style={{ fontSize: "1.25rem", lineHeight: 1.3 }}>
-        {slab.icon} {slab.headline}
-      </div>
-      {slab.caveat && (
-        <div style={{ fontSize: "0.8rem", fontWeight: 400, opacity: 0.92, marginTop: 2 }}>
-          {slab.mark && <span style={{ marginRight: 6, verticalAlign: "baseline" }}>
-            <MarkSwatch mark={slab.mark} barWidth={13} size={8} />
-          </span>}
-          {slab.caveat}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <span style={{ fontSize: "1.25rem", lineHeight: 1.3, flexShrink: 0 }}>{slab.icon}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: "1.25rem", lineHeight: 1.3 }}>{slab.headline}</div>
+          {slab.caveat && (
+            <div style={{ fontSize: "0.8rem", fontWeight: 400, opacity: 0.92, marginTop: 2 }}>
+              {slab.mark && <span style={{ marginRight: 6, verticalAlign: "baseline" }}>
+                <MarkSwatch mark={slab.mark} barWidth={13} size={8} />
+              </span>}
+              {slab.caveat}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

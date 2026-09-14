@@ -11,6 +11,11 @@ namespace ConWatch;
 public static class BuildInfo
 {
     public static readonly string Version = ComputeVersion();
+
+    /// <summary>Version without build metadata ("0.9.0") — what the UI shows;
+    /// the full version with commit hash belongs in tooltips and APIs.</summary>
+    public static readonly string ShortVersion = Version.Split('+')[0];
+
     public static readonly DateTimeOffset? BuiltUtc = ComputeBuiltUtc();
 
     private static string ComputeVersion()
