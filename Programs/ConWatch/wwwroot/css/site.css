@@ -142,7 +142,10 @@ main.container h5 { font-size: 0.85rem; }
 .cw-row .statechip { font-size: 0.69rem; font-weight: 640; border-radius: 4px;
     padding: 2px 7px; white-space: nowrap; }
 .cw-row .stats { margin-left: auto; color: var(--muted); font-size: 0.78rem;
-    font-variant-numeric: tabular-nums; white-space: nowrap; }
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    /* A pool row lists its members here; on a phone that must truncate,
+       not push the whole page wider than the screen. */
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .cw-row .pin { font-size: 0.75rem; opacity: 0.6; }
 
 /* Expanded tile */

@@ -15,6 +15,7 @@
         ["traceroute"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><circle cx=\"4.4\" cy=\"15.6\" r=\"1.9\"></circle><circle cx=\"15.6\" cy=\"4.4\" r=\"1.9\"></circle><circle cx=\"10\" cy=\"10\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"></circle><path d=\"M6.3 15.6h2.2a3.2 3.2 0 0 0 3.2-3.2V8.2a3.2 3.2 0 0 1 2-2.9\"></path></svg>",
         ["admin"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 6.2h13.2M3.4 10h13.2M3.4 13.8h13.2\"></path><circle cx=\"7.6\" cy=\"6.2\" r=\"1.9\" fill=\"var(--surface)\"></circle><circle cx=\"13\" cy=\"10\" r=\"1.9\" fill=\"var(--surface)\"></circle><circle cx=\"6.6\" cy=\"13.8\" r=\"1.9\" fill=\"var(--surface)\"></circle></svg>",
         ["lock"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><rect x=\"4.6\" y=\"8.6\" width=\"10.8\" height=\"7.8\" rx=\"2\"></rect><path d=\"M7.2 8.6V6.4a2.8 2.8 0 0 1 5.6 0v2.2\"></path></svg>",
+        ["logout"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M12.4 3.4H5.6a1.6 1.6 0 0 0-1.6 1.6v10a1.6 1.6 0 0 0 1.6 1.6h6.8\"></path><path d=\"M9.4 10h7.2\"></path><path d=\"M13.8 7.2 16.6 10l-2.8 2.8\"></path></svg>",
         ["moon"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M15.6 11.9A6.4 6.4 0 0 1 8.1 4.4a6.4 6.4 0 1 0 7.5 7.5z\"></path></svg>",
         ["menu"] = $"<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 6h13.2M3.4 10h13.2M3.4 14h13.2\"></path></svg>",
         ["close"] = $"<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" {s}><path d=\"M5.2 5.2l9.6 9.6M14.8 5.2l-9.6 9.6\"></path></svg>",
@@ -68,19 +69,18 @@
             {
                 <a class="cw-navitem @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
             }
-            @if (!locked)
+            <span class="divider"></span>
+            @* Manage links stay visible when locked — they are the way in;
+               each page redirects to the password prompt itself. *@
+            @foreach (var (key, href, label, prefix) in manageNav)
             {
-                <span class="divider"></span>
-                @foreach (var (key, href, label, prefix) in manageNav)
-                {
-                    <a class="cw-navitem @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
-                }
-                @if (Gate.IsEnabled)
-                {
-                    <a class="cw-navitem" href="#" id="nav-exit-admin"
-                       onclick="fetch('/api/v1/auth/logout',{method:'POST'}).then(()=>location.href='/');return false;">
-                        <span>exit admin mode</span></a>
-                }
+                <a class="cw-navitem @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
+            }
+            @if (!locked && Gate.IsEnabled)
+            {
+                <a class="cw-navitem" href="#" id="nav-logout"
+                   onclick="fetch('/api/v1/auth/logout',{method:'POST'}).then(()=>location.href='/');return false;">
+                    @Html.Raw(icons["logout"])<span>Log out</span></a>
             }
         </nav>
         <span class="spacer"></span>
@@ -111,13 +111,16 @@
             {
                 <a class="item @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
             }
-            @if (!locked)
+            <div class="group">Manage</div>
+            @foreach (var (key, href, label, prefix) in manageNav)
             {
-                <div class="group">Manage</div>
-                @foreach (var (key, href, label, prefix) in manageNav)
-                {
-                    <a class="item @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
-                }
+                <a class="item @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
+            }
+            @if (!locked && Gate.IsEnabled)
+            {
+                <a class="item" href="#"
+                   onclick="fetch('/api/v1/auth/logout',{method:'POST'}).then(()=>location.href='/');return false;">
+                    @Html.Raw(icons["logout"])<span>Log out</span></a>
             }
             <div class="foot">
                 <span class="cw-chip" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">v@(ConWatch.BuildInfo.ShortVersion)</span>

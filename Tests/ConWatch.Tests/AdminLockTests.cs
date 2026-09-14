@@ -70,22 +70,26 @@ public class AdminLockTests : IDisposable
     }
 
     [Fact]
-    public async Task Nav_hides_locked_links_and_shows_exit_when_admin()
+    public async Task Nav_always_shows_manage_links_and_logout_only_when_admin()
     {
         var html = await _client.GetStringAsync("/History");
         Assert.Contains("/Config/Targets", html); // gate off: everything visible
+        Assert.DoesNotContain("Log out", html);   // nothing to log out of
 
         await EnableGateAsync(); // now in admin mode
         html = await _client.GetStringAsync("/History");
         Assert.Contains("/Config/Targets", html);
-        Assert.Contains("exit admin mode", html);
+        Assert.Contains("Log out", html);
 
+        // Locked: the Manage links stay visible as the way in — the pages
+        // themselves redirect to the password prompt, and the APIs 401.
         await LogoutAsync();
         html = await _client.GetStringAsync("/History");
-        Assert.DoesNotContain("/Config/Targets", html);
-        Assert.DoesNotContain("href=\"/Data\"", html);
-        Assert.DoesNotContain("/Traceroute", html);
-        Assert.DoesNotContain("/Admin", html);
+        Assert.Contains("/Config/Targets", html);
+        Assert.Contains("href=\"/Data\"", html);
+        Assert.Contains("/Traceroute", html);
+        Assert.Contains("/Admin", html);
+        Assert.DoesNotContain("Log out", html);
     }
 
     [Fact]

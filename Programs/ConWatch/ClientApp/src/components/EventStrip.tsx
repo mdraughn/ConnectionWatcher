@@ -21,8 +21,10 @@ export function EventStrip({ topology }: { topology: StoryTopology }) {
   useEffect(() => {
     const measure = () => {
       const width = containerRef.current?.clientWidth ?? 0;
+      // Never demand more bins than the container fits: a forced minimum
+      // wider than a phone screen makes the whole page scroll sideways.
       if (width > 0)
-        setBinCount(Math.max(30, Math.min(240, Math.floor((width - 60) / (CELL + GAP)))));
+        setBinCount(Math.max(10, Math.min(240, Math.floor((width - 60) / (CELL + GAP)))));
     };
     measure();
     window.addEventListener("resize", measure);

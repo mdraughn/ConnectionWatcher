@@ -88,8 +88,12 @@
             if (r.ok) location.href = "/";
             else document.getElementById("admin-dialog-errors").innerHTML = "<li>Wrong password.</li>";
         });
-        if (new URLSearchParams(location.search).get("admin") === "1")
+        if (new URLSearchParams(location.search).get("admin") === "1") {
             document.getElementById("admin-dialog").showModal();
+            // Drop the flag from the URL right away, so a refresh (or a
+            // cancel followed by a refresh) doesn't re-prompt.
+            history.replaceState(null, "", location.pathname);
+        }
     </script>
 }
 
