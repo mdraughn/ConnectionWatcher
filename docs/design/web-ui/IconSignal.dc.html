@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, Helvetica, Arial, sans-serif; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: var(--primary); text-decoration: underline; }
+    table { border-collapse: collapse; width: 100%; }
+  </style>
+</helmet>
+<div style="width:720px;min-height:1010px;background:var(--bg);color:var(--text);font-family:system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, Helvetica, Arial, sans-serif;font-size:14px;line-height:1.5;display:flex;flex-direction:column;
+    --bg:#ffffff; --surface:#fbfcfd; --surface-2:#f4f6f9; --surface-3:#eef1f5;
+    --text:#373c44; --muted:#646b79; --faint:#8b93a1;
+    --border:#e7eaf0; --border-strong:#d6dbe4;
+    --primary:#0172ad; --primary-soft:rgba(1,114,173,0.10);
+    --ok:#2e9e52; --warn:#e08a00; --down:#cc3333; --unreach:#999999;
+    --warm-glitch:#eda94f; --warm-degraded:#e08a00; --warm-out:#cc3333;
+    --grey-glitch:#d4d4d4; --grey-degraded:#7d7d7d; --grey-out:#2b2b2b;
+    --healthy:#eaf3ec; --healthy-vivid:#4fa96e;
+    --shadow:0 1px 2px rgba(28,35,50,0.05), 0 1px 1px rgba(28,35,50,0.04);
+">
+<div style="flex-shrink:0;padding:22px 24px 16px">
+    <div style="display:flex;align-items:center;gap:11px">
+      <span style="width:26px;height:26px;border-radius:6px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700">A</span>
+      <h1 style="margin:0;font-size:1.28rem;font-weight:650;letter-spacing:-0.015em;color:var(--text)">Signal</h1>
+    </div>
+    <p style="margin:11px 0 0;font-size:0.835rem;color:var(--text);line-height:1.5">The app&rsquo;s own brand mark, carrying state. One icon is both identity and verdict, so the favicon always looks like ConnectionWatcher.</p>
+    <p style="margin:8px 0 0;font-size:0.815rem;color:var(--muted);line-height:1.5"><b style="font-weight:600;color:var(--text)">Tradeoff.</b> Rings read as <b>signal strength</b>, which risks implying your Wi-Fi rather than your uplink &mdash; the exact distinction this product exists to make. The symmetric left/right arcs push against that, but don&rsquo;t erase it. Check the 16&nbsp;px row too: with the outer pair gone, <i>struggling</i> thins out to almost nothing.</p>
+  </div>
+<main style="flex:1;padding:0 24px 26px;display:flex;flex-direction:column;gap:20px">
+      <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Major states</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:10px;padding:22px 14px 18px">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <svg width="58" height="58" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Your internet is up</div>
+    </div><div style="display:flex;flex-direction:column;align-items:center">
+      <svg width="58" height="58" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g></svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Your internet is struggling</div>
+    </div><div style="display:flex;flex-direction:column;align-items:center">
+      <svg width="58" height="58" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g opacity="0.32"><g stroke="var(--down)" fill="var(--down)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></g><path d="M5 19 19 5" stroke="var(--down)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Your internet is down</div>
+    </div>
+  </div>
+  <div style="border-top:1px solid var(--border);padding:11px 18px;font-size:0.775rem;color:var(--muted)">Reach shrinks: two ring pairs &rarr; one &rarr; none.</div></div></div>
+      <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">Size ladder</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">form must survive colour loss</span>
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div style="padding:4px 18px 14px">
+      <div style="display:grid;grid-template-columns:78px repeat(3, minmax(0, 1fr));gap:10px;padding:12px 0 4px">
+        <span></span><span style="font-size:0.715rem;color:var(--faint);text-align:center">up</span><span style="font-size:0.715rem;color:var(--faint);text-align:center">struggling</span><span style="font-size:0.715rem;color:var(--faint);text-align:center">down</span>
+      </div>
+      <div style="display:grid;grid-template-columns:78px repeat(3, minmax(0, 1fr));gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--border)">
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint)">32 px</span>
+      <div style="display:flex;justify-content:center"><svg width="32" height="32" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="32" height="32" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="32" height="32" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g opacity="0.32"><g stroke="var(--down)" fill="var(--down)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></g><path d="M5 19 19 5" stroke="var(--down)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+    </div><div style="display:grid;grid-template-columns:78px repeat(3, minmax(0, 1fr));gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--border)">
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint)">24 px</span>
+      <div style="display:flex;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g opacity="0.32"><g stroke="var(--down)" fill="var(--down)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></g><path d="M5 19 19 5" stroke="var(--down)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+    </div><div style="display:grid;grid-template-columns:78px repeat(3, minmax(0, 1fr));gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--border)">
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint)">16 px tab</span>
+      <div style="display:flex;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g opacity="0.32"><g stroke="var(--down)" fill="var(--down)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></g><path d="M5 19 19 5" stroke="var(--down)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+    </div><div style="display:grid;grid-template-columns:78px repeat(3, minmax(0, 1fr));gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--border)">
+      <span style="font-family:ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;font-size:0.7rem;color:var(--faint)">greyscale</span>
+      <div style="display:flex;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--text)" fill="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--text)" fill="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g></svg></div><div style="display:flex;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g opacity="0.32"><g stroke="var(--text)" fill="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></g><path d="M5 19 19 5" stroke="var(--text)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+    </div>
+    </div></div></div>
+      <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">With a minor status</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:8px;padding:20px 12px 16px">
+    <div style="display:flex;flex-direction:column;align-items:center">
+        <svg width="46" height="46" viewBox="0 0 24 24" style="display:block;flex-shrink:0">
+      <g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g><circle cx="18.4" cy="18.4" r="5.1" fill="var(--surface)"></circle><circle cx="18.4" cy="18.4" r="3.1" fill="var(--warm-glitch)"></circle>
+    </svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Up &middot; one site down</div>
+      </div><div style="display:flex;flex-direction:column;align-items:center">
+        <svg width="46" height="46" viewBox="0 0 24 24" style="display:block;flex-shrink:0">
+      <g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g><rect x="12.7" y="15.5" width="11.6" height="5.8" rx="2.9" fill="var(--surface)"></rect><rect x="14.1" y="16.9" width="8.8" height="3" rx="1.5" fill="var(--warm-degraded)"></rect>
+    </svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Up &middot; internet-wide</div>
+      </div><div style="display:flex;flex-direction:column;align-items:center">
+        <svg width="46" height="46" viewBox="0 0 24 24" style="display:block;flex-shrink:0">
+      <g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g><circle cx="18.4" cy="18.4" r="5.1" fill="var(--surface)"></circle><circle cx="18.4" cy="18.4" r="3.1" fill="var(--warm-glitch)"></circle>
+    </svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Struggling &middot; one site</div>
+      </div><div style="display:flex;flex-direction:column;align-items:center">
+        <svg width="46" height="46" viewBox="0 0 24 24" style="display:block;flex-shrink:0">
+      <g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g><rect x="12.7" y="15.5" width="11.6" height="5.8" rx="2.9" fill="var(--surface)"></rect><rect x="14.1" y="16.9" width="8.8" height="3" rx="1.5" fill="var(--warm-degraded)"></rect>
+    </svg><div style="font-size:0.735rem;color:var(--muted);text-align:center;line-height:1.35;margin-top:9px">Struggling &middot; wide</div>
+      </div>
+  </div></div></div>
+      <div><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="font-size:0.7rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);white-space:nowrap">In place</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      
+    </div><div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);"><div style="padding:16px 18px">
+    <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-left:4px solid var(--warn);border-radius:7px;background:color-mix(in srgb, var(--warn) 7%, var(--surface));padding:11px 14px">
+      <svg width="30" height="30" viewBox="0 0 24 24" style="display:block;flex-shrink:0">
+      <g stroke="var(--warn)" fill="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path></g><rect x="12.7" y="15.5" width="11.6" height="5.8" rx="2.9" fill="color-mix(in srgb, var(--warn) 7%, var(--surface))"></rect><rect x="14.1" y="16.9" width="8.8" height="3" rx="1.5" fill="var(--warm-degraded)"></rect>
+    </svg>
+      <span style="font-size:0.9rem;font-weight:660;color:var(--warn);white-space:nowrap">Your internet is struggling</span>
+      <span style="font-size:0.815rem;color:var(--text);opacity:0.8">&mdash; and several sites are unreachable.</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:18px;margin-top:16px">
+      <span style="display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:3px 12px 3px 7px">
+        <svg width="17" height="17" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g stroke="var(--ok)" fill="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></svg><span style="font-size:0.775rem;font-weight:600;color:var(--text)">Up</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:0;background:var(--surface-3);border-radius:8px 8px 0 0;padding:7px 12px 8px;min-width:190px">
+        <svg width="16" height="16" viewBox="0 0 24 24" style="display:block;flex-shrink:0"><g opacity="0.32"><g stroke="var(--down)" fill="var(--down)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"></circle><path d="M16.6 8.7a5.2 5.2 0 0 1 0 6.6" fill="none"></path><path d="M7.4 15.3a5.2 5.2 0 0 1 0-6.6" fill="none"></path><path d="M19.4 5.9a8.6 8.6 0 0 1 0 12.2" fill="none"></path><path d="M4.6 18.1a8.6 8.6 0 0 1 0-12.2" fill="none"></path></g></g><path d="M5 19 19 5" stroke="var(--down)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:0.755rem;color:var(--muted);margin-left:8px;white-space:nowrap">Dashboard &mdash; Connection&hellip;</span>
+      </span>
+    </div>
+    <div style="font-size:0.75rem;color:var(--faint);margin-top:11px">Banner &middot; nav pip &middot; browser tab at true 16&nbsp;px</div>
+  </div></div></div>
+    </main>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":720,"height":1010}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

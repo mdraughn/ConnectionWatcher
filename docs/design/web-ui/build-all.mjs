@@ -18,3 +18,4 @@ await import("./build-history.mjs");
 await import("./build-targets.mjs");
 await import("./build-mobile.mjs");
 await import("./build-system.mjs");
+await import("./build-icons.mjs");

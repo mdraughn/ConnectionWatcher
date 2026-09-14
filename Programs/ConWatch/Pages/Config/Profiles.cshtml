@@ -6,7 +6,13 @@
     var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
-<h2>Profiles</h2>
+<div class="cw-pageband">
+    <div class="titles">
+        <h2>Profiles</h2>
+        <p>Ping discipline bundles: cadence, bursts, and the state thresholds.</p>
+    </div>
+</div>
+<partial name="_ConfigTabs" model="@("profiles")" />
 <partial name="_HealthBanner" model="Model.Warnings" />
 <p>Ping discipline bundles. Intervals and durations are in seconds; thresholds are 0–1 success rates.</p>
 

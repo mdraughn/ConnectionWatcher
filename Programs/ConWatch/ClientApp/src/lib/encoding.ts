@@ -15,21 +15,26 @@ export interface Mark {
   ambiguous?: boolean;
 }
 
+// Colors are CSS variables (defined in wwwroot/css/site.css) so dark mode can
+// re-point them. The dark GREY ramp INVERTS — pale->black is invisible on a
+// dark page, so there "deeper = worse" runs toward light instead; the warm
+// ramp keeps its direction, preserving warm-vs-grey separation at every tier.
 export const RAMP: Record<Hue, Record<Depth, string>> = {
-  warm: { glitch: "#eda94f", degraded: "#e08a00", out: "#cc3333" },
-  grey: { glitch: "#d4d4d4", degraded: "#7d7d7d", out: "#2b2b2b" },
+  warm: { glitch: "var(--warm-glitch)", degraded: "var(--warm-degraded)", out: "var(--warm-out)" },
+  grey: { glitch: "var(--grey-glitch)", degraded: "var(--grey-degraded)", out: "var(--grey-out)" },
 };
 
 /** Unreachable behind a down parent: inherited, no data, no blame. */
-export const HATCH = "repeating-linear-gradient(45deg, #c9c9c9 0 3px, #f2f2f2 3px 6px)";
+export const HATCH =
+  "repeating-linear-gradient(45deg, var(--grey-glitch) 0 3px, var(--surface-2) 3px 6px)";
 
 /** Healthy ribbon baseline — deliberately pale for large surfaces (punchcard,
  *  ribbon boards) where a vivid green would overwhelm. */
-export const HEALTHY = "#eaf3ec";
+export const HEALTHY = "var(--healthy)";
 
 /** Healthy for SMALL marks (the event strip's 10px bins), where the pale
  *  tint is illegible and "all green" is the whole message. */
-export const HEALTHY_VIVID = "#4fa96e";
+export const HEALTHY_VIVID = "var(--healthy-vivid)";
 
 export function markCss(mark: Mark): { background: string } {
   if (mark.ambiguous) {
@@ -56,8 +61,8 @@ export function ribbonFill(role: RowRole, state: string): string {
     case "Unreachable": return "hatch";
     case "Responding": return HEALTHY;
     case "Starting":
-    case "Initializing": return "#dfe8e2";
-    default: return "#e6e6e6"; // Unknown
+    case "Initializing": return "var(--ribbon-starting)";
+    default: return "var(--ribbon-unknown)"; // Unknown
   }
 }
 

@@ -1,16 +1,27 @@
 {
+  "pages": [
+    { "id": "page-1", "name": "Screens" },
+    { "id": "page-2", "name": "Verdict icons" }
+  ],
   "artboards": [
-    { "file": "Main.dc.html", "title": "Dashboard — light", "x": 0, "y": 0, "w": 1440, "h": 1360 },
-    { "file": "DashboardDark.dc.html", "title": "Dashboard — dark, link down", "x": 1560, "y": 0, "w": 1440, "h": 1360 },
-    { "file": "History.dc.html", "title": "History — dark", "x": 0, "y": 1520, "w": 1440, "h": 2260 },
-    { "file": "Targets.dc.html", "title": "Targets — light", "x": 1560, "y": 1520, "w": 1440, "h": 1540 },
-    { "file": "Mobile.dc.html", "title": "Dashboard — phone, 390px", "x": 0, "y": 3920, "w": 390, "h": 1660 },
-    { "file": "MobileNav.dc.html", "title": "Phone — nav drawer", "x": 510, "y": 3920, "w": 390, "h": 844 },
-    { "file": "System.dc.html", "title": "Design language", "x": 1020, "y": 3920, "w": 1440, "h": 1460 }
+    { "file": "Main.dc.html", "title": "Dashboard — light", "page": "page-1", "x": 0, "y": 0, "w": 1440, "h": 1360 },
+    { "file": "DashboardDark.dc.html", "title": "Dashboard — dark, link down", "page": "page-1", "x": 1560, "y": 0, "w": 1440, "h": 1360 },
+    { "file": "History.dc.html", "title": "History — dark", "page": "page-1", "x": 0, "y": 1520, "w": 1440, "h": 2260 },
+    { "file": "Targets.dc.html", "title": "Targets — light", "page": "page-1", "x": 1560, "y": 1520, "w": 1440, "h": 1540 },
+    { "file": "Mobile.dc.html", "title": "Dashboard — phone, 390px", "page": "page-1", "x": 0, "y": 3920, "w": 390, "h": 1660 },
+    { "file": "MobileNav.dc.html", "title": "Phone — nav drawer", "page": "page-1", "x": 510, "y": 3920, "w": 390, "h": 844 },
+    { "file": "System.dc.html", "title": "Design language", "page": "page-1", "x": 1020, "y": 3920, "w": 1440, "h": 1460 },
+
+    { "file": "IconSignal.dc.html", "title": "A · Signal", "page": "page-2", "x": 0, "y": 0, "w": 720, "h": 1010 },
+    { "file": "IconPath.dc.html", "title": "B · Path", "page": "page-2", "x": 840, "y": 0, "w": 720, "h": 1010 },
+    { "file": "IconGlobe.dc.html", "title": "C · Globe", "page": "page-2", "x": 1680, "y": 0, "w": 720, "h": 1010 },
+    { "file": "IconWeather.dc.html", "title": "D · Weather", "page": "page-2", "x": 2520, "y": 0, "w": 720, "h": 1010 },
+    { "file": "IconSystem.dc.html", "title": "How the set composes", "page": "page-2", "x": 0, "y": 1150, "w": 1440, "h": 1180 }
   ],
   "annotations": [
     {
       "id": "what-changed",
+      "page": "page-1",
       "x": -660,
       "y": 0,
       "w": 560,
@@ -18,6 +29,7 @@
     },
     {
       "id": "dark-ramp",
+      "page": "page-1",
       "x": -660,
       "y": 1520,
       "w": 560,
@@ -25,11 +37,28 @@
     },
     {
       "id": "phone-notes",
+      "page": "page-1",
       "x": -660,
       "y": 3920,
       "w": 560,
       "text": "Phone: 390px, the full scrolling page (not a viewport crop).\n\n• Nav collapses to the drawer; the verdict pip stays in the bar, because knowing the verdict is why the page is open.\n• Tree rows grow to 44px and drop the address — it lives on Targets.\n• The glitch table restacks as cards; tables don't survive 390px.\n• Theme choice (Light / Dark / System) lives in the drawer footer with the build stamp.\n\nOne thing to decide: I surfaced each target's IP next to its name on the desktop tree, where today it's only a tooltip. Easy to drop if it's noise."
+    },
+    {
+      "id": "icon-brief",
+      "page": "page-2",
+      "x": -700,
+      "y": 0,
+      "w": 600,
+      "text": "This isn't five icons — it's 3 majors × an optional minor badge.\n\nSo it's designed as base + modifier. The base is one of four metaphors (A–D across the top). The modifier is identical in all four, and it isn't invented: encoding.ts already says dot = one site, bar = shared path, warm = out there. The badge is just those marks, tucked into the glyph's corner on a plate in the page colour.\n\nTwo hard rules, both testable on each board:\n\n1. The three majors differ in SHAPE, not only hue — see the greyscale row. Colour-only would fail CVD readers and the monochrome tray.\n\n2. Down is one shared convention everywhere: the glyph dimmed under a bold slash. It's the only treatment that still reads at 16px.\n\nThe same glyph set can drive the banner, the nav pip, a state-reflecting favicon, and the ConTray dot — which today is just a coloured blob."
+    },
+    {
+      "id": "icon-verdict",
+      "page": "page-2",
+      "x": -700,
+      "y": 1150,
+      "w": 600,
+      "text": "Where I'd land, and why — but this is your call.\n\nB · Path is the one that means something. It's the only direction that says 'you → your gear → the world', which is the entire thesis of the product, and it's already the Targets pipeline metaphor. It's also the tightest at 16px.\n\nA · Signal is the safe pick: it IS your brand mark, so the favicon stays recognisably ConnectionWatcher. But rings read as Wi-Fi signal, which points at the wrong culprit, and 'struggling' thins out badly at tab size.\n\nC · Globe fails its own greyscale row — up and struggling differ only by a dashed equator. I'd drop it.\n\nD · Weather is the most legible of the four and the most fun, and I'd still not ship it: it spends the word 'weather' on the major axis when your product already uses it for the minor one.\n\nIf you want the meaning, take B and let me thicken it for small sizes. If you want the safety, take A."
     }
   ],
-  "launch": { "view": "canvas" }
+  "launch": { "view": "canvas", "page": "page-2" }
 }

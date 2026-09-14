@@ -1,55 +1,135 @@
 @inject ConWatch.Auth.AdminGate Gate
+@{
+    var path = Context.Request.Path.Value ?? "/";
+    string Active(string prefix) =>
+        (prefix == "/" ? path == "/" : path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            ? "active" : "";
+    var locked = Gate.IsLocked(User);
+    const string s = "fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"";
+    var icons = new Dictionary<string, string>
+    {
+        ["dashboard"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 14.2a7.6 7.6 0 1 1 13.2 0\"></path><path d=\"M10 11.4 13.1 7.6\"></path><circle cx=\"10\" cy=\"12.4\" r=\"1.3\" fill=\"currentColor\" stroke=\"none\"></circle></svg>",
+        ["history"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 9.4a6.8 6.8 0 1 0 1.9-4.6\"></path><path d=\"M3 3.4v3.6h3.6\"></path><path d=\"M10 6.6V10l2.5 1.5\"></path></svg>",
+        ["data"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><ellipse cx=\"10\" cy=\"5.4\" rx=\"5.8\" ry=\"2.4\"></ellipse><path d=\"M4.2 5.4v9.2c0 1.33 2.6 2.4 5.8 2.4s5.8-1.07 5.8-2.4V5.4\"></path><path d=\"M4.2 10c0 1.33 2.6 2.4 5.8 2.4s5.8-1.07 5.8-2.4\"></path></svg>",
+        ["targets"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><circle cx=\"4.6\" cy=\"10\" r=\"2.1\"></circle><circle cx=\"15.4\" cy=\"5.2\" r=\"2.1\"></circle><circle cx=\"15.4\" cy=\"14.8\" r=\"2.1\"></circle><path d=\"M6.6 9.1 13.4 6\"></path><path d=\"M6.6 10.9 13.4 14\"></path></svg>",
+        ["traceroute"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><circle cx=\"4.4\" cy=\"15.6\" r=\"1.9\"></circle><circle cx=\"15.6\" cy=\"4.4\" r=\"1.9\"></circle><circle cx=\"10\" cy=\"10\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"></circle><path d=\"M6.3 15.6h2.2a3.2 3.2 0 0 0 3.2-3.2V8.2a3.2 3.2 0 0 1 2-2.9\"></path></svg>",
+        ["admin"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 6.2h13.2M3.4 10h13.2M3.4 13.8h13.2\"></path><circle cx=\"7.6\" cy=\"6.2\" r=\"1.9\" fill=\"var(--surface)\"></circle><circle cx=\"13\" cy=\"10\" r=\"1.9\" fill=\"var(--surface)\"></circle><circle cx=\"6.6\" cy=\"13.8\" r=\"1.9\" fill=\"var(--surface)\"></circle></svg>",
+        ["lock"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><rect x=\"4.6\" y=\"8.6\" width=\"10.8\" height=\"7.8\" rx=\"2\"></rect><path d=\"M7.2 8.6V6.4a2.8 2.8 0 0 1 5.6 0v2.2\"></path></svg>",
+        ["moon"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M15.6 11.9A6.4 6.4 0 0 1 8.1 4.4a6.4 6.4 0 1 0 7.5 7.5z\"></path></svg>",
+        ["menu"] = $"<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 6h13.2M3.4 10h13.2M3.4 14h13.2\"></path></svg>",
+        ["close"] = $"<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" {s}><path d=\"M5.2 5.2l9.6 9.6M14.8 5.2l-9.6 9.6\"></path></svg>",
+    };
+    var brand = "<svg width=\"22\" height=\"22\" viewBox=\"0 0 22 22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"2\" fill=\"currentColor\" stroke=\"none\"></circle><path d=\"M15.1 6.9a5.8 5.8 0 0 1 0 8.2\"></path><path d=\"M6.9 15.1a5.8 5.8 0 0 1 0-8.2\"></path><path d=\"M17.9 4.1a9.7 9.7 0 0 1 0 13.8\" opacity=\"0.4\"></path><path d=\"M4.1 17.9a9.7 9.7 0 0 1 0-13.8\" opacity=\"0.4\"></path></svg>";
+    var watchNav = new (string Key, string Href, string Label, string ActivePrefix)[]
+    {
+        ("dashboard", "/", "Dashboard", "/"),
+        ("history", "/History", "History", "/History"),
+    };
+    var manageNav = new (string Key, string Href, string Label, string ActivePrefix)[]
+    {
+        ("data", "/Data", "Data", "/Data"),
+        ("targets", "/Config/Targets", "Targets", "/Config"),
+        ("traceroute", "/Traceroute", "Traceroute", "/Traceroute"),
+        ("admin", "/Admin", "Admin", "/Admin"),
+    };
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@(ViewData["Title"] ?? "ConnectionWatcher")</title>
+    <script>
+        // Pre-paint theme: explicit choice wins, otherwise the OS decides.
+        (function () {
+            try {
+                var t = localStorage.getItem("cw-theme");
+                if (t === "light" || t === "dark")
+                    document.documentElement.setAttribute("data-theme", t);
+            } catch { }
+        })();
+    </script>
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" asp-append-version="true" />
+    <link rel="icon" href="~/favicon-32.png" type="image/png" sizes="32x32" asp-append-version="true" />
+    <link rel="apple-touch-icon" sizes="180x180" href="~/apple-touch-icon.png" />
     <link rel="stylesheet" href="~/css/pico.min.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-    <nav class="container">
-        <ul><li class="cw-brand">
-            <strong>ConnectionWatcher</strong>
-            <small id="cw-build" class="cw-build"
-                   data-version="@ConWatch.BuildInfo.Version"
-                   data-built-utc="@(ConWatch.BuildInfo.BuiltUtc?.ToString("o") ?? "")"
-                   title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">
-                v@(ConWatch.BuildInfo.Version)</small>
-        </li></ul>
-        <ul>
-            <li><a href="/">Dashboard</a></li>
-            <li><a href="/History">History</a></li>
-            @if (!Gate.IsLocked(User))
+    <header class="cw-appbar">
+        <button class="cw-iconbtn cw-burger" id="cw-burger" type="button" aria-label="Menu">@Html.Raw(icons["menu"])</button>
+        <a class="brand" href="/" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">
+            <span class="mark">@Html.Raw(brand)</span>
+            <span class="word">ConnectionWatcher</span>
+            <span class="cw-chip" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">v@(ConWatch.BuildInfo.ShortVersion)</span>
+        </a>
+        <nav class="cw-nav">
+            @foreach (var (key, href, label, prefix) in watchNav)
             {
-                <li><a href="/Data">Data</a></li>
-                <li><a href="/Config/Targets">Targets</a></li>
-                <li><a href="/Traceroute">Traceroute</a></li>
-                <li><a href="/Admin">Admin</a></li>
+                <a class="cw-navitem @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
+            }
+            @if (!locked)
+            {
+                <span class="divider"></span>
+                @foreach (var (key, href, label, prefix) in manageNav)
+                {
+                    <a class="cw-navitem @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
+                }
                 @if (Gate.IsEnabled)
                 {
-                    <li><a href="#" id="nav-exit-admin"
-                           onclick="fetch('/api/v1/auth/logout',{method:'POST'}).then(()=>location.href='/');return false;">
-                           exit admin mode</a></li>
+                    <a class="cw-navitem" href="#" id="nav-exit-admin"
+                       onclick="fetch('/api/v1/auth/logout',{method:'POST'}).then(()=>location.href='/');return false;">
+                        <span>exit admin mode</span></a>
                 }
             }
-        </ul>
-    </nav>
+        </nav>
+        <span class="spacer"></span>
+        <div class="cluster">
+            <a class="cw-pip" href="/" id="cw-pip" hidden>
+                <span class="dot"></span><span class="label"></span>
+            </a>
+            <button class="cw-iconbtn" id="cw-theme-btn" type="button"
+                    title="Theme: follows your system — click to change">@Html.Raw(icons["moon"])</button>
+            @if (locked && Gate.IsEnabled)
+            {
+                <a class="cw-iconbtn" href="/?admin=1" title="Enter admin mode">@Html.Raw(icons["lock"])</a>
+            }
+        </div>
+    </header>
+
+    <div class="cw-drawer" id="cw-drawer">
+        <div class="backdrop" id="cw-drawer-backdrop"></div>
+        <div class="panel">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+                <span style="display:flex;align-items:center;gap:8px;color:var(--text);font-weight:640">
+                    <span style="color:var(--primary);display:flex">@Html.Raw(brand)</span> ConnectionWatcher
+                </span>
+                <button class="cw-iconbtn" id="cw-drawer-close" type="button" aria-label="Close">@Html.Raw(icons["close"])</button>
+            </div>
+            <div class="group">Watch</div>
+            @foreach (var (key, href, label, prefix) in watchNav)
+            {
+                <a class="item @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
+            }
+            @if (!locked)
+            {
+                <div class="group">Manage</div>
+                @foreach (var (key, href, label, prefix) in manageNav)
+                {
+                    <a class="item @Active(prefix)" href="@href">@Html.Raw(icons[key])<span>@label</span></a>
+                }
+            }
+            <div class="foot">
+                <span class="cw-chip" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">v@(ConWatch.BuildInfo.ShortVersion)</span>
+                <button class="cw-iconbtn" id="cw-theme-btn-drawer" type="button" title="Change theme">@Html.Raw(icons["moon"])</button>
+            </div>
+        </div>
+    </div>
+
     <main class="container">
         @RenderBody()
     </main>
     @await RenderSectionAsync("Scripts", required: false)
-    <script>
-        // Localize the header build stamp; without JS it stays version-only.
-        (function () {
-            var el = document.getElementById("cw-build");
-            if (!el || !el.dataset.builtUtc) return;
-            var d = new Date(el.dataset.builtUtc);
-            if (isNaN(d)) return;
-            el.textContent = "v" + el.dataset.version + " · built " + d.toLocaleString(undefined,
-                { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-        })();
-    </script>
+    <script src="~/lib/site-shell.js" asp-append-version="true"></script>
 </body>
 </html>

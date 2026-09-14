@@ -18,7 +18,22 @@ HTML that no part of ConWatch imports, serves, or compiles.
 | `MobileNav.dc.html` | 390×844 | Phone nav drawer open over a dimmed page |
 | `System.dc.html` | 1440×1460 | Design language — tokens, ramps, verdict states, icons, type, controls |
 
-Light and dark are split across the set deliberately so both themes are exercised
+Page 2 of the canvas, **Verdict icons** — four competing directions for the
+major/minor verdict icon, plus the rules they share:
+
+| File | Frame | What it shows |
+|---|---|---|
+| `IconSignal.dc.html` | 720×1010 | A · Signal — the brand mark carrying state |
+| `IconPath.dc.html` | 720×1010 | B · Path — you → your gear → the world |
+| `IconGlobe.dc.html` | 720×1010 | C · Globe — the conventional read |
+| `IconWeather.dc.html` | 720×1010 | D · Weather — sun / cloud / rain |
+| `IconSystem.dc.html` | 1440×1180 | Composition rules, the shared minor badge, app-icon sizes |
+
+Each direction board carries the same four tests: the three major states large,
+a size ladder down to 16 px **with a greyscale row**, the two minor badges
+composed onto the glyph, and the glyph in place (banner, nav pip, browser tab).
+
+Light and dark are split across the screens set deliberately so both themes are exercised
 on chart-heavy and form-heavy pages, not just on the dashboard. `System.dc.html`
 shows both side by side for direct comparison.
 
@@ -40,6 +55,7 @@ Layout:
 - `lib-parts.mjs` — verdict card, event strip, tree, ledger, glitch table, status bar.
 - `lib-history.mjs` — stat tiles, state ribbon, latency line, loss bars, punchcard,
   ribbon board, encoding legend.
+- `lib-icons.mjs` — the four verdict-icon metaphors and the shared minor badge.
 - `build-*.mjs` — one per page group; `build-all.mjs` runs them in order.
 
 ## `canvas.json`

@@ -94,8 +94,8 @@ export function RibbonBoard({ subjects, rangeStart, rangeEnd }: {
         <defs>
           <pattern id="cw-hatch" width="6" height="6" patternTransform="rotate(45)"
             patternUnits="userSpaceOnUse">
-            <rect width="6" height="6" fill="#f2f2f2" />
-            <rect width="3" height="6" fill="#c9c9c9" />
+            <rect width="6" height="6" fill="var(--surface-2)" />
+            <rect width="3" height="6" fill="var(--grey-glitch)" />
           </pattern>
         </defs>
       </svg>

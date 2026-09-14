@@ -142,26 +142,65 @@ internal sealed class TrayContext : ApplicationContext
     private static string Truncate(string text, int max) =>
         text.Length <= max ? text : text[..(max - 1)] + "…";
 
-    /// <summary>Runtime-drawn colored dot — no icon assets to ship.</summary>
+    /// <summary>
+    /// Runtime-drawn Signal glyph — no icon assets to ship. Same ladder as
+    /// the web verdict slab: reach shrinks as things get worse (both arc
+    /// pairs → inner pair only → dimmed glyph under a slash), so the states
+    /// differ in FORM, not only color, and survive a greyscale tray.
+    /// </summary>
     private Icon IconFor(TrayState state)
     {
         if (_icons.TryGetValue(state, out var cached))
             return cached;
-        var color = state switch
+        var (color, arcPairs, slash) = state switch
         {
-            TrayState.Healthy => Color.FromArgb(46, 158, 82),
-            TrayState.Degraded => Color.FromArgb(224, 138, 0),
-            TrayState.Down => Color.FromArgb(204, 51, 51),
-            TrayState.Measuring => Color.FromArgb(106, 168, 138),
-            _ => Color.FromArgb(150, 150, 150),
+            TrayState.Healthy => (Color.FromArgb(46, 158, 82), 2, false),
+            TrayState.Degraded => (Color.FromArgb(224, 138, 0), 1, false),
+            TrayState.Down => (Color.FromArgb(204, 51, 51), 2, true),
+            TrayState.Measuring => (Color.FromArgb(106, 168, 138), 2, false),
+            _ => (Color.FromArgb(150, 150, 150), 2, false),
         };
-        using var bitmap = new Bitmap(16, 16);
+
+        // Drawn at 32px in the favicon's 24-unit space; Windows scales down.
+        const int size = 32;
+        const float scale = size / 24f;
+        using var bitmap = new Bitmap(size, size);
         using (var g = Graphics.FromImage(bitmap))
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.Clear(Color.Transparent);
-            using var brush = new SolidBrush(color);
-            g.FillEllipse(brush, 2, 2, 12, 12);
+
+            var glyph = slash ? Color.FromArgb(82, color) : color;
+            using var brush = new SolidBrush(glyph);
+            // Heavier stroke than the web glyph: tray icons render tiny.
+            using var pen = new Pen(glyph, 2.8f * scale)
+            {
+                StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                EndCap = System.Drawing.Drawing2D.LineCap.Round,
+            };
+
+            void Arcs(float radius)
+            {
+                var box = new RectangleF((12 - radius) * scale, (12 - radius) * scale,
+                    radius * 2 * scale, radius * 2 * scale);
+                g.DrawArc(pen, box, -38, 76);  // right of the dot
+                g.DrawArc(pen, box, 142, 76);  // left of the dot
+            }
+
+            const float r = 3.0f * scale;
+            g.FillEllipse(brush, 12 * scale - r, 12 * scale - r, r * 2, r * 2);
+            if (arcPairs >= 1) Arcs(5.9f);
+            if (arcPairs >= 2) Arcs(9.4f);
+
+            if (slash)
+            {
+                using var slashPen = new Pen(color, 3.2f * scale)
+                {
+                    StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                    EndCap = System.Drawing.Drawing2D.LineCap.Round,
+                };
+                g.DrawLine(slashPen, 5f * scale, 19f * scale, 19f * scale, 5f * scale);
+            }
         }
         var icon = Icon.FromHandle(bitmap.GetHicon());
         _icons[state] = icon;

@@ -4,7 +4,13 @@
     ViewData["Title"] = "History — ConnectionWatcher";
 }
 
-<h2>History <small><a href="/Report">ISP report</a></small></h2>
+<div class="cw-pageband">
+    <div class="titles">
+        <h2>History</h2>
+        <p>Every state change, chart, and incident on record — times in your browser's zone.</p>
+    </div>
+    <a href="/Report" role="button" class="outline" style="white-space:nowrap">ISP report</a>
+</div>
 <script id="history-data" type="application/json">@Html.Raw(Model.SubjectsJson)</script>
 <script id="history-topology" type="application/json">@Html.Raw(Model.TopologyJson)</script>
 <div id="history-root">
