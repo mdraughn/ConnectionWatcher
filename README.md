@@ -156,6 +156,27 @@ master switch behind all this is the **Monitoring** toggle on the Admin page
 serving; pinging and notifications stop, and MQTT reads offline in Home
 Assistant.
 
+## Privacy
+
+ConnectionWatcher has **no telemetry**: nothing phones home to the author or
+anyone else — no usage analytics, no crash reporting, no version checks (if
+an update check is ever added, it will be opt-in and documented here). The
+complete list of network traffic the app can generate:
+
+- ICMP pings and DNS lookups for the targets **you** configured (that's the
+  product);
+- only if you enable them, and only to endpoints you typed in: MQTT to your
+  broker, webhooks to your URLs, the heartbeat ping;
+- only when you trigger them: the setup wizard's router probe (your own
+  gateway), traceroute, and clone/take-over calls to a node you named.
+
+The web UI is self-contained — CSS, fonts, and scripts are served by the app,
+so browsers make no third-party requests. Logging goes to stdout only (your
+container's log, or Warning+ to the Windows Event Log as a service); nothing
+is written to log files, credentials are never logged, and webhook/heartbeat
+URLs appear in logs with their secret paths elided (`https://hc-ping.com/…`)
+so a pasted log can't leak them.
+
 ## Ask Claude about your internet (MCP)
 
 ConnectionWatcher exposes a Model Context Protocol endpoint at `/mcp`, so an

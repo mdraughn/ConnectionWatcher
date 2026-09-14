@@ -70,12 +70,13 @@ public class HeartbeatNotifier(SettingsStore settings, IHttpClientFactory httpFa
             var response = await httpFactory.CreateClient("webhooks").GetAsync(url, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                log.LogWarning("Heartbeat ping to {Url} returned {Status}", url, (int)response.StatusCode);
+                log.LogWarning("Heartbeat ping to {Url} returned {Status}",
+                    LogSafe.Url(url), (int)response.StatusCode);
                 _lastPingFailed = true;
             }
             else if (_lastPingFailed)
             {
-                log.LogInformation("Heartbeat ping to {Url} recovered", url);
+                log.LogInformation("Heartbeat ping to {Url} recovered", LogSafe.Url(url));
                 _lastPingFailed = false;
             }
         }
@@ -83,7 +84,8 @@ public class HeartbeatNotifier(SettingsStore settings, IHttpClientFactory httpFa
         {
             // Expected during an internet outage — that silence IS the alert.
             if (!_lastPingFailed)
-                log.LogWarning("Heartbeat ping to {Url} failed: {Message}", url, ex.GetBaseException().Message);
+                log.LogWarning("Heartbeat ping to {Url} failed: {Message}",
+                    LogSafe.Url(url), ex.GetBaseException().Message);
             _lastPingFailed = true;
         }
     }
