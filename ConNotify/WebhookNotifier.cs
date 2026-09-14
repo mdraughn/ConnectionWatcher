@@ -70,7 +70,8 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var response = await client.PostAsync(url, content, ct).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
-                    log.LogWarning("Webhook {Url} returned {Status}", url, (int)response.StatusCode);
+                    log.LogWarning("Webhook {Url} returned {Status}",
+                        LogSafe.Url(url), (int)response.StatusCode);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -78,7 +79,7 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
             }
             catch (Exception ex)
             {
-                log.LogWarning("Webhook {Url} failed: {Message}", url, ex.Message);
+                log.LogWarning("Webhook {Url} failed: {Message}", LogSafe.Url(url), ex.Message);
             }
         }
     }
