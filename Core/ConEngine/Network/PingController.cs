@@ -22,6 +22,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     private Task? _pingTask;
     private IPAddress? _ipAddress = null;
     private ChannelWriter<PingResult>? _resultWriter;
+    private ProbeSpec _probe;
     private IPingCadence? _cadence;
     private Func<int>? _timeoutMsProvider;
     private readonly CancellationTokenSource _localCancellationTokenSource = new();
@@ -35,13 +36,14 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     /// </summary>
     /// <param name="ipAddress">The IP address to ping.</param>
     /// <param name="resultWriter">Channel to report results.</param>
+    /// <param name="probe">How to probe the target (ICMP echo or TCP connect).</param>
     /// <param name="cadence">Decides when each ping happens (may park indefinitely).</param>
     /// <param name="timeoutMsProvider">Per-ping timeout in milliseconds, read before
     /// every ping (bursting shortens the timeout).</param>
     /// <param name="cancellationToken"></param>
     /// <returns>A task that completes when the ping operation is stopped.</returns>
     public Task Launch(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter,
-        IPingCadence cadence, Func<int> timeoutMsProvider, CancellationToken cancellationToken)
+        ProbeSpec probe, IPingCadence cadence, Func<int> timeoutMsProvider, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -52,6 +54,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _localCancellationTokenSource.Token).Token;
             _ipAddress = ipAddress;
             _resultWriter = resultWriter;
+            _probe = probe;
             _cadence = cadence;
             _timeoutMsProvider = timeoutMsProvider;
 
@@ -67,7 +70,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
         {
             // Create the transceiver to send and receive pings for the specified IP address
             log.LogTrace("Creating ping transceiver for {ipAddress} ...", ipAddress);
-            using var ping = pingTransceiverFactory.Create(ipAddress, _cancellationToken);
+            using var ping = pingTransceiverFactory.Create(ipAddress, _probe, _cancellationToken);
 
             // Run until we finish or are cancelled
             while(IsRunnable())

@@ -210,7 +210,8 @@ public class WatcherEngine
         // Bursts shorten the timeout: replies arrive in well under a second,
         // and against a dead host the steady timeout dominates burst cost.
         var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
-        _manager!.GetOrCreateController(ip, monitor.Discipline,
+        ProbeSpec.TryParse(monitor.Target.Probe, out var probe);
+        _manager!.GetOrCreateController(ip, probe, monitor.Discipline,
             () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, 1000) : steadyTimeoutMs);
         // Warm starts burst everything so presumed states confirm in seconds
         // (seeded Faltering/Down already burst via the discipline; this covers
