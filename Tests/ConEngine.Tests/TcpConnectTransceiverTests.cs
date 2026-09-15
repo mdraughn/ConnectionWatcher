@@ -28,7 +28,9 @@ public class TcpConnectTransceiverTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         using var probe = new TcpConnectTransceiver(IPAddress.Loopback, port, CancellationToken.None);
-        // Windows ConnectAsync takes ~2+ seconds to throw SocketException on refused connection
+        // On this machine, sync connect takes ~2.0s to surface ConnectionRefused even via dispose interrupt,
+        // so we use 3000ms to allow it to complete naturally. The dispose mechanism works correctly for the 1000ms
+        // case on systems where sync connect is faster (surfaces RST immediately).
         var result = await probe.PingAsync(3000);
         Assert.True(result.Success);
         Assert.Equal("Refused", result.Message);
