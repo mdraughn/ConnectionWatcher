@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createStatusStore } from "./statusStore";
 import type { Snapshot, TransitionEvent } from "./types";
 
@@ -22,43 +22,27 @@ function transition(overrides: Partial<TransitionEvent>): TransitionEvent {
 }
 
 describe("statusStore", () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
-  it("applies snapshots and updates row ui state", () => {
+  it("applies snapshots", () => {
     const store = createStatusStore();
-    store.applySnapshot(snapshot, 0);
+    store.applySnapshot(snapshot);
     expect(store.getState().targets.length).toBe(2);
-    expect(store.isExpanded("t1")).toBe(false);
+    expect(store.getState().verdict?.state).toBe("Healthy");
   });
 
-  it("a degrading transition expands the row and records the event", () => {
+  it("records transitions", () => {
     const store = createStatusStore();
-    store.applySnapshot(snapshot, 0);
-    store.applyTransition(transition({}), 1000);
-    expect(store.isExpanded("t2")).toBe(true);
+    store.applySnapshot(snapshot);
+    store.applyTransition(transition({}));
     expect(store.getState().latestTransition?.subjectName).toBe("Google");
     expect(store.getState().recentTransitions.length).toBe(1);
   });
 
   it("caps recent transitions at 50", () => {
     const store = createStatusStore();
-    store.applySnapshot(snapshot, 0);
+    store.applySnapshot(snapshot);
     for (let i = 0; i < 60; i++)
-      store.applyTransition(transition({ timestamp: `2026-08-20T12:00:${String(i % 60).padStart(2, "0")}Z` }), i);
+      store.applyTransition(transition({ timestamp: `2026-08-20T12:00:${String(i % 60).padStart(2, "0")}Z` }));
     expect(store.getState().recentTransitions.length).toBe(50);
-  });
-
-  it("pins persist through localStorage", () => {
-    const store = createStatusStore();
-    store.applySnapshot(snapshot, 0);
-    store.togglePin("t1");
-    expect(store.isExpanded("t1")).toBe(true);
-
-    const second = createStatusStore();
-    second.applySnapshot(snapshot, 0);
-    expect(second.isExpanded("t1")).toBe(true);
   });
 
   it("seeds recent transitions from the API", () => {
@@ -72,7 +56,7 @@ describe("statusStore", () => {
     const store = createStatusStore();
     const spy = vi.fn();
     store.subscribe(spy);
-    store.applySnapshot(snapshot, 0);
+    store.applySnapshot(snapshot);
     expect(spy).toHaveBeenCalled();
   });
 });

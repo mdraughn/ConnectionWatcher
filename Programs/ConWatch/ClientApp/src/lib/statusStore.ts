@@ -1,8 +1,6 @@
 // Tiny external store for the dashboard island (React useSyncExternalStore).
-import { initialRow, isExpanded, onStateChange, tick, togglePin, type RowUi } from "./expansion";
 import type { Snapshot, TransitionEvent } from "./types";
 
-const PINS_KEY = "conwatch.pins";
 const MAX_RECENT = 50;
 
 export interface StoreState {
@@ -14,25 +12,7 @@ export interface StoreState {
   connected: boolean;
 }
 
-function loadPins(): Set<string> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(PINS_KEY) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-function savePins(pins: Set<string>): void {
-  try {
-    localStorage.setItem(PINS_KEY, JSON.stringify([...pins]));
-  } catch {
-    // localStorage unavailable — pins just don't persist
-  }
-}
-
 export function createStatusStore() {
-  const rows = new Map<string, RowUi>();
-  const pins = loadPins();
   let state: StoreState = {
     verdict: null, targets: [], pools: [],
     recentTransitions: [], latestTransition: null, connected: false,
@@ -44,16 +24,6 @@ export function createStatusStore() {
     listeners.forEach((l) => l());
   }
 
-  function row(id: string): RowUi {
-    let r = rows.get(id);
-    if (!r) {
-      r = initialRow();
-      if (pins.has(id)) r = togglePin(r);
-      rows.set(id, r);
-    }
-    return r;
-  }
-
   return {
     subscribe(listener: () => void): () => void {
       listeners.add(listener);
@@ -62,46 +32,20 @@ export function createStatusStore() {
     getState(): StoreState {
       return state;
     },
-    isExpanded(id: string): boolean {
-      return isExpanded(row(id));
-    },
-    applySnapshot(snap: Snapshot, nowMs: number): void {
+    applySnapshot(snap: Snapshot): void {
       state.verdict = snap.verdict;
       state.targets = snap.targets;
       state.pools = snap.pools;
-      for (const t of [...snap.targets, ...snap.pools]) {
-        rows.set(t.id, onStateChange(row(t.id), t.state, nowMs));
-      }
       notify();
     },
-    applyTransition(t: TransitionEvent, nowMs: number): void {
-      rows.set(t.subjectId, onStateChange(row(t.subjectId), t.to, nowMs));
+    applyTransition(t: TransitionEvent): void {
       state.latestTransition = t;
       state.recentTransitions = [t, ...state.recentTransitions].slice(0, MAX_RECENT);
       notify();
     },
-    tickAll(nowMs: number): void {
-      let changed = false;
-      for (const [id, r] of rows) {
-        const next = tick(r, nowMs);
-        if (next !== r) {
-          rows.set(id, next);
-          changed = true;
-        }
-      }
-      if (changed) notify();
-    },
     seedRecent(transitions: TransitionEvent[]): void {
       state.recentTransitions = transitions.slice(0, MAX_RECENT);
       state.latestTransition = transitions[0] ?? state.latestTransition;
-      notify();
-    },
-    togglePin(id: string): void {
-      const next = togglePin(row(id));
-      rows.set(id, next);
-      if (next.pinned) pins.add(id);
-      else pins.delete(id);
-      savePins(pins);
       notify();
     },
     setConnected(connected: boolean): void {

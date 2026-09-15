@@ -50,11 +50,6 @@ function App({ store, topology, initial }: {
 }) {
   const state = useSyncExternalStore(store.subscribe, store.getState);
 
-  useEffect(() => {
-    const timer = setInterval(() => store.tickAll(Date.now()), 5000);
-    return () => clearInterval(timer);
-  }, [store]);
-
   // Recent glitches cover the last 24 h, fixed at page load.
   const [glitchRange] = useState(() => {
     const to = new Date();
@@ -90,8 +85,7 @@ function App({ store, topology, initial }: {
     <div>
       <VerdictBanner verdict={state.verdict} connected={state.connected} />
       <EventStrip topology={initial} />
-      <Tree store={store} topology={topology} targets={state.targets}
-        pools={state.pools} recent={state.recentTransitions} />
+      <Tree topology={topology} targets={state.targets} pools={state.pools} />
       <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}
@@ -108,7 +102,7 @@ const dataEl = document.getElementById("initial-data");
 if (el && dataEl) {
   const initial = JSON.parse(dataEl.textContent ?? "{}") as InitialData;
   const store = createStatusStore();
-  if (initial.snapshot) store.applySnapshot(initial.snapshot, Date.now());
+  if (initial.snapshot) store.applySnapshot(initial.snapshot);
 
   fetch("/api/v1/transitions?limit=50")
     .then((r) => (r.ok ? r.json() : null))
@@ -118,8 +112,8 @@ if (el && dataEl) {
     .catch(() => undefined);
 
   startHub({
-    onSnapshot: (s) => store.applySnapshot(s, Date.now()),
-    onTransition: (t) => store.applyTransition(t, Date.now()),
+    onSnapshot: (s) => store.applySnapshot(s),
+    onTransition: (t) => store.applyTransition(t),
     onConnectionChange: (connected) => store.setConnected(connected),
   });
 

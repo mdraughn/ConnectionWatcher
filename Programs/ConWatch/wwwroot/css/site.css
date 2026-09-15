@@ -138,9 +138,8 @@ main.container h5 { font-size: 0.85rem; }
    directly, which beats the ul-level none by inheritance rules — iOS Safari
    paints those phantom squares where desktop browsers happened to hide them. */
 .cw-tree li { padding: 0.1rem 0; list-style: none; }
-.cw-row { cursor: pointer; display: flex; align-items: center; gap: 10px;
+.cw-row { display: flex; align-items: center; gap: 10px;
     min-height: 33px; padding: 0 10px; border-radius: 5px; }
-.cw-row:hover { background: var(--surface-2); }
 .cw-row .addr { font-family: var(--mono); font-size: 0.735rem; color: var(--faint); white-space: nowrap; }
 .cw-row .statechip { font-size: 0.69rem; font-weight: 640; border-radius: 4px;
     padding: 2px 7px; white-space: nowrap; }
@@ -149,25 +148,6 @@ main.container h5 { font-size: 0.85rem; }
     /* A pool row lists its members here; on a phone that must truncate,
        not push the whole page wider than the screen. */
     min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.cw-row .pin { font-size: 0.75rem; opacity: 0.6; }
-
-/* Expanded tile */
-.cw-tile { border: 1px solid var(--cw-warn); border-radius: 8px; padding: 0.6rem 0.9rem; margin: 0.3rem 0;
-           background: color-mix(in srgb, var(--cw-warn) 8%, transparent);
-           overflow: hidden; }
-.cw-tile.pinned-only { border-color: var(--border-strong); background: var(--surface-2); }
-.cw-tile .why { color: var(--cw-warn); font-size: 0.8rem; margin: 0.2rem 0; }
-.cw-tile .chart-box { height: 70px; margin-top: 0.4rem; }
-.cw-tile .axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 0.7rem; }
-
-/* Expansion animation */
-.cw-expandable { display: grid; transition: grid-template-rows 0.35s ease; grid-template-rows: 0fr; }
-.cw-expandable.open { grid-template-rows: 1fr; }
-.cw-expandable > div { overflow: hidden; }
-@media (prefers-reduced-motion: reduce) {
-    .cw-expandable { transition: none; }
-}
-
 /* Status bar */
 .cw-statusbar { position: fixed; bottom: 0; left: 0; right: 0; border-top: 1px solid var(--border);
                 background: var(--surface); padding: 0.4rem 1.2rem; font-size: 0.78rem;
