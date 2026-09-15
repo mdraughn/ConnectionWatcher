@@ -13,20 +13,20 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
 
 ## Integrations (noted 2026-08-21)
 
-- **Prometheus + Grafana** — expose a `/metrics` endpoint (OpenMetrics): per-
-  target state, success rate, RTT gauges, plus the verdict as a labeled gauge.
-  Grafana (containerized on the NAS) dashboards it alongside the rest of the
-  homelab. Makes ConnectionWatcher a citizen of a broader monitoring stack.
+- ~~**Prometheus + Grafana**~~ — DONE 2026-09-14: open `/metrics` (hand-rolled
+  text exposition, no exporter dependency): one-hot verdict gauge, per-target
+  up/loss/RTT/sample gauges, pool up, transitions + glitches counters via
+  `MetricsCounters` riding the event streams; README scrape config + starter
+  PromQL. Grafana dashboard itself lives in Mark's other session.
 - ~~**Healthchecks heartbeat (watch the watchman)**~~ — DONE 2026-08-31:
   `HeartbeatNotifier` GETs `Heartbeat.Url` every `Heartbeat.IntervalMinutes`
   (default 5) while set; immediate ping on (re)configure; Admin Notifications
   section. The receiving service alerts when pings stop.
 - ~~**ISP evidence report**~~ — DONE 2026-08-22 (`/Report`, printable,
   verdict-attributed; SiteIncident excluded by design).
-- **MCP server** — expose query tools (`current_status`, `outages_since`,
-  `weather_history`, maybe `run_traceroute`) so Claude can answer "how was my
-  internet last night?" from the actual database, or triage a slow-feeling
-  connection on request.
+- ~~**MCP server**~~ — DONE 2026-09-13: `/mcp` (stateless streamable HTTP),
+  four read-only tools (`get_current_status`, `get_connection_report`,
+  `get_transitions`, `get_glitches`); open like the watching surface.
 
 ## Distribution (planned 2026-08-31; not a money-making project — MIT licensed)
 
@@ -103,6 +103,19 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 - **Burst on parent recovery** — after a Down parent recovers, released
   children re-prove at normal cadence (~100 s). A TriggerBurst on Release
   would settle them in seconds; deliberately left out of warm-restart scope.
+
+## Probe types (noted 2026-09-14)
+
+- **TCP-connect probe** — per-target probe method: ICMP (default) or a TCP
+  connect to a given port (`tcp:80`), where "reply = connection accepted".
+  Motivating case: Mark's Comcast Business gateway in bridge mode serves its
+  admin page at 10.1.10.1 but firewalls ping, so the only ICMP-answering
+  address it offers is its hairpinned management WAN IP (jittery ~25 ms
+  baseline, drifts with the DHCP lease). A TCP probe would make the modem a
+  clean local "is it alive" target — and generally covers any device that
+  firewalls ICMP while running services. Touches: engine probe discipline
+  (transceiver abstraction currently ICMP-only), target schema/config field,
+  Targets form, snapshot/clone round-trip.
 
 ## Small hardening candidates
 
