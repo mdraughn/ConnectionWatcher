@@ -56,7 +56,12 @@ export function Punchcard({ cells, days, now }: {
         ))}
         <div />
         {Array.from({ length: days }, (_, day) => (
-          <div key={`d${day}`} style={{ fontSize: "0.6rem", opacity: 0.6, textAlign: "center" }}>
+          // Labels are wider than a 22px column ("8/21"): never wrap, let
+          // them overflow the column. The last column is today — align it
+          // right so the overflow spills left, not off the container edge.
+          <div key={`d${day}`} style={{ fontSize: "0.6rem", opacity: 0.6,
+            whiteSpace: "nowrap",
+            textAlign: day === days - 1 ? "right" : "center" }}>
             {day % 5 === 4 ? dayLabel(day) : ""}
           </div>
         ))}
