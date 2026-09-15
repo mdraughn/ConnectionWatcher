@@ -16,4 +16,6 @@ public record Target
     /// <summary>Who runs this hop: an ISP name for trunk targets ("Comcast"),
     /// so attribution can name names. Optional, display-only.</summary>
     public string? Operator { get; init; }
+    /// <summary>Optional probe override ("tcp:&lt;port&gt;"); null means ICMP echo.</summary>
+    public string? Probe { get; init; } = null;
 }

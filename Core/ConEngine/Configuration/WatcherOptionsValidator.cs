@@ -1,3 +1,4 @@
+using ConCore;
 using Microsoft.Extensions.Options;
 
 namespace ConEngine.Configuration;
@@ -25,6 +26,11 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
 
             if (!IsKnownProfile(options, t.Profile))
                 failures.Add($"Target '{t.Name}' references unknown profile '{t.Profile}'.");
+
+            if (!ProbeSpec.TryParse(t.Probe, out var probe))
+                failures.Add($"Target '{t.Name}' has an invalid Probe '{t.Probe}' (expected 'tcp:<port>').");
+            else if (!ProbePolicy.IsAllowed(t.Address ?? "", probe, out var probeReason))
+                failures.Add($"Target '{t.Name}': {probeReason}");
         }
 
         var poolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

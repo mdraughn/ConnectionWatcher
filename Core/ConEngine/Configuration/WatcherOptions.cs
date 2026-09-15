@@ -27,6 +27,8 @@ public class TargetConfig
     public bool Enabled { get; set; } = true;
     /// <summary>Optional operator/ISP name for attribution wording.</summary>
     public string? Operator { get; set; }
+    /// <summary>Optional probe override ("tcp:&lt;port&gt;"); null means ICMP echo.</summary>
+    public string? Probe { get; set; }
 }
 
 /// <summary>A rotation pool, as authored in configuration.</summary>
