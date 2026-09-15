@@ -25,7 +25,7 @@
     <b>Period:</b> @Dual(r.FromUtc, "yyyy-MM-dd HH:mm") — @Dual(r.ToUtc, "yyyy-MM-dd HH:mm")<br />
     <b>Monitored path:</b> @(r.PathNames.Count > 0 ? string.Join(" → ", r.PathNames) : "—")
     → internet anchors (@string.Join(", ", r.AnchorNames))<br />
-    <b>Method:</b> continuous ICMP monitoring of the local path and @r.AnchorNames.Count public
+    <b>Method:</b> continuous reachability monitoring (ICMP ping / TCP connect) of the local path and @r.AnchorNames.Count public
     anycast services, with outage attribution recorded at the moment of each incident.
 </p>
 

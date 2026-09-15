@@ -34,11 +34,11 @@ hiding. The Accepted/Refused distinction survives in the message so
 transition details can show it.
 
 **Persistent-refusal warning (politeness valve):** when a TCP target has
-been refusing essentially every probe for a sustained stretch (24 h),
-`ConfigHealth` emits the standard ⚠ warning on the Targets page: nothing
-is listening on that port, use the Test button to find a better one. No
-back-off machinery, no verdict change — a config nudge, matching how the
-app already handles pool-parent drift.
+been refusing essentially every probe for a sustained stretch (200+ probes
+with zero accepts since engine start), `ConfigHealth` emits the standard ⚠
+warning on the Targets page: nothing is listening on that port, use the
+Test button to find a better one. No back-off machinery, no verdict change
+— a config nudge, matching how the app already handles pool-parent drift.
 
 ## Port policy: polite by address class
 
@@ -93,9 +93,12 @@ result fan-out stay unchanged**. Same-host-two-probes is a non-goal
   `Task.Delay(timeoutMs)` and the stored token (the OS SYN-retry schedule
   ignores caller timeouts — the race enforces ours), refused caught via
   `SocketException(ConnectionRefused)` → success/`Refused`. Dispose always.
-- `WatcherEngine.Activate`'s burst-timeout clamp (`min(steady, 1000)` ms)
-  applies as-is: a live LAN/WAN handshake fits well under a second, and
-  our own race enforces the deadline regardless of OS retries.
+- `WatcherEngine.Activate`'s burst-timeout clamp applies as-is, but is
+  probe-aware: Windows' TCP stack retries a refused connect for ~2 s before
+  reporting `ConnectionRefused` (Linux reports the RST immediately), so TCP
+  probes clamp to `min(steady, 2500)` ms where ICMP clamps to
+  `min(steady, 1000)` ms — Refused still classifies as a reply during
+  bursts on Windows.
 - DNS resolution path unchanged — TCP probes resolve hostnames exactly as
   ICMP targets do and probe the resolved IPv4 address.
 - **Warm restart:** `TargetSeed` staleness equality extends from Address

@@ -106,16 +106,11 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 
 ## Probe types (noted 2026-09-14)
 
-- **TCP-connect probe** — per-target probe method: ICMP (default) or a TCP
-  connect to a given port (`tcp:80`), where "reply = connection accepted".
-  Motivating case: Mark's Comcast Business gateway in bridge mode serves its
-  admin page at 10.1.10.1 but firewalls ping, so the only ICMP-answering
-  address it offers is its hairpinned management WAN IP (jittery ~25 ms
-  baseline, drifts with the DHCP lease). A TCP probe would make the modem a
-  clean local "is it alive" target — and generally covers any device that
-  firewalls ICMP while running services. Touches: engine probe discipline
-  (transceiver abstraction currently ICMP-only), target schema/config field,
-  Targets form, snapshot/clone round-trip.
+- ~~**TCP-connect probe**~~ — DONE 2026-09-15: per-target `Probe` field
+  (`tcp:<port>`, absent = ICMP), refused-counts-as-reply, private-any-port /
+  public-80-443-53 policy, one-click Test button that auto-selects a working
+  probe, persistent-refusal ConfigHealth warning. Spec:
+  `specs/2026-09-15-tcp-probe-design.md`.
 
 ## Small hardening candidates
 
