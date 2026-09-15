@@ -4,9 +4,11 @@ using ConCore.Targets;
 using ConEngine.Configuration;
 using ConEngine.Events;
 using ConEngine.Scheduling;
+using ConEngine.Tests.Fakes;
 using ConEngine.Topology;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace ConEngine.Tests;
@@ -159,42 +161,53 @@ public class WarmStartTests
     }
 
     [Fact]
-    public void Probe_change_discards_the_seed()
+    public async Task Probe_change_discards_the_seed()
     {
-        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-11T00:00:00Z"));
-        var targetId = Guid.NewGuid();
+        var factory = new FakePingTransceiverFactory();
         var ip = IPAddress.Parse("192.168.1.100");
-        var targetWithProbe = new Target
+        var targetId = Guid.NewGuid();
+        var options = new WatcherOptions
         {
-            Id = targetId,
-            Name = "TestTarget",
-            Address = "192.168.1.100",
-            ProfileName = "Test",
-            Probe = "tcp:80"  // Current config has a TCP probe
+            Profiles =
+            {
+                ["Test"] = new PingProfileConfig
+                {
+                    NormalIntervalSeconds = 0.02,
+                    BurstIntervalSeconds = 0.01,
+                    BurstMaxDurationSeconds = 5,
+                    HistorySize = 20,
+                    MinUsableSample = 5,
+                },
+            },
+            Targets =
+            [
+                new TargetConfig { Id = targetId, Name = "Private", Address = "192.168.1.100", Profile = "Test", Probe = "tcp:80" }
+            ],
         };
-        var monitor = new TargetMonitor(targetWithProbe, Profile, new PingDiscipline(Profile, time),
-            time, NullLoggerFactory.Instance);
-
-        // Create a seed with the same address but Probe = null (simulating old seed before probe field)
-        var targetSeedWithoutProbe = new TargetSeed(HostState.Responding, "192.168.1.100", Probe: null);
-
-        // Simulate the engine's seed adoption logic:
-        // The seed should NOT be adopted because the probe changed
-        if (targetSeedWithoutProbe.Address == targetWithProbe.Address &&
-            targetSeedWithoutProbe.Probe == targetWithProbe.Probe)
+        var seed = new EngineSeed
         {
-            monitor.Seed(targetSeedWithoutProbe.State);
+            Targets = new Dictionary<Guid, TargetSeed>
+            {
+                [targetId] = new TargetSeed(HostState.Down, "192.168.1.100", Probe: null)  // Same addr, different probe
+            }
+        };
+        var engine = new WatcherEngine(TimeProvider.System, factory,
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Options.Create(options));
+        var cts = new CancellationTokenSource();
+        try
+        {
+            await engine.StartAsync(cts.Token, seed);
+            var monitor = engine.Monitors[targetId];
+            // Seed not adopted (probe mismatch) => monitor not assumed, starts from Starting
+            Assert.False(monitor.IsAssumed);
+            Assert.NotEqual(HostState.Down, monitor.CurrentState);
         }
-
-        // Start tracking and feed one result to transition from Initializing
-        monitor.StartTracking(ip);
-        time.Advance(TimeSpan.FromSeconds(1));
-        monitor.RecordPingResult(new PingResult(ip, true, 10, timestamp: time.GetUtcNow()));
-
-        // Monitor should not be assumed (seed was rejected due to probe mismatch)
-        Assert.False(monitor.IsAssumed);
-        // After one successful result, tracker should be in Starting state (not yet Responding - needs 5 samples)
-        Assert.Equal(HostState.Starting, monitor.CurrentState);
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
     }
 
     [Fact]
