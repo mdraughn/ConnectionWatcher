@@ -57,7 +57,7 @@
     @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
     {
         <tr>
-            <td>@t.Name</td><td>@t.Address</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td>
+            <td>@t.Name</td><td>@t.Address@(t.Probe is { Length: > 0 } pr ? $" · {pr.Replace(":", "/")}" : "")</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td>
             <td>@(t.Enabled ? "yes" : "no")</td>
             <td>
                 <button class="outline" data-edit="@t.Id" data-json="@json(t)">Edit</button>

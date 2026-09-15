@@ -26,6 +26,7 @@ public static class StatusSnapshotBuilder
             Id = m.Target.Id,
             Name = m.Target.Name,
             Address = m.ResolvedAddress?.ToString() ?? m.Target.Address,
+            Probe = m.Target.Probe,
             State = m.CurrentState.ToString(),
             Assumed = m.IsAssumed,
             SuccessRate = (double)(m.LastStatus?.Host.SuccessRate ?? 0f),
