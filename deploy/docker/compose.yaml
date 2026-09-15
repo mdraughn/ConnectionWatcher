@@ -12,9 +12,12 @@
 
 services:
   conwatch:
-    image: conwatch:latest
-    build:
-      context: ../..
+    # Published by .github/workflows/publish-image.yml (amd64 + arm64).
+    # While the package is private, log the registry in first:
+    #   docker login ghcr.io   (username + a PAT with read:packages)
+    # To build from source instead, replace `image:` with:
+    #   build: { context: ../.. }
+    image: ghcr.io/mdraughn/conwatch:latest
     container_name: conwatch
     restart: unless-stopped
     ports:

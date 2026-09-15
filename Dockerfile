@@ -20,12 +20,17 @@ RUN npm run build
 # --- Stage 2: publish the .NET app (client build skipped; bundles copied in) ---
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
+# CI passes the commit hash (the build context has no .git, so the version
+# stamp would otherwise be bare); the SDK appends it as +<sha> to
+# AssemblyInformationalVersion, which the header build stamp reads.
+ARG GIT_SHA=
 WORKDIR /src
 COPY . .
 COPY --from=client /src/wwwroot/js Programs/ConWatch/wwwroot/js
 # -a maps docker arch names (amd64/arm64) to .NET RIDs; framework-dependent,
 # the aspnet base image below supplies the matching runtime.
-RUN dotnet publish Programs/ConWatch -c Release -a $TARGETARCH -o /app /p:SkipClientBuild=true
+RUN dotnet publish Programs/ConWatch -c Release -a $TARGETARCH -o /app \
+    /p:SkipClientBuild=true ${GIT_SHA:+/p:SourceRevisionId=$GIT_SHA}
 
 # --- Stage 3: runtime ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
