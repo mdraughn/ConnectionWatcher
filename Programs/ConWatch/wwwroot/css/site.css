@@ -134,7 +134,10 @@ main.container h5 { font-size: 0.85rem; }
 /* Tree */
 .cw-tree, .cw-tree ul { list-style: none; padding-left: 0; margin: 0.2rem 0; }
 .cw-tree ul { padding-left: 1.4rem; border-left: 1px dotted var(--border-strong); margin-left: 0.3rem; }
-.cw-tree li { padding: 0.1rem 0; }
+/* On the li itself: pico's `ul li { list-style: square }` targets the li
+   directly, which beats the ul-level none by inheritance rules — iOS Safari
+   paints those phantom squares where desktop browsers happened to hide them. */
+.cw-tree li { padding: 0.1rem 0; list-style: none; }
 .cw-row { cursor: pointer; display: flex; align-items: center; gap: 10px;
     min-height: 33px; padding: 0 10px; border-radius: 5px; }
 .cw-row:hover { background: var(--surface-2); }
