@@ -119,6 +119,23 @@ public class TargetMonitorTests
     }
 
     [Fact]
+    public void Two_hundred_refusals_with_no_accept_flags_persistent_refusal()
+    {
+        var (m, _, time) = Make();
+        for (int i = 0; i < 200; i++)
+        {
+            time.Advance(TimeSpan.FromSeconds(1));
+            m.RecordPingResult(new PingResult(Ip, true, 2, "Refused"));
+        }
+        Assert.Equal(200, m.RefusedReplies);
+        Assert.Equal(0, m.AcceptedReplies);
+        Assert.True(m.PersistentlyRefused);
+
+        m.RecordPingResult(new PingResult(Ip, true, 2, "Accepted"));
+        Assert.False(m.PersistentlyRefused);
+    }
+
+    [Fact]
     public void Resolution_failure_reports_once()
     {
         var (m, transitions, _) = Make();

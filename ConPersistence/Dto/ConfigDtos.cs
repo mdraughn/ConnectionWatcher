@@ -28,6 +28,8 @@ public record TargetDto
     public bool Enabled { get; init; } = true;
     /// <summary>Optional operator/ISP name ("Comcast") for attribution wording.</summary>
     public string? Operator { get; init; }
+    /// <summary>Optional probe override ("tcp:&lt;port&gt;"); null means ICMP echo.</summary>
+    public string? Probe { get; init; }
 }
 
 /// <summary>Pool for API/CRUD and export. Members/Parent referenced by name.</summary>

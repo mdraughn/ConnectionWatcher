@@ -6,7 +6,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages.Config;
 
-public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore settings, AdminGate gate) : PageModel
+public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore settings, AdminGate gate,
+    WatcherHostService host) : PageModel
 {
     public ConfigDocument Config { get; private set; } = new();
     public IReadOnlyList<HealthWarning> Warnings { get; private set; } = [];
@@ -26,7 +27,7 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
         if (gate.IsLocked(User))
             return Redirect("/?admin=1");
         Config = await store.ExportAsync();
-        Warnings = await health.EvaluateAsync();
+        Warnings = [.. await health.EvaluateAsync(), .. RuntimeHealth.RefusalWarnings(host.Engine)];
         ComputePipeline(await settings.GetAsync(SettingKeys.AnchorPool));
         return Page();
     }

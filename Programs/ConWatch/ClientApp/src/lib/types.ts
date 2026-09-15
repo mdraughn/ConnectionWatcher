@@ -2,6 +2,8 @@ export interface TargetStatus {
   id: string;
   name: string;
   address: string | null;
+  /** Optional probe override ("tcp:80"); absent/null means ICMP echo. */
+  probe?: string | null;
   state: string;
   /** Warm-restart presumption not yet confirmed by fresh pings. */
   assumed?: boolean;

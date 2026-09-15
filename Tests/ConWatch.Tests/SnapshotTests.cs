@@ -24,6 +24,10 @@ public class SnapshotTests : IDisposable
     private async Task SeedWithActivityAsync()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
+        await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "Modem", address = "10.1.10.1", profile = "External", probe = "tcp:80",
+        });
         await _client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
         {
             ["Mqtt.Host"] = "homeassistant.local",
@@ -52,6 +56,9 @@ public class SnapshotTests : IDisposable
         Assert.True(snapshot.Config.Profiles.Count > 0);
         Assert.True(snapshot.Config.Pools.Count > 0);
         Assert.True(snapshot.Transitions.Count > 0);
+
+        Assert.Equal("tcp:80", Assert.Single(snapshot.Config.Targets, t => t.Name == "Modem").Probe);
+        Assert.Null(Assert.Single(snapshot.Config.Targets, t => t.Name == "Router").Probe);
 
         Assert.Equal("homeassistant.local", snapshot.Settings["Mqtt.Host"]);
         Assert.False(snapshot.Settings.ContainsKey("Mqtt.Password"));
@@ -89,10 +96,16 @@ public class SnapshotTests : IDisposable
 
             var status = JsonSerializer.Deserialize<JsonElement>(
                 await client.GetStringAsync("/api/v1/status"));
-            var restoredNames = status.GetProperty("targets").EnumerateArray()
+            var statusTargets = status.GetProperty("targets").EnumerateArray().ToList();
+            var restoredNames = statusTargets
                 .Select(t => t.GetProperty("name").GetString()).OrderBy(n => n).ToList();
             var originalNames = snapshot.Config.Targets.Select(t => t.Name).OrderBy(n => n).ToList();
             Assert.Equal(originalNames, restoredNames);
+
+            var modemStatus = statusTargets.Single(t => t.GetProperty("name").GetString() == "Modem");
+            Assert.Equal("tcp:80", modemStatus.GetProperty("probe").GetString());
+            var routerStatus = statusTargets.Single(t => t.GetProperty("name").GetString() == "Router");
+            Assert.Equal(JsonValueKind.Null, routerStatus.GetProperty("probe").ValueKind);
 
             var transitions = JsonSerializer.Deserialize<JsonElement>(
                 await client.GetStringAsync("/api/v1/transitions?limit=1000"));

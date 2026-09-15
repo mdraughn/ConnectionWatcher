@@ -58,12 +58,12 @@ namespace ConTinker.Configuration
             };
         }
 
-        public IPingTransceiver Create(System.Net.IPAddress ipAddress, CancellationToken cancellationToken)
+        public IPingTransceiver Create(System.Net.IPAddress ipAddress, ProbeSpec probe, CancellationToken cancellationToken)
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(ConfiguredPingTransceiverFactory));
 
-            return _innerFactory.Create(ipAddress, cancellationToken);
+            return _innerFactory.Create(ipAddress, probe, cancellationToken);
         }
 
         public void Dispose()

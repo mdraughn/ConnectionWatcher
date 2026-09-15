@@ -36,9 +36,10 @@ namespace ConInfrastructure
         /// Creates an interactive simulated ping transceiver for the specified IP address.
         /// </summary>
         /// <param name="ipAddress">The IP address to simulate pinging.</param>
+        /// <param name="probe">The probe spec (currently unused by the simulation).</param>
         /// <param name="cancellationToken">Cancellation token for async operations.</param>
         /// <returns>An interactive simulated ping transceiver instance.</returns>
-        public IPingTransceiver Create(IPAddress ipAddress, CancellationToken cancellationToken)
+        public IPingTransceiver Create(IPAddress ipAddress, ProbeSpec probe, CancellationToken cancellationToken)
         {
             // Register this IP address with the control manager only if window is shown
             var viewModel = _showControlWindow && _controlManager != null

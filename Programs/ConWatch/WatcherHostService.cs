@@ -197,7 +197,7 @@ public class WatcherHostService(
                 case "Target" when targetsById.TryGetValue(row.SubjectId, out var target)
                     && Enum.TryParse<HostState>(row.ToState, out var state)
                     && state is not (HostState.Initializing or HostState.Starting):
-                    seed.Targets[row.SubjectId] = new TargetSeed(state, target.Address);
+                    seed.Targets[row.SubjectId] = new TargetSeed(state, target.Address, target.Probe);
                     break;
                 case "Pool" when Enum.TryParse<HostState>(row.ToState, out var poolState)
                     && poolState is not (HostState.Initializing or HostState.Starting):
@@ -271,7 +271,7 @@ public class WatcherHostService(
         {
             if (monitor.CurrentState is HostState.Initializing or HostState.Starting)
                 continue;
-            seed.Targets[id] = new TargetSeed(monitor.CurrentState, monitor.Target.Address);
+            seed.Targets[id] = new TargetSeed(monitor.CurrentState, monitor.Target.Address, monitor.Target.Probe);
         }
         foreach (var pool in engine.PoolCoordinators)
         {

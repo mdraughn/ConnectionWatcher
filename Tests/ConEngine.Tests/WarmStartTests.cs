@@ -4,9 +4,11 @@ using ConCore.Targets;
 using ConEngine.Configuration;
 using ConEngine.Events;
 using ConEngine.Scheduling;
+using ConEngine.Tests.Fakes;
 using ConEngine.Topology;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace ConEngine.Tests;
@@ -156,6 +158,56 @@ public class WarmStartTests
         }
         Assert.False(monitor.IsAssumed);
         Assert.Empty(transitions);
+    }
+
+    [Fact]
+    public async Task Probe_change_discards_the_seed()
+    {
+        var factory = new FakePingTransceiverFactory();
+        var ip = IPAddress.Parse("192.168.1.100");
+        var targetId = Guid.NewGuid();
+        var options = new WatcherOptions
+        {
+            Profiles =
+            {
+                ["Test"] = new PingProfileConfig
+                {
+                    NormalIntervalSeconds = 0.02,
+                    BurstIntervalSeconds = 0.01,
+                    BurstMaxDurationSeconds = 5,
+                    HistorySize = 20,
+                    MinUsableSample = 5,
+                },
+            },
+            Targets =
+            [
+                new TargetConfig { Id = targetId, Name = "Private", Address = "192.168.1.100", Profile = "Test", Probe = "tcp:80" }
+            ],
+        };
+        var seed = new EngineSeed
+        {
+            Targets = new Dictionary<Guid, TargetSeed>
+            {
+                [targetId] = new TargetSeed(HostState.Down, "192.168.1.100", Probe: null)  // Same addr, different probe
+            }
+        };
+        var engine = new WatcherEngine(TimeProvider.System, factory,
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Options.Create(options));
+        var cts = new CancellationTokenSource();
+        try
+        {
+            await engine.StartAsync(cts.Token, seed);
+            var monitor = engine.Monitors[targetId];
+            // Seed not adopted (probe mismatch) => monitor not assumed, starts from Starting
+            Assert.False(monitor.IsAssumed);
+            Assert.NotEqual(HostState.Down, monitor.CurrentState);
+        }
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
     }
 
     [Fact]

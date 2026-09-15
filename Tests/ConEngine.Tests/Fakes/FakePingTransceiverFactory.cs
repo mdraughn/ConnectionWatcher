@@ -16,11 +16,17 @@ public class FakePingTransceiverFactory : IPingTransceiverFactory
     /// <summary>Timeouts observed per ping, per IP (for burst-timeout assertions).</summary>
     public ConcurrentDictionary<IPAddress, ConcurrentQueue<int>> ObservedTimeouts { get; } = new();
 
+    /// <summary>Probe spec seen at Create, per IP (for probe-threading assertions).</summary>
+    public ConcurrentDictionary<IPAddress, ProbeSpec> ObservedProbes { get; } = new();
+
     public void SetUp(IPAddress ip, bool up) => _up[ip] = up;
     public void SetThrow(IPAddress ip, bool throwOnPing) => _throw[ip] = throwOnPing;
 
-    public IPingTransceiver Create(IPAddress ipAddress, CancellationToken cancellationToken) =>
-        new FakeTransceiver(ipAddress, this);
+    public IPingTransceiver Create(IPAddress ipAddress, ProbeSpec probe, CancellationToken cancellationToken)
+    {
+        ObservedProbes[ipAddress] = probe;
+        return new FakeTransceiver(ipAddress, this);
+    }
 
     private sealed class FakeTransceiver(IPAddress ip, FakePingTransceiverFactory owner) : IPingTransceiver
     {

@@ -121,4 +121,34 @@ public class WatcherOptionsValidatorTests
         o.Targets[0].Profile = "Bad";
         Assert.True(Validate(o).Failed);
     }
+
+    [Fact]
+    public void Invalid_probe_string_fails_validation()
+    {
+        var o = ValidHome();
+        o.Targets[0].Probe = "tcp:notaport";
+        var result = Validate(o);
+        Assert.True(result.Failed);
+        Assert.Contains("Probe", result.FailureMessage);
+    }
+
+    [Fact]
+    public void Impolite_public_port_fails_validation()
+    {
+        var o = ValidHome();
+        o.Targets[0].Address = "9.9.9.10";
+        o.Targets[0].Probe = "tcp:8080";
+        var result = Validate(o);
+        Assert.True(result.Failed);
+        Assert.Contains("public addresses", result.FailureMessage);
+    }
+
+    [Fact]
+    public void Private_address_any_port_passes()
+    {
+        var o = ValidHome();
+        o.Targets[0].Address = "10.1.10.1";
+        o.Targets[0].Probe = "tcp:8443";
+        Assert.False(Validate(o).Failed);
+    }
 }

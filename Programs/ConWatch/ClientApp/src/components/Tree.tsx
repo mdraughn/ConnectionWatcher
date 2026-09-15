@@ -22,7 +22,9 @@ function Row({ target }: { target: TargetStatus }) {
       <span className={`dot ${target.state.toLowerCase()}`}
         style={target.assumed ? { opacity: 0.45 } : undefined}></span>
       <span>{target.name}{target.assumed && <small style={{ opacity: 0.5 }}> (assumed)</small>}</span>
-      <span className="addr">{target.address}</span>
+      <span className="addr">
+        {target.address}{target.probe ? ` · ${target.probe.replace(":", "/")}` : ""}
+      </span>
       <span className="stats">
         {chip && <span className="statechip" style={{
           color: chip, background: `color-mix(in srgb, ${chip} 14%, transparent)`,

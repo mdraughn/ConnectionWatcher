@@ -56,6 +56,7 @@ public class TargetGraph
                 ProfileName = t.Profile,
                 Enabled = t.Enabled,
                 Operator = t.Operator,
+                Probe = t.Probe,
             });
 
         var poolDefs = options.Pools

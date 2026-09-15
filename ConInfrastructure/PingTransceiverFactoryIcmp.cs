@@ -5,8 +5,10 @@ namespace ConInfrastructure;
 
 public class PingTransceiverFactoryIcmp : IPingTransceiverFactory
 {
-    public IPingTransceiver Create(IPAddress ipAddress, CancellationToken cancellationToken)
-    {
-        return new PingTranceiverIcmp(ipAddress, cancellationToken);
-    }
+    public IPingTransceiver Create(IPAddress ipAddress, ProbeSpec probe, CancellationToken cancellationToken) =>
+        probe.Kind switch
+        {
+            ProbeKind.Tcp => new TcpConnectTransceiver(ipAddress, probe.Port, cancellationToken),
+            _ => new PingTranceiverIcmp(ipAddress, cancellationToken),
+        };
 }

@@ -90,6 +90,15 @@ ConWatch serves its UI at the root:
 - **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
   monitored targets with the right parent pre-filled.
 
+Each target probes over **ICMP ping** by default, or a **TCP connect** to a
+chosen port for devices that firewall ping but still run a service — a
+refused connection still counts as a reply, since an RST proves the host's
+stack answered. Private addresses (RFC1918, loopback, link-local) allow any
+port; public addresses are restricted to 80, 443, 53, where a bare
+connect-and-close looks like ordinary client traffic. The Targets form's
+**Test** button tries ICMP and the policy-allowed TCP ports for the typed
+address in one click and preselects whichever answered.
+
 ## Notifications (Home Assistant MQTT + webhooks)
 
 Configured on the **Admin** page under *Notifications*; both are off by

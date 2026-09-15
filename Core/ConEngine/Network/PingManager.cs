@@ -55,10 +55,11 @@ public class PingManager : IDisposable
     /// Gets or creates a PingController for the specified IP address.
     /// </summary>
     /// <param name="ipAddress">The IP address to ping.</param>
+    /// <param name="probe">How to probe the target (ICMP echo or TCP connect).</param>
     /// <param name="cadence">Decides when each ping happens.</param>
     /// <param name="timeoutMsProvider">Per-ping timeout in milliseconds, read before every ping.</param>
     /// <returns>A PingController configured for the specified IP address.</returns>
-    public PingController GetOrCreateController(IPAddress ipAddress, IPingCadence cadence, Func<int> timeoutMsProvider)
+    public PingController GetOrCreateController(IPAddress ipAddress, ProbeSpec probe, IPingCadence cadence, Func<int> timeoutMsProvider)
     {
         lock (_lock)
         {
@@ -73,6 +74,7 @@ public class PingManager : IDisposable
                 controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
                 controller.Launch(ipAddress,
                     _resultWriter,
+                    probe,
                     cadence,
                     timeoutMsProvider,
                     _globalCancellationToken);

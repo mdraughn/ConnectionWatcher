@@ -50,6 +50,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             {
                 name = m.Target.Name,
                 address = m.ResolvedAddress?.ToString() ?? m.Target.Address,
+                probe = m.Target.Probe,
                 state = m.CurrentState.ToString(),
                 assumed = m.IsAssumed,
                 successRate = m.LastStatus?.Host.SuccessRate,

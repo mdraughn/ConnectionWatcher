@@ -30,7 +30,7 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
 
-        controller.Launch(IpA, channel.Writer,
+        controller.Launch(IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => 1000, cts.Token);
 
@@ -49,8 +49,8 @@ public class PingControllerTests
 
         using var controllerA = new PingController(TimeProvider.System, factory, NullLogger.Instance);
         using var controllerB = new PingController(TimeProvider.System, factory, NullLogger.Instance);
-        controllerA.Launch(IpA, channel.Writer, cadence, () => 1000, cts.Token);
-        controllerB.Launch(IpB, channel.Writer, cadence, () => 1000, cts.Token);
+        controllerA.Launch(IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
+        controllerB.Launch(IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
 
         await Collect(channel.Reader, 2);
         controllerA.Stop();
@@ -72,7 +72,7 @@ public class PingControllerTests
         using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
 
         bool bursting = false;
-        controller.Launch(IpA, channel.Writer,
+        controller.Launch(IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => bursting ? 1000 : 3000, cts.Token);
 
@@ -96,7 +96,7 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
 
-        controller.Launch(IpA, channel.Writer,
+        controller.Launch(IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => 1000, cts.Token);
 

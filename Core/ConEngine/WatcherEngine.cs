@@ -108,7 +108,8 @@ public class WatcherEngine
             var discipline = new PingDiscipline(profile, _timeProvider, initialDelay);
             var monitor = new TargetMonitor(target, profile, discipline, _timeProvider, _loggerFactory);
             if (seed?.Targets.TryGetValue(target.Id, out var targetSeed) == true &&
-                targetSeed.Address == target.Address)
+                targetSeed.Address == target.Address &&
+                targetSeed.Probe == target.Probe)
             {
                 monitor.Seed(targetSeed.State);
                 _log.LogInformation("Warm start: {Target} presumed {State}",
@@ -210,8 +211,13 @@ public class WatcherEngine
         // Bursts shorten the timeout: replies arrive in well under a second,
         // and against a dead host the steady timeout dominates burst cost.
         var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
-        _manager!.GetOrCreateController(ip, monitor.Discipline,
-            () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, 1000) : steadyTimeoutMs);
+        ProbeSpec.TryParse(monitor.Target.Probe, out var probe);
+        // Bursts shorten the timeout — but a refused TCP connect takes ~2s to
+        // surface on Windows (the stack retries after the RST), so TCP probes
+        // keep enough budget to classify Refused as a reply during bursts.
+        var burstCapMs = probe.Kind == ProbeKind.Tcp ? 2500 : 1000;
+        _manager!.GetOrCreateController(ip, probe, monitor.Discipline,
+            () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, burstCapMs) : steadyTimeoutMs);
         // Warm starts burst everything so presumed states confirm in seconds
         // (seeded Faltering/Down already burst via the discipline; this covers
         // Responding/Starting, and no-ops on parked or already-bursting ones).
