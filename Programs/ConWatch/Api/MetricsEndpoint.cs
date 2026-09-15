@@ -67,7 +67,21 @@ public static class MetricsEndpoint
         }
 
         Family(sb, "conwatch_transitions_total", "counter", "State transitions per subject since process start.");
-        foreach (var (name, count) in counters.TransitionsSnapshot().OrderBy(kv => kv.Key))
+        // Union with the live subjects: a counter key only springs into
+        // existence on a subject's first transition, and warm restarts seed
+        // silently — so without the union a stable target has NO series and
+        // rate() reads "no data" instead of 0, blinding panels and alerts.
+        var totals = counters.TransitionsSnapshot().ToDictionary(kv => kv.Key, kv => kv.Value);
+        if (engine is not null)
+        {
+            foreach (var m in engine.Monitors.Values)
+                totals.TryAdd(m.Target.Name, 0);
+            foreach (var p in engine.PoolCoordinators)
+                totals.TryAdd(p.Pool.Name, 0);
+            if (engine.Verdict is not null)
+                totals.TryAdd("Internet", 0); // the verdict subject's name
+        }
+        foreach (var (name, count) in totals.OrderBy(kv => kv.Key))
             Series(sb, "conwatch_transitions_total", name, count);
 
         Family(sb, "conwatch_glitches_total", "counter", "Glitches (blips too short to be transitions) since process start.");

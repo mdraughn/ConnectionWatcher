@@ -65,6 +65,28 @@ public class MetricsEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Transition_counters_exist_at_zero_before_any_transition()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        // Catch the engine in its first seconds: monitors exist (gauges
+        // enumerate them immediately) but no subject has transitioned yet —
+        // Starting needs MinUsableSample pings before its first transition.
+        // An absent counter series makes rate() return "no data" instead of
+        // 0, so panels and alerts sit blind; warm restarts (silent seeding)
+        // can leave a stable target series-less for days. Every live subject
+        // must appear from the very first scrape that knows the engine.
+        var body = "";
+        await ConfigApiTests.Eventually(async () =>
+        {
+            body = await ScrapeAsync();
+            return body.Contains("conwatch_target_up{name=\"Router\"}");
+        });
+        Assert.Contains("conwatch_transitions_total{name=\"Router\"}", body);
+        Assert.Contains("conwatch_transitions_total{name=\"Google\"}", body);
+        Assert.Contains("conwatch_transitions_total{name=\"Internet\"}", body);
+    }
+
+    [Fact]
     public async Task Downed_target_flips_gauges_and_bumps_the_transition_counter()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
