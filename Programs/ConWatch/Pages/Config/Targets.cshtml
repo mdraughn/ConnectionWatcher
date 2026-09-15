@@ -73,7 +73,13 @@
 <form id="target-form">
     <div class="grid">
         <label>Name <input name="name" required value="@Model.PrefillName" /></label>
-        <label>Address <input name="address" required placeholder="IP or hostname" value="@Model.PrefillAddress" /></label>
+        <label>Address
+            <fieldset role="group" style="margin:0">
+                <input name="address" required placeholder="IP or hostname" value="@Model.PrefillAddress" />
+                <button type="button" class="outline" id="probe-test-btn">Test</button>
+            </fieldset>
+            <small id="probe-test-out"></small>
+        </label>
     </div>
     <div class="grid">
         <label>Parent
@@ -94,6 +100,17 @@
             </select>
         </label>
         <label>Enabled <input type="checkbox" name="enabled" checked /></label>
+    </div>
+    <div class="grid">
+        <label>Probe
+            <select name="probeKind" id="probe-kind">
+                <option value="">Ping (ICMP)</option>
+                <option value="tcp">TCP connect</option>
+            </select>
+        </label>
+        <label id="probe-port-label" hidden>Port
+            <input name="probePort" type="number" min="1" max="65535" value="80" />
+        </label>
     </div>
     <label>ISP / operator <small>(optional — lets reports say "Comcast is down")</small>
         <input name="operator" placeholder="e.g. Comcast" />
@@ -130,6 +147,33 @@
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
     <script>
         const form = document.getElementById("target-form");
+
+        const probeKind = document.getElementById("probe-kind");
+        const portLabel = document.getElementById("probe-port-label");
+        probeKind.addEventListener("change", () => { portLabel.hidden = probeKind.value !== "tcp"; });
+
+        function setProbe(probe) {           // probe: null | "tcp:80"
+            const m = /^tcp:(\d+)$/.exec(probe ?? "");
+            probeKind.value = m ? "tcp" : "";
+            if (m) form.elements.probePort.value = m[1];
+            portLabel.hidden = !m;
+        }
+
+        document.getElementById("probe-test-btn").addEventListener("click", async () => {
+            const out = document.getElementById("probe-test-out");
+            out.textContent = "testing…";
+            const body = { address: form.elements.address.value };
+            if (probeKind.value === "tcp") body.port = Number(form.elements.probePort.value);
+            const r = await apiFetch("POST", "/api/v1/targets/probe-test", body);
+            if (!r.ok) { out.textContent = "test failed"; return; }
+            const results = r.body.results;
+            out.textContent = results.length === 0 ? "address did not resolve"
+                : results.map((x) => `${x.probe.replace(":", "/")}: ${x.reply ? `reply ${x.rttMs} ms` : "no reply"}`).join(" · ");
+            const icmp = results.find((x) => x.probe === "icmp" && x.reply);
+            const bestTcp = results.filter((x) => x.probe !== "icmp" && x.reply)
+                .sort((a, b) => a.rttMs - b.rttMs)[0];
+            setProbe(icmp ? null : bestTcp ? bestTcp.probe : null);
+        });
 
         function askAddressChange() {
             const dialog = document.getElementById("addr-dialog");
@@ -179,6 +223,7 @@
                 profile: form.elements.profile.value,
                 enabled: form.elements.enabled.checked,
                 operator: form.elements.operator.value || null,
+                probe: probeKind.value === "tcp" ? `tcp:${form.elements.probePort.value}` : null,
             }),
             fillForm: (dto) => {
                 form.dataset.originalAddress = dto.address;
@@ -188,6 +233,7 @@
                 form.elements.profile.value = dto.profile;
                 form.elements.enabled.checked = dto.enabled;
                 form.elements.operator.value = dto.operator ?? "";
+                setProbe(dto.probe ?? null);
                 document.getElementById("form-title").textContent = `Edit ${dto.name}`;
             },
         });

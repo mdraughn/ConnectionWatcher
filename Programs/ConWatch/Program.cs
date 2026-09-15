@@ -149,6 +149,7 @@ api.MapAuth();
 api.MapEngineControl(); // open route, password verified inline (take-over M2M)
 
 locked.MapConfig();
+locked.MapProbeTest();
 locked.MapTraceroute();
 locked.MapAdmin();
 locked.MapSetup();
