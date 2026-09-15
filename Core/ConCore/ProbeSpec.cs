@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 
 namespace ConCore;
 
@@ -60,11 +61,11 @@ public static class ProbePolicy
     {
         if (!IPAddress.TryParse(address, out var ip))
             return false; // hostname: treat as public
+        if (ip.AddressFamily != AddressFamily.InterNetwork)
+            return false; // IPv6 unsupported end to end
         if (IPAddress.IsLoopback(ip))
             return true;
         var b = ip.GetAddressBytes();
-        if (b.Length != 4)
-            return false; // IPv6 unsupported end to end
         return b[0] == 10
             || (b[0] == 172 && b[1] is >= 16 and <= 31)
             || (b[0] == 192 && b[1] == 168)

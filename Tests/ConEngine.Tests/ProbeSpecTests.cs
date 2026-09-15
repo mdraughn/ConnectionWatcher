@@ -50,6 +50,7 @@ public class ProbeSpecTests
     [InlineData("8.8.8.8", 8080, false)]         // public, impolite port
     [InlineData("example.com", 80, true)]        // hostname = public, polite ok
     [InlineData("example.com", 8080, false)]     // hostname = public, impolite no
+    [InlineData("::1", 9999, false)]              // IPv6 loopback is public → impolite port rejected
     public void Port_policy_by_address_class(string address, int port, bool allowed)
     {
         var ok = ProbePolicy.IsAllowed(address, new ProbeSpec(ProbeKind.Tcp, port), out var reason);
