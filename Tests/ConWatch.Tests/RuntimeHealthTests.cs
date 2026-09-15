@@ -34,6 +34,10 @@ public class RuntimeHealthTests : IDisposable
 
         var engine = host.Engine!;
         var monitor = engine.Monitors.Values.Single(m => m.Target.Name == "Modem");
+        // The live fake cadence keeps pinging this IP while we pump refusals in;
+        // without this, a default success (message null) can land mid-loop and
+        // increment AcceptedReplies, which PersistentlyRefused requires to be zero.
+        _factory.Pings.SetUp(IPAddress.Parse("192.168.1.254"), false);
         for (int i = 0; i < 200; i++)
             monitor.RecordPingResult(new ConCore.PingResult(IPAddress.Parse("192.168.1.254"), true, 2, "Refused"));
 
@@ -70,6 +74,9 @@ public class RuntimeHealthTests : IDisposable
         });
 
         var monitor = host.Engine!.Monitors.Values.Single(m => m.Target.Name == "Modem");
+        // See the comment in the previous test: harden against the live fake
+        // cadence landing a default success (AcceptedReplies++) mid-pump.
+        _factory.Pings.SetUp(IPAddress.Parse("192.168.1.254"), false);
         for (int i = 0; i < 200; i++)
             monitor.RecordPingResult(new ConCore.PingResult(IPAddress.Parse("192.168.1.254"), true, 2, "Refused"));
 

@@ -28,9 +28,10 @@ public class TcpConnectTransceiverTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         using var probe = new TcpConnectTransceiver(IPAddress.Loopback, port, CancellationToken.None);
-        // Windows surfaces ConnectionRefused only after ~2s of stack-level retries;
-        // 2600 keeps headroom while pinning that refusal within the engine's TCP burst cap classifies as a reply.
-        var result = await probe.PingAsync(2600);
+        // Windows surfaces ConnectionRefused only after ~2s of stack-level retries
+        // (~2054ms measured); 2500 is the engine's actual TCP burst-mode timeout
+        // cap (WatcherEngine.Activate), leaving ~450ms headroom above that latency.
+        var result = await probe.PingAsync(2500);
         Assert.True(result.Success);
         Assert.Equal("Refused", result.Message);
     }

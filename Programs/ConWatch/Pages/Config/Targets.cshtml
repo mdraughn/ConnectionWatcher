@@ -170,8 +170,15 @@
             out.textContent = results.length === 0 ? "address did not resolve"
                 : results.map((x) => `${x.probe.replace(":", "/")}: ${x.reply ? `reply ${x.rttMs} ms` : "no reply"}`).join(" · ");
             const icmp = results.find((x) => x.probe === "icmp" && x.reply);
-            const bestTcp = results.filter((x) => x.probe !== "icmp" && x.reply)
-                .sort((a, b) => a.rttMs - b.rttMs)[0];
+            const tcpCandidates = results.filter((x) => x.probe !== "icmp" && x.reply);
+            // Prefer an accepted port: a refused port replies in ~0ms and can
+            // out-rank an accepted one on RTT alone (production runs Linux,
+            // where refusals reply instantly) — exactly the port the
+            // persistent-refusal warning would then flag. Fall back to any
+            // replying TCP candidate only if none were accepted.
+            const bestTcp = tcpCandidates.filter((x) => x.message === "Accepted")
+                .sort((a, b) => a.rttMs - b.rttMs)[0]
+                ?? tcpCandidates.sort((a, b) => a.rttMs - b.rttMs)[0];
             setProbe(icmp ? null : bestTcp ? bestTcp.probe : null);
         });
 

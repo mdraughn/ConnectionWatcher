@@ -65,6 +65,19 @@ public class ProbeFieldTests : IDisposable
     }
 
     [Fact]
+    public async Task Uppercase_probe_is_normalized_to_canonical_form_on_write()
+    {
+        var create = await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "Modem", address = "10.1.10.1", profile = "External", probe = "TCP:80",
+        });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        var exported = Assert.Single((await ExportAsync()).Targets, t => t.Name == "Modem");
+        Assert.Equal("tcp:80", exported.Probe);
+    }
+
+    [Fact]
     public async Task Impolite_public_probe_is_rejected_with_400()
     {
         var create = await _client.PostAsJsonAsync("/api/v1/targets", new

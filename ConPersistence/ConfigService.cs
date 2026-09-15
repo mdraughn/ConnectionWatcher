@@ -1,3 +1,4 @@
+using ConCore;
 using ConEngine.Configuration;
 using ConPersistence.Dto;
 using ConPersistence.Entities;
@@ -141,7 +142,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         row.ProfileId = profile.Id;
         row.Enabled = dto.Enabled;
         row.Operator = dto.Operator?.Trim() is { Length: > 0 } op ? op : null;
-        row.Probe = dto.Probe;
+        row.Probe = NormalizeProbe(dto.Probe);
         return ConfigResult.Ok(row.Id);
     });
 
@@ -177,7 +178,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             ProfileId = profile.Id,
             Enabled = newTarget.Enabled,
             Operator = newTarget.Operator?.Trim() is { Length: > 0 } op ? op : null,
-            Probe = newTarget.Probe,
+            Probe = NormalizeProbe(newTarget.Probe),
         };
         db.Targets.Add(row);
         foreach (var child in children)
@@ -271,7 +272,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             Id = t.Id, Name = t.Name, Address = t.Address,
             Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
             Operator = t.Operator,
-            Probe = t.Probe,
+            Probe = NormalizeProbe(t.Probe),
         }));
         options.Pools.AddRange(doc.Pools.Select(p => new PoolConfig
         {
@@ -318,7 +319,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                 Id = id, Name = t.Name, Address = t.Address,
                 ProfileId = profileIds[t.Profile], Enabled = t.Enabled,
                 Operator = t.Operator?.Trim() is { Length: > 0 } op ? op : null,
-                Probe = t.Probe,
+                Probe = NormalizeProbe(t.Probe),
             });
         }
         await db.SaveChangesAsync();
@@ -375,6 +376,17 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         ConfigChanged?.Invoke();
         return result;
     }
+
+    /// <summary>
+    /// Canonicalizes a probe string so downstream parsers (e.g. the form's
+    /// strict "tcp:&lt;port&gt;" regex) never misread a differently-cased or
+    /// padded value ("TCP:80", " tcp:80 ", "icmp") persisted via the API or
+    /// import. Validation has already rejected unparseable strings by the
+    /// time this runs; if parsing still fails, the raw value is stored
+    /// unchanged so the validator (not this helper) owns rejection.
+    /// </summary>
+    private static string? NormalizeProbe(string? probe) =>
+        ProbeSpec.TryParse(probe, out var spec) ? spec.ToConfigString() : probe;
 
     private static PingProfileConfig ToConfig(ProfileDto p) => new()
     {
