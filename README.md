@@ -55,10 +55,9 @@ the database applies only when the watcher was down briefly (the
 
 ConWatch serves its UI at the root:
 
-- **Dashboard** (`/`) — verdict banner, live reachability tree (SignalR).
-  Misbehaving targets expand in place into tiles with a 60-minute chart and the
-  transition evidence; click any row to pin it open. Bottom status bar shows
-  the latest event.
+- **Dashboard** (`/`) — verdict banner, live reachability tree (SignalR)
+  with per-target success rate and latency at a glance. Bottom status bar
+  shows the latest event.
 - **Dashboard story** — around the live tree: the **event strip** (the last
   N minutes as one row of minute bins right under the verdict banner), the
   **incident ledger** (the 10 most recent events, each as one plain-English
