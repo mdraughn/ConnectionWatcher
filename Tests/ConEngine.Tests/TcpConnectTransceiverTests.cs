@@ -23,12 +23,13 @@ public class TcpConnectTransceiverTests
     {
         // Grab a free port then close the listener: nothing listens, the
         // stack RSTs — which proves the host is alive.
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         using var probe = new TcpConnectTransceiver(IPAddress.Loopback, port, CancellationToken.None);
-        var result = await probe.PingAsync(2000);
+        // Windows ConnectAsync takes ~2+ seconds to throw SocketException on refused connection
+        var result = await probe.PingAsync(3000);
         Assert.True(result.Success);
         Assert.Equal("Refused", result.Message);
     }
