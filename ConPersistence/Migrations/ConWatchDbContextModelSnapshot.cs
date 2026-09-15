@@ -225,6 +225,9 @@ namespace ConPersistence.Migrations
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Probe")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ProfileId")
                         .HasColumnType("TEXT");
 
