@@ -32,6 +32,7 @@ public static class StatusSnapshotBuilder
             SuccessRate = (double)(m.LastStatus?.Host.SuccessRate ?? 0f),
             AvgRtt = (double)(m.LastStatus?.Host.AverageRoundtripTime ?? 0f),
             SampleSize = m.LastStatus?.Host.SampleSize ?? 0,
+            PingCount = m.PingCount,
         }).OrderBy(t => t.Name).ToList();
         var pools = engine.PoolCoordinators.Select(p => new
         {

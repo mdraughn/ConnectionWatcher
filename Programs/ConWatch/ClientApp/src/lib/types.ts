@@ -10,6 +10,8 @@ export interface TargetStatus {
   successRate: number;
   avgRtt: number;
   sampleSize: number;
+  /** Monotonic count of results ever recorded; the activity LED flickers when it grows. */
+  pingCount?: number;
 }
 
 export interface PoolStatus {

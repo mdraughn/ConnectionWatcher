@@ -136,6 +136,18 @@ public class TargetMonitorTests
     }
 
     [Fact]
+    public void Ping_count_grows_on_every_result_success_or_not()
+    {
+        var (m, _, time) = Make();
+        m.StartTracking(Ip);
+        Assert.Equal(0, m.PingCount);
+
+        Feed(m, time, 5, success: true);
+        Feed(m, time, 3, success: false);
+        Assert.Equal(8, m.PingCount);
+    }
+
+    [Fact]
     public void Resolution_failure_reports_once()
     {
         var (m, transitions, _) = Make();

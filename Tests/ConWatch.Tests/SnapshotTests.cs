@@ -106,6 +106,9 @@ public class SnapshotTests : IDisposable
             Assert.Equal("tcp:80", modemStatus.GetProperty("probe").GetString());
             var routerStatus = statusTargets.Single(t => t.GetProperty("name").GetString() == "Router");
             Assert.Equal(JsonValueKind.Null, routerStatus.GetProperty("probe").ValueKind);
+            // Activity LEDs ride the snapshot: every target carries a
+            // monotonic ping counter the tree flickers on.
+            Assert.True(routerStatus.GetProperty("pingCount").GetInt64() >= 0);
 
             var transitions = JsonSerializer.Deserialize<JsonElement>(
                 await client.GetStringAsync("/api/v1/transitions?limit=1000"));

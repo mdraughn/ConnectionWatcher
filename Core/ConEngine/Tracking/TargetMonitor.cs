@@ -24,6 +24,7 @@ public class TargetMonitor : IDisposable
 
     private long _acceptedReplies;
     private long _refusedReplies;
+    private long _pingCount;
 
     private HostTracker? _tracker;
     private IDisposable? _transitionSubscription;
@@ -80,6 +81,10 @@ public class TargetMonitor : IDisposable
     /// <summary>True once this monitor has seen only refusals, never an accept — a probe pointed at a closed port.</summary>
     public bool PersistentlyRefused => AcceptedReplies == 0 && RefusedReplies >= RefusalWarningSamples;
 
+    /// <summary>Every result ever recorded, success or not — the dashboard's
+    /// activity LEDs flicker when this grows between snapshots.</summary>
+    public long PingCount => Interlocked.Read(ref _pingCount);
+
     /// <summary>
     /// Warm restart: adopt a presumed state silently — no transition. Shows
     /// immediately (marked assumed); applied to the tracker at StartTracking
@@ -131,6 +136,7 @@ public class TargetMonitor : IDisposable
 
     public void RecordPingResult(PingResult result)
     {
+        Interlocked.Increment(ref _pingCount);
         if (result.Success)
         {
             if (result.Message == "Refused") Interlocked.Increment(ref _refusedReplies);

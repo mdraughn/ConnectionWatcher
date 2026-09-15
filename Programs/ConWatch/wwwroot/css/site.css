@@ -120,6 +120,18 @@ main.container h5 { font-size: 0.85rem; }
 .dot.unreachable { background: var(--cw-unreach); }
 .dot.starting, .dot.initializing { background: var(--cw-quiet); }
 
+/* Activity LED: a drive light at the far end of each tree row, well away
+   from the state dot. React remounts it whenever the target's ping count
+   grows, replaying the flash — steady 1 Hz twinkle for LAN cadence, lazy
+   blinks for external targets, rapid subtree flicker during bursts. */
+.cw-row .cw-led { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    background: var(--border); animation: cw-led-flash 0.35s ease-out; }
+@keyframes cw-led-flash {
+    0%, 40% { background: var(--cw-ok); box-shadow: 0 0 5px var(--cw-ok); }
+    100% { background: var(--border); box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { .cw-row .cw-led { animation: none; } }
+
 /* Verdict slab: kept FULL-BLEED deliberately (overrides design §6.1) — the
    at-a-glance answer is the product; see plans/2026-09-14-design-refresh.md. */
 .verdict-banner { padding: 0.75rem 1.1rem; border-radius: 8px; font-weight: 700; color: #fff;

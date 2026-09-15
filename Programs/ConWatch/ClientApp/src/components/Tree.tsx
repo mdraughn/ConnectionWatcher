@@ -32,6 +32,11 @@ function Row({ target }: { target: TargetStatus }) {
         }}>{target.state}</span>}
         {statsText}
       </span>
+      {/* Activity LED, drive-light style: keyed by the monotonic ping count,
+          so a changed count remounts the node and replays the flash. */}
+      {target.pingCount !== undefined &&
+        <span className="cw-led" key={`led-${target.pingCount}`}
+          title="ping activity" aria-hidden="true"></span>}
     </div>
   );
 }
