@@ -6,8 +6,8 @@ public enum TrayState
 {
     Unreachable,   // service not answering
     Measuring,     // up, but no determinable verdict/states yet
-    Healthy,
-    Degraded,      // weather / link degraded / some target unhappy
+    Healthy,       // incl. SiteIncident/InternetWeather: trouble out there is not YOUR internet
+    Degraded,      // your link is degraded / some target unhappy
     Down           // link down / a target hard-down (no-verdict fallback)
 }
 
@@ -31,8 +31,10 @@ public static class TrayStatus
                 var detail = verdict.TryGetProperty("detail", out var d) ? d.GetString() : null;
                 var state = verdict.GetProperty("state").GetString() switch
                 {
-                    "Healthy" or "SiteIncident" => TrayState.Healthy,
-                    "InternetWeather" or "LinkDegraded" => TrayState.Degraded,
+                    // Same answer the web slab gives: weather and site incidents
+                    // mean YOUR internet is up — no amber, no toast.
+                    "Healthy" or "SiteIncident" or "InternetWeather" => TrayState.Healthy,
+                    "LinkDegraded" => TrayState.Degraded,
                     "LinkDown" => TrayState.Down,
                     _ => TrayState.Measuring,
                 };
@@ -70,7 +72,7 @@ public static class TrayStatus
         TrayState.Unreachable => "ConnectionWatcher service is not responding",
         TrayState.Measuring => "ConnectionWatcher — measuring…",
         TrayState.Healthy => "Internet: healthy",
-        TrayState.Degraded => "Internet: degraded / weather",
+        TrayState.Degraded => "Internet: degraded",
         TrayState.Down => "Internet: DOWN",
         _ => "ConnectionWatcher",
     };

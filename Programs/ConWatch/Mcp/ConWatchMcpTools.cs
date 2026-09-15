@@ -25,6 +25,11 @@ public class ConWatchMcpTools(WatcherHostService host,
         "SiteIncident, InternetWeather, LinkDegraded, LinkDown) with its evidence and " +
         "blamed ISP when applicable, every monitored target's state, and whether " +
         "monitoring is enabled (a disabled node is a read-only archive). " +
+        "Answering 'is my internet up?': Healthy, SiteIncident and InternetWeather all " +
+        "mean YES, the user's own connection is up (SiteIncident = one remote site is " +
+        "having trouble; InternetWeather = widespread trouble out on the internet, not " +
+        "the user's line); LinkDegraded means their connection is losing traffic; " +
+        "LinkDown means it is down. " +
         "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering.")]
     public async Task<string> GetCurrentStatus()
     {
