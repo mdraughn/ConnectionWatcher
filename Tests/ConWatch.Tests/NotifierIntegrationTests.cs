@@ -37,16 +37,24 @@ public class NotifierIntegrationTests
         {
             while (listener.IsListening)
             {
+                HttpListenerContext ctx;
+                try { ctx = await listener.GetContextAsync(); }
+                catch (Exception) when (!listener.IsListening) { return; }
                 try
                 {
-                    var ctx = await listener.GetContextAsync();
                     using var reader = new StreamReader(ctx.Request.InputStream, Encoding.UTF8);
                     var body = await reader.ReadToEndAsync();
                     lock (received) received.Add(body);
                     ctx.Response.StatusCode = 204;
                     ctx.Response.Close();
                 }
-                catch (Exception) when (!listener.IsListening) { return; }
+                catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException)
+                {
+                    // The app's webhook client (10s timeout, fire-and-forget) can
+                    // abort a connection mid-read under load; drop that request
+                    // and keep serving instead of faulting the pump.
+                    ctx.Response.Abort();
+                }
             }
         });
 
@@ -86,9 +94,11 @@ public class NotifierIntegrationTests
         {
             while (listener.IsListening)
             {
+                HttpListenerContext ctx;
+                try { ctx = await listener.GetContextAsync(); }
+                catch (Exception) when (!listener.IsListening) { return; }
                 try
                 {
-                    var ctx = await listener.GetContextAsync();
                     var body = await new StreamReader(ctx.Request.InputStream).ReadToEndAsync();
                     var kind = JsonSerializer.Deserialize<JsonElement>(body).GetProperty("subjectKind").GetString();
                     Assert.Equal("Verdict", kind);
@@ -96,7 +106,12 @@ public class NotifierIntegrationTests
                     ctx.Response.StatusCode = 204;
                     ctx.Response.Close();
                 }
-                catch (Exception) when (!listener.IsListening) { return; }
+                catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException)
+                {
+                    // Aborted delivery: drop the request, keep serving. Assert
+                    // failures are not in this list and still fault the pump.
+                    ctx.Response.Abort();
+                }
             }
         });
 
@@ -129,15 +144,21 @@ public class NotifierIntegrationTests
         {
             while (listener.IsListening)
             {
+                HttpListenerContext ctx;
+                try { ctx = await listener.GetContextAsync(); }
+                catch (Exception) when (!listener.IsListening) { return; }
                 try
                 {
-                    var ctx = await listener.GetContextAsync();
                     Interlocked.Increment(ref hits);
                     Volatile.Write(ref lastPath, ctx.Request.Url!.AbsolutePath);
                     ctx.Response.StatusCode = 200;
                     ctx.Response.Close();
                 }
-                catch (Exception) when (!listener.IsListening) { return; }
+                catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException)
+                {
+                    // Aborted delivery: drop the request, keep serving.
+                    ctx.Response.Abort();
+                }
             }
         });
 
