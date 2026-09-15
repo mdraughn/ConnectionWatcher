@@ -50,7 +50,13 @@ public class TopologyCoordinator : IDisposable
             {
                 if (_monitors.TryGetValue(descendant.Id, out var monitor) &&
                     monitor.CurrentState == HostState.Unreachable)
+                {
                     monitor.Release();
+                    // Re-prove in seconds, not at the ~100s normal cadence:
+                    // the child spent the outage parked, and Release has just
+                    // put it in Starting with an empty window.
+                    monitor.Discipline.TriggerBurst();
+                }
             }
         }
     }

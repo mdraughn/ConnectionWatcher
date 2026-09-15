@@ -87,6 +87,23 @@ public class TopologyCoordinatorTests
     }
 
     [Fact]
+    public void Released_children_burst_to_reprove_quickly()
+    {
+        Feed("Router", 5, true);
+        Feed("Modem", 5, true);
+        Feed("Google", 5, true);
+        Feed("Router", 20, false);
+        Assert.Equal(HostState.Unreachable, State("Google"));
+
+        // Router recovers and the subtree is released — the children must
+        // re-prove at burst cadence, not the ~100s normal interval.
+        Feed("Router", 10, true);
+        Assert.Equal(HostState.Starting, State("Modem"));
+        Assert.True(_monitors[_graph.GetByName("Modem").Id].Discipline.IsBurstActive);
+        Assert.True(_monitors[_graph.GetByName("Google").Id].Discipline.IsBurstActive);
+    }
+
+    [Fact]
     public void Mid_tree_down_only_affects_subtree()
     {
         Feed("Router", 5, true);

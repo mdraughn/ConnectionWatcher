@@ -6,10 +6,9 @@ Ideas noted for later; each gets the usual spec → plan → build cycle when pi
 
 - ~~**Export data**~~ — DONE 2026-08-22 (`/api/v1/export/*`, CSV/JSON, Admin page).
 - ~~**Start over**~~ — DONE 2026-08-22 (Admin danger zone: CLEAR / factory RESET).
-- **Prune old data** — user-initiated deletion beyond the automatic
-  downsampling: e.g. "drop everything before {date}" or "drop this target's
-  history". Should respect the history-semantics model (a prune is not a
-  HistoryReset; it just removes rows). VACUUM after big deletes.
+- ~~**Prune old data**~~ — DONE 2026-09-13: DataPruner (prune-before-date
+  across transitions/rollups/glitches with the latest-per-subject guard for
+  warm-restart seeding) + full VACUUM, on the Data page.
 
 ## Integrations (noted 2026-08-21)
 
@@ -100,9 +99,9 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
   (zero-gap deploys) without violating SQLite's single-writer constraint.
   Only worth it if deploy gaps ever matter again; pairs with the clone-install
   take-over choreography.
-- **Burst on parent recovery** — after a Down parent recovers, released
-  children re-prove at normal cadence (~100 s). A TriggerBurst on Release
-  would settle them in seconds; deliberately left out of warm-restart scope.
+- ~~**Burst on parent recovery**~~ — DONE 2026-09-15: TopologyCoordinator's
+  release path triggers a burst on each released child, so the subtree
+  re-proves in seconds instead of at the ~100 s normal cadence.
 
 ## Probe types (noted 2026-09-14)
 
