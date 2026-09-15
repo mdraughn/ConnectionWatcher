@@ -102,10 +102,10 @@ public class WatcherEngine
         foreach (var target in _graph.Targets.Values.Where(t => t.Enabled))
         {
             var profile = _graph.ProfileFor(target);
-            var initialDelay = poolPosition.TryGetValue(target.Id, out var pos)
+            var phaseOffset = poolPosition.TryGetValue(target.Id, out var pos)
                 ? PoolCoordinator.PhaseOffset(pos.index, pos.count, profile.NormalInterval)
                 : TimeSpan.Zero;
-            var discipline = new PingDiscipline(profile, _timeProvider, initialDelay);
+            var discipline = new PingDiscipline(profile, _timeProvider, phaseOffset);
             var monitor = new TargetMonitor(target, profile, discipline, _timeProvider, _loggerFactory);
             if (seed?.Targets.TryGetValue(target.Id, out var targetSeed) == true &&
                 targetSeed.Address == target.Address &&

@@ -82,10 +82,10 @@ public class PingDisciplineTests
     }
 
     [Fact]
-    public async Task Initial_delay_applies_once()
+    public async Task Phase_offset_delays_the_first_ping_and_anchors_the_grid()
     {
         var time = new FakeTimeProvider();
-        var d = new PingDiscipline(Profile, time, initialDelay: TimeSpan.FromSeconds(3));
+        var d = new PingDiscipline(Profile, time, phaseOffset: TimeSpan.FromSeconds(3));
         d.OnStateChanged(HostState.Responding);
 
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
@@ -94,6 +94,31 @@ public class PingDisciplineTests
         wait = d.WaitForNextPingAsync(CancellationToken.None);
         Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(3)));
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(7)));
+    }
+
+    [Fact]
+    public async Task Normal_cadence_returns_to_the_phase_slot_after_a_burst()
+    {
+        var time = new FakeTimeProvider();
+        // Pool member 1 of 4: slots at 2.5, 12.5, 22.5, ...
+        var d = new PingDiscipline(Profile, time, phaseOffset: TimeSpan.FromSeconds(2.5));
+        d.OnStateChanged(HostState.Responding);
+
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(2.5))); // t=2.5, on slot
+
+        // A corroboration sweep bursts the member off its phase.
+        d.TriggerBurst();
+        wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));   // t=3.5, off slot
+
+        // Burst window expires; the next normal wait must re-align to the
+        // slot grid, not run a flat interval from the last burst ping —
+        // otherwise one sweep collapses the whole pool into lockstep.
+        time.Advance(TimeSpan.FromSeconds(62));                              // t=65.5, calm again
+        wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(6.5))); // t=72, not yet
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(0.5)));  // t=72.5, on slot
     }
 
     [Fact]

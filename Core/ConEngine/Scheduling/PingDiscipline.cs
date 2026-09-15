@@ -8,7 +8,9 @@ namespace ConEngine.Scheduling;
 /// (time-capped) while Faltering/Recovering/Down, parked while Unreachable.
 /// A lost ping (or an external TriggerBurst from the corroboration sweep) also
 /// starts a "suspicion burst" while still Responding, guarded so a chronically
-/// lossy line cannot keep the burst alive forever.
+/// lossy line cannot keep the burst alive forever. Normal-cadence pings are
+/// phase-locked to slots at epoch + phaseOffset + k·interval, so pool members
+/// staggered across the interval return to their stagger after any burst.
 /// </summary>
 public class PingDiscipline : IPingCadence
 {
@@ -17,20 +19,22 @@ public class PingDiscipline : IPingCadence
     private readonly PingProfile _profile;
     private readonly TimeProvider _time;
     private readonly Lock _lock = new();
+    private readonly DateTimeOffset _epoch;
+    private readonly TimeSpan _phaseOffset;
     private HostState _state = HostState.Initializing;
     private DateTimeOffset? _burstStartedAt;
     private DateTimeOffset? _lastBurstStart;
-    private TimeSpan? _initialDelay;
     private TaskCompletionSource _releaseTcs = NewTcs();
 
     private static TaskCompletionSource NewTcs() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public PingDiscipline(PingProfile profile, TimeProvider timeProvider, TimeSpan initialDelay = default)
+    public PingDiscipline(PingProfile profile, TimeProvider timeProvider, TimeSpan phaseOffset = default)
     {
         _profile = profile;
         _time = timeProvider;
-        _initialDelay = initialDelay > TimeSpan.Zero ? initialDelay : null;
+        _epoch = timeProvider.GetUtcNow();
+        _phaseOffset = phaseOffset;
     }
 
     /// <summary>Start of the active burst window, or null when not bursting.</summary>
@@ -132,11 +136,6 @@ public class PingDiscipline : IPingCadence
                 {
                     parkTask = _releaseTcs.Task;
                 }
-                else if (_initialDelay is { } initial)
-                {
-                    _initialDelay = null;
-                    delay = initial;
-                }
                 else
                 {
                     delay = ComputeDelay();
@@ -170,6 +169,15 @@ public class PingDiscipline : IPingCadence
         {
             return _profile.BurstInterval;
         }
-        return _profile.NormalInterval;
+        // Normal cadence is PHASE-LOCKED: aim at the next slot on this
+        // member's own grid (epoch + offset + k·interval) instead of
+        // "interval from now". A flat interval lets one lockstep burst (a
+        // corroboration sweep, the warm-start confirm) collapse a pool's
+        // stagger permanently; slots make it self-healing.
+        var ahead = _time.GetUtcNow() - _epoch - _phaseOffset;
+        if (ahead < TimeSpan.Zero)
+            return -ahead; // before the first slot: the classic initial delay
+        var rem = ahead.Ticks % _profile.NormalInterval.Ticks;
+        return TimeSpan.FromTicks(_profile.NormalInterval.Ticks - rem);
     }
 }
