@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\ConEngine\ConEngine.csproj" />
     <ProjectReference Include="..\..\Core\ConCore\ConCore.csproj" />
+    <ProjectReference Include="..\..\ConInfrastructure\ConInfrastructure.csproj" />
   </ItemGroup>
 
 </Project>

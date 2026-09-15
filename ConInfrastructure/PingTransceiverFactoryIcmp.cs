@@ -8,7 +8,7 @@ public class PingTransceiverFactoryIcmp : IPingTransceiverFactory
     public IPingTransceiver Create(IPAddress ipAddress, ProbeSpec probe, CancellationToken cancellationToken) =>
         probe.Kind switch
         {
-            ProbeKind.Tcp => throw new NotSupportedException("TCP probe arrives in the next commit"),
+            ProbeKind.Tcp => new TcpConnectTransceiver(ipAddress, probe.Port, cancellationToken),
             _ => new PingTranceiverIcmp(ipAddress, cancellationToken),
         };
 }
