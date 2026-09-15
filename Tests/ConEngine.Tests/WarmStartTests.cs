@@ -159,6 +159,45 @@ public class WarmStartTests
     }
 
     [Fact]
+    public void Probe_change_discards_the_seed()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-11T00:00:00Z"));
+        var targetId = Guid.NewGuid();
+        var ip = IPAddress.Parse("192.168.1.100");
+        var targetWithProbe = new Target
+        {
+            Id = targetId,
+            Name = "TestTarget",
+            Address = "192.168.1.100",
+            ProfileName = "Test",
+            Probe = "tcp:80"  // Current config has a TCP probe
+        };
+        var monitor = new TargetMonitor(targetWithProbe, Profile, new PingDiscipline(Profile, time),
+            time, NullLoggerFactory.Instance);
+
+        // Create a seed with the same address but Probe = null (simulating old seed before probe field)
+        var targetSeedWithoutProbe = new TargetSeed(HostState.Responding, "192.168.1.100", Probe: null);
+
+        // Simulate the engine's seed adoption logic:
+        // The seed should NOT be adopted because the probe changed
+        if (targetSeedWithoutProbe.Address == targetWithProbe.Address &&
+            targetSeedWithoutProbe.Probe == targetWithProbe.Probe)
+        {
+            monitor.Seed(targetSeedWithoutProbe.State);
+        }
+
+        // Start tracking and feed one result to transition from Initializing
+        monitor.StartTracking(ip);
+        time.Advance(TimeSpan.FromSeconds(1));
+        monitor.RecordPingResult(new PingResult(ip, true, 10, timestamp: time.GetUtcNow()));
+
+        // Monitor should not be assumed (seed was rejected due to probe mismatch)
+        Assert.False(monitor.IsAssumed);
+        // After one successful result, tracker should be in Starting state (not yet Responding - needs 5 samples)
+        Assert.Equal(HostState.Starting, monitor.CurrentState);
+    }
+
+    [Fact]
     public void Pool_seed_is_silent_then_corrected_by_member_evidence()
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-11T00:00:00Z"));

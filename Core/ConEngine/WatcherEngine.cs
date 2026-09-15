@@ -108,7 +108,8 @@ public class WatcherEngine
             var discipline = new PingDiscipline(profile, _timeProvider, initialDelay);
             var monitor = new TargetMonitor(target, profile, discipline, _timeProvider, _loggerFactory);
             if (seed?.Targets.TryGetValue(target.Id, out var targetSeed) == true &&
-                targetSeed.Address == target.Address)
+                targetSeed.Address == target.Address &&
+                targetSeed.Probe == target.Probe)
             {
                 monitor.Seed(targetSeed.State);
                 _log.LogInformation("Warm start: {Target} presumed {State}",

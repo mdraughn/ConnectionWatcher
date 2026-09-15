@@ -4,8 +4,8 @@ using ConEngine.Tracking;
 namespace ConEngine;
 
 /// <summary>A presumed state for one target: applied only when the address
-/// still matches current configuration (a repointed target cold-starts).</summary>
-public sealed record TargetSeed(HostState State, string Address);
+/// and probe still match current configuration (a repointed or re-probed target cold-starts).</summary>
+public sealed record TargetSeed(HostState State, string Address, string? Probe = null);
 
 /// <summary>
 /// Presumed subject states for a warm start: shown immediately (marked
