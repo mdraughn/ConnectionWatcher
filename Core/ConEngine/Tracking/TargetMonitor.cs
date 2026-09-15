@@ -14,10 +14,16 @@ namespace ConEngine.Tracking;
 /// </summary>
 public class TargetMonitor : IDisposable
 {
+    /// <summary>Refused-with-no-accept samples before a TCP probe is flagged persistently refused.</summary>
+    public const int RefusalWarningSamples = 200;
+
     private readonly TimeProvider _timeProvider;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<TargetMonitor> _log;
     private readonly Lock _lock = new();
+
+    private long _acceptedReplies;
+    private long _refusedReplies;
 
     private HostTracker? _tracker;
     private IDisposable? _transitionSubscription;
@@ -64,6 +70,15 @@ public class TargetMonitor : IDisposable
     {
         get { lock (_lock) { return _tracker?.Assumed ?? _seedState is not null; } }
     }
+
+    /// <summary>Successful pings/connects whose message was not "Refused" (ICMP replies, accepted TCP connects).</summary>
+    public long AcceptedReplies => Interlocked.Read(ref _acceptedReplies);
+
+    /// <summary>Successful TCP connects whose message was "Refused" (port closed, nothing listening).</summary>
+    public long RefusedReplies => Interlocked.Read(ref _refusedReplies);
+
+    /// <summary>True once this monitor has seen only refusals, never an accept — a probe pointed at a closed port.</summary>
+    public bool PersistentlyRefused => AcceptedReplies == 0 && RefusedReplies >= RefusalWarningSamples;
 
     /// <summary>
     /// Warm restart: adopt a presumed state silently — no transition. Shows
@@ -116,6 +131,11 @@ public class TargetMonitor : IDisposable
 
     public void RecordPingResult(PingResult result)
     {
+        if (result.Success)
+        {
+            if (result.Message == "Refused") Interlocked.Increment(ref _refusedReplies);
+            else Interlocked.Increment(ref _acceptedReplies);
+        }
         lock (_lock) { _tracker?.RecordPingResult(result); }
     }
 

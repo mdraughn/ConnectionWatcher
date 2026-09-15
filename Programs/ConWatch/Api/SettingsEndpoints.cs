@@ -11,11 +11,12 @@ public static class SettingsEndpoints
         // Health warnings feed banners on open pages; settings themselves are
         // admin-only (the GET includes the MQTT broker password).
         open.MapGet("/config/health", async (ConfigHealth health,
-            ConWatch.Clone.CloneHealth cloneHealth) =>
+            ConWatch.Clone.CloneHealth cloneHealth, WatcherHostService host) =>
         {
             var warnings = (await health.EvaluateAsync()).ToList();
             if (await cloneHealth.EvaluateAsync() is { } cloneWarning)
                 warnings.Add(cloneWarning);
+            warnings.AddRange(RuntimeHealth.RefusalWarnings(host.Engine));
             return new { warnings };
         });
 
