@@ -41,15 +41,22 @@ public class MetricsEndpointTests : IDisposable
     public async Task Gauges_reflect_a_healthy_home()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
+        // Seeding posts several config writes, each debouncing a rebuild;
+        // require the whole steady state in ONE scrape and assert on that
+        // same body, so a trailing rebuild can't slip between wait and check.
+        var body = "";
         await ConfigApiTests.Eventually(async () =>
-            (await ScrapeAsync()).Contains("conwatch_verdict{state=\"Healthy\"} 1"));
-
-        var body = await ScrapeAsync();
+        {
+            body = await ScrapeAsync();
+            return body.Contains("conwatch_verdict{state=\"Healthy\"} 1")
+                && body.Contains("conwatch_target_up{name=\"Router\"} 1")
+                && body.Contains("conwatch_pool_up{name=\"Internet\"} 1")
+                && body.Contains("conwatch_target_sample_size{name=\"Google\"}")
+                && !body.Contains("conwatch_target_sample_size{name=\"Google\"} 0");
+        });
         Assert.Equal(1, Value(body, "conwatch_engine_enabled"));
         // One-hot verdict: the current state is 1, every other state 0.
         Assert.Equal(0, Value(body, "conwatch_verdict{state=\"LinkDown\"}"));
-        Assert.Equal(1, Value(body, "conwatch_target_up{name=\"Router\"}"));
-        Assert.Equal(1, Value(body, "conwatch_pool_up{name=\"Internet\"}"));
         Assert.Equal(0, Value(body, "conwatch_target_loss_ratio{name=\"Google\"}"));
         // RTT is exposed in seconds, Prometheus-style.
         Assert.Contains("# TYPE conwatch_target_rtt_seconds gauge", body);

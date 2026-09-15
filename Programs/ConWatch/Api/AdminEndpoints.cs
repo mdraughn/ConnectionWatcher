@@ -66,10 +66,15 @@ public static class AdminEndpoints
                     Rollups = await db.Rollups.CountAsync(),
                     Settings = await db.Settings.CountAsync(),
                 },
-                OldestTransitionUtc = oldestTransition,
-                OldestRollupUtc = oldestRollup,
+                // Stamp the kind: SQLite loads these Unspecified, and a bare
+                // DateTime serializes without the +00:00 the browser needs.
+                OldestTransitionUtc = AsUtc(oldestTransition),
+                OldestRollupUtc = AsUtc(oldestRollup),
                 LastRetentionRunUtc = await settings.GetAsync(SettingKeys.RetentionLastRunUtc),
             });
+
+            static DateTimeOffset? AsUtc(DateTime? dt) => dt is { } d
+                ? new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Utc)) : null;
         });
 
         // Tests the broker with the values in the form, saved or not.

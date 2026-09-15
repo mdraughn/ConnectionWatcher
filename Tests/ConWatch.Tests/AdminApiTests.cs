@@ -23,6 +23,25 @@ public class AdminApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Stats_timestamps_carry_a_utc_offset()
+    {
+        // SQLite hands DateTimes back Kind=Unspecified; serialized bare they
+        // get parsed as LOCAL by the browser and display shifted. Every
+        // timestamp the API emits must carry Z or +00:00.
+        await ConfigApiTests.SeedHomeAsync(_client);
+        string? oldest = null;
+        await ConfigApiTests.Eventually(async () =>
+        {
+            await _factory.Services.GetRequiredService<TransitionRecorder>().FlushAsync();
+            var stats = await Stats();
+            var el = stats.GetProperty("oldestTransitionUtc");
+            oldest = el.ValueKind == JsonValueKind.String ? el.GetString() : null;
+            return oldest is not null;
+        });
+        Assert.Matches(@"(Z|\+00:00)$", oldest!);
+    }
+
+    [Fact]
     public async Task Stats_reflect_seeded_data()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
