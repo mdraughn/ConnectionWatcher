@@ -136,9 +136,11 @@ public class WatcherOptionsValidatorTests
     public void Impolite_public_port_fails_validation()
     {
         var o = ValidHome();
-        o.Targets[0].Address = "8.8.8.8";
+        o.Targets[0].Address = "9.9.9.10";
         o.Targets[0].Probe = "tcp:8080";
-        Assert.True(Validate(o).Failed);
+        var result = Validate(o);
+        Assert.True(result.Failed);
+        Assert.Contains("public addresses", result.FailureMessage);
     }
 
     [Fact]
