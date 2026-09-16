@@ -55,12 +55,19 @@ public class ConWatchFactory : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+        // Release pooled SQLite handles: without this, deletes of just-used
+        // databases fail on Windows (file locked) and REOPENS go wrong on
+        // Linux (pooled connections still bound to an old unlinked inode).
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try
         {
+            // Only ever delete what this factory created. A caller-supplied
+            // DbPath is the CALLER's file — restart tests reopen it with a
+            // second factory. The old delete-it-anyway only "worked" on
+            // Windows because open handles made it throw; on Linux the
+            // unlink succeeded and the second factory booted onto a ghost.
             if (_ownedDir is not null)
                 Directory.Delete(_ownedDir, recursive: true);
-            else if (File.Exists(DbPath))
-                File.Delete(DbPath);
         }
         catch (IOException)
         {
