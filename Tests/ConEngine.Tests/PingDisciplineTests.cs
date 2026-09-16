@@ -122,6 +122,28 @@ public class PingDisciplineTests
     }
 
     [Fact]
+    public async Task Late_wakeup_fires_the_owed_ping_immediately_instead_of_skipping_the_slot()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+
+        // First ping due at t=10; the loop wakes LATE, at t=25 (load spike).
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(25))); // t=25
+
+        // The t=20 slot was owed: the next wait must fire immediately, not
+        // wait for t=30 — lateness may never cost sample rate.
+        wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(wait, time, TimeSpan.Zero));
+
+        // And the one after glides back onto the grid: due t=30, 5s away.
+        wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(4))); // t=29
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));  // t=30
+    }
+
+    [Fact]
     public async Task Failed_ping_while_responding_starts_suspicion_burst()
     {
         var time = new FakeTimeProvider();

@@ -21,6 +21,7 @@ public class PingDiscipline : IPingCadence
     private readonly Lock _lock = new();
     private readonly DateTimeOffset _epoch;
     private readonly TimeSpan _phaseOffset;
+    private DateTimeOffset? _nextNormalDue;
     private HostState _state = HostState.Initializing;
     private DateTimeOffset? _burstStartedAt;
     private DateTimeOffset? _lastBurstStart;
@@ -72,7 +73,10 @@ public class PingDiscipline : IPingCadence
             if (oldState == HostState.Unreachable && newState != HostState.Unreachable)
                 _releaseTcs.TrySetResult(); // unpark any waiter
             if (newState == HostState.Unreachable && oldState != HostState.Unreachable)
+            {
                 _releaseTcs = NewTcs();
+                _nextNormalDue = null; // the grid re-anchors after the park
+            }
         }
     }
 
@@ -162,22 +166,40 @@ public class PingDiscipline : IPingCadence
 
     private TimeSpan ComputeDelay()
     {
+        var now = _time.GetUtcNow();
         // Any active burst window bursts — including a suspicion burst while
         // the state is still Responding.
-        if (_burstStartedAt is { } start &&
-            _time.GetUtcNow() - start < _profile.BurstMaxDuration)
+        if (_burstStartedAt is { } start && now - start < _profile.BurstMaxDuration)
         {
+            _nextNormalDue = null; // the grid re-anchors after the burst
             return _profile.BurstInterval;
         }
         // Normal cadence is PHASE-LOCKED: aim at the next slot on this
         // member's own grid (epoch + offset + k·interval) instead of
         // "interval from now". A flat interval lets one lockstep burst (a
         // corroboration sweep, the warm-start confirm) collapse a pool's
-        // stagger permanently; slots make it self-healing.
-        var ahead = _time.GetUtcNow() - _epoch - _phaseOffset;
+        // stagger permanently; slots make it self-healing. Lateness must
+        // never cost sample rate, though — under load a wakeup can land past
+        // its due slot (or several, at millisecond test cadences): the owed
+        // ping fires IMMEDIATELY and the grid resumes at the next slot.
+        var interval = _profile.NormalInterval;
+        var due = _nextNormalDue ?? NextSlotAfter(now, interval);
+        if (due <= now)
+        {
+            _nextNormalDue = NextSlotAfter(now, interval);
+            return TimeSpan.Zero;
+        }
+        _nextNormalDue = due + interval;
+        return due - now;
+    }
+
+    /// <summary>The first grid point strictly after <paramref name="now"/>.</summary>
+    private DateTimeOffset NextSlotAfter(DateTimeOffset now, TimeSpan interval)
+    {
+        var ahead = now - _epoch - _phaseOffset;
         if (ahead < TimeSpan.Zero)
-            return -ahead; // before the first slot: the classic initial delay
-        var rem = ahead.Ticks % _profile.NormalInterval.Ticks;
-        return TimeSpan.FromTicks(_profile.NormalInterval.Ticks - rem);
+            return now - ahead; // before the first slot: the classic initial delay
+        var rem = ahead.Ticks % interval.Ticks;
+        return now + TimeSpan.FromTicks(interval.Ticks - rem);
     }
 }
