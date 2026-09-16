@@ -29,8 +29,11 @@ COPY . .
 COPY --from=client /src/wwwroot/js Programs/ConWatch/wwwroot/js
 # -a maps docker arch names (amd64/arm64) to .NET RIDs; framework-dependent,
 # the aspnet base image below supplies the matching runtime.
+# ReadyToRun precompiles the app's IL so startup skips most JIT work —
+# worth the fatter layer on the NAS's modest CPU.
 RUN dotnet publish Programs/ConWatch -c Release -a $TARGETARCH -o /app \
-    /p:SkipClientBuild=true ${GIT_SHA:+/p:SourceRevisionId=$GIT_SHA}
+    /p:SkipClientBuild=true /p:PublishReadyToRun=true \
+    ${GIT_SHA:+/p:SourceRevisionId=$GIT_SHA}
 
 # --- Stage 3: runtime ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
@@ -43,6 +46,9 @@ ENV ASPNETCORE_URLS=http://0.0.0.0:8080
 ENV Persistence__DbPath=/app/data/conwatch.db
 VOLUME /app/data
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# Older engines (Synology) run the FIRST probe only after --interval, and
+# their UI gates on "healthy" — a long interval makes a 2-second app look
+# unready for half a minute. 10s keeps that gate short at negligible cost.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://localhost:8080/api/v1/health || exit 1
 ENTRYPOINT ["dotnet", "ConWatch.dll"]
