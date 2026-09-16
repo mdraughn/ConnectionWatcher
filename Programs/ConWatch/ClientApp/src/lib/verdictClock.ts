@@ -90,7 +90,9 @@ export function answerClock(currentState: string | null | undefined,
   };
 }
 
-/** Compact two-unit duration: 42s · 5m 12s · 3h 24m · 6d 4h. */
+/** Compact ticking duration: 42s · 5m 12s · 3h 24m · 6d 4h 12m. Seconds
+ *  show up to an hour; minutes ALWAYS show, however long the streak — a
+ *  frozen-looking number reads as a stale page, not a live clock. */
 export function formatDuration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return `${s}s`;
@@ -99,5 +101,5 @@ export function formatDuration(ms: number): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ${m % 60}m`;
   const d = Math.floor(h / 24);
-  return `${d}d ${h % 24}h`;
+  return `${d}d ${h % 24}h ${m % 60}m`;
 }

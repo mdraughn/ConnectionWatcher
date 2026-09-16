@@ -64,10 +64,12 @@ describe("answerClock", () => {
 });
 
 describe("formatDuration", () => {
-  it("uses compact two-unit forms", () => {
+  it("shows seconds up to an hour and minutes forever — the clock must visibly tick", () => {
     expect(formatDuration(42_000)).toBe("42s");
     expect(formatDuration(5 * 60_000 + 12_000)).toBe("5m 12s");
     expect(formatDuration(3 * 3_600_000 + 24 * 60_000)).toBe("3h 24m");
-    expect(formatDuration(6 * 86_400_000 + 4 * 3_600_000)).toBe("6d 4h");
+    expect(formatDuration(6 * 86_400_000 + 4 * 3_600_000 + 12 * 60_000)).toBe("6d 4h 12m");
+    // Hundreds of days in, the minutes still change every minute.
+    expect(formatDuration(247 * 86_400_000 + 13 * 3_600_000 + 22 * 60_000)).toBe("247d 13h 22m");
   });
 });

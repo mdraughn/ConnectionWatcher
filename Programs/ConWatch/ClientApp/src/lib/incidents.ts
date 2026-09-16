@@ -149,8 +149,11 @@ export interface LedgerItem {
 export function humanDuration(ms: number): string {
   const seconds = Math.max(1, Math.round(ms / 1000));
   if (seconds < 120) return `${seconds} s`;
-  const minutes = seconds / 60;
-  if (minutes < 120) return `${Math.round(minutes)} min`;
+  const minutes = Math.floor(seconds / 60);
+  // Short events keep their seconds — a 9½-minute outage is not "10 min".
+  if (minutes < 10)
+    return seconds % 60 === 0 ? `${minutes} min` : `${minutes} min ${seconds % 60} s`;
+  if (minutes < 120) return `${Math.round(seconds / 60)} min`;
   return `${(minutes / 60).toFixed(1)} h`;
 }
 
