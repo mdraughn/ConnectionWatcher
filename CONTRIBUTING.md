@@ -11,8 +11,8 @@ requests are the most useful contributions.
   `http://localhost:8080`, SQLite DB in `./data`).
 - Frontend loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside the
   running server.
-- `ConTinker` (interactive ping simulator) and `ConTray` are Windows-only;
-  everything else is cross-platform.
+- `ConTray` (the tray companion) is Windows-only; everything else is
+  cross-platform.
 
 ## Tests
 

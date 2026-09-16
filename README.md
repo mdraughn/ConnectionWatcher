@@ -315,7 +315,6 @@ locally (amd64 + arm64 via cross-compilation) when you want to.
 | `Core/ConCore` | Contracts and domain primitives |
 | `ConInfrastructure` | Real ICMP ping + DNS implementations |
 | `ConPersistence` | EF Core (SQLite) schema, config store, transition/rollup recording, retention |
-| `ConTinker` | Windows-only dev harness with an interactive WPF ping simulator |
 | `Tests/*` | xUnit suites for engine, persistence, and the full app over HTTP |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev loop and test commands.

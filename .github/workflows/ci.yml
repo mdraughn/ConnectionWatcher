@@ -1,7 +1,7 @@
-# Test gate for pushes and PRs. The tray and simulator are Windows-only
-# (WPF), so tests run per-project rather than via the solution on the Linux
-# runner. NotifierIntegrationTests is quarantined into a non-blocking job
-# until its known flake (real-HttpListener timing) is fixed — see BACKLOG.
+# Test gate for pushes and PRs. The tray is Windows-only (WPF), so tests
+# run per-project rather than via the solution on the Linux runner.
+# NotifierIntegrationTests is quarantined into a non-blocking job until
+# its known flake (real-HttpListener timing) is fixed — see BACKLOG.
 name: ci
 
 on:
