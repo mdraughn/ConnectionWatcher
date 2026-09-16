@@ -113,6 +113,13 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 
 ## Small hardening candidates
 
+- **Un-quarantine NotifierIntegrationTests in CI** — the class runs in a
+  non-blocking job (`.github/workflows/ci.yml`) because
+  `VerdictOnly_suppresses_target_transitions` still flakes under load
+  (real-HttpListener timing; a fix session fizzled 2026-09-16). Fix the
+  flake, then delete the quarantine job and the `!~NotifierIntegrationTests`
+  filter.
+
 - ~~**Config health warning: pool parent vs. members' parent drift**~~ —
   DONE 2026-09-13: ConfigHealth computes the members' deepest shared
   ancestor and warns (with the exact re-parent to make) when the pool's

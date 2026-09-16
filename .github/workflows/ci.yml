@@ -1,0 +1,61 @@
+# Test gate for pushes and PRs. The tray and simulator are Windows-only
+# (WPF), so tests run per-project rather than via the solution on the Linux
+# runner. NotifierIntegrationTests is quarantined into a non-blocking job
+# until its known flake (real-HttpListener timing) is fixed — see BACKLOG.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dotnet test Tests/ConEngine.Tests -c Debug
+      - run: dotnet test Tests/ConPersistence.Tests -c Debug
+      - run: dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName!~NotifierIntegrationTests"
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Programs/ConWatch/ClientApp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Programs/ConWatch/ClientApp/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build
+
+  # Known-flaky class, visible but never blocking. Delete this job and the
+  # filter above when the flake is fixed.
+  notifier-quarantine:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~NotifierIntegrationTests"

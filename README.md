@@ -1,24 +1,38 @@
 # ConnectionWatcher
 
+[![ci](https://github.com/mdraughn/ConnectionWatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mdraughn/ConnectionWatcher/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A home internet connectivity monitor. It pings a hierarchy of targets — LAN
 devices, the router, the cable modem, upstream ISP hops, and external anchors
 like Google and Cloudflare — and answers the question *"is my internet down,
 and what kind of down is it?"*: a single site's incident, general internet
 weather, or your own link.
 
-## Projects
+![The dashboard: verdict, uptime clock, and the path to the internet](docs/images/dashboard.png)
 
-| Project | Purpose |
-|---|---|
-| `Programs/ConWatch` | The production app: monitoring engine + SQLite persistence + REST API |
-| `Core/ConEngine` | The engine: adaptive ping disciplines, reachability tree, pools, verdict layer |
-| `Core/ConCore` | Contracts and domain primitives |
-| `ConInfrastructure` | Real ICMP ping + DNS implementations |
-| `ConPersistence` | EF Core (SQLite) schema, config store, transition/rollup recording, retention |
-| `ConTinker` | Windows-only dev harness with an interactive WPF ping simulator |
-| `Tests/*` | xUnit suites for engine, persistence, and the full app over HTTP |
+When your connection *is* the problem, ConnectionWatcher tells you which hop
+broke, keeps the evidence (a printable ISP report with timestamps your
+provider can correlate), and can page you through Home Assistant, MQTT, or
+webhooks. When it isn't, it says so — a Netflix outage should never send you
+to reboot your modem.
 
-## Running ConWatch
+## Quick start (Docker)
+
+```bash
+docker run -d --name conwatch --restart unless-stopped \
+  -p 8080:8080 -v ./data:/app/data --cap-add NET_RAW \
+  ghcr.io/mdraughn/conwatch:latest
+```
+
+Open `http://localhost:8080` — the quick-setup wizard detects your router,
+offers four public DNS anchors, and starts monitoring in one click. The image
+is multi-arch (amd64 + arm64: Intel/ARM Synology, Raspberry Pi, any Linux);
+`deploy/docker/compose.yaml` has the same thing in compose form. On Windows,
+`.\Install-Watcher.ps1` installs it as a service instead — see
+[Running unattended](#running-unattended).
+
+## Running from source
 
 ```powershell
 dotnet run --project Programs/ConWatch
@@ -286,11 +300,25 @@ arrive from the bridge gateway, not loopback, so the trusted-proxy config
 must name the bridge network.
 
 **Docker** — `deploy/docker/compose.yaml` (data in `./data`, port 8080,
-`NET_RAW` for ping/traceroute when running non-root). Built and smoke-tested
-locally on Docker Desktop (health endpoint + real in-container ICMP verified);
-not yet verified on Synology hardware. `Build-Images.ps1` builds the image
-for both `linux/amd64` and `linux/arm64` (Intel and ARM Synology/Pi) via
-cross-compilation, and with `-Push` publishes both as a single multi-arch
-tag to a registry.
+`NET_RAW` for ping/traceroute when running non-root). This is the reference
+deployment: the multi-arch image is published to
+`ghcr.io/mdraughn/conwatch` by CI on every merge and runs in production on
+Synology Container Manager. `Build-Images.ps1` builds the same image
+locally (amd64 + arm64 via cross-compilation) when you want to.
 
-Design specs and implementation plans live in `docs/superpowers/`.
+## Development
+
+| Project | Purpose |
+|---|---|
+| `Programs/ConWatch` | The production app: monitoring engine + SQLite persistence + REST API |
+| `Core/ConEngine` | The engine: adaptive ping disciplines, reachability tree, pools, verdict layer |
+| `Core/ConCore` | Contracts and domain primitives |
+| `ConInfrastructure` | Real ICMP ping + DNS implementations |
+| `ConPersistence` | EF Core (SQLite) schema, config store, transition/rollup recording, retention |
+| `ConTinker` | Windows-only dev harness with an interactive WPF ping simulator |
+| `Tests/*` | xUnit suites for engine, persistence, and the full app over HTTP |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev loop and test commands.
+Design specs and implementation plans live in `docs/superpowers/` — the
+project's full engineering history, often the fastest answer to "why is
+this the way it is."
