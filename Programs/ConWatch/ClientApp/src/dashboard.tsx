@@ -85,7 +85,8 @@ function App({ store, topology, initial }: {
     <div>
       <VerdictBanner verdict={state.verdict} connected={state.connected} />
       <EventStrip topology={initial} />
-      <Tree topology={topology} targets={state.targets} pools={state.pools} />
+      <Tree topology={topology} targets={state.targets} pools={state.pools}
+        trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
       <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}

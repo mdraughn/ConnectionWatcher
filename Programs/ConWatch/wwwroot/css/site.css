@@ -9,6 +9,9 @@
     --primary: #0172ad; --primary-soft: rgba(1, 114, 173, 0.10);
     --cw-ok: #2e9e52; --cw-warn: #e08a00; --cw-down: #cc3333;
     --cw-unreach: #999999; --cw-quiet: #6a8;
+    /* Tree rails: heavy spine for the path to the internet, light rails
+       for off-path branches. */
+    --cw-spine: #c2cbd9; --cw-rail: #d6dbe4;
 
     /* Incident encoding (shape = scope, hue = whose gear, depth = severity).
        Consumed by ClientApp/src/lib/encoding.ts via var() so dark mode can
@@ -31,6 +34,7 @@
     --border: #262d3b; --border-strong: #323a4b;
     --primary: #01aaff; --primary-soft: rgba(1, 170, 255, 0.13);
     --cw-ok: #3fb567; --cw-warn: #f0a02a; --cw-down: #e8544b; --cw-unreach: #6d7585;
+    --cw-spine: #3a445a; --cw-rail: #323a4b;
     --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
     --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
     --healthy: #1b2620; --healthy-vivid: #46a86c;
@@ -44,6 +48,7 @@
         --border: #262d3b; --border-strong: #323a4b;
         --primary: #01aaff; --primary-soft: rgba(1, 170, 255, 0.13);
         --cw-ok: #3fb567; --cw-warn: #f0a02a; --cw-down: #e8544b; --cw-unreach: #6d7585;
+        --cw-spine: #3a445a; --cw-rail: #323a4b;
         --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
         --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
         --healthy: #1b2620; --healthy-vivid: #46a86c;
@@ -161,6 +166,23 @@ main.container h5 { font-size: 0.85rem; }
     /* A pool row lists its members here; on a phone that must truncate,
        not push the whole page wider than the screen. */
     min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Trunk-and-pool tree: section captions (uppercase micro-label + hairline,
+   the page's section-rule vocabulary) and light rail cells for off-path
+   branches. The heavy spine is drawn per-row by the Tree component. */
+.cw-treecap { display: flex; align-items: center; gap: 10px; padding: 12px 10px 4px;
+    font-size: 0.62rem; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--faint); }
+.cw-treecap::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.cw-row .cw-g { width: 18px; align-self: stretch; flex-shrink: 0; }
+.cw-row .cw-g.pipe { background:
+    linear-gradient(var(--cw-rail), var(--cw-rail)) 5px 0 / 1px 100% no-repeat; }
+.cw-row .cw-g.tee { background:
+    linear-gradient(var(--cw-rail), var(--cw-rail)) 5px 0 / 1px 100% no-repeat,
+    linear-gradient(var(--cw-rail), var(--cw-rail)) 6px calc(50% - 0.5px) / 10px 1px no-repeat; }
+.cw-row .cw-g.elbow { background:
+    linear-gradient(var(--cw-rail), var(--cw-rail)) 5px 0 / 1px 50% no-repeat,
+    linear-gradient(var(--cw-rail), var(--cw-rail)) 6px calc(50% - 0.5px) / 10px 1px no-repeat; }
+
 /* Fixed numeric columns so rows line up and never dance: percentages
    right-align in 4ch ("100%"), RTTs right-align in 7ch ("9999 ms"). */
 .cw-row .stats .pct { display: inline-block; min-width: 4ch; text-align: right; }
