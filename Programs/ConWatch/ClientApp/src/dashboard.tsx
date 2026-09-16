@@ -9,6 +9,7 @@ import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
 import { startHub } from "./lib/hub";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
+import { answerClock } from "./lib/verdictClock";
 import { fetchStory, type Story } from "./lib/story";
 import type { Snapshot, TransitionEvent } from "./lib/types";
 
@@ -45,10 +46,36 @@ function RecentEvents({ initial }: { initial: InitialData }) {
   );
 }
 
+// The slab clock's trail: verdict transitions, fetched once and kept
+// current by the live stream. 500 reaches years of verdict history.
+const TRAIL_LIMIT = 500;
+
 function App({ store, topology, initial }: {
   store: StatusStore; topology: Topology; initial: InitialData;
 }) {
   const state = useSyncExternalStore(store.subscribe, store.getState);
+
+  const [trail, setTrail] = useState<{ items: TransitionEvent[]; complete: boolean } | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/v1/transitions?subjectName=Internet&limit=${TRAIL_LIMIT}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (live && body?.items)
+          setTrail({ items: body.items, complete: body.items.length < TRAIL_LIMIT });
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  useEffect(() => {
+    const t = state.latestTransition;
+    if (!t?.verdict) return; // only verdict-subject rows carry a verdict
+    setTrail((prev) => prev && prev.items[0]?.timestamp !== t.timestamp
+      ? { ...prev, items: [t, ...prev.items] } : prev);
+  }, [state.latestTransition]);
+  const clock = trail && state.verdict
+    ? answerClock(state.verdict.state, trail.items, new Date().toISOString(), trail.complete)
+    : null;
 
   // Recent glitches cover the last 24 h, fixed at page load.
   const [glitchRange] = useState(() => {
@@ -83,7 +110,7 @@ function App({ store, topology, initial }: {
 
   return (
     <div>
-      <VerdictBanner verdict={state.verdict} connected={state.connected} />
+      <VerdictBanner verdict={state.verdict} connected={state.connected} clock={clock} />
       <EventStrip topology={initial} />
       <Tree topology={topology} targets={state.targets} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />

@@ -83,6 +83,27 @@ public class HistoryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Transitions_filter_by_subject_name()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () => await StateOf("Google") == "Responding");
+        var recorder = _factory.Services.GetRequiredService<TransitionRecorder>();
+        await ConfigApiTests.Eventually(async () =>
+        {
+            await recorder.FlushAsync();
+            var p = await GetJson("/api/v1/transitions?subjectName=Internet&limit=100");
+            return p.GetProperty("items").GetArrayLength() > 0;
+        });
+
+        // The dashboard's verdict clock leans on this filter: only rows for
+        // the named subject (the verdict AND the same-named pool), nothing else.
+        var page = await GetJson("/api/v1/transitions?subjectName=Internet&limit=100");
+        var items = page.GetProperty("items").EnumerateArray().ToList();
+        Assert.All(items, i => Assert.Equal("Internet", i.GetProperty("subjectName").GetString()));
+        Assert.Contains(items, i => i.GetProperty("verdict").GetString() is not null);
+    }
+
+    [Fact]
     public async Task Transitions_paging_returns_cursor()
     {
         await ConfigApiTests.SeedHomeAsync(_client);

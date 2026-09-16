@@ -10,11 +10,12 @@ public static class HistoryEndpoints
     public static void MapHistory(this RouteGroupBuilder api)
     {
         api.MapGet("/transitions", async (IDbContextFactory<ConWatchDbContext> dbFactory,
-            Guid? subjectId, DateTime? from, DateTime? to, int limit = 100, long? before = null) =>
+            Guid? subjectId, string? subjectName, DateTime? from, DateTime? to,
+            int limit = 100, long? before = null) =>
         {
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.TransitionsAsync(db, subjectId,
-                from?.ToUniversalTime(), to?.ToUniversalTime(), limit, before);
+                from?.ToUniversalTime(), to?.ToUniversalTime(), limit, before, subjectName);
             var items = rows.Select(r => new
             {
                 r.Id,

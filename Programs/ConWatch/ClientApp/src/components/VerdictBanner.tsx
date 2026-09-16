@@ -5,6 +5,7 @@
 // ledger. The technical detail survives as a hover tooltip.
 import type { Mark } from "../lib/encoding";
 import type { VerdictStatus } from "../lib/types";
+import { formatDuration, type AnswerClock } from "../lib/verdictClock";
 import { MarkSwatch } from "./marks";
 
 interface Slab {
@@ -87,9 +88,37 @@ export function slabFor(verdict: VerdictStatus): Slab {
   }
 }
 
-export function VerdictBanner({ verdict, connected }: {
+const CLOCK_LABEL: Record<string, string> = {
+  up: "up for", struggling: "struggling for", down: "down for",
+};
+
+/** The slab's clock: how long the current answer has held. The up-streak
+ *  only resets on DOWN (decided with Mark: struggling blemishes a streak,
+ *  it doesn't end it), so struggling shows the still-counting streak
+ *  beneath the stretch timer, and down shows the streak the outage ended. */
+function Clock({ clock }: { clock: AnswerClock }) {
+  if (!clock.sinceIso || !(clock.cls in CLOCK_LABEL)) return null;
+  const sinceMs = Date.now() - Date.parse(clock.sinceIso);
+  return (
+    <div className="vb-clock"
+      title={`since ${new Date(clock.sinceIso).toLocaleString()}`}>
+      <div className="lbl">{CLOCK_LABEL[clock.cls]}</div>
+      <div className="num">{formatDuration(sinceMs)}{clock.atLeast ? "+" : ""}</div>
+      {clock.upStreakMs !== null && (
+        <div className="prev">
+          {clock.cls === "struggling"
+            ? `up ${formatDuration(clock.upStreakMs)}`
+            : `up ${formatDuration(clock.upStreakMs)} before this`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function VerdictBanner({ verdict, connected, clock }: {
   verdict: VerdictStatus | null;
   connected: boolean;
+  clock?: AnswerClock | null;
 }) {
   if (!verdict) {
     return (
@@ -107,7 +136,7 @@ export function VerdictBanner({ verdict, connected }: {
     <div className={`verdict-banner ${slab.cls} ${connected ? "" : "reconnecting"}`}
       title={verdict.detail ?? undefined}>
       {!connected && <span className="pill">reconnecting…</span>}
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
         <span style={{ flexShrink: 0, marginTop: 2 }}><SignalIcon state={slab.icon} /></span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: "1.25rem", lineHeight: 1.3 }}>{slab.headline}</div>
@@ -120,6 +149,7 @@ export function VerdictBanner({ verdict, connected }: {
             </div>
           )}
         </div>
+        {clock && <Clock clock={clock} />}
       </div>
     </div>
   );

@@ -11,12 +11,15 @@ public static class HistoryQueries
     /// as <paramref name="before"/> to get the next page.
     /// </summary>
     public static async Task<List<TransitionRow>> TransitionsAsync(ConWatchDbContext db,
-        Guid? subjectId, DateTime? fromUtc, DateTime? toUtc, int limit, long? before)
+        Guid? subjectId, DateTime? fromUtc, DateTime? toUtc, int limit, long? before,
+        string? subjectName = null)
     {
         limit = Math.Clamp(limit, 1, 1000);
         IQueryable<TransitionRow> query = db.Transitions.AsNoTracking();
         if (subjectId is { } sid)
             query = query.Where(t => t.SubjectId == sid);
+        if (subjectName is { Length: > 0 })
+            query = query.Where(t => t.SubjectName == subjectName);
         if (fromUtc is { } from)
             query = query.Where(t => t.TimestampUtc >= from);
         if (toUtc is { } to)

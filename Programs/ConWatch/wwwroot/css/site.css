@@ -166,6 +166,19 @@ main.container h5 { font-size: 0.85rem; }
     /* A pool row lists its members here; on a phone that must truncate,
        not push the whole page wider than the screen. */
     min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The slab clock: right-hand column with the answer's timer. */
+.verdict-banner .vb-clock { margin-left: auto; text-align: right; flex-shrink: 0;
+    font-family: var(--mono); align-self: center; }
+.verdict-banner .vb-clock .lbl { font-size: 0.6rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
+.verdict-banner .vb-clock .num { font-size: 1.3rem; line-height: 1.2;
+    font-variant-numeric: tabular-nums; }
+.verdict-banner .vb-clock .prev { font-size: 0.7rem; font-weight: 400;
+    opacity: 0.85; margin-top: 2px; white-space: nowrap; }
+@media (max-width: 899px) {
+    .verdict-banner .vb-clock .num { font-size: 1.05rem; }
+}
+
 /* Trunk-and-pool tree: section captions (uppercase micro-label + hairline,
    the page's section-rule vocabulary) and light rail cells for off-path
    branches. The heavy spine is drawn per-row by the Tree component. */
