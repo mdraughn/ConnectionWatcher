@@ -126,8 +126,9 @@ main.container h5 { font-size: 0.85rem; }
    blinks for external targets, rapid subtree flicker during bursts. */
 .cw-row .cw-led { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
     background: var(--border); animation: cw-led-flash 0.35s ease-out; }
+/* Brand blue, deliberately NOT a status color: activity is not health. */
 @keyframes cw-led-flash {
-    0%, 40% { background: var(--cw-ok); box-shadow: 0 0 5px var(--cw-ok); }
+    0%, 40% { background: var(--primary); box-shadow: 0 0 5px var(--primary); }
     100% { background: var(--border); box-shadow: none; }
 }
 @media (prefers-reduced-motion: reduce) { .cw-row .cw-led { animation: none; } }
@@ -160,6 +161,11 @@ main.container h5 { font-size: 0.85rem; }
     /* A pool row lists its members here; on a phone that must truncate,
        not push the whole page wider than the screen. */
     min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Fixed numeric columns so rows line up and never dance: percentages
+   right-align in 4ch ("100%"), RTTs right-align in 7ch ("9999 ms"). */
+.cw-row .stats .pct { display: inline-block; min-width: 4ch; text-align: right; }
+.cw-row .stats .sep { margin: 0 6px; opacity: 0.6; }
+.cw-row .stats .rtt { display: inline-block; min-width: 7ch; text-align: right; }
 /* Status bar */
 .cw-statusbar { position: fixed; bottom: 0; left: 0; right: 0; border-top: 1px solid var(--border);
                 background: var(--surface); padding: 0.4rem 1.2rem; font-size: 0.78rem;

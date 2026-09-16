@@ -8,7 +8,6 @@ export interface Topology {
 }
 
 function Row({ target }: { target: TargetStatus }) {
-  const statsText = `${(target.successRate * 100).toFixed(0)}% · ${target.avgRtt.toFixed(0)} ms`;
   const assumedTitle = target.assumed
     ? "assumed from before the restart — confirming with fresh pings" : null;
   const chipColor: Record<string, string> = {
@@ -30,7 +29,9 @@ function Row({ target }: { target: TargetStatus }) {
           color: chip, background: `color-mix(in srgb, ${chip} 14%, transparent)`,
           marginRight: 10,
         }}>{target.state}</span>}
-        {statsText}
+        <span className="pct">{(target.successRate * 100).toFixed(0)}%</span>
+        <span className="sep">·</span>
+        <span className="rtt">{target.avgRtt.toFixed(0)} ms</span>
       </span>
       {/* Activity LED, drive-light style: keyed by the monotonic ping count,
           so a changed count remounts the node and replays the flash. */}
