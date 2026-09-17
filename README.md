@@ -107,7 +107,11 @@ ConWatch serves its UI at the root:
   carry an optional **ISP/operator name** ("Comcast"): link verdicts then say
   "LinkDown: Comcast — External Router is Down", the ISP report titles itself
   with the provider, and the MQTT verdict attributes carry it. The setup
-  wizard asks once ("Who is your internet provider?") and tags the WAN hop.
+  wizard asks once ("Who is your internet provider?") and tags the WAN hop,
+  and tags its anchors with their providers. The verdict counts degraded
+  **operators**, not targets: four addresses of one provider failing together
+  are one piece of evidence and stay a site incident, never internet weather.
+  Untagged anchors each count as their own operator.
 - **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
   monitored targets with the right parent pre-filled.
 

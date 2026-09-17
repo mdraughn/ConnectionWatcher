@@ -199,6 +199,78 @@ public class VerdictCoordinatorTests
         Assert.Contains("cannot distinguish", verdict.CurrentDetail);
     }
 
+    /// <summary>Four anchors, three of them one operator: Router -> {MS-1, MS-2, MS-3 (Microsoft), Google}.</summary>
+    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) OperatorTopology()
+    {
+        var graph = TargetGraph.FromOptions(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "MS-1", Address = "20.0.0.1", Parent = "Router", Operator = "Microsoft" },
+                new TargetConfig { Name = "MS-2", Address = "20.0.0.2", Parent = "Router", Operator = "microsoft " },
+                new TargetConfig { Name = "MS-3", Address = "20.0.0.3", Parent = "Router", Operator = "Microsoft" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["MS-1", "MS-2", "MS-3", "Google"] }],
+        });
+        var monitors = new Dictionary<Guid, TargetMonitor>();
+        foreach (var target in graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
+                _time, NullLoggerFactory.Instance);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            monitors[target.Id] = monitor;
+        }
+        var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
+            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+        verdict.Start();
+        foreach (var m in monitors.Values)
+            for (int i = 0; i < 5; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+            }
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        return (verdict, monitors, graph);
+    }
+
+    private void FeedDown(Dictionary<Guid, TargetMonitor> monitors, TargetGraph graph, string name)
+    {
+        var monitor = monitors[graph.GetByName(name).Id];
+        for (int i = 0; i < 20; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            monitor.RecordPingResult(new PingResult(monitor.ResolvedAddress!, false, 0, timestamp: _time.GetUtcNow()));
+        }
+    }
+
+    [Fact]
+    public void Three_anchors_of_one_operator_down_is_still_a_site_incident()
+    {
+        var (verdict, monitors, graph) = OperatorTopology();
+        FeedDown(monitors, graph, "MS-1");
+        FeedDown(monitors, graph, "MS-2");
+        FeedDown(monitors, graph, "MS-3");
+
+        // Three degraded anchors, one operator: one piece of evidence, not three.
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+        Assert.Contains("Microsoft", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void A_second_operator_degraded_makes_it_weather()
+    {
+        var (verdict, monitors, graph) = OperatorTopology();
+        FeedDown(monitors, graph, "MS-1");
+        FeedDown(monitors, graph, "MS-2");
+        FeedDown(monitors, graph, "Google"); // untagged anchors count as their own operator
+
+        Assert.Equal(VerdictState.InternetWeather, verdict.CurrentVerdict);
+        Assert.Contains("2 of 2 operators", verdict.CurrentDetail);
+        Assert.Contains("3 of 4 anchors", verdict.CurrentDetail);
+    }
+
     [Fact]
     public void At_or_above_threshold_has_no_qualifier()
     {

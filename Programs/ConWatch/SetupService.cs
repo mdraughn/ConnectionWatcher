@@ -3,7 +3,7 @@ using ConPersistence.Dto;
 
 namespace ConWatch;
 
-public record SetupTarget(string Name, string Address);
+public record SetupTarget(string Name, string Address, string? Operator = null);
 public record SetupApplyRequest(SetupTarget Router, SetupTarget? OuterIp, List<string> AnchorAddresses,
     string? IspName = null);
 
@@ -17,13 +17,15 @@ public class SetupService(ConfigService config, ConfigStore store, SettingsStore
 {
     public const string PoolName = "Internet";
 
-    /// <summary>The wizard's anchor catalog: anycast resolvers built for public traffic.</summary>
+    /// <summary>The wizard's anchor catalog: anycast resolvers built for public
+    /// traffic, one per operator. The operator tag is what the verdict counts
+    /// as independent evidence (see VerdictCoordinator).</summary>
     public static readonly IReadOnlyList<SetupTarget> AnchorCatalog =
     [
-        new("Google DNS", "8.8.8.8"),
-        new("Cloudflare DNS", "1.1.1.1"),
-        new("Quad9 DNS", "9.9.9.9"),
-        new("OpenDNS", "208.67.222.222"),
+        new("Google DNS", "8.8.8.8", "Google"),
+        new("Cloudflare DNS", "1.1.1.1", "Cloudflare"),
+        new("Quad9 DNS", "9.9.9.9", "Quad9"),
+        new("OpenDNS", "208.67.222.222", "OpenDNS"),
     ];
 
     public async Task<ConfigResult> ApplyAsync(SetupApplyRequest request)
@@ -82,11 +84,12 @@ public class SetupService(ConfigService config, ConfigStore store, SettingsStore
                 anchorNames.Add(known);
                 continue;
             }
-            var catalogName = AnchorCatalog.FirstOrDefault(a => a.Address == address)?.Name ?? address;
-            var name = Unique(catalogName, NameTaken);
+            var catalogEntry = AnchorCatalog.FirstOrDefault(a => a.Address == address);
+            var name = Unique(catalogEntry?.Name ?? address, NameTaken);
             var result = await config.UpsertTargetAsync(new TargetDto
             {
                 Name = name, Address = address, Parent = pathLeaf, Profile = "External",
+                Operator = catalogEntry?.Operator,
             });
             if (!result.Success)
                 return result;

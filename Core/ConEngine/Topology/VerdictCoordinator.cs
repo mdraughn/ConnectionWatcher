@@ -171,19 +171,39 @@ public class VerdictCoordinator : IDisposable
             is HostState.Down or HostState.Faltering or HostState.Recovering).ToList();
         string List() => string.Join(", ", degraded.Select(a => $"{a.Target.Name}={a.CurrentState}"));
 
-        // With fewer determined anchors than the weather threshold, weather can
+        // Weather needs INDEPENDENT evidence. Anchors that share an operator
+        // ("Microsoft" four times, one per A record) share a path and fail
+        // together, so they count once; untagged anchors count individually.
+        var determinedUnits = CountOperators(determined);
+        var degradedUnits = CountOperators(degraded);
+        var grouped = degradedUnits != degraded.Count || determinedUnits != determined.Count;
+
+        // With fewer independent anchors than the weather threshold, weather can
         // never be diagnosed — say so rather than implying full confidence.
-        var qualifier = determined.Count < _weatherThreshold
-            ? $" (only {determined.Count} anchor(s) — cannot distinguish a site incident from internet weather)"
+        var qualifier = determinedUnits < _weatherThreshold
+            ? $" (only {determinedUnits} {(grouped ? "operator(s)" : "anchor(s)")} — cannot distinguish a site incident from internet weather)"
             : "";
 
         if (degraded.Count == 0)
             return (VerdictState.Healthy, $"Healthy: {determined.Count} anchors responding{qualifier}", null);
-        if (degraded.Count < _weatherThreshold)
-            return (VerdictState.SiteIncident, $"SiteIncident: {List()}{qualifier}", null);
-        return (VerdictState.InternetWeather,
-            $"InternetWeather: {degraded.Count} of {determined.Count} anchors degraded ({List()})", null);
+        if (degradedUnits < _weatherThreshold)
+        {
+            var sharedOperator = degraded.Count > 1 && degradedUnits == 1
+                ? $" — all {degraded[0].Target.Operator}" : "";
+            return (VerdictState.SiteIncident, $"SiteIncident: {List()}{sharedOperator}{qualifier}", null);
+        }
+        var counts = grouped
+            ? $"{degradedUnits} of {determinedUnits} operators ({degraded.Count} of {determined.Count} anchors)"
+            : $"{degraded.Count} of {determined.Count} anchors";
+        return (VerdictState.InternetWeather, $"InternetWeather: {counts} degraded ({List()})", null);
     }
+
+    /// <summary>Distinct operators among the anchors; an untagged anchor is its own.</summary>
+    private static int CountOperators(IEnumerable<TargetMonitor> anchors) =>
+        anchors.Select(a => a.Target.Operator?.Trim() is { Length: > 0 } op
+                ? "op:" + op.ToLowerInvariant()
+                : "id:" + a.Target.Id)
+            .Distinct().Count();
 
     private static HostState Map(VerdictState v) => v switch
     {

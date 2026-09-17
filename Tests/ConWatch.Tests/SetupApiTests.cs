@@ -120,6 +120,19 @@ public class SetupApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_tags_catalog_anchors_with_their_operators()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8", "1.1.1.1", "203.0.113.9"]));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        Assert.Equal("Google", targets!.Single(t => t.Address == "8.8.8.8").Operator);
+        Assert.Equal("Cloudflare", targets.Single(t => t.Address == "1.1.1.1").Operator);
+        Assert.Null(targets.Single(t => t.Address == "203.0.113.9").Operator); // not in the catalog
+    }
+
+    [Fact]
     public async Task Apply_tags_the_wan_target_with_the_isp_name()
     {
         var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
