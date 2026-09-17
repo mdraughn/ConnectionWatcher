@@ -92,6 +92,21 @@ public class ConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Seed_normalizes_probe_and_operator_like_every_other_write_path()
+    {
+        var home = ValidHome();
+        home.Targets[0].Probe = "TCP:80";
+        home.Targets[0].Operator = "  Comcast ";
+        home.Targets[1].Operator = "   ";
+        await _store.SeedAsync(home);
+
+        var options = await _store.LoadWatcherOptionsAsync();
+        Assert.Equal("tcp:80", options.Targets.Single(t => t.Name == "Router").Probe);
+        Assert.Equal("Comcast", options.Targets.Single(t => t.Name == "Router").Operator);
+        Assert.Null(options.Targets.Single(t => t.Name == "Modem").Operator);
+    }
+
+    [Fact]
     public async Task Seed_with_invalid_config_falls_back_to_builtins()
     {
         var bad = ValidHome();

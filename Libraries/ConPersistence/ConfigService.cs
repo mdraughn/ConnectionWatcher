@@ -1,4 +1,3 @@
-using ConCore;
 using ConEngine.Configuration;
 using ConPersistence.Dto;
 using ConPersistence.Entities;
@@ -57,17 +56,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             row = new ProfileRow { Id = Guid.NewGuid() };
             db.Profiles.Add(row);
         }
-        row.Name = dto.Name;
-        row.NormalIntervalSeconds = dto.NormalIntervalSeconds;
-        row.PingTimeoutSeconds = dto.PingTimeoutSeconds;
-        row.BurstIntervalSeconds = dto.BurstIntervalSeconds;
-        row.BurstMaxDurationSeconds = dto.BurstMaxDurationSeconds;
-        row.HistorySize = dto.HistorySize;
-        row.MinUsableSample = dto.MinUsableSample;
-        row.RespondingThreshold = dto.RespondingThreshold;
-        row.FalteringThreshold = dto.FalteringThreshold;
-        row.DownThreshold = dto.DownThreshold;
-        row.RecoveringThreshold = dto.RecoveringThreshold;
+        row.CopyFrom(dto);
         return ConfigResult.Ok(row.Id);
     });
 
@@ -141,8 +130,8 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         row.ParentId = parentId;
         row.ProfileId = profile.Id;
         row.Enabled = dto.Enabled;
-        row.Operator = dto.Operator?.Trim() is { Length: > 0 } op ? op : null;
-        row.Probe = NormalizeProbe(dto.Probe);
+        row.Operator = ConfigMapping.NormalizeOperator(dto.Operator);
+        row.Probe = ConfigMapping.NormalizeProbe(dto.Probe);
         return ConfigResult.Ok(row.Id);
     });
 
@@ -177,8 +166,8 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             ParentId = parents[0],
             ProfileId = profile.Id,
             Enabled = newTarget.Enabled,
-            Operator = newTarget.Operator?.Trim() is { Length: > 0 } op ? op : null,
-            Probe = NormalizeProbe(newTarget.Probe),
+            Operator = ConfigMapping.NormalizeOperator(newTarget.Operator),
+            Probe = ConfigMapping.NormalizeProbe(newTarget.Probe),
         };
         db.Targets.Add(row);
         foreach (var child in children)
@@ -264,81 +253,13 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
     public async Task<ConfigResult> ImportAsync(ConfigDocument doc)
     {
         // Validate the incoming document before touching the database.
-        var options = new WatcherOptions();
-        foreach (var p in doc.Profiles)
-            options.Profiles[p.Name] = ToConfig(p);
-        options.Targets.AddRange(doc.Targets.Select(t => new TargetConfig
-        {
-            Id = t.Id, Name = t.Name, Address = t.Address,
-            Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
-            Operator = t.Operator,
-            Probe = NormalizeProbe(t.Probe),
-        }));
-        options.Pools.AddRange(doc.Pools.Select(p => new PoolConfig
-        {
-            Id = p.Id, Name = p.Name, Members = p.Members, Parent = p.Parent,
-        }));
-        var validation = new WatcherOptionsValidator().Validate(null, options);
+        var validation = new WatcherOptionsValidator().Validate(null, doc.ToOptions());
         if (validation.Failed)
             return ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray());
 
         await using var db = await dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
-        db.PoolMembers.RemoveRange(db.PoolMembers);
-        db.Pools.RemoveRange(db.Pools);
-        db.Targets.RemoveRange(db.Targets);
-        db.Profiles.RemoveRange(db.Profiles);
-        await db.SaveChangesAsync();
-
-        var profileIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        foreach (var p in doc.Profiles)
-        {
-            var id = p.Id ?? Guid.NewGuid();
-            profileIds[p.Name] = id;
-            db.Profiles.Add(new ProfileRow
-            {
-                Id = id, Name = p.Name,
-                NormalIntervalSeconds = p.NormalIntervalSeconds,
-                PingTimeoutSeconds = p.PingTimeoutSeconds,
-                BurstIntervalSeconds = p.BurstIntervalSeconds,
-                BurstMaxDurationSeconds = p.BurstMaxDurationSeconds,
-                HistorySize = p.HistorySize, MinUsableSample = p.MinUsableSample,
-                RespondingThreshold = p.RespondingThreshold,
-                FalteringThreshold = p.FalteringThreshold,
-                DownThreshold = p.DownThreshold,
-                RecoveringThreshold = p.RecoveringThreshold,
-            });
-        }
-        var targetIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        foreach (var t in doc.Targets)
-        {
-            var id = t.Id ?? Guid.NewGuid();
-            targetIds[t.Name] = id;
-            db.Targets.Add(new TargetRow
-            {
-                Id = id, Name = t.Name, Address = t.Address,
-                ProfileId = profileIds[t.Profile], Enabled = t.Enabled,
-                Operator = t.Operator?.Trim() is { Length: > 0 } op ? op : null,
-                Probe = NormalizeProbe(t.Probe),
-            });
-        }
-        await db.SaveChangesAsync();
-        foreach (var t in doc.Targets.Where(t => t.Parent is { Length: > 0 }))
-            (await db.Targets.SingleAsync(r => r.Id == targetIds[t.Name])).ParentId = targetIds[t.Parent!];
-        foreach (var p in doc.Pools)
-        {
-            var poolId = p.Id ?? Guid.NewGuid();
-            db.Pools.Add(new PoolRow
-            {
-                Id = poolId, Name = p.Name,
-                ParentId = p.Parent is { Length: > 0 } parent ? targetIds[parent] : null,
-                Members = p.Members.Select((m, i) => new PoolMemberRow
-                {
-                    PoolId = poolId, TargetId = targetIds[m], MemberIndex = i,
-                }).ToList(),
-            });
-        }
-        await db.SaveChangesAsync();
+        await ConfigStore.WriteDocumentAsync(db, doc);
         await tx.CommitAsync();
         _log.LogInformation("Imported configuration: {Targets} targets, {Pools} pools",
             doc.Targets.Count, doc.Pools.Count);
@@ -376,29 +297,4 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         ConfigChanged?.Invoke();
         return result;
     }
-
-    /// <summary>
-    /// Canonicalizes a probe string so downstream parsers (e.g. the form's
-    /// strict "tcp:&lt;port&gt;" regex) never misread a differently-cased or
-    /// padded value ("TCP:80", " tcp:80 ", "icmp") persisted via the API or
-    /// import. Validation has already rejected unparseable strings by the
-    /// time this runs; if parsing still fails, the raw value is stored
-    /// unchanged so the validator (not this helper) owns rejection.
-    /// </summary>
-    private static string? NormalizeProbe(string? probe) =>
-        ProbeSpec.TryParse(probe, out var spec) ? spec.ToConfigString() : probe;
-
-    private static PingProfileConfig ToConfig(ProfileDto p) => new()
-    {
-        NormalIntervalSeconds = p.NormalIntervalSeconds,
-        PingTimeoutSeconds = p.PingTimeoutSeconds,
-        BurstIntervalSeconds = p.BurstIntervalSeconds,
-        BurstMaxDurationSeconds = p.BurstMaxDurationSeconds,
-        HistorySize = p.HistorySize,
-        MinUsableSample = p.MinUsableSample,
-        RespondingThreshold = p.RespondingThreshold,
-        FalteringThreshold = p.FalteringThreshold,
-        DownThreshold = p.DownThreshold,
-        RecoveringThreshold = p.RecoveringThreshold,
-    };
 }
