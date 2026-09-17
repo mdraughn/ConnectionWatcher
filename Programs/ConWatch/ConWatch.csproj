@@ -18,11 +18,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Company>DSoftCo</Company>
-    <Product>ConnectionWatcher</Product>
-    <!-- Shown in the header and /api/v1/health; keep in step with the
-         installer's default (Build-Installer.ps1 -Version). -->
-    <Version>0.9.0</Version>
+    <!-- Version, Company and Product come from Directory.Build.props. -->
   </PropertyGroup>
 
   <ItemGroup>

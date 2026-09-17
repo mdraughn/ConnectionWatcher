@@ -24,4 +24,13 @@ public class BuildInfoTests : IDisposable
         var builtUtc = body.GetProperty("builtUtc").GetDateTimeOffset();
         Assert.InRange(builtUtc, DateTimeOffset.UtcNow.AddYears(-1), DateTimeOffset.UtcNow.AddMinutes(5));
     }
+
+    [Fact]
+    public void Dev_builds_are_marked_as_such()
+    {
+        // Local and edge builds must never impersonate a release: Directory.Build.props
+        // sets VersionSuffix=dev, and only a release build overrides Version from its tag.
+        Assert.Contains("-dev", BuildInfo.ShortVersion);
+        Assert.DoesNotContain("+", BuildInfo.ShortVersion); // metadata stays out of the UI string
+    }
 }

@@ -1,0 +1,13 @@
+<Project>
+  <!-- The ONE place the version lives. Local and edge builds read
+       "<prefix>-dev+<sha>" (the SDK appends the commit); a release build
+       passes /p:Version=<tag> from the tag that triggered it, which
+       overrides prefix and suffix. Bump VersionPrefix right after a release
+       so dev builds announce the version they are heading toward. -->
+  <PropertyGroup>
+    <VersionPrefix>0.9.0</VersionPrefix>
+    <VersionSuffix>dev</VersionSuffix>
+    <Company>DSoftCo</Company>
+    <Product>ConnectionWatcher</Product>
+  </PropertyGroup>
+</Project>

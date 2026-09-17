@@ -24,6 +24,9 @@ ARG TARGETARCH
 # stamp would otherwise be bare); the SDK appends it as +<sha> to
 # AssemblyInformationalVersion, which the header build stamp reads.
 ARG GIT_SHA=
+# A release build (v* tag) passes its version; edge builds leave it empty and
+# report Directory.Build.props' "<prefix>-dev+<sha>".
+ARG APP_VERSION=
 WORKDIR /src
 COPY . .
 COPY --from=client /src/wwwroot/js Programs/ConWatch/wwwroot/js
@@ -33,7 +36,7 @@ COPY --from=client /src/wwwroot/js Programs/ConWatch/wwwroot/js
 # worth the fatter layer on the NAS's modest CPU.
 RUN dotnet publish Programs/ConWatch -c Release -a $TARGETARCH -o /app \
     /p:SkipClientBuild=true /p:PublishReadyToRun=true \
-    ${GIT_SHA:+/p:SourceRevisionId=$GIT_SHA}
+    ${GIT_SHA:+/p:SourceRevisionId=$GIT_SHA} ${APP_VERSION:+/p:Version=$APP_VERSION}
 
 # --- Stage 3: runtime ---
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
