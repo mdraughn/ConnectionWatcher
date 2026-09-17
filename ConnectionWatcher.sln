@@ -9,7 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{59AB6BE3-9
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConEngine", "Core\ConEngine\ConEngine.csproj", "{2BA015B5-83B5-C840-BCDF-7C4191A8DEF0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConInfrastructure", "ConInfrastructure\ConInfrastructure.csproj", "{3581B714-60DA-4734-BB13-FD0992A2AADD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConInfrastructure", "Libraries\ConInfrastructure\ConInfrastructure.csproj", "{3581B714-60DA-4734-BB13-FD0992A2AADD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConCore", "Core\ConCore\ConCore.csproj", "{9B417C39-5504-4A5D-9D4E-626C0535CD08}"
 EndProject
@@ -17,7 +17,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConEngine.Tests", "Tests\ConEngine.Tests\ConEngine.Tests.csproj", "{6BC5ED1A-064D-4F4C-95C6-CDC39977BDA7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConPersistence", "ConPersistence\ConPersistence.csproj", "{0C64C48E-E032-477E-8FC6-8C8CDCFD009B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConPersistence", "Libraries\ConPersistence\ConPersistence.csproj", "{0C64C48E-E032-477E-8FC6-8C8CDCFD009B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConWatch", "Programs\ConWatch\ConWatch.csproj", "{47CBD419-F06A-4F69-939C-0109F2B8819D}"
 EndProject
@@ -27,7 +27,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConWatch.Tests", "Tests\Con
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConTray", "Programs\ConTray\ConTray.csproj", "{540C996C-2040-4D05-AE0F-37FA6B32E92B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConNotify", "ConNotify\ConNotify.csproj", "{0B67C75C-B0AE-4F22-B1DE-03E56CDD3B22}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConNotify", "Libraries\ConNotify\ConNotify.csproj", "{0B67C75C-B0AE-4F22-B1DE-03E56CDD3B22}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConNotify.Tests", "Tests\ConNotify.Tests\ConNotify.Tests.csproj", "{FD457E7A-6E8F-4677-BC12-7B4ACA9F9EAD}"
 EndProject

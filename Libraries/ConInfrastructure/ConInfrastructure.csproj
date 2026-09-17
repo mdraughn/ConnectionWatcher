@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Core\ConCore\ConCore.csproj" />
+    <ProjectReference Include="..\..\Core\ConCore\ConCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\ConPersistence\ConPersistence.csproj" />
+    <ProjectReference Include="..\..\Libraries\ConPersistence\ConPersistence.csproj" />
   </ItemGroup>
 
 </Project>

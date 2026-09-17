@@ -313,8 +313,9 @@ locally (amd64 + arm64 via cross-compilation) when you want to.
 | `Programs/ConWatch` | The production app: monitoring engine + SQLite persistence + REST API |
 | `Core/ConEngine` | The engine: adaptive ping disciplines, reachability tree, pools, verdict layer |
 | `Core/ConCore` | Contracts and domain primitives |
-| `ConInfrastructure` | Real ICMP ping + DNS implementations |
-| `ConPersistence` | EF Core (SQLite) schema, config store, transition/rollup recording, retention |
+| `Libraries/ConInfrastructure` | Real ICMP/TCP probes, DNS, gateway discovery, traceroute |
+| `Libraries/ConPersistence` | EF Core (SQLite) schema, config store, transition/rollup recording, retention |
+| `Libraries/ConNotify` | MQTT (Home Assistant), webhook, and heartbeat notifiers |
 | `Tests/*` | xUnit suites for engine, persistence, and the full app over HTTP |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev loop and test commands.

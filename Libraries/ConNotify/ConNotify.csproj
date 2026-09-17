@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Core\ConEngine\ConEngine.csproj" />
+    <ProjectReference Include="..\..\Core\ConEngine\ConEngine.csproj" />
     <ProjectReference Include="..\ConPersistence\ConPersistence.csproj" />
   </ItemGroup>
 

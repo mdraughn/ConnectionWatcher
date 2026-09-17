@@ -2,9 +2,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\ConEngine\ConEngine.csproj" />
-    <ProjectReference Include="..\..\ConInfrastructure\ConInfrastructure.csproj" />
-    <ProjectReference Include="..\..\ConPersistence\ConPersistence.csproj" />
-    <ProjectReference Include="..\..\ConNotify\ConNotify.csproj" />
+    <ProjectReference Include="..\..\Libraries\ConInfrastructure\ConInfrastructure.csproj" />
+    <ProjectReference Include="..\..\Libraries\ConPersistence\ConPersistence.csproj" />
+    <ProjectReference Include="..\..\Libraries\ConNotify\ConNotify.csproj" />
   </ItemGroup>
 
   <ItemGroup>
