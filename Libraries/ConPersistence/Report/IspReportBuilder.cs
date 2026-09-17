@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConEngine.Topology;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -43,10 +44,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
 
         var (episodes, totals) = await BuildEpisodesAsync(db, fromUtc, toUtc);
         var (pathNames, anchorNames, operatorName) = await BuildTopologyAsync(db);
-        var targets = await BuildTargetRowsAsync(db, fromUtc, toUtc, anchorNames);
-
-        var anchorRows = targets.Where(t => t.IsAnchor).ToList();
-        double? anchorUptime = await AnchorUptimeAsync(db, fromUtc, toUtc, anchorNames);
+        var (targets, anchorUptime) = await BuildTargetRowsAsync(db, fromUtc, toUtc, anchorNames);
 
         return new IspReport(fromUtc, toUtc, pathNames, anchorNames,
             totals.GetValueOrDefault("LinkDown"), totals.GetValueOrDefault("LinkDegraded"),
@@ -138,77 +136,84 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         var leafId = pool.ParentId ?? pool.Members
             .Select(m => targets.GetValueOrDefault(m.TargetId)?.ParentId)
             .Distinct().SingleOrDefault();
-        var path = new List<string>();
-        var operators = new List<string>();
-        var guard = new HashSet<Guid>();
-        while (leafId is { } id && targets.TryGetValue(id, out var node) && guard.Add(id))
-        {
-            path.Add(node.Name);
-            if (node.Operator is { Length: > 0 } op && !operators.Contains(op))
-                operators.Add(op);
-            leafId = node.ParentId;
-        }
+        var leaf = leafId is { } id ? targets.GetValueOrDefault(id) : null;
+        var chain = leaf is null
+            ? []
+            : TreeWalk.ChainToRoot(leaf, n => n.ParentId is { } pid ? targets.GetValueOrDefault(pid) : null);
+        var path = chain.Select(n => n.Name).ToList();
         path.Reverse();
+        var operators = chain.Select(n => n.Operator).OfType<string>()
+            .Where(op => op.Length > 0).Distinct().ToList();
         return (path, anchors, operators.Count > 0 ? string.Join(" / ", operators) : null);
     }
 
-    private static async Task<List<TargetReportRow>> BuildTargetRowsAsync(ConWatchDbContext db,
-        DateTime fromUtc, DateTime toUtc, List<string> anchorNames)
+    /// <summary>
+    /// Per-target rows plus the pooled anchor uptime, from three round trips
+    /// regardless of target count: every target's transitions up to the
+    /// window end (one query), then rollup sums grouped by target, one query
+    /// per distinct clipped window start (usually just one, since only a
+    /// HistoryReset inside the window moves a target's start).
+    /// </summary>
+    private static async Task<(List<TargetReportRow> Rows, double? AnchorUptime)> BuildTargetRowsAsync(
+        ConWatchDbContext db, DateTime fromUtc, DateTime toUtc, List<string> anchorNames)
     {
-        var rows = new List<TargetReportRow>();
-        foreach (var target in await db.Targets.AsNoTracking().OrderBy(t => t.Name).ToListAsync())
+        var targets = await db.Targets.AsNoTracking().OrderBy(t => t.Name).ToListAsync();
+        var targetIds = targets.Select(t => t.Id).ToList();
+
+        var transitionsBySubject = (await db.Transitions.AsNoTracking()
+                .Where(t => t.TimestampUtc <= toUtc && targetIds.Contains(t.SubjectId))
+                .OrderBy(t => t.Id).ToListAsync())
+            .GroupBy(t => t.SubjectId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Clip each target at its latest HistoryReset (address correction/repoint).
+        var effectiveFrom = new Dictionary<Guid, DateTime>();
+        foreach (var target in targets)
         {
-            var transitions = await db.Transitions.AsNoTracking()
-                .Where(t => t.SubjectId == target.Id && t.TimestampUtc <= toUtc)
-                .OrderBy(t => t.Id).ToListAsync();
+            var resetAt = transitionsBySubject.GetValueOrDefault(target.Id)?
+                .LastOrDefault(t => t.Trigger == "HistoryReset")?.TimestampUtc;
+            effectiveFrom[target.Id] = resetAt is { } reset && reset > fromUtc ? reset : fromUtc;
+        }
 
-            // Clip at the latest HistoryReset (address correction/repoint).
-            var resetAt = transitions.LastOrDefault(t => t.Trigger == "HistoryReset")?.TimestampUtc;
-            var effectiveFrom = resetAt is { } reset && reset > fromUtc ? reset : fromUtc;
-            var effective = transitions.Where(t => t.TimestampUtc > effectiveFrom).ToList();
+        var totals = new Dictionary<Guid, (long Pings, long Successes)>();
+        foreach (var window in effectiveFrom.GroupBy(kv => kv.Value))
+        {
+            var ids = window.Select(kv => kv.Key).ToList();
+            var start = window.Key;
+            var sums = await db.Rollups.AsNoTracking()
+                .Where(r => ids.Contains(r.TargetId) && r.PeriodStartUtc >= start && r.PeriodStartUtc <= toUtc)
+                .GroupBy(r => r.TargetId)
+                .Select(g => new { TargetId = g.Key, Pings = g.Sum(r => r.PingCount), Successes = g.Sum(r => r.SuccessCount) })
+                .ToListAsync();
+            foreach (var s in sums)
+                totals[s.TargetId] = (s.Pings, s.Successes);
+        }
 
+        var rows = new List<TargetReportRow>();
+        foreach (var target in targets)
+        {
+            var effective = (transitionsBySubject.GetValueOrDefault(target.Id) ?? [])
+                .Where(t => t.TimestampUtc > effectiveFrom[target.Id]).ToList();
             var stats = ComputeIncidents(effective, toUtc);
-            var uptime = await UptimeAsync(db, target.Id, effectiveFrom, toUtc);
+            double? uptime = totals.TryGetValue(target.Id, out var t) && t.Pings > 0
+                ? 100.0 * t.Successes / t.Pings : null;
             rows.Add(new TargetReportRow(target.Name, target.Address,
                 anchorNames.Contains(target.Name), uptime,
                 stats.OutageCount, stats.LongestOutage, stats.UnreachableTime));
         }
-        return rows;
-    }
 
-    private static async Task<double?> UptimeAsync(ConWatchDbContext db, Guid targetId,
-        DateTime fromUtc, DateTime toUtc)
-    {
-        var totals = await db.Rollups.AsNoTracking()
-            .Where(r => r.TargetId == targetId && r.PeriodStartUtc >= fromUtc && r.PeriodStartUtc <= toUtc)
-            .GroupBy(_ => 1)
-            .Select(g => new { Pings = g.Sum(r => r.PingCount), Successes = g.Sum(r => r.SuccessCount) })
-            .SingleOrDefaultAsync();
-        return totals is { Pings: > 0 } ? 100.0 * totals.Successes / totals.Pings : null;
-    }
-
-    private async Task<double?> AnchorUptimeAsync(ConWatchDbContext db, DateTime fromUtc,
-        DateTime toUtc, List<string> anchorNames)
-    {
+        // Anchor uptime pools the anchors' samples over the same clipped windows.
         long pings = 0, successes = 0;
-        var anchorIds = await db.Targets.AsNoTracking()
-            .Where(t => anchorNames.Contains(t.Name)).Select(t => t.Id).ToListAsync();
-        foreach (var id in anchorIds)
+        foreach (var anchor in targets.Where(t => anchorNames.Contains(t.Name)))
         {
-            var transitions = await db.Transitions.AsNoTracking()
-                .Where(t => t.SubjectId == id && t.TimestampUtc <= toUtc && t.Trigger == "HistoryReset")
-                .OrderBy(t => t.Id).ToListAsync();
-            var resetAt = transitions.LastOrDefault()?.TimestampUtc;
-            var effectiveFrom = resetAt is { } reset && reset > fromUtc ? reset : fromUtc;
-            var totals = await db.Rollups.AsNoTracking()
-                .Where(r => r.TargetId == id && r.PeriodStartUtc >= effectiveFrom && r.PeriodStartUtc <= toUtc)
-                .GroupBy(_ => 1)
-                .Select(g => new { Pings = g.Sum(r => r.PingCount), Successes = g.Sum(r => r.SuccessCount) })
-                .SingleOrDefaultAsync();
-            pings += totals?.Pings ?? 0;
-            successes += totals?.Successes ?? 0;
+            if (totals.TryGetValue(anchor.Id, out var t))
+            {
+                pings += t.Pings;
+                successes += t.Successes;
+            }
         }
-        return pings > 0 ? 100.0 * successes / pings : null;
+        double? anchorUptime = pings > 0 ? 100.0 * successes / pings : null;
+        return (rows, anchorUptime);
     }
 
     private record IncidentTotals(int OutageCount, TimeSpan LongestOutage, TimeSpan UnreachableTime);
