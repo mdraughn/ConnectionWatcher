@@ -26,6 +26,7 @@ public class WatcherHostService(
     IOptions<VerdictOptions> verdictOptions,
     IOptions<PersistenceOptions> persistenceOptions,
     IConfiguration configuration,
+    IHostApplicationLifetime lifetime,
     TransitionRecorder recorder,
     GlitchRecorder glitchRecorder,
     RollupCollector collector,
@@ -36,8 +37,13 @@ public class WatcherHostService(
 {
     private readonly ILogger<WatcherHostService> _log = loggerFactory.CreateLogger<WatcherHostService>();
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
+    private readonly Lock _debounceLock = new();
     private CancellationTokenSource? _debounceCts;
-    private CancellationToken _appStopping;
+    // The host's real shutdown signal (StartAsync's token only covers startup).
+    private readonly CancellationToken _appStopping = lifetime.ApplicationStopping;
+    // Set under _rebuildLock by StopAsync: a rebuild queued behind it must not
+    // start a new engine after shutdown.
+    private bool _stopped;
 
     /// <summary>The running engine, or null before start / mid-rebuild.</summary>
     public WatcherEngine? Engine { get; private set; }
@@ -46,8 +52,6 @@ public class WatcherHostService(
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _appStopping = cancellationToken;
-
         // Schema migration happened in DatabaseStartup.PrepareAsync before any
         // hosted service started; this only seeds an empty config.
         if (await store.IsEmptyAsync())
@@ -83,12 +87,13 @@ public class WatcherHostService(
     {
         configService.ConfigChanged -= OnConfigChanged;
         settingsStore.SettingsChanged -= OnConfigChanged;
-        _debounceCts?.Cancel();
+        lock (_debounceLock) { _debounceCts?.Cancel(); }
         // Serialize with any in-flight rebuild: two concurrent engine.StopAsync
         // calls race inside the coordinators' Dispose.
         await _rebuildLock.WaitAsync(CancellationToken.None);
         try
         {
+            _stopped = true;
             if (Engine is { } engine)
             {
                 Engine = null;
@@ -284,6 +289,11 @@ public class WatcherHostService(
         await _rebuildLock.WaitAsync();
         try
         {
+            if (_stopped)
+            {
+                _log.LogDebug("Rebuild requested after shutdown; ignored");
+                return;
+            }
             _log.LogInformation("Rebuilding engine after config change");
             EngineSeed? seed = null;
             if (Engine is { } engine)
@@ -310,9 +320,14 @@ public class WatcherHostService(
 
     private void OnConfigChanged()
     {
-        _debounceCts?.Cancel();
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(_appStopping);
-        _debounceCts = cts;
+        CancellationTokenSource cts;
+        lock (_debounceLock)
+        {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            cts = CancellationTokenSource.CreateLinkedTokenSource(_appStopping);
+            _debounceCts = cts;
+        }
         var delay = TimeSpan.FromSeconds(persistenceOptions.Value.RebuildDebounceSeconds);
         _ = Task.Run(async () =>
         {
