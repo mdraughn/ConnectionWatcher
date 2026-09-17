@@ -71,11 +71,8 @@ public static class ExportEndpoints
             ConWatch.Auth.AdminGate gate, IDbContextFactory<ConWatchDbContext> dbFactory,
             ConfigStore configStore, SettingsStore settingsStore, TimeProvider time) =>
         {
-            if (gate.IsEnabled && !gate.Verify(request.Password ?? ""))
-            {
-                await Task.Delay(1000); // same brute-force friction as login
+            if (!await gate.VerifyOrDelayAsync(request.Password))
                 return Results.Unauthorized();
-            }
             return Results.Ok(await BuildSnapshotAsync(dbFactory, configStore, settingsStore, time,
                 includeSecrets: true));
         });

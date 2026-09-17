@@ -35,6 +35,19 @@ public class AdminGate(string filePath, ILogger<AdminGate> log)
             File.Delete(FilePath);
     }
 
+    /// <summary>
+    /// The one check for endpoints that verify the password inline: true when
+    /// the gate is off or the password matches; otherwise a fixed one-second
+    /// delay (brute-force friction) and false. Callers answer 401.
+    /// </summary>
+    public async Task<bool> VerifyOrDelayAsync(string? password)
+    {
+        if (!IsEnabled || Verify(password ?? ""))
+            return true;
+        await Task.Delay(1000);
+        return false;
+    }
+
     public bool Verify(string password)
     {
         try

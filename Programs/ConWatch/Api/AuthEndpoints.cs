@@ -33,11 +33,8 @@ public static class AuthEndpoints
         {
             if (!gate.IsEnabled)
                 return Results.BadRequest(new { errors = new[] { "No admin password is set." } });
-            if (!gate.Verify(request.Password ?? ""))
-            {
-                await Task.Delay(1000); // fixed brute-force friction
+            if (!await gate.VerifyOrDelayAsync(request.Password))
                 return Results.Unauthorized();
-            }
             await SignInAdminAsync(http);
             return Results.NoContent();
         });
@@ -52,11 +49,8 @@ public static class AuthEndpoints
         {
             if (request.Password is not { Length: >= 4 })
                 return Results.BadRequest(new { errors = new[] { "Password must be at least 4 characters." } });
-            if (gate.IsEnabled && !gate.Verify(request.Current ?? ""))
-            {
-                await Task.Delay(1000);
+            if (!await gate.VerifyOrDelayAsync(request.Current))
                 return Results.Unauthorized();
-            }
             gate.Set(request.Password);
             await SignInAdminAsync(http); // never lock the admin out of the page they're on
             return Results.NoContent();
@@ -66,11 +60,8 @@ public static class AuthEndpoints
         {
             if (!gate.IsEnabled)
                 return Results.BadRequest(new { errors = new[] { "No admin password is set." } });
-            if (!gate.Verify(request.Current ?? ""))
-            {
-                await Task.Delay(1000);
+            if (!await gate.VerifyOrDelayAsync(request.Current))
                 return Results.Unauthorized();
-            }
             gate.Remove();
             return Results.NoContent();
         });

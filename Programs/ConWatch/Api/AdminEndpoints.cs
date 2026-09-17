@@ -27,11 +27,8 @@ public static class AdminEndpoints
         openApi.MapPost("/admin/engine", async (EngineControlRequest request,
             ConWatch.Auth.AdminGate gate, SettingsStore settings, WatcherHostService host) =>
         {
-            if (gate.IsEnabled && !gate.Verify(request.Password ?? ""))
-            {
-                await Task.Delay(1000); // same brute-force friction as login
+            if (!await gate.VerifyOrDelayAsync(request.Password))
                 return Results.Unauthorized();
-            }
             await settings.SetManyAsync(new Dictionary<string, string?>
             {
                 [SettingKeys.EngineEnabled] = request.Enabled ? "true" : "false",
