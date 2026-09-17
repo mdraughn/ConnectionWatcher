@@ -109,7 +109,14 @@ builder.Services.AddMcpServer(o => o.ServerInfo = new()
     .WithTools<ConWatch.Mcp.ConWatchMcpTools>();
 
 builder.Services.AddOpenApi();
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(o =>
+{
+    // Admin pages: one filter by convention instead of a check in every model.
+    var adminLock = new Microsoft.AspNetCore.Mvc.TypeFilterAttribute(typeof(ConWatch.Auth.AdminLockPageFilter));
+    o.Conventions.AddFolderApplicationModelConvention("/Config", m => m.Filters.Add(adminLock));
+    foreach (var page in new[] { "/Admin", "/Data", "/Setup", "/Traceroute" })
+        o.Conventions.AddPageApplicationModelConvention(page, m => m.Filters.Add(adminLock));
+});
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<StatusBroadcaster>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());

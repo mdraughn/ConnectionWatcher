@@ -1,11 +1,11 @@
 using ConPersistence;
 using ConPersistence.Dto;
 using ConWatch.Auth;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
+/// <summary>Admin-locked by convention (AdminLockPageFilter in Program.cs).</summary>
 public class AdminModel(ConfigStore store, SettingsStore settingsStore, AdminGate gate) : PageModel
 {
     public Dictionary<string, string> Settings { get; private set; } = new();
@@ -15,13 +15,10 @@ public class AdminModel(ConfigStore store, SettingsStore settingsStore, AdminGat
     public bool EngineEnabled => Setting(SettingKeys.EngineEnabled, "true") != "false";
     public string CloneSource => Setting(SettingKeys.CloneSourceUrl);
 
-    public async Task<IActionResult> OnGetAsync()
+    public async Task OnGetAsync()
     {
-        if (gate.IsLocked(User))
-            return Redirect("/?admin=1");
         Settings = await settingsStore.GetAllAsync();
         Pools = (await store.ExportAsync()).Pools;
-        return Page();
     }
 
     public string Setting(string key, string fallback = "") =>
