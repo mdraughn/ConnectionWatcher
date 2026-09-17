@@ -13,6 +13,12 @@ namespace ConWatch.Tests;
 /// transitions, which must reach a webhook listener / a real MQTT broker.
 /// The MQTT test runs Mosquitto in Docker and skips itself when Docker is
 /// unavailable.
+///
+/// Every listener serves ONE test-specific path prefix and 404s the rest.
+/// FreePort can hand a test the port a previous test just released, and the
+/// previous test's app may still be delivering fire-and-forget webhooks to
+/// it; without the prefix those strays were counted (or asserted on) as
+/// this test's traffic — the flake that kept this class quarantined.
 /// </summary>
 public class NotifierIntegrationTests
 {
@@ -25,26 +31,45 @@ public class NotifierIntegrationTests
         return port;
     }
 
-    [Fact]
-    public async Task Transitions_are_delivered_to_a_webhook()
+    /// <summary>A loopback HTTP listener that records requests under its own prefix only.</summary>
+    private sealed class Hook : IDisposable
     {
-        var port = FreePort();
-        var received = new List<string>();
-        using var listener = new HttpListener();
-        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        listener.Start();
-        var pump = Task.Run(async () =>
+        private readonly HttpListener _listener = new();
+        private readonly Task _pump;
+        private readonly List<(string Path, string Body)> _received = new();
+
+        public int Port { get; }
+        public string Prefix { get; } = "/t-" + Guid.NewGuid().ToString("N")[..8];
+        public string Url(string path) => $"http://127.0.0.1:{Port}{Prefix}{path}";
+
+        public Hook()
         {
-            while (listener.IsListening)
+            Port = FreePort();
+            _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
+            _listener.Start();
+            _pump = Task.Run(PumpAsync);
+        }
+
+        private async Task PumpAsync()
+        {
+            while (_listener.IsListening)
             {
                 HttpListenerContext ctx;
-                try { ctx = await listener.GetContextAsync(); }
-                catch (Exception) when (!listener.IsListening) { return; }
+                try { ctx = await _listener.GetContextAsync(); }
+                catch (Exception) when (!_listener.IsListening) { return; }
                 try
                 {
+                    var path = ctx.Request.Url!.AbsolutePath;
+                    if (!path.StartsWith(Prefix, StringComparison.Ordinal))
+                    {
+                        // A stray from another test's app on a reused port.
+                        ctx.Response.StatusCode = 404;
+                        ctx.Response.Close();
+                        continue;
+                    }
                     using var reader = new StreamReader(ctx.Request.InputStream, Encoding.UTF8);
                     var body = await reader.ReadToEndAsync();
-                    lock (received) received.Add(body);
+                    lock (_received) _received.Add((path[Prefix.Length..], body));
                     ctx.Response.StatusCode = 204;
                     ctx.Response.Close();
                 }
@@ -52,137 +77,95 @@ public class NotifierIntegrationTests
                 {
                     // The app's webhook client (10s timeout, fire-and-forget) can
                     // abort a connection mid-read under load; drop that request
-                    // and keep serving instead of faulting the pump.
+                    // and keep serving.
                     ctx.Response.Abort();
                 }
             }
-        });
+        }
 
+        public List<(string Path, string Body)> Received
+        {
+            get { lock (_received) return _received.ToList(); }
+        }
+
+        public void Dispose()
+        {
+            _listener.Stop();
+            _pump.Wait(TimeSpan.FromSeconds(5));
+            _listener.Close();
+        }
+    }
+
+    [Fact]
+    public async Task Transitions_are_delivered_to_a_webhook()
+    {
+        using var hook = new Hook();
         using var factory = new ConWatchFactory();
         var client = factory.CreateClient();
         var put = await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
         {
             ["Webhook.Enabled"] = "true",
-            ["Webhook.Urls"] = $"http://127.0.0.1:{port}/hook",
+            ["Webhook.Urls"] = hook.Url("/hook"),
         });
         Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
 
         await ConfigApiTests.SeedHomeAsync(client);
-        await ConfigApiTests.Eventually(() =>
-        {
-            lock (received) return Task.FromResult(received.Count > 0);
-        });
+        await ConfigApiTests.Eventually(() => Task.FromResult(hook.Received.Count > 0));
 
-        string first;
-        lock (received) first = received[0];
-        var payload = JsonSerializer.Deserialize<JsonElement>(first);
+        var first = hook.Received[0];
+        Assert.Equal("/hook", first.Path);
+        var payload = JsonSerializer.Deserialize<JsonElement>(first.Body);
         Assert.True(payload.TryGetProperty("to", out _));
         Assert.True(payload.TryGetProperty("subjectKind", out _));
-        listener.Stop();
-        await pump;
     }
 
     [Fact]
     public async Task VerdictOnly_suppresses_target_transitions()
     {
-        var port = FreePort();
-        int hits = 0;
-        using var listener = new HttpListener();
-        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        listener.Start();
-        var pump = Task.Run(async () =>
-        {
-            while (listener.IsListening)
-            {
-                HttpListenerContext ctx;
-                try { ctx = await listener.GetContextAsync(); }
-                catch (Exception) when (!listener.IsListening) { return; }
-                try
-                {
-                    var body = await new StreamReader(ctx.Request.InputStream).ReadToEndAsync();
-                    var kind = JsonSerializer.Deserialize<JsonElement>(body).GetProperty("subjectKind").GetString();
-                    Assert.Equal("Verdict", kind);
-                    Interlocked.Increment(ref hits);
-                    ctx.Response.StatusCode = 204;
-                    ctx.Response.Close();
-                }
-                catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException)
-                {
-                    // Aborted delivery: drop the request, keep serving. Assert
-                    // failures are not in this list and still fault the pump.
-                    ctx.Response.Abort();
-                }
-            }
-        });
-
+        using var hook = new Hook();
         using var factory = new ConWatchFactory();
         var client = factory.CreateClient();
         await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
         {
             ["Webhook.Enabled"] = "true",
             ["Webhook.VerdictOnly"] = "true",
-            ["Webhook.Urls"] = $"http://127.0.0.1:{port}/hook",
+            ["Webhook.Urls"] = hook.Url("/hook"),
         });
 
-        // SeedHome creates an anchor pool, so the verdict transitions to Healthy.
+        // SeedHome creates an anchor pool, so the verdict transitions to Healthy;
+        // the target transitions that precede it must never arrive.
         await ConfigApiTests.SeedHomeAsync(client);
-        await ConfigApiTests.Eventually(() => Task.FromResult(Volatile.Read(ref hits) > 0));
-        listener.Stop();
-        await pump;
+        await ConfigApiTests.Eventually(() => Task.FromResult(hook.Received.Count > 0));
+        await Task.Delay(500); // anything wrongly queued behind the verdict would land by now
+
+        var kinds = hook.Received.Select(r =>
+            JsonSerializer.Deserialize<JsonElement>(r.Body).GetProperty("subjectKind").GetString()).ToList();
+        Assert.NotEmpty(kinds);
+        Assert.All(kinds, kind => Assert.Equal("Verdict", kind));
     }
 
     [Fact]
     public async Task Heartbeat_pings_immediately_when_configured_and_follows_url_changes()
     {
-        var port = FreePort();
-        int hits = 0;
-        string lastPath = "";
-        using var listener = new HttpListener();
-        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        listener.Start();
-        var pump = Task.Run(async () =>
-        {
-            while (listener.IsListening)
-            {
-                HttpListenerContext ctx;
-                try { ctx = await listener.GetContextAsync(); }
-                catch (Exception) when (!listener.IsListening) { return; }
-                try
-                {
-                    Interlocked.Increment(ref hits);
-                    Volatile.Write(ref lastPath, ctx.Request.Url!.AbsolutePath);
-                    ctx.Response.StatusCode = 200;
-                    ctx.Response.Close();
-                }
-                catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException)
-                {
-                    // Aborted delivery: drop the request, keep serving.
-                    ctx.Response.Abort();
-                }
-            }
-        });
-
+        using var hook = new Hook();
         using var factory = new ConWatchFactory();
         var client = factory.CreateClient();
 
         // Configuring the URL wakes the notifier; the first ping is immediate.
         await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
         {
-            ["Heartbeat.Url"] = $"http://127.0.0.1:{port}/check-a",
+            ["Heartbeat.Url"] = hook.Url("/check-a"),
         });
-        await ConfigApiTests.Eventually(() => Task.FromResult(Volatile.Read(ref hits) > 0));
-        Assert.Equal("/check-a", Volatile.Read(ref lastPath));
+        await ConfigApiTests.Eventually(() => Task.FromResult(hook.Received.Count > 0));
+        Assert.Equal("/check-a", hook.Received[0].Path);
 
         // A URL change re-pings the new target without waiting out the interval.
         await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
         {
-            ["Heartbeat.Url"] = $"http://127.0.0.1:{port}/check-b",
+            ["Heartbeat.Url"] = hook.Url("/check-b"),
         });
         await ConfigApiTests.Eventually(() =>
-            Task.FromResult(Volatile.Read(ref lastPath) == "/check-b"));
-
-        listener.Stop();
-        await pump;
+            Task.FromResult(hook.Received.Any(r => r.Path == "/check-b")));
     }
 
     // ---------------- MQTT (Mosquitto in Docker) ----------------

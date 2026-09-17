@@ -113,12 +113,12 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 
 ## Small hardening candidates
 
-- **Un-quarantine NotifierIntegrationTests in CI** — the class runs in a
-  non-blocking job (`.github/workflows/ci.yml`) because
-  `VerdictOnly_suppresses_target_transitions` still flakes under load
-  (real-HttpListener timing; a fix session fizzled 2026-09-16). Fix the
-  flake, then delete the quarantine job and the `!~NotifierIntegrationTests`
-  filter.
+- ~~**Un-quarantine NotifierIntegrationTests in CI**~~ — DONE 2026-09-17:
+  the flake was a reused loopback port — FreePort could hand a test the port
+  the previous test just released while that test's app was still delivering
+  fire-and-forget webhooks to it, and the pump asserted on the stray. Each
+  listener now serves one test-specific path prefix and 404s the rest; the
+  quarantine job and filter are gone.
 
 - ~~**Config health warning: pool parent vs. members' parent drift**~~ —
   DONE 2026-09-13: ConfigHealth computes the members' deepest shared
