@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace ConWatch;
 
 /// <summary>
-/// Owns the engine lifecycle: migrate + seed at startup, build the engine from
+/// Owns the engine lifecycle: seed config at startup, build the engine from
 /// DB config, attach the recorder and collector, and rebuild (debounced) when
 /// the configuration changes.
 /// </summary>
@@ -48,11 +48,8 @@ public class WatcherHostService(
     {
         _appStopping = cancellationToken;
 
-        await using (var db = await dbFactory.CreateDbContextAsync(cancellationToken))
-        {
-            await db.Database.MigrateAsync(cancellationToken);
-        }
-
+        // Schema migration happened in DatabaseStartup.PrepareAsync before any
+        // hosted service started; this only seeds an empty config.
         if (await store.IsEmptyAsync())
         {
             var seed = configuration.GetSection(WatcherOptions.SectionName).Exists()

@@ -53,10 +53,9 @@ builder.Services.AddSingleton<TransitionRecorder>();
 builder.Services.AddSingleton<GlitchRecorder>();
 builder.Services.AddSingleton<RollupCollector>();
 
-// Engine host FIRST: hosted services start sequentially, and this one owns
-// the migration + seeding — nothing else may touch the schema before it.
+// The schema is migrated before any hosted service starts (see
+// DatabaseStartup.PrepareAsync below), so start order is about data flow only.
 builder.Services.AddSingleton<WatcherHostService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GlitchRecorder>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
@@ -116,7 +115,16 @@ builder.Services.AddSingleton<StatusBroadcaster>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());
 builder.Services.AddSingleton<ConWatch.Metrics.MetricsCounters>();
 
+// Engine host LAST: hosted services start in registration order and stop in
+// reverse, so the engine starts after every consumer (recorders, notifiers,
+// broadcaster) is listening and stops before any of them closes.
+builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
+
 var app = builder.Build();
+
+// Migrate + WAL before anything can touch the schema; hosted services start in app.Run().
+await DatabaseStartup.PrepareAsync(
+    app.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>(), CancellationToken.None);
 
 app.UseStaticFiles();
 app.UseAuthentication();
