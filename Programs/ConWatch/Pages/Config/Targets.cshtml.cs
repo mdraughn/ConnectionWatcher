@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence;
 using ConPersistence.Dto;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -44,14 +45,8 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
         if (leafName is null || !byName.TryGetValue(leafName, out var leaf))
             return;
 
-        var trunk = new List<TargetDto>();
-        var current = leaf;
-        var guard = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        while (current is not null && guard.Add(current.Name))
-        {
-            trunk.Add(current);
-            current = current.Parent is { } parentName && byName.TryGetValue(parentName, out var p) ? p : null;
-        }
+        var trunk = TreeWalk.ChainToRoot(leaf,
+            t => t.Parent is { Length: > 0 } parentName && byName.TryGetValue(parentName, out var p) ? p : null);
         trunk.Reverse(); // root first
         Trunk = trunk;
 

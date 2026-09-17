@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence;
 using ConPersistence.Dto;
 
@@ -31,21 +32,11 @@ public static class TopologyNames
         var byName = config.Targets
             .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        foreach (var memberName in pool.Members)
-        {
-            if (!byName.TryGetValue(memberName, out var member))
-                continue;
-            anchors.Add(member.Name);
-            var parentName = member.Parent;
-            for (var depth = 0; depth < 20 && parentName is { Length: > 0 }; depth++)
-            {
-                if (!byName.TryGetValue(parentName, out var ancestor))
-                    break;
-                if (!trunk.Contains(ancestor.Name))
-                    trunk.Add(ancestor.Name);
-                parentName = ancestor.Parent;
-            }
-        }
+        var members = pool.Members.Where(byName.ContainsKey).Select(m => byName[m]).ToList();
+        anchors.AddRange(members.Select(m => m.Name));
+        trunk.AddRange(TreeWalk.AncestorsOf(members,
+                t => t.Parent is { Length: > 0 } parent && byName.TryGetValue(parent, out var p) ? p : null)
+            .Select(t => t.Name));
         return new Names(trunk, anchors, config);
     }
 }
