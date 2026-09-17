@@ -1,11 +1,6 @@
-using ConCore;
-using ConEngine.Configuration;
-using ConInfrastructure;
 using ConPersistence;
-using ConPersistence.Services;
 using ConWatch;
 using ConWatch.Api;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 // Under the Windows Service Control Manager the working directory is
@@ -20,112 +15,17 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionWatcher");
 
-// Options
-builder.Services.Configure<PersistenceOptions>(
-    builder.Configuration.GetSection(PersistenceOptions.SectionName));
-builder.Services.Configure<VerdictOptions>(
-    builder.Configuration.GetSection(VerdictOptions.SectionName));
-
-// Database
-var dbPath = builder.Configuration[$"{PersistenceOptions.SectionName}:DbPath"] ?? "data/conwatch.db";
-var dbDir = Path.GetDirectoryName(Path.GetFullPath(dbPath));
-if (dbDir is { Length: > 0 })
-    Directory.CreateDirectory(dbDir);
-builder.Services.AddDbContextFactory<ConWatchDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
-
-// Engine dependencies
-builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
-builder.Services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
-builder.Services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
-builder.Services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
-builder.Services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery, ConInfrastructure.Discovery.GatewayDiscovery>();
-builder.Services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
-builder.Services.AddSingleton<SetupService>();
-
-// Persistence services
-builder.Services.AddSingleton<ConfigStore>();
-builder.Services.AddSingleton<ConfigService>();
-builder.Services.AddSingleton<SettingsStore>();
-builder.Services.AddSingleton<ConfigHealth>();
-builder.Services.AddSingleton<ConPersistence.Report.IspReportBuilder>();
-builder.Services.AddSingleton<TransitionRecorder>();
-builder.Services.AddSingleton<GlitchRecorder>();
-builder.Services.AddSingleton<RollupCollector>();
-
-// The schema is migrated before any hosted service starts (see
-// DatabaseStartup.PrepareAsync below), so start order is about data flow only.
-builder.Services.AddSingleton<WatcherHostService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<GlitchRecorder>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
-builder.Services.AddHostedService<RetentionService>();
-
-// Cross-node clone/take-over: outbound calls to the source node.
-builder.Services.AddHttpClient(ConWatch.Clone.CloneService.HttpClientName,
-    c => c.Timeout = TimeSpan.FromSeconds(60)); // a full snapshot can be MBs
-builder.Services.AddSingleton<ConWatch.Clone.CloneService>();
-builder.Services.AddSingleton<ConWatch.Clone.CloneHealth>();
-
-// Notifiers: idle until Mqtt.Enabled / Webhook.Enabled; reconfigured live via
-// NotifierSettingsChanged, re-attached by WatcherHostService on every rebuild.
-builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));
-builder.Services.AddSingleton<ConNotify.MqttNotifier>();
-builder.Services.AddSingleton<ConNotify.WebhookNotifier>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ConNotify.WebhookNotifier>());
-builder.Services.AddHostedService<ConNotify.HeartbeatNotifier>();
-
-// Admin gate: password file lives beside the database; cookies mark a
-// browser as admin for the session. Keys persisted so cookies survive a
-// service restart.
-builder.Services.AddSingleton(sp => new ConWatch.Auth.AdminGate(
-    Path.Combine(dbDir is { Length: > 0 } ? dbDir : ".", "admin-password.txt"),
-    sp.GetRequiredService<ILogger<ConWatch.Auth.AdminGate>>()));
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(
-        Path.Combine(dbDir is { Length: > 0 } ? dbDir : ".", "keys")));
-builder.Services.AddAuthentication(
-        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(o =>
-    {
-        o.Cookie.Name = "conwatch.admin";
-        o.Cookie.HttpOnly = true;
-        o.Cookie.SameSite = SameSiteMode.Lax;
-        // APIs get plain status codes, never login-page redirects.
-        o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; };
-        o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
-    });
-
-// MCP endpoint (/mcp): read-only tools over the open watching surface, so an
-// MCP host can query status and history directly. Stateless HTTP keeps it
-// session-free and reverse-proxy-friendly.
-builder.Services.AddMcpServer(o => o.ServerInfo = new()
-    {
-        Name = "ConnectionWatcher",
-        Version = BuildInfo.Version,
-    })
-    .WithHttpTransport(o => o.Stateless = true)
-    .WithTools<ConWatch.Mcp.ConWatchMcpTools>();
-
-builder.Services.AddOpenApi();
-builder.Services.AddRazorPages(o =>
-{
-    // Admin pages: one filter by convention instead of a check in every model.
-    var adminLock = new Microsoft.AspNetCore.Mvc.TypeFilterAttribute(typeof(ConWatch.Auth.AdminLockPageFilter));
-    o.Conventions.AddFolderApplicationModelConvention("/Config", m => m.Filters.Add(adminLock));
-    foreach (var page in new[] { "/Admin", "/Data", "/Setup", "/Traceroute" })
-        o.Conventions.AddPageApplicationModelConvention(page, m => m.Filters.Add(adminLock));
-});
-builder.Services.AddSignalR();
-builder.Services.AddSingleton<StatusBroadcaster>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());
-builder.Services.AddSingleton<ConWatch.Metrics.MetricsCounters>();
-
-// Engine host LAST: hosted services start in registration order and stop in
-// reverse, so the engine starts after every consumer (recorders, notifiers,
-// broadcaster) is listening and stops before any of them closes.
-builder.Services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
+// Registrations live in ConWatchServices, one method per concern.
+builder.Services
+    .AddConWatchOptions(builder.Configuration)
+    .AddConWatchDatabase(builder.Configuration, out var stateDir)
+    .AddConWatchEngine()
+    .AddConWatchPersistence()
+    .AddConWatchClone()
+    .AddConWatchNotifiers()
+    .AddConWatchAdminAuth(stateDir)
+    .AddConWatchWeb()
+    .AddConWatchHostedServices();
 
 var app = builder.Build();
 
@@ -149,7 +49,7 @@ if (app.Environment.IsDevelopment())
 app.MapRazorPages();
 app.MapHub<StatusHub>("/hubs/status");
 app.MapMcp("/mcp"); // open, read-only (see the MCP design spec)
-ConWatch.Api.MetricsEndpoint.MapMetrics(app); // open, like the watching surface
+MetricsEndpoint.MapMetrics(app); // open, like the watching surface
 
 var api = app.MapGroup("/api/v1");
 // Watching is always open; changing requires admin mode when a password is set.
