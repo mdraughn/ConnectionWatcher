@@ -61,4 +61,28 @@ public static class HistoryQueries
                         r.PeriodStartUtc >= fromUtc && r.PeriodStartUtc <= toUtc)
             .OrderBy(r => r.PeriodStartUtc)
             .ToListAsync();
+
+    /// <summary>Glitches newest-first (by start, then id), optionally for one target and window.</summary>
+    public static Task<List<GlitchRow>> GlitchesAsync(ConWatchDbContext db,
+        Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit)
+    {
+        limit = Math.Clamp(limit, 1, 1000);
+        IQueryable<GlitchRow> query = db.Glitches.AsNoTracking();
+        if (targetId is { } tid)
+            query = query.Where(g => g.TargetId == tid);
+        if (fromUtc is { } from)
+            query = query.Where(g => g.StartUtc >= from);
+        if (toUtc is { } to)
+            query = query.Where(g => g.StartUtc <= to);
+        return query.OrderByDescending(g => g.StartUtc).ThenByDescending(g => g.Id)
+            .Take(limit).ToListAsync();
+    }
+
+    /// <summary>
+    /// The id of each subject's most recent transition. Every retention and
+    /// prune path must keep these rows: warm restart seeds the presumed state
+    /// from them, however old they are.
+    /// </summary>
+    public static IQueryable<long> LatestTransitionIdsPerSubject(ConWatchDbContext db) =>
+        db.Transitions.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
 }

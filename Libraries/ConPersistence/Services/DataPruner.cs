@@ -21,7 +21,7 @@ public static class DataPruner
     {
         var sizeBefore = FileSize(dbPath);
 
-        var latestIds = db.Transitions.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
+        var latestIds = HistoryQueries.LatestTransitionIdsPerSubject(db);
         var transitions = await db.Transitions
             .Where(t => t.TimestampUtc < beforeUtc && !latestIds.Contains(t.Id))
             .ExecuteDeleteAsync(ct);

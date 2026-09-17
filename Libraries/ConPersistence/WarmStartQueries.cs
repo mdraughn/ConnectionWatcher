@@ -34,7 +34,7 @@ public static class WarmStartQueries
     /// <summary>The latest transition row per subject (any kind).</summary>
     public static Task<List<TransitionRow>> LatestTransitionsPerSubjectAsync(ConWatchDbContext db)
     {
-        var latestIds = db.Transitions.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
+        var latestIds = HistoryQueries.LatestTransitionIdsPerSubject(db);
         return db.Transitions.AsNoTracking().Where(t => latestIds.Contains(t.Id)).ToListAsync();
     }
 }

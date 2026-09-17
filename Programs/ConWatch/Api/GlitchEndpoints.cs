@@ -13,13 +13,8 @@ public static class GlitchEndpoints
         {
             if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
                 return problem!;
-            limit = Math.Clamp(limit, 1, 1000);
             await using var db = await dbFactory.CreateDbContextAsync();
-            IQueryable<ConPersistence.Entities.GlitchRow> query = db.Glitches.AsNoTracking();
-            if (targetId is { } tid) query = query.Where(g => g.TargetId == tid);
-            if (fromUtc is { } f) query = query.Where(g => g.StartUtc >= f);
-            if (toUtc is { } u) query = query.Where(g => g.StartUtc <= u);
-            var rows = await query.OrderByDescending(g => g.StartUtc).Take(limit).ToListAsync();
+            var rows = await HistoryQueries.GlitchesAsync(db, targetId, fromUtc, toUtc, limit);
 
             return Results.Ok(new
             {

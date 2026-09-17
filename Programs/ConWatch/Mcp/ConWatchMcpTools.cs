@@ -89,12 +89,10 @@ public class ConWatchMcpTools(WatcherHostService host,
         [Description("Max rows, 1-500 (default 100)")] int limit = 100)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        IQueryable<ConPersistence.Entities.TransitionRow> query = db.Transitions.AsNoTracking();
-        if (fromUtc is { } from) { var f = TimeRange.AsUtc(from); query = query.Where(t => t.TimestampUtc >= f); }
-        if (toUtc is { } to) { var u = TimeRange.AsUtc(to); query = query.Where(t => t.TimestampUtc <= u); }
-        if (subjectName is { Length: > 0 }) query = query.Where(t => t.SubjectName == subjectName);
-        var rows = await query.OrderByDescending(t => t.Id)
-            .Take(Math.Clamp(limit, 1, 500)).ToListAsync();
+        var rows = await HistoryQueries.TransitionsAsync(db, subjectId: null,
+            fromUtc is { } f ? TimeRange.AsUtc(f) : null,
+            toUtc is { } u ? TimeRange.AsUtc(u) : null,
+            Math.Clamp(limit, 1, 500), before: null, subjectName);
         return JsonSerializer.Serialize(rows.Select(t => new
         {
             TimestampUtc = DateTime.SpecifyKind(t.TimestampUtc, DateTimeKind.Utc),
@@ -114,11 +112,10 @@ public class ConWatchMcpTools(WatcherHostService host,
         [Description("Max rows, 1-500 (default 100)")] int limit = 100)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        IQueryable<ConPersistence.Entities.GlitchRow> query = db.Glitches.AsNoTracking();
-        if (fromUtc is { } from) { var f = TimeRange.AsUtc(from); query = query.Where(g => g.StartUtc >= f); }
-        if (toUtc is { } to) { var u = TimeRange.AsUtc(to); query = query.Where(g => g.StartUtc <= u); }
-        var rows = await query.OrderByDescending(g => g.Id)
-            .Take(Math.Clamp(limit, 1, 500)).ToListAsync();
+        var rows = await HistoryQueries.GlitchesAsync(db, targetId: null,
+            fromUtc is { } f ? TimeRange.AsUtc(f) : null,
+            toUtc is { } u ? TimeRange.AsUtc(u) : null,
+            Math.Clamp(limit, 1, 500));
         return JsonSerializer.Serialize(rows.Select(g => new
         {
             StartUtc = DateTime.SpecifyKind(g.StartUtc, DateTimeKind.Utc),

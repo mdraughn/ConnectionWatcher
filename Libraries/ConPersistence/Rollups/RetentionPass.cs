@@ -38,7 +38,7 @@ public class RetentionPass(ILogger log)
         // subject's MOST RECENT transition always survives: warm restart
         // seeds the presumed state from it, however old it is.
         var transitionThreshold = nowUtc.AddMonths(-options.TransitionRetentionMonths);
-        var latestIds = db.Transitions.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
+        var latestIds = HistoryQueries.LatestTransitionIdsPerSubject(db);
         var prunedTransitions = await db.Transitions
             .Where(t => t.TimestampUtc < transitionThreshold && !latestIds.Contains(t.Id))
             .ExecuteDeleteAsync(ct);
