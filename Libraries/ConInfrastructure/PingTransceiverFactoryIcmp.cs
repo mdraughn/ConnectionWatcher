@@ -9,6 +9,6 @@ public class PingTransceiverFactoryIcmp : IPingTransceiverFactory
         probe.Kind switch
         {
             ProbeKind.Tcp => new TcpConnectTransceiver(ipAddress, probe.Port, cancellationToken),
-            _ => new PingTranceiverIcmp(ipAddress, cancellationToken),
+            _ => new PingTransceiverIcmp(ipAddress, cancellationToken),
         };
 }
