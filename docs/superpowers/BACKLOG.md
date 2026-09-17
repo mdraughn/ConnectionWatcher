@@ -154,3 +154,14 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
     JSON topic, generic webhooks with verdict-only filter; Admin Notifications
     section with broker Test button; verified end-to-end against Mosquitto in
     Docker. Remaining user-side: point it at the real HA broker.
+
+## From the 2026-09-17 DNS discussion
+
+- **Count operators, not targets, in the weather threshold** — deduplicate
+  degraded anchors by their `Operator` tag before comparing to
+  `Verdict.WeatherThreshold`, so four addresses of one provider cannot
+  masquerade as internet weather. Verdict-layer change; see the cleanup
+  plan's DNS task for why address count says nothing about path diversity.
+- **Show a hostname's answer set in the Targets form** — informational: when
+  a name resolves to several addresses, list them so the user sees what is
+  being pinned (one address per target at a time; the engine follows changes).
