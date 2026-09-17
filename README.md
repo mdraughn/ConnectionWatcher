@@ -65,6 +65,12 @@ the timelines stay continuous and no restart noise is recorded. Seeding from
 the database applies only when the watcher was down briefly (the
 `Engine.WarmRestartMaxGapMinutes` setting, default 10 minutes; 0 disables).
 
+Hostname targets follow DNS: the name is re-resolved every five minutes and
+immediately when the target goes Down, and an address that has left the
+answer set is replaced without resetting the target's history. Two targets
+may share an address (say, the router by ICMP and by `tcp:443`); each is
+probed and tracked on its own.
+
 ## Web UI
 
 ConWatch serves its UI at the root:

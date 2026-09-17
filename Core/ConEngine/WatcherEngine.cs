@@ -30,6 +30,8 @@ public class WatcherEngine
     private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
     private readonly List<PoolCoordinator> _poolCoordinators = new();
     private readonly List<IDisposable> _subscriptions = new();
+    /// <summary>Per hostname target: completing the source wakes its DNS refresh loop early.</summary>
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _dnsRefreshRequests = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
     private readonly Subject<(Guid TargetId, PingResult Result)> _pingSampleSubject = new();
 
@@ -39,10 +41,17 @@ public class WatcherEngine
     private CancellationTokenSource? _cts;
 
     private readonly VerdictOptions _verdictOptions;
+    private readonly TimeSpan _dnsRefreshInterval;
+
+    /// <summary>Default re-resolution period for hostname targets. There is
+    /// no TTL to honor (System.Net.Dns hides it); five minutes tracks CDN-scale
+    /// record changes without hammering the resolver.</summary>
+    public static readonly TimeSpan DefaultDnsRefreshInterval = TimeSpan.FromMinutes(5);
 
     public WatcherEngine(TimeProvider timeProvider, IPingTransceiverFactory pingFactory,
         IDomainNameResolverFactory resolverFactory, ILoggerFactory loggerFactory,
-        IOptions<WatcherOptions> options, IOptions<VerdictOptions>? verdictOptions = null)
+        IOptions<WatcherOptions> options, IOptions<VerdictOptions>? verdictOptions = null,
+        TimeSpan? dnsRefreshInterval = null)
     {
         _timeProvider = timeProvider;
         _pingFactory = pingFactory;
@@ -50,6 +59,7 @@ public class WatcherEngine
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _verdictOptions = verdictOptions?.Value ?? new VerdictOptions();
+        _dnsRefreshInterval = dnsRefreshInterval ?? DefaultDnsRefreshInterval;
         _log = loggerFactory.CreateLogger<WatcherEngine>();
     }
 
@@ -191,6 +201,15 @@ public class WatcherEngine
             ex => _log.LogError(ex, "Error in ping result stream"),
             () => _log.LogInformation("Ping result stream completed")));
 
+        // A hostname target that goes Down while the trunk is fine has most
+        // likely had its address retired: re-resolve now, not at the next tick.
+        _subscriptions.Add(_transitionSubject.Subscribe(t =>
+        {
+            if (t.Kind == TransitionSubjectKind.Target && t.To == HostState.Down &&
+                _dnsRefreshRequests.TryGetValue(t.TargetId, out var request))
+                request.TrySetResult();
+        }));
+
         // Activate every enabled target (immediately for IP literals, via DNS otherwise).
         foreach (var (targetId, monitor) in _monitors)
         {
@@ -208,6 +227,17 @@ public class WatcherEngine
     private void Activate(TargetMonitor monitor, IPAddress ip)
     {
         monitor.StartTracking(ip);
+        StartController(monitor, ip);
+        // Warm starts burst everything so presumed states confirm in seconds
+        // (seeded Faltering/Down already burst via the discipline; this covers
+        // Responding/Starting, and no-ops on parked or already-bursting ones).
+        if (_warmStart)
+            monitor.Discipline.TriggerBurst();
+        _log.LogInformation("Activated {Target} at {Ip}", monitor.Target.Name, ip);
+    }
+
+    private void StartController(TargetMonitor monitor, IPAddress ip)
+    {
         // Bursts shorten the timeout: replies arrive in well under a second,
         // and against a dead host the steady timeout dominates burst cost.
         var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
@@ -218,32 +248,42 @@ public class WatcherEngine
         var burstCapMs = probe.Kind == ProbeKind.Tcp ? 2500 : 1000;
         _manager!.GetOrCreateController(monitor.Target.Id, ip, probe, monitor.Discipline,
             () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, burstCapMs) : steadyTimeoutMs);
-        // Warm starts burst everything so presumed states confirm in seconds
-        // (seeded Faltering/Down already burst via the discipline; this covers
-        // Responding/Starting, and no-ops on parked or already-bursting ones).
-        if (_warmStart)
-            monitor.Discipline.TriggerBurst();
-        _log.LogInformation("Activated {Target} at {Ip}", monitor.Target.Name, ip);
     }
 
+    /// <summary>DNS moved the target: swap the controller, keep the monitor's
+    /// state and history, and burst so the new address proves itself fast.</summary>
+    private async Task RepointAsync(TargetMonitor monitor, IPAddress ip)
+    {
+        await _manager!.StopControllerAsync(monitor.Target.Id, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        monitor.Repoint(ip);
+        StartController(monitor, ip);
+        monitor.Discipline.TriggerBurst();
+    }
+
+    /// <summary>
+    /// Owns a hostname target for the engine's lifetime: resolves (with backoff
+    /// until the first answer), activates, then keeps re-resolving every
+    /// <see cref="_dnsRefreshInterval"/> and immediately when the target goes
+    /// Down. The current address is kept while it is still in the answer set;
+    /// when it drops out the target is re-pointed at the first address. A
+    /// failed refresh keeps the current address.
+    /// </summary>
     private async Task ResolveAndActivateAsync(TargetMonitor monitor, string hostname, CancellationToken ct)
     {
         var backoff = TimeSpan.FromSeconds(30);
         var maxBackoff = TimeSpan.FromMinutes(5);
         using var resolver = _resolverFactory.Create(ct);
+        IPAddress? current = null;
 
         while (!ct.IsCancellationRequested)
         {
+            List<IPAddress> answers = [];
             try
             {
                 var result = await resolver.ResolveAsync(hostname, 5000).ConfigureAwait(false);
-                var ip = result.IPv4Addresses.FirstOrDefault();
-                if (ip is not null)
-                {
-                    Activate(monitor, ip);
-                    return;
-                }
-                monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
+                answers = result.IPv4Addresses.ToList();
+                if (answers.Count == 0 && current is null)
+                    monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -251,19 +291,49 @@ public class WatcherEngine
             }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "DNS resolution failed for {Hostname}", hostname);
-                monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {ex.Message}");
+                if (current is null)
+                {
+                    _log.LogWarning(ex, "DNS resolution failed for {Hostname}", hostname);
+                    monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {ex.Message}");
+                }
+                else
+                {
+                    _log.LogDebug(ex, "DNS refresh failed for {Hostname}; keeping {Ip}", hostname, current);
+                }
             }
 
+            if (current is null)
+            {
+                if (answers.Count == 0)
+                {
+                    // Not activated yet: retry with backoff until DNS answers.
+                    try { await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { return; }
+                    backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
+                    continue;
+                }
+                current = answers[0];
+                Activate(monitor, current);
+            }
+            else if (answers.Count > 0 && !answers.Contains(current))
+            {
+                _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
+                    monitor.Target.Name, current, answers[0]);
+                current = answers[0];
+                await RepointAsync(monitor, current).ConfigureAwait(false);
+            }
+
+            // Sleep until the refresh interval or a Down transition, whichever first.
+            var request = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _dnsRefreshRequests[monitor.Target.Id] = request;
             try
             {
-                await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false);
+                await Task.WhenAny(Task.Delay(_dnsRefreshInterval, _timeProvider, ct), request.Task).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 return;
             }
-            backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
         }
     }
 
