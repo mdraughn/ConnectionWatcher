@@ -47,6 +47,12 @@ else
                 <button type="button" id="takeover-btn">Take over from source</button>
             </div>
         </div>
+        <div id="takeover-insecure" hidden>
+            <p>The source address is plain HTTP on another machine: taking over would
+            send its admin password and receive its secrets unencrypted. Use the
+            source's HTTPS address if it has one, or confirm.</p>
+            <button id="takeover-insecure-anyway" type="button" class="secondary">I understand — send it over HTTP</button>
+        </div>
         <p id="takeover-result"></p>
     </article>
 }

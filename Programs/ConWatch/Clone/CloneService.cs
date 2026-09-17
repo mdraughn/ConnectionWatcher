@@ -75,15 +75,25 @@ public class CloneService(IHttpClientFactory httpFactory,
         return CloneOutcome.Ok(Summary(snapshot, includeSecrets));
     }
 
-    public async Task<CloneOutcome> TakeOverAsync(string? sourcePassword, CancellationToken ct)
+    public async Task<CloneOutcome> TakeOverAsync(string? sourcePassword, bool allowInsecure, CancellationToken ct)
     {
         var stored = await settings.GetAsync(SettingKeys.CloneSourceUrl);
         if (!TryParseSource(stored, out var source, out _))
             return CloneOutcome.Fail(400, "no-clone-source",
                 "This node was not cloned from another — there is nothing to take over from.");
 
-        // The password goes out again, over whatever transport the clone
-        // already used with the user's explicit consent.
+        // Take-over always carries the password and always pulls secrets. The
+        // consent given at clone time may have covered a non-sensitive
+        // transfer (no password, no secrets), so it is asked for again here.
+        if (TransportPolicy.Evaluate(source, sensitive: true, allowInsecure) ==
+            TransportPolicy.Verdict.RequiresOverride)
+        {
+            return CloneOutcome.Fail(400, "insecure-transport",
+                "Taking over would send the source admin password and receive its secrets " +
+                "over unencrypted HTTP. Use the source's HTTPS address or confirm the " +
+                "insecure transfer.");
+        }
+
         var client = httpFactory.CreateClient(HttpClientName);
 
         // 1. Disable the source. Its engine stops and flushes before the call

@@ -9,7 +9,7 @@ public static class SetupEndpoints
     public record CloneRequest(string? SourceUrl, string? SourcePassword,
         bool IncludeSecrets = true, bool AllowInsecure = false);
 
-    public record TakeoverRequest(string? SourcePassword);
+    public record TakeoverRequest(string? SourcePassword, bool AllowInsecure = false);
 
     public static void MapSetup(this RouteGroupBuilder api)
     {
@@ -33,7 +33,8 @@ public static class SetupEndpoints
                 request.SourcePassword, request.IncludeSecrets, request.AllowInsecure, ct)));
 
         api.MapPost("/setup/takeover", async (TakeoverRequest request, CloneService clone,
-            CancellationToken ct) => ToHttp(await clone.TakeOverAsync(request.SourcePassword, ct)));
+            CancellationToken ct) => ToHttp(await clone.TakeOverAsync(request.SourcePassword,
+                request.AllowInsecure, ct)));
     }
 
     private static IResult ToHttp(CloneOutcome outcome) => outcome.Status switch

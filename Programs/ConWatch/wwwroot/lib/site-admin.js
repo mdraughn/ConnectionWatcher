@@ -126,22 +126,32 @@ if (engineToggle) {
 // Take-over from the clone source.
 const takeoverBtn = document.getElementById("takeover-btn");
 if (takeoverBtn) {
-    takeoverBtn.addEventListener("click", async () => {
+    async function runTakeover(allowInsecure) {
         const errors = document.getElementById("takeover-errors");
         const out = document.getElementById("takeover-result");
+        const insecure = document.getElementById("takeover-insecure");
         clearErrors(errors);
+        insecure.hidden = true;
         out.textContent = "taking over — disabling source, final sync…";
         takeoverBtn.setAttribute("aria-busy", "true");
         const result = await apiFetch("POST", "/api/v1/setup/takeover", {
             sourcePassword: document.getElementById("takeover-password").value || null,
+            allowInsecure,
         });
         takeoverBtn.removeAttribute("aria-busy");
         if (result.ok) {
             out.textContent = "Done — this node is live; the source is a disabled archive.";
             setTimeout(() => location.href = "/", 1500);
+        } else if (result.body?.code === "insecure-transport") {
+            // Same flow as the setup page's clone: explain, then let them confirm.
+            out.textContent = "";
+            insecure.hidden = false;
         } else {
             out.textContent = "";
             showErrors(errors, result);
         }
-    });
+    }
+    takeoverBtn.addEventListener("click", () => runTakeover(false));
+    document.getElementById("takeover-insecure-anyway")
+        .addEventListener("click", () => runTakeover(true));
 }

@@ -151,7 +151,7 @@ public class CloneTests : IDisposable
             return false;
         });
 
-        var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { });
+        var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { allowInsecure = true });
         Assert.Equal(HttpStatusCode.OK, takeover.StatusCode);
 
         // Source: disabled archive. Target: live, with the post-clone outage.
@@ -180,7 +180,7 @@ public class CloneTests : IDisposable
             new { password = "hunter2" })).EnsureSuccessStatusCode();
 
         var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover",
-            new { sourcePassword = "nope" });
+            new { sourcePassword = "nope", allowInsecure = true });
         Assert.Equal(HttpStatusCode.Unauthorized, takeover.StatusCode);
         Assert.Contains("source-auth", await takeover.Content.ReadAsStringAsync());
 
@@ -189,6 +189,25 @@ public class CloneTests : IDisposable
             (await GetJson(_sourceClient, "/api/v1/health")).GetProperty("status").GetString());
         Assert.Equal("Disabled",
             (await GetJson(client, "/api/v1/health")).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Takeover_over_plain_http_to_a_non_loopback_source_requires_the_override()
+    {
+        // The clone may have been non-sensitive (no password, no secrets), so
+        // the consent given then does not cover take-over, which always sends
+        // the password and pulls secrets.
+        var target = MakeTarget();
+        var client = target.CreateClient();
+        var settings = target.Services.GetRequiredService<ConPersistence.SettingsStore>();
+        await settings.SetManyAsync(new Dictionary<string, string?>
+        {
+            [ConPersistence.SettingKeys.CloneSourceUrl] = "http://10.0.0.5:8080/",
+        });
+
+        var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { sourcePassword = "pw" });
+        Assert.Equal(HttpStatusCode.BadRequest, takeover.StatusCode);
+        Assert.Contains("insecure-transport", await takeover.Content.ReadAsStringAsync());
     }
 
     [Fact]
