@@ -36,7 +36,7 @@ public class VerdictCoordinator : IDisposable
     private readonly ILogger<VerdictCoordinator> _log;
     private readonly Lock _lock = new();
     private readonly List<IDisposable> _subscriptions = new();
-    private readonly ReplaySubject<TargetTransition> _transitionSubject = new(bufferSize: 1);
+    private readonly Subject<TargetTransition> _transitionSubject = new();
 
     public VerdictState CurrentVerdict { get; private set; } = VerdictState.Unknown;
     public string? CurrentDetail { get; private set; }

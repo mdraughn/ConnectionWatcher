@@ -184,6 +184,18 @@ public class TargetMonitorTests
     }
 
     [Fact]
+    public void Seeded_monitor_exposes_last_status_before_any_ping()
+    {
+        var (m, _, _) = Make();
+        m.Seed(HostState.Responding);
+        m.StartTracking(Ip);
+
+        Assert.NotNull(m.LastStatus);
+        Assert.True(m.LastStatus!.Host.Assumed);
+        Assert.Equal(HostState.Responding, m.LastStatus.Host.State);
+    }
+
+    [Fact]
     public void Resolution_failure_reports_once()
     {
         var (m, transitions, _) = Make();

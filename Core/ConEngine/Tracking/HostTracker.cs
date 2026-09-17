@@ -55,7 +55,10 @@ public class HostTracker
     public IObservable<AnalysisTransition> HostStateChangeSource => _stateChangeSubject;
 
     /// <summary>Gets the current count of items in the history buffer.</summary>
-    public int HistoryCount => _history.Count;
+    public int HistoryCount
+    {
+        get { lock (_lock) { return _history.Count; } }
+    }
 
     /// <summary>Gets the minimum number of samples required for statistics to be considered usable.</summary>
     public int MinUsableSample => _minUsableSample;

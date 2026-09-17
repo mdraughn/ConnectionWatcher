@@ -10,7 +10,7 @@ namespace ConEngine.Network;
 /// Runs the probe loop for one IP address: waits on its cadence, sends one
 /// probe through its transceiver, reports the result on the shared channel.
 /// </summary>
-public class PingController(TimeProvider timeProvider, IPingTransceiverFactory pingTransceiverFactory, ILogger log) : IDisposable
+public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILogger log) : IDisposable
 {
     private readonly Lock _lock = new();
     private bool _disposed;

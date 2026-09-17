@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
+using ConCore.Targets;
 using ConEngine.Configuration;
 using ConEngine.Events;
 using ConEngine.Network;
@@ -151,41 +152,39 @@ public class WatcherEngine
             _poolCoordinators.Add(coordinator);
         }
 
-        // Verdict layer, if an anchor pool is configured.
+        // The anchor pool, when configured and present, feeds both the verdict
+        // and the suspicion layers.
+        PoolDefinition? anchorPool = null;
         if (_verdictOptions.AnchorPool is { Length: > 0 } anchorPoolName)
         {
-            var anchorPool = _graph.Pools.Values.FirstOrDefault(p =>
+            anchorPool = _graph.Pools.Values.FirstOrDefault(p =>
                 p.Name.Equals(anchorPoolName, StringComparison.OrdinalIgnoreCase));
             if (anchorPool is null)
-            {
                 _log.LogWarning("Verdict disabled: anchor pool '{Pool}' not found", anchorPoolName);
-            }
-            else
-            {
-                Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
-                    _verdictOptions.WeatherThreshold, _timeProvider,
-                    _loggerFactory.CreateLogger<VerdictCoordinator>());
-                if (seed?.Verdict is { } verdictSeed)
-                    Verdict.Seed(verdictSeed);
-                _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
-                Verdict.Start();
-            }
+        }
+
+        // Verdict layer, if an anchor pool is configured.
+        if (anchorPool is not null)
+        {
+            Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
+                _verdictOptions.WeatherThreshold, _timeProvider,
+                _loggerFactory.CreateLogger<VerdictCoordinator>());
+            if (seed?.Verdict is { } verdictSeed)
+                Verdict.Seed(verdictSeed);
+            _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
+            Verdict.Start();
         }
 
         // Suspicion layer: works without an anchor pool (per-target glitches
         // only); sweeps need the pool.
-        var suspicionPool = _verdictOptions.AnchorPool is { Length: > 0 } poolName
-            ? _graph.Pools.Values.FirstOrDefault(p =>
-                p.Name.Equals(poolName, StringComparison.OrdinalIgnoreCase))
-            : null;
-        Suspicion = new SuspicionCoordinator(_graph, suspicionPool, _monitors,
+        Suspicion = new SuspicionCoordinator(_graph, anchorPool, _monitors,
             _verdictOptions.WeatherThreshold, _timeProvider,
             _loggerFactory.CreateLogger<SuspicionCoordinator>());
         _subscriptions.Add(Suspicion.GlitchSource.Subscribe(_glitchSubject.OnNext));
 
         // Ping plumbing: one manager, one controller per target, results
         // routed by target id (targets may share an address).
-        _manager = new PingManager(_timeProvider, _pingFactory, ct, _loggerFactory);
+        _manager = new PingManager(_pingFactory, ct, _loggerFactory);
         _subscriptions.Add(_manager.PingResultSource.Subscribe(
             routed =>
             {

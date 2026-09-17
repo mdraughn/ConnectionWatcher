@@ -16,7 +16,6 @@ namespace ConEngine.Network;
 public class PingManager : IDisposable
 {
     private readonly Lock _lock = new();
-    private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingTransceiverFactory;
     private readonly CancellationToken _globalCancellationToken;
     private readonly Dictionary<Guid, PingController> _pingControllers = new();
@@ -32,14 +31,12 @@ public class PingManager : IDisposable
     private readonly Subject<RoutedPingResult> _pingResultSubject = new();
     public IObservable<RoutedPingResult> PingResultSource => _pingResultSubject;
 
-    public PingManager(TimeProvider timeProvider,
-        IPingTransceiverFactory pingTransceiverFactory,
+    public PingManager(IPingTransceiverFactory pingTransceiverFactory,
         CancellationToken globalCancellationToken,
         ILoggerFactory loggerFactory)
     {
         _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<PingManager>();
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
 
@@ -66,7 +63,7 @@ public class PingManager : IDisposable
             if (!_pingControllers.TryGetValue(targetId, out var controller))
             {
                 var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
-                controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
+                controller = new PingController(_pingTransceiverFactory, controllerLogger);
                 controller.Launch(targetId, ipAddress, _resultWriter, probe, cadence, timeoutMsProvider, _globalCancellationToken);
                 _pingControllers[targetId] = controller;
                 _log.LogInformation("Created PingController for {IpAddress} (target {TargetId})", ipAddress, targetId);

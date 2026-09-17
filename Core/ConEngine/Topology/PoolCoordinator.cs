@@ -19,7 +19,7 @@ public class PoolCoordinator : IDisposable
     private readonly Lock _lock = new();
     private readonly List<IDisposable> _subscriptions = new();
 
-    private readonly ReplaySubject<TargetTransition> _transitionSubject = new(bufferSize: 1);
+    private readonly Subject<TargetTransition> _transitionSubject = new();
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public HostState CurrentState { get; private set; } = HostState.Initializing;

@@ -28,7 +28,7 @@ public class PingControllerTests
         var factory = new FakePingTransceiverFactory();
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
+        using var controller = new PingController(factory, NullLogger.Instance);
 
         controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
@@ -47,8 +47,8 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         var cadence = new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System);
 
-        using var controllerA = new PingController(TimeProvider.System, factory, NullLogger.Instance);
-        using var controllerB = new PingController(TimeProvider.System, factory, NullLogger.Instance);
+        using var controllerA = new PingController(factory, NullLogger.Instance);
+        using var controllerB = new PingController(factory, NullLogger.Instance);
         controllerA.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
         controllerB.Launch(Guid.NewGuid(), IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
 
@@ -69,7 +69,7 @@ public class PingControllerTests
         var factory = new FakePingTransceiverFactory();
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
+        using var controller = new PingController(factory, NullLogger.Instance);
 
         bool bursting = false;
         controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
@@ -94,7 +94,7 @@ public class PingControllerTests
         factory.SetThrow(IpA, true);
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
+        using var controller = new PingController(factory, NullLogger.Instance);
 
         controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),

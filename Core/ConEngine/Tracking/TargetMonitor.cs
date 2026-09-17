@@ -43,8 +43,10 @@ public class TargetMonitor : IDisposable
     private bool _resolutionFailureReported;
     private HostState? _seedState;
 
-    private readonly ReplaySubject<TargetTransition> _transitionSubject = new(bufferSize: 1);
-    private readonly ReplaySubject<TargetStatus> _statusSubject = new(bufferSize: 1);
+    // Plain subjects: every subscriber attaches before the engine activates
+    // anything, and LastStatus serves late polling consumers.
+    private readonly Subject<TargetTransition> _transitionSubject = new();
+    private readonly Subject<TargetStatus> _statusSubject = new();
 
     public TargetMonitor(Target target, PingProfile profile, PingDiscipline discipline,
         TimeProvider timeProvider, ILoggerFactory loggerFactory)
