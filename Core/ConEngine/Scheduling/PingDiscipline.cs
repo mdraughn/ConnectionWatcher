@@ -26,9 +26,18 @@ public class PingDiscipline : IPingCadence
     private DateTimeOffset? _burstStartedAt;
     private DateTimeOffset? _lastBurstStart;
     private TaskCompletionSource _releaseTcs = NewTcs();
+    private TaskCompletionSource _wakeTcs = NewTcs();
 
     private static TaskCompletionSource NewTcs() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>A burst just started: a controller sleeping out a normal
+    /// interval must wake and re-evaluate, or the burst waits for the sleep.</summary>
+    private void WakeLocked()
+    {
+        _wakeTcs.TrySetResult();
+        _wakeTcs = NewTcs();
+    }
 
     public PingDiscipline(PingProfile profile, TimeProvider timeProvider, TimeSpan phaseOffset = default)
     {
@@ -64,6 +73,7 @@ public class PingDiscipline : IPingCadence
                 // rate-limited by the analysis window itself, not the guard.
                 _burstStartedAt = _time.GetUtcNow();
                 _lastBurstStart = _burstStartedAt;
+                WakeLocked();
             }
             else
             {
@@ -126,6 +136,7 @@ public class PingDiscipline : IPingCadence
             return; // politeness: a lossy line must not chain bursts forever
         _burstStartedAt = now;
         _lastBurstStart = now;
+        WakeLocked();
     }
 
     public async Task WaitForNextPingAsync(CancellationToken ct)
@@ -133,9 +144,11 @@ public class PingDiscipline : IPingCadence
         while (true)
         {
             Task? parkTask = null;
+            Task wake;
             TimeSpan delay = TimeSpan.Zero;
             lock (_lock)
             {
+                wake = _wakeTcs.Task;
                 if (_state == HostState.Unreachable)
                 {
                     parkTask = _releaseTcs.Task;
@@ -153,7 +166,18 @@ public class PingDiscipline : IPingCadence
             }
 
             if (delay > TimeSpan.Zero)
-                await Task.Delay(delay, _time, ct).ConfigureAwait(false);
+            {
+                // Race the sleep against a burst start: a sweep, a lost ping,
+                // or a state change must not wait out a normal interval.
+                var sleep = Task.Delay(delay, _time, ct);
+                var first = await Task.WhenAny(sleep, wake).ConfigureAwait(false);
+                if (first == wake)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    continue; // ComputeDelay now returns the burst interval
+                }
+                await sleep.ConfigureAwait(false); // propagates cancellation
+            }
 
             lock (_lock)
             {

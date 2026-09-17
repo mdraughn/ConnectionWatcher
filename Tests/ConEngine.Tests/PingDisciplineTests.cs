@@ -144,6 +144,43 @@ public class PingDisciplineTests
     }
 
     [Fact]
+    public async Task TriggerBurst_wakes_a_pending_normal_wait()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+        var first = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(first, time, TimeSpan.FromSeconds(10))); // t=10, on slot
+
+        // A corroboration sweep lands while the controller sleeps toward t=20.
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.False(await Completes(wait, time, TimeSpan.Zero));
+        d.TriggerBurst();
+        await Task.Delay(50); // real time: let the woken loop arm its burst timer
+        // One burst interval later the ping must fire — not at t=20.
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));  // t=11
+    }
+
+    [Fact]
+    public async Task Lost_ping_wakes_a_pending_normal_wait()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+        var first = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.True(await Completes(first, time, TimeSpan.FromSeconds(10)));
+
+        // The controller computed its next normal delay before the manager
+        // thread delivered the loss (the usual ordering): the suspicion burst
+        // must still start now, not after the 10 s sleep.
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        Assert.False(await Completes(wait, time, TimeSpan.Zero));
+        d.OnPingResult(success: false);
+        await Task.Delay(50); // real time: let the woken loop arm its burst timer
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
     public async Task Failed_ping_while_responding_starts_suspicion_burst()
     {
         var time = new FakeTimeProvider();
