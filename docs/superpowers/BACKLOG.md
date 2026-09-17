@@ -35,12 +35,14 @@ Three public artifacts cover essentially everyone:
   Inno Setup `ConnectionWatcher-Setup-<ver>.exe`, self-contained win-x64,
   component choice (service+tray / tray-only with server-URL page), familiar
   install/uninstall, data in ProgramData always preserved.
-- **Multi-arch container publish** — one image tag for linux/amd64 +
-  linux/arm64 via `docker buildx`, pushed to a registry (GHCR when the repo
-  goes to GitHub). Covers Intel/ARM Synology, Pi, any Linux, Docker on Mac.
-- **Release pipeline** — GitHub Actions on version tag: build installer,
-  build+push image, attach to a GitHub Release. Version scheme shared between
-  installer and image tag.
+- ~~**Multi-arch container publish**~~ — DONE 2026-09-14 (GHCR, amd64 +
+  arm64, on every master push).
+- ~~**Release pipeline**~~ — DONE 2026-09-17: two channels. `edge` on every
+  master push; a `v*` tag publishes semver image tags + `latest`, builds the
+  Windows installer on a Windows runner, and creates a GitHub Release
+  (`-rc1` suffix = pre-release, never moves `latest`). One version source
+  (`Directory.Build.props`), stamped from the tag into image, binary and
+  installer name. See `plans/2026-09-17-release-pipeline.md`.
 - **Code signing** (when going public) — unsigned installers trip
   SmartScreen; cert costs ~$100-400/yr. The single biggest polish item for
   strangers; irrelevant while it's just Mark.

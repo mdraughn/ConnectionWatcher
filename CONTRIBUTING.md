@@ -37,8 +37,31 @@ real time, that's a smell worth mentioning in the PR.
   where the neighbors are, comments explain *why*, not *what*).
 - Use `example.com` hostnames and RFC 5737 addresses (`203.0.113.x`,
   `198.51.100.x`) in tests and docs — never real endpoints.
-- CI must be green (one historically flaky notifier test class runs
-  non-blocking; everything else is required).
+- CI must be green.
+
+## Releases
+
+Two channels, one source:
+
+- **edge** — every push to `master` publishes
+  `ghcr.io/mdraughn/conwatch:edge` (and `sha-<commit>`). Binaries report
+  `<version>-dev+<sha>`.
+- **stable** — push a tag and everything else is automatic:
+
+  ```bash
+  git tag v1.2.3
+  git push origin v1.2.3
+  ```
+
+  This publishes the image as `1.2.3`, `1.2`, `1` and moves `latest`,
+  builds `ConnectionWatcher-Setup-1.2.3.exe` on a Windows runner, and
+  creates a GitHub Release with generated notes and the installer attached.
+  A tag with a suffix (`v1.2.3-rc1`) becomes a GitHub *pre-release*, gets
+  only its own image tag, and never moves `latest`.
+
+The version lives in one place, `Directory.Build.props` (`VersionPrefix`);
+bump it right after a release so dev builds announce the version they are
+heading toward. Installers are not code-signed yet.
 
 Design notes and implementation history live in `docs/superpowers/` — often
 the fastest way to learn why something is the way it is.

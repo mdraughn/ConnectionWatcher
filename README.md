@@ -28,7 +28,13 @@ docker run -d --name conwatch --restart unless-stopped \
 Open `http://localhost:8080` — the quick-setup wizard detects your router,
 offers four public DNS anchors, and starts monitoring in one click. The image
 is multi-arch (amd64 + arm64: Intel/ARM Synology, Raspberry Pi, any Linux);
-`deploy/docker/compose.yaml` has the same thing in compose form. On Windows,
+`deploy/docker/compose.yaml` has the same thing in compose form.
+
+Image tags: `latest` is the newest stable release (also `1.2.3`, `1.2`, `1`
+to pin a line); `edge` is the newest build from `master`, for people who
+like to live there. Every build also carries a `sha-<commit>` tag. Windows
+installers ship with each release on the
+[Releases page](https://github.com/mdraughn/ConnectionWatcher/releases). On Windows,
 `.\Install-Watcher.ps1` installs it as a service instead — see
 [Running unattended](#running-unattended).
 

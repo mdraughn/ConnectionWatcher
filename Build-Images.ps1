@@ -1,4 +1,4 @@
-# Builds the ConnectionWatcher container image for linux/amd64 AND linux/arm64.
+﻿# Builds the ConnectionWatcher container image for linux/amd64 AND linux/arm64.
 #
 # Without -Push: builds each architecture into the local Docker image store as
 #   conwatch:<tag>-amd64 and conwatch:<tag>-arm64 for inspection/testing.
@@ -13,7 +13,11 @@
 #
 #   .\Build-Images.ps1
 #   .\Build-Images.ps1 -ExportTar
-#   .\Build-Images.ps1 -Push -Image ghcr.io/<user>/conwatch -Tag 0.9.0
+#   .\Build-Images.ps1 -Push -Image ghcr.io/<user>/conwatch -Tag 0.9.0-local
+#
+# Releases are NOT cut with this script: pushing a v* tag builds and
+# publishes the image (edge/latest/semver tags) and the installer through
+# GitHub Actions. This script never touches :latest.
 [CmdletBinding()]
 param(
     [string]$Image = "conwatch",
@@ -25,9 +29,10 @@ $ErrorActionPreference = "Stop"
 
 if ($Push) {
     # One tag, two platforms; the manifest list means each machine pulls the
-    # right architecture invisibly. Also stamps :latest alongside the tag.
+    # right architecture invisibly. Only the given tag: :latest belongs to
+    # the release workflow.
     docker buildx build --platform linux/amd64,linux/arm64 `
-        -t "${Image}:${Tag}" -t "${Image}:latest" --push $PSScriptRoot
+        -t "${Image}:${Tag}" --push $PSScriptRoot
     if ($LASTEXITCODE -ne 0) { throw "Multi-arch build/push failed." }
     Write-Host "Pushed ${Image}:${Tag} (linux/amd64 + linux/arm64)" -ForegroundColor Green
 } else {
