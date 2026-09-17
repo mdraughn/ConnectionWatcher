@@ -1,0 +1,72 @@
+# Cuts a release from a v* tag: builds the Windows installer on a Windows
+# runner and attaches it to a GitHub Release with generated notes. A tag with
+# a pre-release suffix (v1.2.3-rc1) becomes a GitHub pre-release. The
+# container image for the same tag is published by publish-image.yml.
+#
+# To release: `git tag v1.2.3 && git push origin v1.2.3`. Then bump
+# VersionPrefix in Directory.Build.props so dev builds announce the next one.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Ensure Inno Setup 6
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - id: ver
+        shell: pwsh
+        run: '"version=$($env:GITHUB_REF_NAME.TrimStart(''v''))" >> $env:GITHUB_OUTPUT'
+
+      - name: Build installer
+        shell: pwsh
+        run: .\Build-Installer.ps1 -Version ${{ steps.ver.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/ConnectionWatcher-Setup-*.exe
+          if-no-files-found: error
+
+  release:
+    needs: installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: dist
+
+      - id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ConnectionWatcher-Setup-*.exe
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
+          generate_release_notes: true
+          body: |
+            **Container:** `docker pull ghcr.io/${{ github.repository_owner }}/conwatch:${{ steps.ver.outputs.version }}`
+            (multi-arch: amd64 + arm64). A stable release also moves `latest`.
+
+            **Windows:** `ConnectionWatcher-Setup-${{ steps.ver.outputs.version }}.exe` below.
+            The installer is not code-signed yet, so SmartScreen will ask you to confirm.
