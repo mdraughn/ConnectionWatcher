@@ -102,4 +102,57 @@ public class RecorderCollectorTests : IDisposable
             Assert.Equal(40, minute0.RttMax);
         }
     }
+
+    [Fact]
+    public async Task A_failed_transition_write_is_retried_and_lands_exactly_once()
+    {
+        var recorder = new TransitionRecorder(new FailingOnceDbFactory(_factory), NullLogger<TransitionRecorder>.Instance);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Google", HostState.Down));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => recorder.FlushAsync());
+        await recorder.FlushAsync(); // second attempt succeeds
+
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(1, await db.Transitions.CountAsync());
+    }
+
+    [Fact]
+    public async Task A_failed_glitch_write_is_retried_and_lands_exactly_once()
+    {
+        var recorder = new GlitchRecorder(new FailingOnceDbFactory(_factory), NullLogger<GlitchRecorder>.Instance);
+        using var source = new Subject<GlitchEvent>();
+        recorder.Attach(source);
+        source.OnNext(new GlitchEvent
+        {
+            TargetId = Guid.NewGuid(), TargetName = "Google",
+            StartUtc = DateTimeOffset.UtcNow.AddSeconds(-5), EndUtc = DateTimeOffset.UtcNow,
+            LostCount = 2, SampleCount = 6,
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => recorder.FlushAsync());
+        await recorder.FlushAsync();
+
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(1, await db.Glitches.CountAsync());
+    }
+
+    [Fact]
+    public async Task A_failed_rollup_write_is_retried_next_flush()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var collector = new RollupCollector(new FailingOnceDbFactory(_factory), time, NullLogger<RollupCollector>.Instance);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source);
+        var target = Guid.NewGuid();
+        source.OnNext((target, new PingResult(Ip, true, 10, timestamp: time.GetUtcNow())));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => collector.FlushAllAsync());
+        await collector.FlushAllAsync();
+
+        await using var db = _factory.CreateDbContext();
+        var row = await db.Rollups.SingleAsync(r => r.TargetId == target);
+        Assert.Equal(1, row.PingCount);
+    }
 }

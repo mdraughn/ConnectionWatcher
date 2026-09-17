@@ -1,85 +1,21 @@
-using System.Threading.Channels;
 using ConEngine.Events;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace ConPersistence.Services;
 
-/// <summary>
-/// Persists engine transitions. Events flow through a bounded channel so the
-/// engine never blocks on the database; a background loop batches inserts.
-/// </summary>
+/// <summary>Persists engine transitions (see <see cref="ChannelRecorder{TEvent}"/> for the mechanics).</summary>
 public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
-    ILogger<TransitionRecorder> log) : BackgroundService
+    ILogger<TransitionRecorder> log) : ChannelRecorder<TargetTransition>(log)
 {
-    private readonly Channel<TargetTransition> _channel = Channel.CreateBounded<TargetTransition>(
-        new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.DropOldest });
-    private readonly SemaphoreSlim _flushLock = new(1, 1);
-    private IDisposable? _subscription;
+    protected override string EventNoun => "transitions";
 
-    /// <summary>Subscribes to a transition stream, replacing any prior subscription.</summary>
-    public void Attach(IObservable<TargetTransition> source)
+    protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
     {
-        _subscription?.Dispose();
-        _subscription = source.Subscribe(
-            t =>
-            {
-                if (!_channel.Writer.TryWrite(t))
-                    log.LogWarning("Transition channel full; dropped {Transition}", t);
-            },
-            ex => log.LogError(ex, "Transition stream error"));
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            while (await _channel.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
-            {
-                try
-                {
-                    await FlushAsync(stoppingToken).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    log.LogError(ex, "Failed writing transitions; retrying in 5s");
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Shutdown: drain what's left without a token.
-            try { await FlushAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch (Exception ex) { log.LogWarning(ex, "Final transition flush failed"); }
-        }
-    }
-
-    /// <summary>Drains everything currently in the channel into the database.
-    /// Serialized: the background loop and a test-driven flush must not split
-    /// one batch between them (the loser would see a half-written log).</summary>
-    public async Task FlushAsync(CancellationToken ct = default)
-    {
-        await _flushLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var batch = new List<TargetTransition>();
-            while (batch.Count < 500 && _channel.Reader.TryRead(out var t))
-                batch.Add(t);
-            if (batch.Count == 0)
-                return;
-
-            await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
-            db.Transitions.AddRange(batch.Select(ToRow));
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            log.LogDebug("Recorded {Count} transitions", batch.Count);
-        }
-        finally
-        {
-            _flushLock.Release();
-        }
+        await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        db.Transitions.AddRange(batch.Select(ToRow));
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private static TransitionRow ToRow(TargetTransition t) => new()
@@ -99,10 +35,4 @@ public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
         Verdict = t.Reason.Verdict,
         AvgRtt = t.AverageRoundtripTime,
     };
-
-    public override void Dispose()
-    {
-        _subscription?.Dispose();
-        base.Dispose();
-    }
 }

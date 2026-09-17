@@ -1,86 +1,23 @@
-using System.Threading.Channels;
 using ConEngine.Events;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace ConPersistence.Services;
 
 /// <summary>
-/// Persists glitch events (same channel-batching shape as TransitionRecorder).
-/// A Coalesced event extends the target's most recent glitch row instead of
-/// inserting — one ongoing rough patch stays one row.
+/// Persists glitch events (see <see cref="ChannelRecorder{TEvent}"/> for the
+/// mechanics). A Coalesced event extends the target's most recent glitch row
+/// instead of inserting — one ongoing rough patch stays one row — which is
+/// why batches must stay whole.
 /// </summary>
 public class GlitchRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
-    ILogger<GlitchRecorder> log) : BackgroundService
+    ILogger<GlitchRecorder> log) : ChannelRecorder<GlitchEvent>(log)
 {
-    private readonly Channel<GlitchEvent> _channel = Channel.CreateBounded<GlitchEvent>(
-        new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.DropOldest });
-    private readonly SemaphoreSlim _flushLock = new(1, 1);
-    private IDisposable? _subscription;
+    protected override string EventNoun => "glitches";
 
-    /// <summary>Subscribes to a glitch stream, replacing any prior subscription.</summary>
-    public void Attach(IObservable<GlitchEvent> source)
+    protected override async Task WriteBatchAsync(IReadOnlyList<GlitchEvent> batch, CancellationToken ct)
     {
-        _subscription?.Dispose();
-        _subscription = source.Subscribe(
-            g =>
-            {
-                if (!_channel.Writer.TryWrite(g))
-                    log.LogWarning("Glitch channel full; dropped {Glitch}", g);
-            },
-            ex => log.LogError(ex, "Glitch stream error"));
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            while (await _channel.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
-            {
-                try
-                {
-                    await FlushAsync(stoppingToken).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    log.LogError(ex, "Failed writing glitches; retrying in 5s");
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            try { await FlushAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch (Exception ex) { log.LogWarning(ex, "Final glitch flush failed"); }
-        }
-    }
-
-    /// <summary>Drains everything currently in the channel into the database.
-    /// Serialized like TransitionRecorder.FlushAsync (coalescing also depends
-    /// on batches staying whole).</summary>
-    public async Task FlushAsync(CancellationToken ct = default)
-    {
-        await _flushLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            await FlushCoreAsync(ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            _flushLock.Release();
-        }
-    }
-
-    private async Task FlushCoreAsync(CancellationToken ct)
-    {
-        var batch = new List<GlitchEvent>();
-        while (batch.Count < 500 && _channel.Reader.TryRead(out var g))
-            batch.Add(g);
-        if (batch.Count == 0)
-            return;
-
         await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         var addedThisBatch = new Dictionary<Guid, GlitchRow>();
         foreach (var g in batch)
@@ -119,12 +56,5 @@ public class GlitchRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
             }
         }
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        log.LogDebug("Recorded {Count} glitches", batch.Count);
-    }
-
-    public override void Dispose()
-    {
-        _subscription?.Dispose();
-        base.Dispose();
     }
 }
