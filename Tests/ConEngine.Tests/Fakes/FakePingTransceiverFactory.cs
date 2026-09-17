@@ -19,12 +19,16 @@ public class FakePingTransceiverFactory : IPingTransceiverFactory
     /// <summary>Probe spec seen at Create, per IP (for probe-threading assertions).</summary>
     public ConcurrentDictionary<IPAddress, ProbeSpec> ObservedProbes { get; } = new();
 
+    /// <summary>Every transceiver created, in order (several per IP when targets share an address).</summary>
+    public ConcurrentQueue<(IPAddress Ip, ProbeSpec Probe)> Created { get; } = new();
+
     public void SetUp(IPAddress ip, bool up) => _up[ip] = up;
     public void SetThrow(IPAddress ip, bool throwOnPing) => _throw[ip] = throwOnPing;
 
     public IPingTransceiver Create(IPAddress ipAddress, ProbeSpec probe, CancellationToken cancellationToken)
     {
         ObservedProbes[ipAddress] = probe;
+        Created.Enqueue((ipAddress, probe));
         return new FakeTransceiver(ipAddress, this);
     }
 

@@ -40,6 +40,25 @@ public class WatcherOptionsValidatorTests
     }
 
     [Fact]
+    public void Same_address_with_different_probes_is_allowed()
+    {
+        // Each target gets its own controller; sharing an address is the user's business.
+        var o = ValidHome();
+        o.Targets.Add(new TargetConfig { Name = "RouterHttps", Address = "192.168.1.1", Probe = "tcp:443" });
+        Assert.True(Validate(o).Succeeded);
+    }
+
+    [Fact]
+    public void Same_address_and_probe_twice_fails()
+    {
+        var o = ValidHome();
+        o.Targets.Add(new TargetConfig { Name = "RouterAgain", Address = "192.168.1.1", Probe = "ICMP" });
+        var result = Validate(o);
+        Assert.True(result.Failed);
+        Assert.Contains("Duplicate target address", result.FailureMessage);
+    }
+
+    [Fact]
     public void Unknown_profile_fails()
     {
         var o = ValidHome();

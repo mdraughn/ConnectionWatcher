@@ -35,7 +35,7 @@ public class PingManagerTests
         var manager = new PingManager(TimeProvider.System, new HangingFactory(), cts.Token, NullLoggerFactory.Instance);
         var cadence = new FixedIntervalCadence(TimeSpan.FromMilliseconds(1), TimeProvider.System);
         for (int i = 1; i <= 10; i++)
-            manager.GetOrCreateController(IPAddress.Parse($"10.9.0.{i}"), ProbeSpec.Icmp, cadence, () => 60_000);
+            manager.GetOrCreateController(Guid.NewGuid(), IPAddress.Parse($"10.9.0.{i}"), ProbeSpec.Icmp, cadence, () => 60_000);
         await Task.Delay(50); // let every loop enter its ping
 
         var sw = Stopwatch.StartNew();

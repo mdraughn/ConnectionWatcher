@@ -8,8 +8,10 @@ using Microsoft.Extensions.Logging;
 namespace ConEngine.Network;
 
 /// <summary>
-/// Owns one PingController per probed address and pumps their results from
-/// the shared channel onto <see cref="PingResultSource"/> on a single thread.
+/// Owns one PingController per target and pumps their results from the
+/// shared channel onto <see cref="PingResultSource"/> on a single thread.
+/// Controllers are keyed by target id, never by address: targets that share
+/// an address (or probe one host two ways) stay independent.
 /// </summary>
 public class PingManager : IDisposable
 {
@@ -17,9 +19,9 @@ public class PingManager : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingTransceiverFactory;
     private readonly CancellationToken _globalCancellationToken;
-    private readonly Dictionary<IPAddress, PingController> _pingControllers = new();
-    private readonly ChannelWriter<PingResult> _resultWriter;
-    private readonly ChannelReader<PingResult> _resultReader;
+    private readonly Dictionary<Guid, PingController> _pingControllers = new();
+    private readonly ChannelWriter<RoutedPingResult> _resultWriter;
+    private readonly ChannelReader<RoutedPingResult> _resultReader;
     private readonly Task _messageProcessingTask;
     private readonly ILogger<PingManager> _log;
     private readonly ILoggerFactory _loggerFactory;
@@ -27,8 +29,8 @@ public class PingManager : IDisposable
 
     // Plain Subject: the engine subscribes before any controller exists, so
     // nothing ever needs a replay.
-    private readonly Subject<PingResult> _pingResultSubject = new();
-    public IObservable<PingResult> PingResultSource => _pingResultSubject;
+    private readonly Subject<RoutedPingResult> _pingResultSubject = new();
+    public IObservable<RoutedPingResult> PingResultSource => _pingResultSubject;
 
     public PingManager(TimeProvider timeProvider,
         IPingTransceiverFactory pingTransceiverFactory,
@@ -41,34 +43,50 @@ public class PingManager : IDisposable
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
 
-        var resultChannel = Channel.CreateUnbounded<PingResult>();
+        var resultChannel = Channel.CreateUnbounded<RoutedPingResult>();
         _resultWriter = resultChannel.Writer;
         _resultReader = resultChannel.Reader;
 
         _messageProcessingTask = Task.Run(ProcessMessages, globalCancellationToken);
     }
 
-    /// <summary>Gets or creates the controller probing <paramref name="ipAddress"/>.</summary>
+    /// <summary>Gets or creates the controller probing on behalf of <paramref name="targetId"/>.</summary>
+    /// <param name="targetId">The target the results belong to.</param>
     /// <param name="ipAddress">The IP address to probe.</param>
     /// <param name="probe">How to probe the target (ICMP echo or TCP connect).</param>
     /// <param name="cadence">Decides when each probe happens.</param>
     /// <param name="timeoutMsProvider">Per-probe timeout in milliseconds, read before every probe.</param>
-    public PingController GetOrCreateController(IPAddress ipAddress, ProbeSpec probe, IPingCadence cadence, Func<int> timeoutMsProvider)
+    public PingController GetOrCreateController(Guid targetId, IPAddress ipAddress, ProbeSpec probe,
+        IPingCadence cadence, Func<int> timeoutMsProvider)
     {
         lock (_lock)
         {
             ObjectDisposedException.ThrowIf(_stopped, this);
 
-            if (!_pingControllers.TryGetValue(ipAddress, out var controller))
+            if (!_pingControllers.TryGetValue(targetId, out var controller))
             {
                 var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
                 controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
-                controller.Launch(ipAddress, _resultWriter, probe, cadence, timeoutMsProvider, _globalCancellationToken);
-                _pingControllers[ipAddress] = controller;
-                _log.LogInformation("Created PingController for {IpAddress}", ipAddress);
+                controller.Launch(targetId, ipAddress, _resultWriter, probe, cadence, timeoutMsProvider, _globalCancellationToken);
+                _pingControllers[targetId] = controller;
+                _log.LogInformation("Created PingController for {IpAddress} (target {TargetId})", ipAddress, targetId);
             }
             return controller;
         }
+    }
+
+    /// <summary>Stops and removes one target's controller (no-op when absent). Never throws.</summary>
+    public async Task StopControllerAsync(Guid targetId, TimeSpan grace)
+    {
+        PingController? controller;
+        lock (_lock)
+        {
+            _pingControllers.Remove(targetId, out controller);
+        }
+        if (controller is null)
+            return;
+        await controller.StopAsync(grace).ConfigureAwait(false);
+        controller.Dispose();
     }
 
     /// <summary>
@@ -109,10 +127,10 @@ public class PingManager : IDisposable
         try
         {
             _log.LogDebug("PingManager message processing started");
-            await foreach (var message in _resultReader.ReadAllAsync(_globalCancellationToken))
+            await foreach (var routed in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
-                LogPingResult(message);
-                _pingResultSubject.OnNext(message);
+                LogPingResult(routed.Result);
+                _pingResultSubject.OnNext(routed);
             }
         }
         catch (OperationCanceledException)

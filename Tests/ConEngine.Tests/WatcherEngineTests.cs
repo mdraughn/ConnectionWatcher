@@ -1,4 +1,5 @@
 using System.Net;
+using ConCore;
 using ConEngine.Configuration;
 using ConEngine.Events;
 using ConEngine.Tests.Fakes;
@@ -67,6 +68,43 @@ public class WatcherEngineTests : IAsyncLifetime
     }
 
     private HostState State(string name) => _engine.Monitors[_engine.Graph.GetByName(name).Id].CurrentState;
+
+    [Fact]
+    public async Task Two_targets_on_one_ip_are_tracked_independently()
+    {
+        var sharedIp = IPAddress.Parse("192.168.9.1");
+        var options = new WatcherOptions
+        {
+            Profiles = { ["Fast"] = new PingProfileConfig { NormalIntervalSeconds = 0.02, MinUsableSample = 5, HistorySize = 20 } },
+            Targets =
+            [
+                new TargetConfig { Name = "RouterIcmp", Address = "192.168.9.1", Profile = "Fast" },
+                new TargetConfig { Name = "RouterHttps", Address = "192.168.9.1", Profile = "Fast", Probe = "tcp:443" },
+            ],
+        };
+        var fake = new FakePingTransceiverFactory();
+        var engine = new WatcherEngine(TimeProvider.System, fake,
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(options));
+        using var cts = new CancellationTokenSource();
+        await engine.StartAsync(cts.Token);
+        try
+        {
+            var icmp = engine.Monitors[engine.Graph.GetByName("RouterIcmp").Id];
+            var tcp = engine.Monitors[engine.Graph.GetByName("RouterHttps").Id];
+            await Eventually(() => icmp.CurrentState == HostState.Responding && tcp.CurrentState == HostState.Responding);
+            await Eventually(() => icmp.PingCount >= 5 && tcp.PingCount >= 5);
+
+            var probes = fake.Created.Where(c => c.Ip.Equals(sharedIp)).Select(c => c.Probe).ToList();
+            Assert.Contains(ProbeSpec.Icmp, probes);
+            Assert.Contains(new ProbeSpec(ProbeKind.Tcp, 443), probes);
+        }
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
+    }
 
     [Fact]
     public async Task Healthy_network_reaches_responding_and_pool_responds()

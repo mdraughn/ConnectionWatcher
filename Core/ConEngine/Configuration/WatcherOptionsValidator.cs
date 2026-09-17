@@ -10,7 +10,9 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
     {
         var failures = new List<string>();
         var targetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var addresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Targets may share an address (each gets its own controller); the
+        // same address probed the same way twice is a typo, not a choice.
+        var addressProbes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var t in options.Targets)
         {
@@ -19,18 +21,19 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
             else if (!targetNames.Add(t.Name))
                 failures.Add($"Duplicate target name '{t.Name}'.");
 
-            if (string.IsNullOrWhiteSpace(t.Address))
-                failures.Add($"Target '{t.Name}' has an empty Address.");
-            else if (!addresses.Add(t.Address))
-                failures.Add($"Duplicate target address '{t.Address}'.");
-
             if (!IsKnownProfile(options, t.Profile))
                 failures.Add($"Target '{t.Name}' references unknown profile '{t.Profile}'.");
 
-            if (!ProbeSpec.TryParse(t.Probe, out var probe))
+            var probeValid = ProbeSpec.TryParse(t.Probe, out var probe);
+            if (!probeValid)
                 failures.Add($"Target '{t.Name}' has an invalid Probe '{t.Probe}' (expected 'tcp:<port>').");
             else if (!ProbePolicy.IsAllowed(t.Address ?? "", probe, out var probeReason))
                 failures.Add($"Target '{t.Name}': {probeReason}");
+
+            if (string.IsNullOrWhiteSpace(t.Address))
+                failures.Add($"Target '{t.Name}' has an empty Address.");
+            else if (probeValid && !addressProbes.Add($"{t.Address}|{probe}"))
+                failures.Add($"Duplicate target address '{t.Address}' with probe '{probe}'.");
         }
 
         var poolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

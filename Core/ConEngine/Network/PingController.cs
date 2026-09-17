@@ -15,8 +15,9 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     private readonly Lock _lock = new();
     private bool _disposed;
     private Task? _pingTask;
+    private Guid _targetId;
     private IPAddress? _ipAddress;
-    private ChannelWriter<PingResult>? _resultWriter;
+    private ChannelWriter<RoutedPingResult>? _resultWriter;
     private ProbeSpec _probe;
     private IPingCadence? _cadence;
     private Func<int>? _timeoutMsProvider;
@@ -30,6 +31,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     /// Starts probing the specified IP address, pacing probes via the cadence,
     /// and sending results through the channel.
     /// </summary>
+    /// <param name="targetId">The target this controller probes for; stamped on every result.</param>
     /// <param name="ipAddress">The IP address to probe.</param>
     /// <param name="resultWriter">Channel to report results.</param>
     /// <param name="probe">How to probe the target (ICMP echo or TCP connect).</param>
@@ -38,7 +40,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
     /// every probe (bursting shortens the timeout).</param>
     /// <param name="cancellationToken">Engine-wide cancellation.</param>
     /// <returns>A task that completes when the loop exits.</returns>
-    public Task Launch(IPAddress ipAddress, ChannelWriter<PingResult> resultWriter,
+    public Task Launch(Guid targetId, IPAddress ipAddress, ChannelWriter<RoutedPingResult> resultWriter,
         ProbeSpec probe, IPingCadence cadence, Func<int> timeoutMsProvider, CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -47,6 +49,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
 
             _linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _localCancellationTokenSource.Token);
             _cancellationToken = _linkedCts.Token;
+            _targetId = targetId;
             _ipAddress = ipAddress;
             _resultWriter = resultWriter;
             _probe = probe;
@@ -135,7 +138,7 @@ public class PingController(TimeProvider timeProvider, IPingTransceiverFactory p
         if (_resultWriter is null)
             return;
         // If the channel is closed this fails quietly; the manager is shutting down.
-        if (!_resultWriter.TryWrite(result))
+        if (!_resultWriter.TryWrite(new RoutedPingResult(_targetId, result)))
             log.LogDebug("[{ipAddress}] result dropped: channel closed", _ipAddress);
     }
 

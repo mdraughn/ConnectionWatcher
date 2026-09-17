@@ -29,7 +29,6 @@ public class WatcherEngine
 
     private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
     private readonly List<PoolCoordinator> _poolCoordinators = new();
-    private readonly ConcurrentDictionary<IPAddress, TargetMonitor> _routingTable = new();
     private readonly List<IDisposable> _subscriptions = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
     private readonly Subject<(Guid TargetId, PingResult Result)> _pingSampleSubject = new();
@@ -174,13 +173,15 @@ public class WatcherEngine
             _loggerFactory.CreateLogger<SuspicionCoordinator>());
         _subscriptions.Add(Suspicion.GlitchSource.Subscribe(_glitchSubject.OnNext));
 
-        // Ping plumbing: one manager, results routed by IP.
+        // Ping plumbing: one manager, one controller per target, results
+        // routed by target id (targets may share an address).
         _manager = new PingManager(_timeProvider, _pingFactory, ct, _loggerFactory);
         _subscriptions.Add(_manager.PingResultSource.Subscribe(
-            result =>
+            routed =>
             {
-                if (_routingTable.TryGetValue(result.IpAddress, out var monitor))
+                if (_monitors.TryGetValue(routed.TargetId, out var monitor))
                 {
+                    var result = routed.Result;
                     monitor.Discipline.OnPingResult(result.Success);
                     monitor.RecordPingResult(result);
                     _pingSampleSubject.OnNext((monitor.Target.Id, result));
@@ -207,7 +208,6 @@ public class WatcherEngine
     private void Activate(TargetMonitor monitor, IPAddress ip)
     {
         monitor.StartTracking(ip);
-        _routingTable[ip] = monitor;
         // Bursts shorten the timeout: replies arrive in well under a second,
         // and against a dead host the steady timeout dominates burst cost.
         var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
@@ -216,7 +216,7 @@ public class WatcherEngine
         // surface on Windows (the stack retries after the RST), so TCP probes
         // keep enough budget to classify Refused as a reply during bursts.
         var burstCapMs = probe.Kind == ProbeKind.Tcp ? 2500 : 1000;
-        _manager!.GetOrCreateController(ip, probe, monitor.Discipline,
+        _manager!.GetOrCreateController(monitor.Target.Id, ip, probe, monitor.Discipline,
             () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, burstCapMs) : steadyTimeoutMs);
         // Warm starts burst everything so presumed states confirm in seconds
         // (seeded Faltering/Down already burst via the discipline; this covers

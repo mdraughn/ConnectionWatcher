@@ -13,9 +13,9 @@ public class PingControllerTests
     private static readonly IPAddress IpA = IPAddress.Parse("10.0.0.1");
     private static readonly IPAddress IpB = IPAddress.Parse("10.0.0.2");
 
-    private static async Task<List<PingResult>> Collect(ChannelReader<PingResult> reader, int count, int timeoutMs = 5000)
+    private static async Task<List<RoutedPingResult>> Collect(ChannelReader<RoutedPingResult> reader, int count, int timeoutMs = 5000)
     {
-        var results = new List<PingResult>();
+        var results = new List<RoutedPingResult>();
         using var cts = new CancellationTokenSource(timeoutMs);
         while (results.Count < count)
             results.Add(await reader.ReadAsync(cts.Token));
@@ -26,16 +26,16 @@ public class PingControllerTests
     public async Task Controller_pings_at_cadence_and_reports_results()
     {
         var factory = new FakePingTransceiverFactory();
-        var channel = Channel.CreateUnbounded<PingResult>();
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
 
-        controller.Launch(IpA, channel.Writer, ProbeSpec.Icmp,
+        controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => 1000, cts.Token);
 
         var results = await Collect(channel.Reader, 3);
-        Assert.All(results, r => Assert.True(r.Success));
+        Assert.All(results, r => Assert.True(r.Result.Success));
         cts.Cancel();
     }
 
@@ -43,14 +43,14 @@ public class PingControllerTests
     public async Task Stopping_one_controller_does_not_complete_shared_channel()
     {
         var factory = new FakePingTransceiverFactory();
-        var channel = Channel.CreateUnbounded<PingResult>();
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
         var cadence = new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System);
 
         using var controllerA = new PingController(TimeProvider.System, factory, NullLogger.Instance);
         using var controllerB = new PingController(TimeProvider.System, factory, NullLogger.Instance);
-        controllerA.Launch(IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
-        controllerB.Launch(IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
+        controllerA.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
+        controllerB.Launch(Guid.NewGuid(), IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
 
         await Collect(channel.Reader, 2);
         controllerA.Stop();
@@ -59,7 +59,7 @@ public class PingControllerTests
         // Channel must still be open and still carrying B's results.
         Assert.False(channel.Reader.Completion.IsCompleted);
         var afterStop = await Collect(channel.Reader, 3);
-        Assert.All(afterStop.Where(r => !r.IpAddress.Equals(IpA)), r => Assert.True(r.Success));
+        Assert.All(afterStop.Where(r => !r.Result.IpAddress.Equals(IpA)), r => Assert.True(r.Result.Success));
         cts.Cancel();
     }
 
@@ -67,12 +67,12 @@ public class PingControllerTests
     public async Task Timeout_provider_is_read_per_ping()
     {
         var factory = new FakePingTransceiverFactory();
-        var channel = Channel.CreateUnbounded<PingResult>();
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
 
         bool bursting = false;
-        controller.Launch(IpA, channel.Writer, ProbeSpec.Icmp,
+        controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => bursting ? 1000 : 3000, cts.Token);
 
@@ -92,24 +92,24 @@ public class PingControllerTests
     {
         var factory = new FakePingTransceiverFactory();
         factory.SetThrow(IpA, true);
-        var channel = Channel.CreateUnbounded<PingResult>();
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(TimeProvider.System, factory, NullLogger.Instance);
 
-        controller.Launch(IpA, channel.Writer, ProbeSpec.Icmp,
+        controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => 1000, cts.Token);
 
         var failures = await Collect(channel.Reader, 2);
-        Assert.All(failures, r => Assert.False(r.Success));
+        Assert.All(failures, r => Assert.False(r.Result.Success));
 
         // Heal the transceiver: the same loop must recover and report successes.
         factory.SetThrow(IpA, false);
         using var cts2 = new CancellationTokenSource(5000);
-        PingResult? healed = null;
-        while (healed is not { Success: true })
+        RoutedPingResult? healed = null;
+        while (healed is not { Result.Success: true })
             healed = await channel.Reader.ReadAsync(cts2.Token);
-        Assert.True(healed.Success);
+        Assert.True(healed.Result.Success);
         cts.Cancel();
     }
 }
