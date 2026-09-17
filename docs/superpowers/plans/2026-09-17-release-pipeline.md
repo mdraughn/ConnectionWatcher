@@ -26,7 +26,7 @@
 - Modify: `Programs/ConWatch/ConWatch.csproj:22-25` (remove `<Version>`), `Build-Installer.ps1` (default `-Version` from the props; pass `/p:Version` to both publishes), `Dockerfile` (new `APP_VERSION` build arg)
 - Test: `Tests/ConWatch.Tests/BuildInfoTests.cs`
 
-- [ ] **Step 1: Failing test — dev builds carry the `-dev` suffix**
+- [x] **Step 1: Failing test — dev builds carry the `-dev` suffix**
 
 ```csharp
 [Fact]
@@ -40,7 +40,7 @@ public void Dev_builds_are_marked_as_such()
 
 Run: `dotnet test Tests/ConWatch.Tests --filter BuildInfoTests` → FAIL (version is `0.9.0`).
 
-- [ ] **Step 2: Create `Directory.Build.props`**
+- [x] **Step 2: Create `Directory.Build.props`**
 
 ```xml
 <Project>
@@ -58,15 +58,15 @@ Run: `dotnet test Tests/ConWatch.Tests --filter BuildInfoTests` → FAIL (versio
 
 Remove `<Version>0.9.0</Version>` and its comment from `ConWatch.csproj` (keep `Company`/`Product` there or drop them; the props now supply both).
 
-- [ ] **Step 3: Dockerfile takes `APP_VERSION`**
+- [x] **Step 3: Dockerfile takes `APP_VERSION`**
 
 After `ARG GIT_SHA=` add `ARG APP_VERSION=` and extend the publish line with `${APP_VERSION:+/p:Version=$APP_VERSION}`.
 
-- [ ] **Step 4: `Build-Installer.ps1` stamps the binaries**
+- [x] **Step 4: `Build-Installer.ps1` stamps the binaries**
 
 Default `-Version` to the props value (`<VersionPrefix>-<VersionSuffix>`, read with a regex), and add `/p:Version=$Version` to both `dotnet publish` calls so the installed service reports the same version the installer is named with.
 
-- [ ] **Step 5: Run the test, then the full web suite; commit**
+- [x] **Step 5: Run the test, then the full web suite; commit**
 
 `git commit -m "build: one version source (Directory.Build.props); dev builds are X.Y.Z-dev"`
 
@@ -75,7 +75,7 @@ Default `-Version` to the props value (`<VersionPrefix>-<VersionSuffix>`, read w
 **Files:**
 - Modify: `.github/workflows/publish-image.yml`
 
-- [ ] **Step 1: Tag rules**
+- [x] **Step 1: Tag rules**
 
 Replace the `tags:` block with:
 
@@ -90,7 +90,7 @@ tags: |
 
 `flavor: latest=auto` (the default) adds `latest` only for non-pre-release semver tags, and the major/minor patterns are skipped for pre-releases automatically.
 
-- [ ] **Step 2: Version build-arg from the tag**
+- [x] **Step 2: Version build-arg from the tag**
 
 Add a step before `meta`:
 
@@ -102,14 +102,14 @@ Add a step before `meta`:
 
 and pass `build-args: |` `GIT_SHA=${{ github.sha }}` and `APP_VERSION=${{ steps.ver.outputs.version }}`.
 
-- [ ] **Step 3: Validate the YAML** (`python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/publish-image.yml'))"` or `gh workflow view`), commit: `ci: edge channel on master pushes; latest and semver tags only from v* tags`.
+- [x] **Step 3: Validate the YAML** (`python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/publish-image.yml'))"` or `gh workflow view`), commit: `ci: edge channel on master pushes; latest and semver tags only from v* tags`.
 
 ### Task 3: Release workflow (`release.yml`)
 
 **Files:**
 - Create: `.github/workflows/release.yml`
 
-- [ ] **Step 1: Write the workflow**
+- [x] **Step 1: Write the workflow**
 
 ```yaml
 name: release
@@ -155,19 +155,19 @@ jobs:
             **Windows:** `ConnectionWatcher-Setup-${{ steps.ver.outputs.version }}.exe` below (unsigned: SmartScreen will ask you to confirm).
 ```
 
-- [ ] **Step 2: Validate YAML; commit** `ci: release workflow builds the Windows installer and publishes a GitHub Release on v* tags`.
+- [x] **Step 2: Validate YAML; commit** `ci: release workflow builds the Windows installer and publishes a GitHub Release on v* tags`.
 
 ### Task 4: Local scripts and docs
 
 **Files:**
 - Modify: `Build-Images.ps1` (stop stamping `:latest` on `-Push`; that is the release's job), `README.md` (quick start: `latest` = stable, `edge` = newest master build; a "Releases" paragraph), `CONTRIBUTING.md` (how to cut a release: tag `vX.Y.Z`, `-rc1` for pre-release; bump `VersionPrefix` after a release), `docs/superpowers/BACKLOG.md` (release pipeline DONE).
 
-- [ ] **Step 1: Edit; run the full suite; commit** `docs: two release channels (edge / latest), how to cut a release`.
+- [x] **Step 1: Edit; run the full suite; commit** `docs: two release channels (edge / latest), how to cut a release`.
 
 ### Task 5: Local proof
 
-- [ ] Build the installer locally with `.\Build-Installer.ps1 -Version 0.9.0-local` (Inno Setup present?) and confirm `dist\ConnectionWatcher-Setup-0.9.0-local.exe` exists and the staged `ConWatch.dll` reports `0.9.0-local` in its file version.
-- [ ] `docker build --build-arg APP_VERSION=0.9.0-local .` and check `/api/v1/health` reports `0.9.0-local`.
-- [ ] Both workflow files parse.
+- [x] Build the installer locally with `.\Build-Installer.ps1 -Version 0.9.0-local` (Inno Setup present?) and confirm `dist\ConnectionWatcher-Setup-0.9.0-local.exe` exists and the staged `ConWatch.dll` reports `0.9.0-local` in its file version.
+- [x] `docker build --build-arg APP_VERSION=0.9.0-local .` and check `/api/v1/health` reports `0.9.0-local`.
+- [x] Both workflow files parse.
 
 What cannot be verified without a push: the GitHub Release creation and the GHCR tags. First real check is Mark tagging (a `-rc1` pre-release is the safe first try).
