@@ -122,7 +122,9 @@ stack answered. Private addresses (RFC1918, loopback, link-local) allow any
 port; public addresses are restricted to 80, 443, 53, where a bare
 connect-and-close looks like ordinary client traffic. The Targets form's
 **Test** button tries ICMP and the policy-allowed TCP ports for the typed
-address in one click and preselects whichever answered.
+address in one click and preselects whichever answered; for a hostname it
+also lists every address in the DNS answer set, so you can see what is being
+pinned.
 
 ## Notifications (Home Assistant MQTT + webhooks)
 

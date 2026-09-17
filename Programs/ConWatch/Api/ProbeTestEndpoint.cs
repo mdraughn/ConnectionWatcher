@@ -5,7 +5,9 @@ namespace ConWatch.Api;
 
 /// <summary>One-click probe discovery for the Targets form: the SERVER
 /// (where monitoring runs) tries ICMP plus the policy-allowed TCP ports
-/// once each, so the form can preselect a probe that actually answers.</summary>
+/// once each, so the form can preselect a probe that actually answers. For
+/// a hostname it also returns the whole IPv4 answer set, so the user sees
+/// what is being pinned (one address at a time; the engine follows changes).</summary>
 public static class ProbeTestEndpoint
 {
     public record Request(string Address, int? Port = null);
@@ -16,16 +18,22 @@ public static class ProbeTestEndpoint
             IPingTransceiverFactory factory, IDomainNameResolverFactory resolvers,
             CancellationToken ct) =>
         {
-            IPAddress? ip = null;
-            if (!IPAddress.TryParse(request.Address, out ip))
+            List<IPAddress> answers;
+            if (IPAddress.TryParse(request.Address, out var literal))
+            {
+                answers = [literal];
+            }
+            else
             {
                 using var resolver = resolvers.Create(ct);
                 var resolution = await resolver.ResolveAsync(request.Address, 5000);
-                ip = resolution.IPv4Addresses.FirstOrDefault();
+                answers = resolution.IPv4Addresses.ToList();
             }
+            var resolvedIps = answers.Select(a => a.ToString()).ToList();
+            var ip = answers.FirstOrDefault();
             if (ip is null)
                 return Results.Ok(new { request.Address, ResolvedIp = (string?)null,
-                    Results = Array.Empty<object>() });
+                    ResolvedIps = resolvedIps, Results = Array.Empty<object>() });
 
             var ports = (ProbePolicy.IsPrivate(request.Address)
                     ? new[] { 80, 443, 8080, 8443 } : ProbePolicy.PublicPorts)
@@ -43,6 +51,7 @@ public static class ProbeTestEndpoint
                 return new { Probe = probe.ToString(), Reply = result.Success,
                     RttMs = result.RoundtripTime, Message = result.Message };
             }));
-            return Results.Ok(new { request.Address, ResolvedIp = ip.ToString(), Results = results });
+            return Results.Ok(new { request.Address, ResolvedIp = ip.ToString(),
+                ResolvedIps = resolvedIps, Results = results });
         });
 }
