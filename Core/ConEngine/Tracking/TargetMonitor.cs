@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
@@ -11,6 +12,12 @@ namespace ConEngine.Tracking;
 /// <summary>
 /// Binds one Target to its tracker and discipline, and enriches host-level
 /// transitions into target-level TargetTransition events.
+///
+/// Threading contract: state changes happen under <c>_lock</c>; every
+/// publication is queued while the lock is held (so delivery order equals
+/// state order) and delivered only after it is released, serialized through
+/// <c>_publishLock</c>. Subscribers may therefore take other monitors' locks
+/// freely — nothing they can reach is held while they run.
 /// </summary>
 public class TargetMonitor : IDisposable
 {
@@ -21,14 +28,14 @@ public class TargetMonitor : IDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<TargetMonitor> _log;
     private readonly Lock _lock = new();
+    private readonly Lock _publishLock = new();
+    private readonly ConcurrentQueue<Action> _outbox = new();
 
     private long _acceptedReplies;
     private long _refusedReplies;
     private long _pingCount;
 
     private HostTracker? _tracker;
-    private IDisposable? _transitionSubscription;
-    private IDisposable? _statusSubscription;
 
     // Pre-tracker state bookkeeping (before StartTracking / for resolution failures).
     private HostState _preTrackerState = HostState.Initializing;
@@ -115,22 +122,22 @@ public class TargetMonitor : IDisposable
             _tracker = new HostTracker(resolvedAddress, Profile, _timeProvider,
                 _loggerFactory.CreateLogger<HostTracker>());
             if (_seedState is { } seed)
-                _tracker.Seed(seed);
-
-            _transitionSubscription = _tracker.HostStateChangeSource.Subscribe(OnAnalysisTransition);
-            _statusSubscription = _tracker.HostStatusSource.Subscribe(status =>
-            {
-                var targetStatus = new TargetStatus
-                {
-                    TargetId = Target.Id, TargetName = Target.Name, Host = status,
-                };
-                LastStatus = targetStatus;
-                _statusSubject.OnNext(targetStatus);
-            });
+                QueueOutcomeLocked(_tracker.Seed(seed));
 
             // Honor topology commands that arrived before we started.
             if (_pendingUnreachableAncestor is { } ancestor)
-                _tracker.MarkUnreachable(ancestor);
+                QueueOutcomeLocked(_tracker.MarkUnreachable(ancestor));
+        }
+        DrainOutbox();
+    }
+
+    /// <summary>DNS moved the target: keep state and history, change the address.</summary>
+    public void Repoint(IPAddress newAddress)
+    {
+        lock (_lock)
+        {
+            ResolvedAddress = newAddress;
+            _tracker?.UpdateAddress(newAddress);
         }
     }
 
@@ -142,7 +149,12 @@ public class TargetMonitor : IDisposable
             if (result.Message == "Refused") Interlocked.Increment(ref _refusedReplies);
             else Interlocked.Increment(ref _acceptedReplies);
         }
-        lock (_lock) { _tracker?.RecordPingResult(result); }
+        lock (_lock)
+        {
+            if (_tracker is not null)
+                QueueOutcomeLocked(_tracker.RecordPingResult(result));
+        }
+        DrainOutbox();
     }
 
     public void SetUnreachable(Guid ancestorId)
@@ -151,18 +163,19 @@ public class TargetMonitor : IDisposable
         {
             if (_tracker is not null)
             {
-                _tracker.MarkUnreachable(ancestorId);
-                return;
+                QueueOutcomeLocked(_tracker.MarkUnreachable(ancestorId));
             }
-            if (_preTrackerState == HostState.Unreachable)
-                return;
-            _seedState = null; // topology has spoken; the presumption is void
-            _pendingUnreachableAncestor = ancestorId;
-            EmitPreTrackerTransition(HostState.Unreachable, new TransitionReason
+            else if (_preTrackerState != HostState.Unreachable)
             {
-                Trigger = TransitionTrigger.ParentDown, AncestorId = ancestorId,
-            });
+                _seedState = null; // topology has spoken; the presumption is void
+                _pendingUnreachableAncestor = ancestorId;
+                QueuePreTrackerTransitionLocked(HostState.Unreachable, new TransitionReason
+                {
+                    Trigger = TransitionTrigger.ParentDown, AncestorId = ancestorId,
+                });
+            }
         }
+        DrainOutbox();
     }
 
     public void Release()
@@ -171,16 +184,17 @@ public class TargetMonitor : IDisposable
         {
             if (_tracker is not null)
             {
-                _tracker.Release();
-                return;
+                QueueOutcomeLocked(_tracker.Release());
             }
-            if (_preTrackerState != HostState.Unreachable)
-                return;
-            _seedState = null; // released: re-prove from Starting, not the presumption
-            _pendingUnreachableAncestor = null;
-            EmitPreTrackerTransition(HostState.Starting,
-                new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
+            else if (_preTrackerState == HostState.Unreachable)
+            {
+                _seedState = null; // released: re-prove from Starting, not the presumption
+                _pendingUnreachableAncestor = null;
+                QueuePreTrackerTransitionLocked(HostState.Starting,
+                    new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
+            }
         }
+        DrainOutbox();
     }
 
     /// <summary>Reports a DNS resolution failure. Emits one transition; later failures are quiet.</summary>
@@ -191,19 +205,20 @@ public class TargetMonitor : IDisposable
             if (_resolutionFailureReported || _tracker is not null)
                 return;
             _resolutionFailureReported = true;
-            EmitPreTrackerTransition(HostState.Starting, new TransitionReason
+            QueuePreTrackerTransitionLocked(HostState.Starting, new TransitionReason
             {
                 Trigger = TransitionTrigger.ResolutionFailed, Detail = detail,
             });
         }
+        DrainOutbox();
     }
 
-    private void EmitPreTrackerTransition(HostState to, TransitionReason reason)
+    private void QueuePreTrackerTransitionLocked(HostState to, TransitionReason reason)
     {
         var from = _preTrackerState;
         _preTrackerState = to;
         Discipline.OnStateChanged(to);
-        _transitionSubject.OnNext(new TargetTransition
+        var transition = new TargetTransition
         {
             TargetId = Target.Id,
             TargetName = Target.Name,
@@ -211,16 +226,31 @@ public class TargetMonitor : IDisposable
             To = to,
             Timestamp = _timeProvider.GetUtcNow(),
             Reason = reason,
-        });
+        };
+        _outbox.Enqueue(() => _transitionSubject.OnNext(transition));
     }
 
-    private void OnAnalysisTransition(AnalysisTransition at)
+    /// <summary>Turns a tracker outcome into target-level publications. Called under _lock.</summary>
+    private void QueueOutcomeLocked(AnalysisOutcome? outcome)
     {
+        if (outcome is null)
+            return;
+
+        var targetStatus = new TargetStatus
+        {
+            TargetId = Target.Id, TargetName = Target.Name, Host = outcome.Status,
+        };
+        LastStatus = targetStatus;
+        _outbox.Enqueue(() => _statusSubject.OnNext(targetStatus));
+
+        if (outcome.Transition is not { } at)
+            return;
+
         // Compute burst loss BEFORE notifying the discipline (which may reset the window).
         var reason = at.Reason;
         if (Discipline.BurstStartedAt is { } burstStart && _tracker is not null)
         {
-            var entries = _tracker.EntriesSince(burstStart).ToList();
+            var entries = _tracker.EntriesSince(burstStart);
             if (entries.Count > 0)
                 reason = reason with
                 {
@@ -240,14 +270,27 @@ public class TargetMonitor : IDisposable
             Reason = reason,
             AverageRoundtripTime = at.Status.AverageRoundtripTime,
         };
-        _log.LogInformation("Transition: {Transition}", transition);
-        _transitionSubject.OnNext(transition);
+        _outbox.Enqueue(() =>
+        {
+            _log.LogInformation("Transition: {Transition}", transition);
+            _transitionSubject.OnNext(transition);
+        });
+    }
+
+    /// <summary>Delivers queued publications in order, never under _lock.</summary>
+    private void DrainOutbox()
+    {
+        if (_outbox.IsEmpty)
+            return;
+        lock (_publishLock)
+        {
+            while (_outbox.TryDequeue(out var publish))
+                publish();
+        }
     }
 
     public void Dispose()
     {
-        _transitionSubscription?.Dispose();
-        _statusSubscription?.Dispose();
         _transitionSubject.OnCompleted();
         _statusSubject.OnCompleted();
         GC.SuppressFinalize(this);

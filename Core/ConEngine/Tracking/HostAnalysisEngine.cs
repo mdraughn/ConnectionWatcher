@@ -1,19 +1,19 @@
 using ConCore.Targets;
 using ConEngine.Events;
 using System.Net;
-using System.Reactive.Subjects;
 
 namespace ConEngine.Tracking;
 
 /// <summary>
 /// Per-host state machine. Derives state from recent ping samples and from
-/// topology commands (MarkUnreachable/Release).
+/// topology commands (MarkUnreachable/Release). Pure: every step returns
+/// its outcome and never publishes, so the owner decides when to emit.
 /// </summary>
 internal class HostAnalysisEngine
 {
     private readonly PingProfile _profile;
-    private readonly IPAddress _hostAddress;
     private readonly TimeProvider _timeProvider;
+    private IPAddress _hostAddress;
 
     public HostAnalysisEngine(PingProfile profile, IPAddress hostAddress, TimeProvider timeProvider)
     {
@@ -40,34 +40,33 @@ internal class HostAnalysisEngine
     public float FailureRate { get; private set; }
     public float AverageRoundtripTime { get; private set; }
 
-    private readonly ReplaySubject<HostStatus> _hostStatusSubject = new(bufferSize: 1);
-    public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
-    private readonly ReplaySubject<AnalysisTransition> _stateChangeSubject = new(bufferSize: 1);
-    public IObservable<AnalysisTransition> HostStateChangeSource => _stateChangeSubject;
+    /// <summary>DNS moved the host: later statuses carry the new address.</summary>
+    public void UpdateAddress(IPAddress address) => _hostAddress = address;
 
     /// <summary>
     /// Warm restart: adopt a presumed state silently — no transition. Fresh
     /// samples confirm it (nothing emitted) or correct it (one transition
     /// from the seeded state) once MinUsableSample is reached; until then no
     /// threshold transition can fire. Valid only before the first sample.
+    /// Returns the status to publish, or null when ignored.
     /// </summary>
-    public void Seed(HostState state)
+    public AnalysisOutcome? Seed(HostState state)
     {
         if (CurrentState != HostState.Initializing)
-            return;
+            return null;
         CurrentState = state;
         _seeded = true;
         TrackingStarted = _timeProvider.GetUtcNow();
-        _hostStatusSubject.OnNext(BuildStatus(TrackingStarted));
+        return new AnalysisOutcome(BuildStatus(TrackingStarted), null);
     }
 
     /// <summary>Commanded by topology: an ancestor is Down, stop deriving state from data.</summary>
-    public void MarkUnreachable(Guid ancestorId)
+    public AnalysisOutcome? MarkUnreachable(Guid ancestorId)
     {
         if (CurrentState == HostState.Unreachable)
-            return;
+            return null;
         _seeded = false;
-        Transition(HostState.Unreachable, new TransitionReason
+        return Transition(HostState.Unreachable, new TransitionReason
         {
             Trigger = TransitionTrigger.ParentDown,
             AncestorId = ancestorId,
@@ -75,20 +74,22 @@ internal class HostAnalysisEngine
     }
 
     /// <summary>Commanded by topology: the ancestor recovered; re-prove from Starting.</summary>
-    public void Release()
+    public AnalysisOutcome? Release()
     {
         if (CurrentState != HostState.Unreachable)
-            return;
+            return null;
         _seeded = false;
         SampleSize = 0; NumSuccess = 0; NumFailed = 0;
         SuccessRate = 0; FailureRate = 0; AverageRoundtripTime = 0;
-        Transition(HostState.Starting, new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
+        return Transition(HostState.Starting, new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
     }
 
-    public void Recalculate(IEnumerable<PingHistoryEntry> samples)
+    /// <summary>Folds the sample window into statistics and state. Returns
+    /// null while Unreachable (stale in-flight results must not move a parked host).</summary>
+    public AnalysisOutcome? Recalculate(IEnumerable<PingHistoryEntry> samples)
     {
         if (CurrentState == HostState.Unreachable)
-            return; // stale in-flight results must not move a parked host
+            return null;
 
         SampleSize = 0; NumSuccess = 0; NumFailed = 0;
         float sumRoundtrip = 0f;
@@ -152,20 +153,17 @@ internal class HostAnalysisEngine
 
         if (next != CurrentState)
         {
-            Transition(next, new TransitionReason
+            return Transition(next, new TransitionReason
             {
                 Trigger = TransitionTrigger.ThresholdCrossed,
                 SuccessRate = SuccessRate,
                 SampleSize = SampleSize,
             });
         }
-        else
-        {
-            _hostStatusSubject.OnNext(BuildStatus(LastUpdated));
-        }
+        return new AnalysisOutcome(BuildStatus(LastUpdated), null);
     }
 
-    private void Transition(HostState to, TransitionReason reason)
+    private AnalysisOutcome Transition(HostState to, TransitionReason reason)
     {
         var from = CurrentState;
         CurrentState = to;
@@ -173,8 +171,7 @@ internal class HostAnalysisEngine
             ? LastUpdated
             : _timeProvider.GetUtcNow();
         var status = BuildStatus(timestamp);
-        _hostStatusSubject.OnNext(status);
-        _stateChangeSubject.OnNext(new AnalysisTransition
+        return new AnalysisOutcome(status, new AnalysisTransition
         {
             From = from,
             To = to,

@@ -148,6 +148,42 @@ public class TargetMonitorTests
     }
 
     [Fact]
+    public void Transition_is_published_after_the_monitor_lock_is_released()
+    {
+        var (m, _, time) = Make();
+        var lockWasFreeDuringPublish = false;
+        m.TransitionSource.Subscribe(_ =>
+        {
+            // Another thread must be able to read state while a subscriber
+            // runs; the coordinators do exactly this from inside callbacks.
+            var read = Task.Run(() => m.CurrentState);
+            lockWasFreeDuringPublish = read.Wait(TimeSpan.FromSeconds(2));
+        });
+        m.StartTracking(Ip);
+        Feed(m, time, 5, success: true); // Starting -> Responding
+        Assert.True(lockWasFreeDuringPublish);
+    }
+
+    [Fact]
+    public void Transitions_from_two_threads_arrive_in_state_order()
+    {
+        var (m, transitions, time) = Make();
+        m.StartTracking(Ip);
+        Feed(m, time, 5, success: true); // Responding
+        var ancestor = Guid.NewGuid();
+        Parallel.Invoke(
+            () => m.SetUnreachable(ancestor),
+            () => m.RecordPingResult(new PingResult(Ip, false, 0, timestamp: time.GetUtcNow())));
+        m.Release();
+
+        var states = transitions.Select(t => (t.From, t.To)).ToList();
+        Assert.Equal((HostState.Starting, HostState.Responding), states[0]);
+        Assert.Equal((HostState.Responding, HostState.Unreachable), states[1]);
+        Assert.Equal((HostState.Unreachable, HostState.Starting), states[2]);
+        Assert.Equal(3, states.Count);
+    }
+
+    [Fact]
     public void Resolution_failure_reports_once()
     {
         var (m, transitions, _) = Make();

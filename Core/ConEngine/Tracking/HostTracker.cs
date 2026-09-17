@@ -1,188 +1,155 @@
+using System.Net;
+using System.Reactive.Subjects;
 using ConCore;
 using ConCore.Targets;
 using ConEngine.Events;
-using System.Net;
 using Microsoft.Extensions.Logging;
 
-namespace ConEngine.Tracking
+namespace ConEngine.Tracking;
+
+/// <summary>
+/// Tracks historic ping results for a single host using a sliding window and
+/// drives the per-host state machine. Every command returns its outcome and
+/// also publishes it on the observable streams, always after the tracker's
+/// own lock has been released.
+/// </summary>
+public class HostTracker
 {
-    /// <summary>
-    /// Tracks historic ping results for a single host using a sliding window.
-    /// Maintains the most recent results and provides statistics.
-    /// </summary>
-    public class HostTracker
+    private readonly CircularBuffer<PingHistoryEntry> _history;
+    private readonly int _minUsableSample;
+    private readonly Lock _lock = new();
+    private readonly ILogger<HostTracker> _log;
+    private readonly HostAnalysisEngine _analysisEngine;
+
+    private readonly Subject<HostStatus> _hostStatusSubject = new();
+    private readonly Subject<AnalysisTransition> _stateChangeSubject = new();
+
+    /// <summary>The IP address of the host being tracked (updated on a DNS re-point).</summary>
+    public IPAddress HostAddress { get; private set; }
+
+    /// <param name="hostAddress">The IP address of the host to track.</param>
+    /// <param name="profile">Ping profile providing analysis settings.</param>
+    /// <param name="timeProvider">Clock used for commanded transitions.</param>
+    /// <param name="log">Logger.</param>
+    public HostTracker(IPAddress hostAddress, PingProfile profile, TimeProvider timeProvider, ILogger<HostTracker> log)
     {
-        private readonly CircularBuffer<PingHistoryEntry> _history;
-        private readonly int _minUsableSample;
-        private readonly Lock _lock = new();
-        private readonly ILogger<HostTracker> _log;
+        _log = log;
+        HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
+        ArgumentNullException.ThrowIfNull(profile);
 
-        /// <summary>
-        /// Gets the IP address of the host being tracked.
-        /// </summary>
-        public IPAddress HostAddress { get; }
+        _history = new CircularBuffer<PingHistoryEntry>(profile.HistorySize);
+        _minUsableSample = profile.MinUsableSample;
+        _analysisEngine = new HostAnalysisEngine(profile, hostAddress, timeProvider);
+    }
 
-        private readonly HostAnalysisEngine _analysisEngine;
+    /// <summary>Current state of the host state machine.</summary>
+    public HostState CurrentState => _analysisEngine.CurrentState;
 
-        /// <summary>
-        /// Initializes a new instance of the HostTracker class.
-        /// </summary>
-        /// <param name="hostAddress">The IP address of the host to track.</param>
-        /// <param name="profile">Ping profile providing analysis settings.</param>
-        /// <param name="timeProvider">Clock used for commanded transitions.</param>
-        /// <param name="log">Logger.</param>
-        public HostTracker(IPAddress hostAddress, PingProfile profile, TimeProvider timeProvider, ILogger<HostTracker> log)
+    /// <summary>True while running on an unconfirmed warm-restart presumption.</summary>
+    public bool Assumed => _analysisEngine.Assumed;
+
+    /// <summary>Stream of status snapshots (one per recorded sample or command).</summary>
+    public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
+
+    /// <summary>Stream of state transitions with structured reasons.</summary>
+    public IObservable<AnalysisTransition> HostStateChangeSource => _stateChangeSubject;
+
+    /// <summary>Gets the current count of items in the history buffer.</summary>
+    public int HistoryCount => _history.Count;
+
+    /// <summary>Gets the minimum number of samples required for statistics to be considered usable.</summary>
+    public int MinUsableSample => _minUsableSample;
+
+    /// <summary>Warm restart: adopt a presumed state silently (no transition).</summary>
+    public AnalysisOutcome? Seed(HostState state)
+    {
+        AnalysisOutcome? outcome;
+        lock (_lock)
         {
-            _log = log;
-            HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
-            ArgumentNullException.ThrowIfNull(profile);
-
-            _history = new CircularBuffer<PingHistoryEntry>(profile.HistorySize);
-            _minUsableSample = profile.MinUsableSample;
-            _analysisEngine = new HostAnalysisEngine(profile, hostAddress, timeProvider);
+            outcome = _analysisEngine.Seed(state);
         }
+        Publish(outcome);
+        return outcome;
+    }
 
-        /// <summary>Current state of the host state machine.</summary>
-        public HostState CurrentState => _analysisEngine.CurrentState;
-
-        /// <summary>True while running on an unconfirmed warm-restart presumption.</summary>
-        public bool Assumed => _analysisEngine.Assumed;
-
-        /// <summary>Warm restart: adopt a presumed state silently (no transition).</summary>
-        public void Seed(HostState state)
+    /// <summary>DNS moved the host: keep state and history, change the address.</summary>
+    public void UpdateAddress(IPAddress address)
+    {
+        lock (_lock)
         {
-            lock (_lock)
-            {
-                _analysisEngine.Seed(state);
-            }
-        }
-
-        /// <summary>Stream of periodic status snapshots.</summary>
-        public IObservable<HostStatus> HostStatusSource => _analysisEngine.HostStatusSource;
-
-        /// <summary>Stream of state transitions with structured reasons.</summary>
-        public IObservable<AnalysisTransition> HostStateChangeSource => _analysisEngine.HostStateChangeSource;
-
-        /// <summary>
-        /// Gets the capacity of the history buffer.
-        /// </summary>
-        public int HistoryCapacity => _history.Capacity;
-
-        /// <summary>
-        /// Gets the current count of items in the history buffer.
-        /// </summary>
-        public int HistoryCount => _history.Count;
-
-        /// <summary>
-        /// Gets the minimum number of samples required for statistics to be considered usable.
-        /// </summary>
-        public int MinUsableSample => _minUsableSample;
-
-        /// <summary>
-        /// Gets whether the current sample size is sufficient for reliable statistics.
-        /// Returns true if HistoryCount >= MinUsableSample.
-        /// </summary>
-        public bool IsUsableSample => HistoryCount >= _minUsableSample;
-
-        /// <summary>
-        /// Records a new ping result in the history and recalculates state.
-        /// </summary>
-        /// <param name="result">The ping result to record.</param>
-        public void RecordPingResult(PingResult result)
-        {
-            ArgumentNullException.ThrowIfNull(result);
-
-            var entry = PingHistoryEntry.FromPingResult(result);
-
-            lock (_lock)
-            {
-                _history.Add(entry);
-                Recalculate();
-            }
-        }
-
-        /// <summary>Commanded by topology: an ancestor is Down.</summary>
-        public void MarkUnreachable(Guid ancestorId)
-        {
-            lock (_lock)
-            {
-                _analysisEngine.MarkUnreachable(ancestorId);
-            }
-        }
-
-        /// <summary>Commanded by topology: the ancestor recovered; clear history and re-prove.</summary>
-        public void Release()
-        {
-            lock (_lock)
-            {
-                _history.Clear();
-                _analysisEngine.Release();
-            }
-        }
-
-        /// <summary>History entries with Timestamp &gt;= since, oldest first.</summary>
-        public IEnumerable<PingHistoryEntry> EntriesSince(DateTimeOffset since) =>
-            _history.InReverseOrder().TakeWhile(e => e.Timestamp >= since).Reverse();
-
-        private void Recalculate()
-        {
-            _analysisEngine.Recalculate(Sample());
-        }
-
-        /// <summary>
-        /// Gets the most recent ping result.
-        /// </summary>
-        public PingHistoryEntry? LatestResult => _history.GetLatest();
-
-        /// <summary>
-        /// Gets the timestamp of the most recent ping.
-        /// </summary>
-        public DateTimeOffset? LatestTimestamp => LatestResult?.Timestamp;
-
-        /// <summary>
-        /// Gets all history entries in chronological order (oldest to newest).
-        /// </summary>
-        /// <returns>An array of history entries.</returns>
-        public PingHistoryEntry[] GetHistory()
-        {
-            return _history.ToArray();
-        }
-
-        /// <summary>
-        /// Gets all history entries in reverse chronological order (newest to oldest).
-        /// </summary>
-        /// <returns>An array of history entries.</returns>
-        public PingHistoryEntry[] GetHistoryReversed()
-        {
-            return _history.ToArrayReversed();
-        }
-
-        /// <summary>
-        /// Gets the most recent MinUsableSample entries in chronological order (oldest to newest).
-        /// If fewer entries exist than MinUsableSample, returns all available entries.
-        /// </summary>
-        /// <returns>Up to MinUsableSample most recent entries.</returns>
-        public IEnumerable<PingHistoryEntry> Sample()
-        {
-            int sampleCount = Math.Min(_history.Count, _minUsableSample);
-            return _history.InReverseOrder().Take(sampleCount);
-        }
-
-        /// <summary>
-        /// Clears all history entries.
-        /// </summary>
-        public void ClearHistory()
-        {
-            _history.Clear();
-        }
-
-        /// <summary>
-        /// Returns a string representation of this host tracker.
-        /// </summary>
-        public override string ToString()
-        {
-            var usabilityIndicator = IsUsableSample ? "" : " (insufficient samples)";
-            return $"{HostAddress}: (last {HistoryCount}){usabilityIndicator}";
+            HostAddress = address;
+            _analysisEngine.UpdateAddress(address);
         }
     }
+
+    /// <summary>Records a new ping result in the history and recalculates state.</summary>
+    public AnalysisOutcome? RecordPingResult(PingResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var entry = PingHistoryEntry.FromPingResult(result);
+
+        AnalysisOutcome? outcome;
+        lock (_lock)
+        {
+            _history.Add(entry);
+            outcome = _analysisEngine.Recalculate(Sample());
+        }
+        Publish(outcome);
+        return outcome;
+    }
+
+    /// <summary>Commanded by topology: an ancestor is Down.</summary>
+    public AnalysisOutcome? MarkUnreachable(Guid ancestorId)
+    {
+        AnalysisOutcome? outcome;
+        lock (_lock)
+        {
+            outcome = _analysisEngine.MarkUnreachable(ancestorId);
+        }
+        Publish(outcome);
+        return outcome;
+    }
+
+    /// <summary>Commanded by topology: the ancestor recovered; clear history and re-prove.</summary>
+    public AnalysisOutcome? Release()
+    {
+        AnalysisOutcome? outcome;
+        lock (_lock)
+        {
+            _history.Clear();
+            outcome = _analysisEngine.Release();
+        }
+        Publish(outcome);
+        return outcome;
+    }
+
+    /// <summary>History entries with Timestamp &gt;= since, oldest first (a snapshot).</summary>
+    public IReadOnlyList<PingHistoryEntry> EntriesSince(DateTimeOffset since)
+    {
+        lock (_lock)
+        {
+            return _history.InReverseOrder().TakeWhile(e => e.Timestamp >= since).Reverse().ToList();
+        }
+    }
+
+    /// <summary>
+    /// The most recent MinUsableSample entries, newest first. Callers hold
+    /// <see cref="_lock"/>; the analysis engine consumes it immediately.
+    /// </summary>
+    private IEnumerable<PingHistoryEntry> Sample()
+    {
+        int sampleCount = Math.Min(_history.Count, _minUsableSample);
+        return _history.InReverseOrder().Take(sampleCount);
+    }
+
+    private void Publish(AnalysisOutcome? outcome)
+    {
+        if (outcome is null)
+            return;
+        _hostStatusSubject.OnNext(outcome.Status);
+        if (outcome.Transition is { } transition)
+            _stateChangeSubject.OnNext(transition);
+    }
+
+    public override string ToString() => $"{HostAddress}: {CurrentState} (last {HistoryCount})";
 }
