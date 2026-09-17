@@ -102,7 +102,7 @@ public static class AdminEndpoints
 
             await using var db = await dbFactory.CreateDbContextAsync();
             var result = await ConPersistence.Services.DataPruner.PruneBeforeAsync(
-                db, options.Value.DbPath, before.ToUniversalTime());
+                db, options.Value.DbPath, TimeRange.AsUtc(before));
             loggerFactory.CreateLogger("Admin").LogWarning(
                 "History PRUNED before {Before:u}: {Transitions} transitions, {Rollups} rollups, " +
                 "{Glitches} glitches; file {Before2} -> {After} bytes",

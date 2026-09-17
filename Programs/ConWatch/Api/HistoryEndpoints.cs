@@ -10,12 +10,14 @@ public static class HistoryEndpoints
     public static void MapHistory(this RouteGroupBuilder api)
     {
         api.MapGet("/transitions", async (IDbContextFactory<ConWatchDbContext> dbFactory,
-            Guid? subjectId, string? subjectName, DateTime? from, DateTime? to,
+            Guid? subjectId, string? subjectName, string? from, string? to,
             int limit = 100, long? before = null) =>
         {
+            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
+                return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.TransitionsAsync(db, subjectId,
-                from?.ToUniversalTime(), to?.ToUniversalTime(), limit, before, subjectName);
+                fromUtc, toUtc, limit, before, subjectName);
             var items = rows.Select(r => new
             {
                 r.Id,
@@ -31,16 +33,18 @@ public static class HistoryEndpoints
 
         api.MapGet("/rollups/{targetId:guid}", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             IOptions<PersistenceOptions> options, TimeProvider time,
-            Guid targetId, DateTime? from, DateTime? to, string resolution = "auto") =>
+            Guid targetId, string? from, string? to, string resolution = "auto") =>
         {
-            if (from is null || to is null)
+            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
+                return problem!;
+            if (fromUtc is null || toUtc is null)
                 return Results.BadRequest(new { errors = new[] { "'from' and 'to' are required." } });
 
             string resolved;
             try
             {
                 resolved = HistoryQueries.ResolveResolution(resolution,
-                    from.Value.ToUniversalTime(), time.GetUtcNow().UtcDateTime, options.Value);
+                    fromUtc.Value, time.GetUtcNow().UtcDateTime, options.Value);
             }
             catch (ArgumentException ex)
             {
@@ -49,7 +53,7 @@ public static class HistoryEndpoints
 
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.RollupsAsync(db, targetId,
-                from.Value.ToUniversalTime(), to.Value.ToUniversalTime(), resolved);
+                fromUtc.Value, toUtc.Value, resolved);
             return Results.Ok(new
             {
                 Resolution = resolved,

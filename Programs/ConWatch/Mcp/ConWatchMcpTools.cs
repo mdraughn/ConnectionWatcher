@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using ConPersistence;
 using ConPersistence.Report;
+using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol.Server;
 
@@ -73,7 +74,7 @@ public class ConWatchMcpTools(WatcherHostService host,
         [Description("Period end, ISO-8601 UTC")] DateTime toUtc)
     {
         var report = await reportBuilder.BuildAsync(
-            fromUtc.ToUniversalTime(), toUtc.ToUniversalTime());
+            TimeRange.AsUtc(fromUtc), TimeRange.AsUtc(toUtc));
         return JsonSerializer.Serialize(report, Json);
     }
 
@@ -89,8 +90,8 @@ public class ConWatchMcpTools(WatcherHostService host,
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         IQueryable<ConPersistence.Entities.TransitionRow> query = db.Transitions.AsNoTracking();
-        if (fromUtc is { } from) query = query.Where(t => t.TimestampUtc >= from.ToUniversalTime());
-        if (toUtc is { } to) query = query.Where(t => t.TimestampUtc <= to.ToUniversalTime());
+        if (fromUtc is { } from) { var f = TimeRange.AsUtc(from); query = query.Where(t => t.TimestampUtc >= f); }
+        if (toUtc is { } to) { var u = TimeRange.AsUtc(to); query = query.Where(t => t.TimestampUtc <= u); }
         if (subjectName is { Length: > 0 }) query = query.Where(t => t.SubjectName == subjectName);
         var rows = await query.OrderByDescending(t => t.Id)
             .Take(Math.Clamp(limit, 1, 500)).ToListAsync();
@@ -114,8 +115,8 @@ public class ConWatchMcpTools(WatcherHostService host,
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         IQueryable<ConPersistence.Entities.GlitchRow> query = db.Glitches.AsNoTracking();
-        if (fromUtc is { } from) query = query.Where(g => g.StartUtc >= from.ToUniversalTime());
-        if (toUtc is { } to) query = query.Where(g => g.StartUtc <= to.ToUniversalTime());
+        if (fromUtc is { } from) { var f = TimeRange.AsUtc(from); query = query.Where(g => g.StartUtc >= f); }
+        if (toUtc is { } to) { var u = TimeRange.AsUtc(to); query = query.Where(g => g.StartUtc <= u); }
         var rows = await query.OrderByDescending(g => g.Id)
             .Take(Math.Clamp(limit, 1, 500)).ToListAsync();
         return JsonSerializer.Serialize(rows.Select(g => new

@@ -45,6 +45,8 @@ dotnet run --project Programs/ConWatch
   edited through the REST API under `/api/v1` — Swagger UI at `/swagger` in
   Development. On first boot, a `Watcher` section in appsettings.json (if
   present) seeds the config; after that the DB is the source of truth.
+  Timestamps in query strings (`from`, `to`) are ISO-8601; an explicit offset
+  is honored and **no offset means UTC**, never the server's local zone.
 - The verdict layer (`Verdict:AnchorPool`) names the pool whose members act as
   internet anchors; with intermediates healthy, one degraded anchor is a
   SiteIncident, two or more (configurable) is InternetWeather.

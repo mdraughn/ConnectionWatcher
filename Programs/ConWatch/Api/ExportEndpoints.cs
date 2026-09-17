@@ -12,15 +12,17 @@ public static class ExportEndpoints
     {
         api.MapGet("/export/transitions", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             TimeProvider time, string format = "csv", Guid? subjectId = null,
-            DateTime? from = null, DateTime? to = null) =>
+            string? from = null, string? to = null) =>
         {
             if (!IsValidFormat(format))
                 return BadFormat();
+            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
+                return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
             IQueryable<ConPersistence.Entities.TransitionRow> query = db.Transitions.AsNoTracking();
             if (subjectId is { } sid) query = query.Where(t => t.SubjectId == sid);
-            if (from is { } f) query = query.Where(t => t.TimestampUtc >= f.ToUniversalTime());
-            if (to is { } u) query = query.Where(t => t.TimestampUtc <= u.ToUniversalTime());
+            if (fromUtc is { } f) query = query.Where(t => t.TimestampUtc >= f);
+            if (toUtc is { } u) query = query.Where(t => t.TimestampUtc <= u);
             var rows = await query.OrderBy(t => t.Id).ToListAsync();
 
             var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
@@ -31,16 +33,18 @@ public static class ExportEndpoints
 
         api.MapGet("/export/rollups", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             TimeProvider time, string format = "csv", Guid? targetId = null,
-            string? resolution = null, DateTime? from = null, DateTime? to = null) =>
+            string? resolution = null, string? from = null, string? to = null) =>
         {
             if (!IsValidFormat(format))
                 return BadFormat();
+            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
+                return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
             IQueryable<ConPersistence.Entities.RollupRow> query = db.Rollups.AsNoTracking();
             if (targetId is { } tid) query = query.Where(r => r.TargetId == tid);
             if (resolution is { Length: > 0 }) query = query.Where(r => r.Resolution == resolution);
-            if (from is { } f) query = query.Where(r => r.PeriodStartUtc >= f.ToUniversalTime());
-            if (to is { } u) query = query.Where(r => r.PeriodStartUtc <= u.ToUniversalTime());
+            if (fromUtc is { } f) query = query.Where(r => r.PeriodStartUtc >= f);
+            if (toUtc is { } u) query = query.Where(r => r.PeriodStartUtc <= u);
             var rows = await query.OrderBy(r => r.TargetId).ThenBy(r => r.PeriodStartUtc).ToListAsync();
 
             var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
@@ -78,15 +82,17 @@ public static class ExportEndpoints
 
         api.MapGet("/export/glitches", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             TimeProvider time, string format = "csv", Guid? targetId = null,
-            DateTime? from = null, DateTime? to = null) =>
+            string? from = null, string? to = null) =>
         {
             if (!IsValidFormat(format))
                 return BadFormat();
+            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
+                return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
             IQueryable<ConPersistence.Entities.GlitchRow> query = db.Glitches.AsNoTracking();
             if (targetId is { } tid) query = query.Where(g => g.TargetId == tid);
-            if (from is { } f) query = query.Where(g => g.StartUtc >= f.ToUniversalTime());
-            if (to is { } u) query = query.Where(g => g.StartUtc <= u.ToUniversalTime());
+            if (fromUtc is { } f) query = query.Where(g => g.StartUtc >= f);
+            if (toUtc is { } u) query = query.Where(g => g.StartUtc <= u);
             var rows = await query.OrderBy(g => g.Id).ToListAsync();
 
             var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");

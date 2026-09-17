@@ -7,11 +7,18 @@ public class ReportModel(IspReportBuilder builder, TimeProvider time) : PageMode
 {
     public IspReport Report { get; private set; } = null!;
 
-    public async Task OnGetAsync(DateTime? from, DateTime? to)
+    public async Task OnGetAsync(string? from, string? to)
     {
-        var toUtc = (to?.ToUniversalTime() ?? time.GetUtcNow().UtcDateTime);
-        var fromUtc = (from?.ToUniversalTime() ?? toUtc.AddDays(-30));
+        // A page, not an API: an unparseable bound falls back to the default window.
+        var toUtc = Parse(to) ?? time.GetUtcNow().UtcDateTime;
+        var fromUtc = Parse(from) ?? toUtc.AddDays(-30);
         Report = await builder.BuildAsync(fromUtc, toUtc);
+    }
+
+    private static DateTime? Parse(string? text)
+    {
+        try { return Api.TimeRange.ParseUtc(text); }
+        catch (ArgumentException) { return null; }
     }
 
     public static string Duration(TimeSpan span) =>
