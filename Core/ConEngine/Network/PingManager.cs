@@ -1,21 +1,18 @@
-﻿using System.Net;
-using System.Runtime.CompilerServices;
+using System.Net;
+using System.Reactive.Subjects;
 using System.Threading.Channels;
 using ConCore;
 using ConEngine.Scheduling;
 using Microsoft.Extensions.Logging;
-using System.Reactive;
-using System.Reactive.Subjects;
 
 namespace ConEngine.Network;
 
 /// <summary>
-/// Manages a collection of PingControllers, each responsible for pinging a specific IP address.
+/// Owns one PingController per probed address and pumps their results from
+/// the shared channel onto <see cref="PingResultSource"/> on a single thread.
 /// </summary>
 public class PingManager : IDisposable
 {
-    public const int MaxEventBuffer = 5;
-
     private readonly Lock _lock = new();
     private readonly TimeProvider _timeProvider;
     private readonly IPingTransceiverFactory _pingTransceiverFactory;
@@ -24,11 +21,13 @@ public class PingManager : IDisposable
     private readonly ChannelWriter<PingResult> _resultWriter;
     private readonly ChannelReader<PingResult> _resultReader;
     private readonly Task _messageProcessingTask;
-    private bool _disposed = false;
     private readonly ILogger<PingManager> _log;
     private readonly ILoggerFactory _loggerFactory;
+    private bool _stopped;
 
-    private readonly ReplaySubject<PingResult> _pingResultSubject = new(bufferSize: MaxEventBuffer);
+    // Plain Subject: the engine subscribes before any controller exists, so
+    // nothing ever needs a replay.
+    private readonly Subject<PingResult> _pingResultSubject = new();
     public IObservable<PingResult> PingResultSource => _pingResultSubject;
 
     public PingManager(TimeProvider timeProvider,
@@ -42,44 +41,30 @@ public class PingManager : IDisposable
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
 
-        // Create unbounded channel for ping results
         var resultChannel = Channel.CreateUnbounded<PingResult>();
         _resultWriter = resultChannel.Writer;
         _resultReader = resultChannel.Reader;
 
-        // Launch background task to process messages
         _messageProcessingTask = Task.Run(ProcessMessages, globalCancellationToken);
     }
 
-    /// <summary>
-    /// Gets or creates a PingController for the specified IP address.
-    /// </summary>
-    /// <param name="ipAddress">The IP address to ping.</param>
+    /// <summary>Gets or creates the controller probing <paramref name="ipAddress"/>.</summary>
+    /// <param name="ipAddress">The IP address to probe.</param>
     /// <param name="probe">How to probe the target (ICMP echo or TCP connect).</param>
-    /// <param name="cadence">Decides when each ping happens.</param>
-    /// <param name="timeoutMsProvider">Per-ping timeout in milliseconds, read before every ping.</param>
-    /// <returns>A PingController configured for the specified IP address.</returns>
+    /// <param name="cadence">Decides when each probe happens.</param>
+    /// <param name="timeoutMsProvider">Per-probe timeout in milliseconds, read before every probe.</param>
     public PingController GetOrCreateController(IPAddress ipAddress, ProbeSpec probe, IPingCadence cadence, Func<int> timeoutMsProvider)
     {
         lock (_lock)
         {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(PingManager));
+            ObjectDisposedException.ThrowIf(_stopped, this);
 
             if (!_pingControllers.TryGetValue(ipAddress, out var controller))
             {
-                // Create a logger for the PingController with the IP address in the category
                 var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
-
                 controller = new PingController(_timeProvider, _pingTransceiverFactory, controllerLogger);
-                controller.Launch(ipAddress,
-                    _resultWriter,
-                    probe,
-                    cadence,
-                    timeoutMsProvider,
-                    _globalCancellationToken);
+                controller.Launch(ipAddress, _resultWriter, probe, cadence, timeoutMsProvider, _globalCancellationToken);
                 _pingControllers[ipAddress] = controller;
-
                 _log.LogInformation("Created PingController for {IpAddress}", ipAddress);
             }
             return controller;
@@ -87,55 +72,43 @@ public class PingManager : IDisposable
     }
 
     /// <summary>
-    /// Stops and removes the controller for the specified IP address.
+    /// Stops every controller concurrently, closes the result channel, and
+    /// waits for the pump to drain. Each phase is bounded by <paramref name="grace"/>.
+    /// Idempotent; never throws.
     /// </summary>
-    /// <param name="ipAddress">The IP address whose controller should be stopped.</param>
-    public void StopController(IPAddress ipAddress)
+    public async Task StopAsync(TimeSpan grace)
     {
+        List<PingController> controllers;
         lock (_lock)
         {
-            if (_pingControllers.TryGetValue(ipAddress, out var controller))
-            {
-                _log.LogInformation("Stopping PingController for {IpAddress}", ipAddress);
-                controller.Stop();
-                controller.Dispose();
-                _pingControllers.Remove(ipAddress);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Stops all controllers managed by this PingManager.
-    /// </summary>
-    public void StopAllControllers()
-    {
-        lock (_lock)
-        {
-            _log.LogInformation("Stopping all {Count} PingControllers", _pingControllers.Count);
-        
-            foreach (var (ipAddress, controller) in _pingControllers)
-            {
-                controller.Stop();
-                controller.Dispose();
-            }
+            if (_stopped)
+                return;
+            _stopped = true;
+            controllers = _pingControllers.Values.ToList();
             _pingControllers.Clear();
         }
+        _log.LogDebug("Stopping {Count} PingControllers", controllers.Count);
+
+        await Task.WhenAll(controllers.Select(c => c.StopAsync(grace))).ConfigureAwait(false);
+        foreach (var c in controllers)
+            c.Dispose();
+
+        _resultWriter.TryComplete();
+        try
+        {
+            await _messageProcessingTask.WaitAsync(grace).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Result pump did not drain within {Grace}", grace);
+        }
     }
 
-    /// <summary>
-    /// Gets the current count of active controllers.
-    /// </summary>
-    public int ActiveControllerCount => _pingControllers.Count;
-
-    /// <summary>
-    /// Background task that processes ping result messages from the channel.
-    /// </summary>
     private async Task ProcessMessages()
     {
         try
         {
             _log.LogDebug("PingManager message processing started");
-            
             await foreach (var message in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
                 LogPingResult(message);
@@ -144,7 +117,6 @@ public class PingManager : IDisposable
         }
         catch (OperationCanceledException)
         {
-            // Expected when cancellation is requested
             _log.LogInformation("PingManager message processing stopped due to cancellation");
         }
         catch (Exception ex)
@@ -160,79 +132,15 @@ public class PingManager : IDisposable
     private void LogPingResult(PingResult message)
     {
         if (message.Success)
-        {
             _log.LogTrace("Processing success from {IpAddress}, {RoundtripTime}ms", message.IpAddress, message.RoundtripTime);
-        } else
-        {
+        else
             _log.LogTrace("Processing lost ping from {IpAddress}: {Message}", message.IpAddress, message.Message);
-        }
     }
 
-    /// <summary>
-    /// Closes the result channel to signal no more messages will be sent.
-    /// </summary>
-    public void CloseChannel()
-    {
-        _resultWriter.TryComplete();
-    }
-
-    /// <summary>
-    /// Releases all resources used by the PingManager.
-    /// </summary>
+    /// <summary>Synchronous best effort for callers that cannot await; <see cref="StopAsync"/> is the real path.</summary>
     public void Dispose()
     {
-        Dispose(true);
+        _ = StopAsync(TimeSpan.FromSeconds(5));
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Releases the unmanaged resources used by the PingManager and optionally releases the managed resources.
-    /// </summary>
-    /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
-    protected virtual void Dispose(bool disposing)
-    {
-        lock (_lock)
-        {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    _log.LogDebug("Disposing PingManager");
-                
-                    // Stop all controllers first
-                    StopAllControllers();
-
-                    // Close the channel to signal no more messages
-                    CloseChannel();
-
-                    // Wait for message processing to complete (with timeout)
-                    try
-                    {
-                        _messageProcessingTask.Wait(TimeSpan.FromSeconds(5));
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.LogWarning(ex, "Message processing task did not complete cleanly");
-                    }
-
-                    // Dispose the message processing task
-                    _messageProcessingTask?.Dispose();
-
-                    // NOTE: the ILoggerFactory is owned by the host, never by
-                    // this class — disposing it here killed all logging after
-                    // an engine rebuild.
-                }
-
-                _disposed = true;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Finalizer for PingManager to ensure cleanup if Dispose is not called.
-    /// </summary>
-    ~PingManager()
-    {
-        Dispose(false);
     }
 }

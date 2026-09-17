@@ -267,7 +267,7 @@ public class WatcherEngine
         }
     }
 
-    public Task StopAsync()
+    public async Task StopAsync()
     {
         _log.LogInformation("WatcherEngine stopping...");
         _cts?.Cancel();
@@ -281,11 +281,11 @@ public class WatcherEngine
         Suspicion?.Dispose();
         foreach (var pool in _poolCoordinators)
             pool.Dispose();
-        _manager?.Dispose();
+        if (_manager is { } manager)
+            await manager.StopAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         foreach (var monitor in _monitors.Values)
             monitor.Dispose();
 
         _log.LogInformation("WatcherEngine stopped.");
-        return Task.CompletedTask;
     }
 }
