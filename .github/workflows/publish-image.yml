@@ -1,8 +1,12 @@
-# Builds and pushes the multi-arch container image to GHCR on every master
-# push and on v* tags. The package is PRIVATE by default (independent of
-# repo visibility); pulling it needs a PAT with read:packages until it is
-# made public in the package settings. Pushing uses the workflow's own
-# GITHUB_TOKEN - no stored secrets.
+# Builds and pushes the multi-arch container image to GHCR. Two channels:
+#   edge    - every master push (the testing channel; what Mark runs at home)
+#   X.Y.Z   - a v* tag: semver tags (1.2.3, 1.2, 1) and `latest` for a
+#             stable release; a pre-release tag (v1.2.3-rc1) gets only its
+#             own tag and never moves `latest`.
+# Every build also gets a sha-<commit> tag. The version inside the binary
+# (header, /api/v1/health) comes from the tag; edge builds report
+# Directory.Build.props' "<prefix>-dev+<sha>". Pushing uses the workflow's
+# own GITHUB_TOKEN - no stored secrets.
 name: publish-image
 
 on:
@@ -36,13 +40,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The release version is the tag minus its leading "v"; empty for edge.
+      - id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # flavor latest=auto (the default) adds `latest` only for a semver tag
+      # without a pre-release suffix, and skips the major/minor patterns for
+      # pre-releases.
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/conwatch
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=edge,enable={{is_default_branch}}
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             type=sha
 
       - uses: docker/build-push-action@v6
@@ -52,6 +70,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: GIT_SHA=${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APP_VERSION=${{ steps.ver.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
