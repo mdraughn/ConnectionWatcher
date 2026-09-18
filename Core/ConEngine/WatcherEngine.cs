@@ -401,7 +401,7 @@ public class WatcherEngine
         foreach (var pool in _poolCoordinators)
             pool.Dispose();
         if (_manager is { } manager)
-            await manager.StopAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await manager.StopAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         foreach (var monitor in _monitors.Values)
             monitor.Dispose();
 

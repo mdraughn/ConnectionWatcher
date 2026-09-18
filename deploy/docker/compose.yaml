@@ -20,6 +20,10 @@ services:
     image: ghcr.io/mdraughn/conwatch:latest
     container_name: conwatch
     restart: unless-stopped
+    # The app writes its last minute of data on the way out; give it time.
+    # Synology Container Manager reads this from the compose file (there is
+    # no UI for it). Docker's default is 10 s.
+    stop_grace_period: 30s
     ports:
       - "8080:8080"
     volumes:

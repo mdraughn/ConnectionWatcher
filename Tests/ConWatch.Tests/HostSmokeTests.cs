@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using ConPersistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace ConWatch.Tests;
 
@@ -30,6 +31,13 @@ public class HostSmokeTests : IDisposable
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
         await using var db = await dbFactory.CreateDbContextAsync();
         Assert.Equal(2, await db.Profiles.CountAsync());
+    }
+
+    [Fact]
+    public void Host_shutdown_ceiling_fits_under_the_container_grace()
+    {
+        var options = _factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<HostOptions>>().Value;
+        Assert.Equal(TimeSpan.FromSeconds(25), options.ShutdownTimeout);
     }
 
     private sealed record HealthDto(string Status, bool EngineRunning, int TargetCount, bool Stalled);

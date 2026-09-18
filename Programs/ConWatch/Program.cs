@@ -15,6 +15,12 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionWatcher");
 
+// Shutdown budget (see docs/superpowers/reviews/2026-09-18-codebase-review.md, H5):
+// the engine stops in <= 2+2 s, the notifiers say goodbye in <= 2 s, and the
+// recorders' final flush gets the rest. 25 s sits under the 30 s
+// stop_grace_period in deploy/docker/compose.yaml and the SCM's default.
+builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(25));
+
 // Registrations live in ConWatchServices, one method per concern.
 builder.Services
     .AddConWatchOptions(builder.Configuration)

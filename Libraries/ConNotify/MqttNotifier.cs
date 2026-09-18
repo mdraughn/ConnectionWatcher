@@ -164,8 +164,11 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             {
                 try
                 {
-                    await PublishAsync(client, _topics.Availability, "offline", retain: true, CancellationToken.None);
-                    await client.DisconnectAsync().ConfigureAwait(false);
+                    // Bounded goodbye: a black-holed broker must not eat the
+                    // shutdown budget the recorders need.
+                    using var goodbye = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await PublishAsync(client, _topics.Availability, "offline", retain: true, goodbye.Token);
+                    await client.DisconnectAsync(new MqttClientDisconnectOptions(), goodbye.Token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
