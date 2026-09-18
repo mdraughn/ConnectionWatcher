@@ -69,9 +69,11 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
     /// must not interleave. Buckets are taken from the accumulator only once
     /// the lock is held, so a cancelled wait cannot strand them. Pending
     /// buckets for the same target and minute (a late sample after a failed
-    /// write) are merged before the write, so a retry can never collide with
-    /// itself on the unique index. After too many consecutive failures the
-    /// pending list is dropped with an error rather than growing forever.
+    /// write) are folded into the pending list itself before the write, so a
+    /// failed write leaves the already-folded list and a retry can never
+    /// absorb the same duplicate twice or collide with itself on the unique
+    /// index. After too many consecutive failures the pending list is
+    /// dropped with an error rather than growing forever.
     /// </summary>
     private async Task WriteAsync(Func<List<RollupBucket>> take, CancellationToken ct)
     {
@@ -83,7 +85,10 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
                 return;
             ct.ThrowIfCancellationRequested();
 
-            var merged = Coalesce(_pending);
+            // Fold duplicates into the pending list itself: a failed write then
+            // leaves the folded list, and nothing is ever absorbed twice.
+            _pending = Coalesce(_pending);
+            var merged = _pending;
             await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
             var earliest = merged.Min(b => b.PeriodStartUtc);
             var targetIds = merged.Select(b => b.TargetId).Distinct().ToList();

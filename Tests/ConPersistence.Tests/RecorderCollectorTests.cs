@@ -229,6 +229,33 @@ public class RecorderCollectorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_duplicate_pending_bucket_is_folded_once_even_across_two_failed_writes()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var collector = new RollupCollector(new FailingNTimesDbFactory(_factory, failures: 2), time,
+            NullLogger<RollupCollector>.Instance);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source);
+        var target = Guid.NewGuid();
+        var minute0 = DateTimeOffset.Parse("2026-09-01T00:00:00Z");
+
+        source.OnNext((target, new PingResult(Ip, true, 10, timestamp: minute0.AddSeconds(5))));
+        time.Advance(TimeSpan.FromSeconds(65));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => collector.FlushClosedAsync()); // failure 1
+
+        source.OnNext((target, new PingResult(Ip, true, 30, timestamp: minute0.AddSeconds(59)))); // duplicate key
+        time.Advance(TimeSpan.FromSeconds(60));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => collector.FlushClosedAsync()); // failure 2: folded once
+        await collector.FlushClosedAsync(); // succeeds
+
+        await using var db = _factory.CreateDbContext();
+        var row = await db.Rollups.SingleAsync(r => r.TargetId == target);
+        Assert.Equal(2, row.PingCount);   // not 3: the duplicate was absorbed exactly once
+        Assert.Equal(2, row.SuccessCount);
+        Assert.Equal(20.0, row.RttAvg);
+    }
+
+    [Fact]
     public async Task Pending_buckets_are_dropped_after_too_many_consecutive_failures()
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
