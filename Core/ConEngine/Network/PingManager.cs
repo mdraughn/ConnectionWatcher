@@ -24,6 +24,7 @@ public class PingManager : IDisposable
     private readonly Task _messageProcessingTask;
     private readonly ILogger<PingManager> _log;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly TimeProvider _timeProvider;
     private bool _stopped;
 
     // Plain Subject: the engine subscribes before any controller exists, so
@@ -33,12 +34,14 @@ public class PingManager : IDisposable
 
     public PingManager(IPingTransceiverFactory pingTransceiverFactory,
         CancellationToken globalCancellationToken,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        TimeProvider timeProvider)
     {
         _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<PingManager>();
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
+        _timeProvider = timeProvider;
 
         var resultChannel = Channel.CreateUnbounded<RoutedPingResult>();
         _resultWriter = resultChannel.Writer;
@@ -63,7 +66,7 @@ public class PingManager : IDisposable
             if (!_pingControllers.TryGetValue(targetId, out var controller))
             {
                 var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
-                controller = new PingController(_pingTransceiverFactory, controllerLogger);
+                controller = new PingController(_pingTransceiverFactory, controllerLogger, _timeProvider);
                 controller.Launch(targetId, ipAddress, _resultWriter, probe, cadence, timeoutMsProvider, _globalCancellationToken);
                 _pingControllers[targetId] = controller;
                 _log.LogInformation("Created PingController for {IpAddress} (target {TargetId})", ipAddress, targetId);

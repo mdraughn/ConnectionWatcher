@@ -184,7 +184,7 @@ public class WatcherEngine
 
         // Ping plumbing: one manager, one controller per target, results
         // routed by target id (targets may share an address).
-        _manager = new PingManager(_pingFactory, ct, _loggerFactory);
+        _manager = new PingManager(_pingFactory, ct, _loggerFactory, _timeProvider);
         _subscriptions.Add(_manager.PingResultSource.Subscribe(
             routed =>
             {
