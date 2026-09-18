@@ -16,11 +16,37 @@ namespace ConNotify;
 /// </summary>
 public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : BackgroundService
 {
-    private sealed record Refresh;
+    /// <summary>
+    /// Everything the session loop reacts to travels through ONE channel with
+    /// ONE reader: transitions, a refresh request (engine (re)start), and a
+    /// reconfigure request (settings changed). A second wake path (the old
+    /// semaphore + WhenAny) orphaned one waiter per processed item, so pokes
+    /// were swallowed and the first transition after a reconnect was lost.
+    /// </summary>
+    public sealed class Inbox
+    {
+        public sealed record RefreshMessage;
+        public sealed record ReconfigureMessage;
 
-    private readonly Channel<object> _queue = Channel.CreateBounded<object>(
-        new BoundedChannelOptions(500) { FullMode = BoundedChannelFullMode.DropOldest });
-    private readonly SemaphoreSlim _wake = new(0);
+        private readonly Channel<object> _queue = Channel.CreateBounded<object>(
+            new BoundedChannelOptions(500) { FullMode = BoundedChannelFullMode.DropOldest });
+
+        public void Post(TargetTransition transition) => _queue.Writer.TryWrite(transition);
+        public void Refresh() => _queue.Writer.TryWrite(new RefreshMessage());
+        public void Reconfigure() => _queue.Writer.TryWrite(new ReconfigureMessage());
+
+        public ValueTask<object> ReadAsync(CancellationToken ct) => _queue.Reader.ReadAsync(ct);
+
+        /// <summary>Discards everything until a reconfigure request arrives.</summary>
+        public async Task WaitForReconfigureAsync(CancellationToken ct)
+        {
+            while (await _queue.Reader.ReadAsync(ct).ConfigureAwait(false) is not ReconfigureMessage)
+            {
+            }
+        }
+    }
+
+    private readonly Inbox _inbox = new();
     private readonly Lock _lock = new();
 
     private WatcherEngine? _engine;
@@ -37,16 +63,15 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             _subscription?.Dispose();
             _engine = engine;
             _subscription = engine.TransitionSource.Subscribe(
-                t => _queue.Writer.TryWrite(t),
+                _inbox.Post,
                 ex => log.LogError(ex, "Transition stream error in MQTT notifier"));
         }
-        _queue.Writer.TryWrite(new Refresh());
-        _wake.Release();
+        _inbox.Refresh();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        settings.NotifierSettingsChanged += () => _wake.Release();
+        settings.NotifierSettingsChanged += _inbox.Reconfigure;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -59,7 +84,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 var engineEnabled = await settings.GetAsync(SettingKeys.EngineEnabled) != "false";
                 if (!enabled || !engineEnabled || host is not { Length: > 0 })
                 {
-                    await _wake.WaitAsync(stoppingToken).ConfigureAwait(false);
+                    await _inbox.WaitForReconfigureAsync(stoppingToken).ConfigureAwait(false);
                     continue;
                 }
                 await RunConnectedSessionAsync(host, stoppingToken).ConfigureAwait(false);
@@ -106,21 +131,19 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
             while (client.IsConnected && !stoppingToken.IsCancellationRequested)
             {
-                // Wake on queued work OR a settings poke; settings poke ends the session.
-                var readTask = _queue.Reader.ReadAsync(stoppingToken).AsTask();
-                var wakeTask = _wake.WaitAsync(stoppingToken);
-                var winner = await Task.WhenAny(readTask, wakeTask).ConfigureAwait(false);
-                if (winner == wakeTask)
+                var item = await _inbox.ReadAsync(stoppingToken).ConfigureAwait(false);
+                switch (item)
                 {
-                    await wakeTask.ConfigureAwait(false);
-                    log.LogInformation("MQTT settings changed; reconnecting");
-                    return; // outer loop re-reads settings
+                    case Inbox.ReconfigureMessage:
+                        log.LogInformation("MQTT settings changed; reconnecting");
+                        return; // outer loop re-reads settings
+                    case Inbox.RefreshMessage:
+                        await RefreshAllAsync(client, stoppingToken).ConfigureAwait(false);
+                        break;
+                    case TargetTransition transition:
+                        await PublishTransitionAsync(client, transition, stoppingToken).ConfigureAwait(false);
+                        break;
                 }
-                var item = await readTask.ConfigureAwait(false);
-                if (item is Refresh)
-                    await RefreshAllAsync(client, stoppingToken).ConfigureAwait(false);
-                else if (item is TargetTransition transition)
-                    await PublishTransitionAsync(client, transition, stoppingToken).ConfigureAwait(false);
             }
         }
         finally
@@ -203,7 +226,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 lock (_lock) { _slugsById.TryGetValue(t.TargetId, out slug); }
                 if (slug is null)
                 {
-                    _queue.Writer.TryWrite(new Refresh()); // unknown target: topology changed
+                    _inbox.Refresh(); // unknown target: topology changed
                     return;
                 }
                 await PublishAsync(client, _topics.TargetState(slug),
