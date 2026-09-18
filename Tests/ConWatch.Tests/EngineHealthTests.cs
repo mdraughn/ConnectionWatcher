@@ -1,3 +1,5 @@
+using System.Net;
+using ConCore;
 using ConEngine.Configuration;
 using ConEngine.Tests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,12 +17,35 @@ public class EngineHealthTests
         Targets = [new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "P" }],
     };
 
-    /// <summary>A fake clock keeps every controller asleep, so the engine never
-    /// produces a result: a clean way to get "started, active, silent".</summary>
+    /// <summary>A transceiver whose ping never completes unless cancelled — so
+    /// no result can be produced however the fake clock is advanced.</summary>
+    private sealed class HangingFactory : IPingTransceiverFactory
+    {
+        public IPingTransceiver Create(IPAddress ip, ProbeSpec probe, CancellationToken ct) => new Hanging(ip, ct);
+
+        private sealed class Hanging(IPAddress ip, CancellationToken ct) : IPingTransceiver
+        {
+            public IPAddress IpAddress => ip;
+
+            public async Task<PingResult> PingAsync(int timeoutMs)
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return new PingResult(ip, false, 0, "unreachable");
+            }
+
+            public void Dispose() { }
+        }
+    }
+
+    /// <summary>The engine started, with an active monitor, and physically
+    /// unable to produce a result: the clean way to get "started, active,
+    /// silent". A completing fake transceiver would not do — advancing the
+    /// fake clock fires the controller's cadence timer synchronously, and a
+    /// result could be pumped in before Classify runs.</summary>
     private static async Task<(ConEngine.WatcherEngine Engine, FakeTimeProvider Time, CancellationTokenSource Cts)> SilentEngineAsync()
     {
         var time = new FakeTimeProvider(T0);
-        var engine = new ConEngine.WatcherEngine(time, new FakePingTransceiverFactory(),
+        var engine = new ConEngine.WatcherEngine(time, new HangingFactory(),
             new FakeDomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(OneTarget()));
         var cts = new CancellationTokenSource();
@@ -33,6 +58,15 @@ public class EngineHealthTests
     {
         Assert.Equal("EngineDown", EngineHealth.Classify(null, enabled: true, T0).Status);
         Assert.Equal("Disabled", EngineHealth.Classify(null, enabled: false, T0).Status);
+    }
+
+    [Fact]
+    public void Validation_failure_with_no_engine_is_ConfigInvalid()
+    {
+        Assert.Equal("ConfigInvalid", EngineHealth.Classify(null, enabled: true, T0,
+            "Profile 'X': FalteringThreshold (0.75) must be below RespondingThreshold (0.5)").Status);
+        // No recorded failure: an engine-less node is just down.
+        Assert.Equal("EngineDown", EngineHealth.Classify(null, enabled: true, T0, null).Status);
     }
 
     [Fact]

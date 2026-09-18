@@ -59,12 +59,16 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
 
     /// <summary>Tells every open tab the node is now an archive: one push of the
     /// disabled snapshot. Called by the host from the archive path only, after
-    /// Detach(), so a plain restart or an ordinary rebuild never flips a dashboard.</summary>
+    /// Detach(), so a plain restart or an ordinary rebuild never flips a dashboard.
+    /// Bounded at 2 s: the host awaits this while holding its rebuild lock, and a
+    /// wedged hub client (or a busy send gate) must not hold that lock open —
+    /// the timeout lands in the catch below and the rebuild carries on.</summary>
     public async Task PushDisabledAsync()
     {
         try
         {
-            await SendStatusChangedAsync(DisabledSnapshot).ConfigureAwait(false);
+            await SendStatusChangedAsync(DisabledSnapshot)
+                .WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

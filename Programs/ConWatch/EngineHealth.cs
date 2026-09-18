@@ -12,10 +12,19 @@ public static class EngineHealth
 {
     public sealed record Verdict(string Status, bool Stalled, TimeSpan? SilenceFor);
 
-    public static Verdict Classify(WatcherEngine? engine, bool enabled, DateTimeOffset now)
+    /// <param name="startFailure">The validator's complaint from the last
+    /// start attempt, when one refused to build an engine. An enabled node
+    /// with no engine for that reason is "ConfigInvalid", not merely down:
+    /// the operator has something to fix, not something to wait out.</param>
+    public static Verdict Classify(WatcherEngine? engine, bool enabled, DateTimeOffset now,
+        string? startFailure = null)
     {
         if (engine is null)
+        {
+            if (enabled && startFailure is not null)
+                return new Verdict("ConfigInvalid", Stalled: false, SilenceFor: null);
             return new Verdict(enabled ? "EngineDown" : "Disabled", Stalled: false, SilenceFor: null);
+        }
 
         // Only monitors that have an address are expected to produce results;
         // a hostname still resolving is not silence.

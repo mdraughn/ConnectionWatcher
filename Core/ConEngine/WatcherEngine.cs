@@ -215,10 +215,12 @@ public class WatcherEngine
                     {
                         _pingSampleSubject.OnNext((monitor.Target.Id, result));
                     }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    catch (Exception ex) when (ex is not OperationCanceledException
+                        || !ct.IsCancellationRequested)
                     {
                         // Host observers ride this stream; one of them throwing must
-                        // not starve suspicion or the stall stamp.
+                        // not starve suspicion or the stall stamp — including when
+                        // it throws a cancellation of its own, which is not ours.
                         _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed",
                             monitor.Target.Name);
                     }
@@ -351,15 +353,21 @@ public class WatcherEngine
                         backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
                         continue;
                     }
-                    current = answers[0];
-                    Activate(monitor, current);
+                    // Adopt the answer only once the call it feeds has
+                    // returned: the catch below promises a retry at the next
+                    // refresh, which it can only keep if a throw leaves
+                    // `current` as it was.
+                    var next = answers[0];
+                    Activate(monitor, next);
+                    current = next;
                 }
                 else if (answers.Count > 0 && !answers.Contains(current))
                 {
                     _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
                         monitor.Target.Name, current, answers[0]);
-                    current = answers[0];
-                    await RepointAsync(monitor, current).ConfigureAwait(false);
+                    var next = answers[0];
+                    await RepointAsync(monitor, next).ConfigureAwait(false);
+                    current = next;
                 }
             }
             catch (ObjectDisposedException) when (ct.IsCancellationRequested)

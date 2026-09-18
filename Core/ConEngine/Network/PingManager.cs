@@ -146,11 +146,15 @@ public class PingManager : IDisposable
                     _pingResultSubject.OnNext(routed);
                     Volatile.Write(ref _lastResultTicks, routed.Result.Timestamp.UtcTicks);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (ex is not OperationCanceledException
+                    || !_globalCancellationToken.IsCancellationRequested)
                 {
                     // Subscribers run inline. One bad observer must not end
-                    // result processing for the life of the engine. The stamp
-                    // is not advanced: it means "last result fully processed".
+                    // result processing for the life of the engine — not even
+                    // when its bug is a cancellation of its own (an HTTP call
+                    // that timed out): only OUR cancellation ends the pump.
+                    // The stamp is not advanced: it means "last result fully
+                    // processed".
                     _log.LogError(ex, "A ping result subscriber threw for target {TargetId}; result skipped",
                         routed.TargetId);
                 }

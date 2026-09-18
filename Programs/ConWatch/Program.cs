@@ -18,7 +18,10 @@ builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionW
 // Shutdown budget (see docs/superpowers/reviews/2026-09-18-codebase-review.md, H5):
 // the engine stops in <= 2+2 s, the notifiers say goodbye in <= 2 s, and the
 // recorders' final flush gets the rest. 25 s sits under the 30 s
-// stop_grace_period in deploy/docker/compose.yaml and the SCM's default.
+// stop_grace_period in deploy/docker/compose.yaml; under the Windows SCM the
+// host-shutdown kill timeout can be as low as 5 s, but the normal path
+// (engine <= 4 s, MQTT goodbye <= 2 s, then the flushes) finishes well inside
+// that.
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(25));
 
 // Registrations live in ConWatchServices, one method per concern.

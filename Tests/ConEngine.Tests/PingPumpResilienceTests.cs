@@ -58,6 +58,46 @@ public class PingPumpResilienceTests
         }
     }
 
+    /// <summary>
+    /// A subscriber's own cancellation (its HTTP call timed out, say) is not
+    /// the pump's cancellation: nothing has been asked to stop, so the pump
+    /// must treat it like any other subscriber bug and keep going.
+    /// </summary>
+    [Fact]
+    public async Task A_subscriber_throwing_a_foreign_cancellation_does_not_stop_the_pump()
+    {
+        var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
+            new FakeDomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(OneTarget()));
+        int delivered = 0;
+        int thrown = 0;
+        engine.PingSampleSource.Subscribe(_ => Interlocked.Increment(ref delivered));
+        engine.PingSampleSource.Subscribe(_ =>
+        {
+            Interlocked.Increment(ref thrown);
+            throw new OperationCanceledException("subscriber's own timeout");
+        });
+        Assert.Null(engine.LastResultUtc);
+        using var cts = new CancellationTokenSource();
+        await engine.StartAsync(cts.Token);
+        try
+        {
+            await Eventually(() => Volatile.Read(ref thrown) >= 1);
+            var afterFirstThrow = Volatile.Read(ref delivered);
+            await Eventually(() => Volatile.Read(ref delivered) >= afterFirstThrow + 5);
+            Assert.NotNull(engine.LastResultUtc);
+            Assert.True(engine.LastResultUtc >= engine.StartedUtc);
+            var stampAfterThrow = engine.LastResultUtc;
+            await Task.Delay(200);
+            Assert.True(engine.LastResultUtc > stampAfterThrow);
+        }
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
+    }
+
     [Fact]
     public async Task Stall_threshold_follows_the_slowest_profile()
     {

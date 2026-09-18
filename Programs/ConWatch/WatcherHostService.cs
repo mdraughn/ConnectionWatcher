@@ -69,6 +69,11 @@ public class WatcherHostService(
     /// health, status and metrics endpoints read this instead of the database.</summary>
     public bool EngineEnabled { get; private set; } = true;
 
+    /// <summary>The validator's complaint from the last start attempt that
+    /// refused to build an engine, or null when the last attempt got past
+    /// validation. The health endpoint reports it as "ConfigInvalid".</summary>
+    public string? LastStartFailure { get; private set; }
+
     private void DetachObservers()
     {
         foreach (var observer in observers)
@@ -136,9 +141,19 @@ public class WatcherHostService(
     public async Task<bool> EngineEnabledAsync() =>
         await settingsStore.GetAsync(SettingKeys.EngineEnabled) != "false";
 
-    private async Task StartEngineAsync(EngineSeed? seed = null)
+    /// <summary>
+    /// Brings the node to the state the settings ask for. Returns true when
+    /// that succeeded — an engine is running, or archive mode was entered —
+    /// and false only when the stored configuration failed validation, which
+    /// leaves the node enabled but engine-less (see
+    /// <see cref="LastStartFailure"/>).
+    /// </summary>
+    private async Task<bool> StartEngineAsync(EngineSeed? seed = null)
     {
         EngineEnabled = await EngineEnabledAsync();
+        // Every attempt that gets this far starts clean; only the validation
+        // branch below records a failure.
+        LastStartFailure = null;
         if (!EngineEnabled)
         {
             // Archive mode: no engine, but everything recorded so far must be
@@ -149,17 +164,20 @@ public class WatcherHostService(
             await glitchRecorder.FlushAsync();
             await collector.FlushAllAsync();
             _log.LogInformation("Monitoring disabled (Engine.Enabled=false); serving as archive");
-            return;
+            return true;
         }
 
         var options = await store.LoadWatcherOptionsAsync();
         var validation = new WatcherOptionsValidator().Validate(null, options);
         if (validation.Failed)
         {
-            // Should be unreachable: every write was pre-validated.
+            // Nearly unreachable: every write through the API was pre-validated.
+            // A raw write — or an upgrade that tightened the rules — can still
+            // land here, and the node must say so rather than look merely down.
             _log.LogError("Stored configuration is invalid; engine not started: {Failures}",
                 validation.FailureMessage);
-            return;
+            LastStartFailure = validation.FailureMessage;
+            return false;
         }
 
         seed ??= await BuildSeedFromDbAsync();
@@ -178,6 +196,7 @@ public class WatcherHostService(
         Engine = engine;
         _log.LogInformation("Engine started with {Count} targets{Warm}",
             options.Targets.Count, seed is { IsEmpty: false } ? " (warm start)" : "");
+        return true;
     }
 
     private async Task<bool> WarmRestartEnabledAsync() =>
@@ -362,18 +381,11 @@ public class WatcherHostService(
                 await engine.StopAsync();
                 DetachObservers();
             }
-            await StartEngineAsync(seed);
-            // Covers StartEngineAsync's other early return (config validation
-            // failed) as well as the archive branch (which already detached
-            // itself) — Detach() is idempotent, so a harmless double call
-            // there just guarantees no observer is left attached whenever the
-            // rebuild didn't end with a running engine.
-            if (Engine is null)
-                DetachObservers();
+            var started = await StartEngineAsync(seed);
             // Always inside _rebuildLock: a plain read/write is enough.
             if (targetGeneration > _servicedGeneration)
                 _servicedGeneration = targetGeneration;
-            return true;
+            return started;
         }
         catch (Exception ex)
         {
@@ -382,6 +394,14 @@ public class WatcherHostService(
         }
         finally
         {
+            // Covers StartEngineAsync's validation-failed return and the
+            // archive branch (which already detached itself), and also a
+            // throw from StartEngineAsync after observers were attached —
+            // Detach() is idempotent, so the harmless double call just
+            // guarantees no observer is left attached whenever the rebuild
+            // didn't end with a running engine.
+            if (Engine is null)
+                DetachObservers();
             _rebuildLock.Release();
         }
     }
@@ -409,7 +429,19 @@ public class WatcherHostService(
         // own async call stack (before the PUT/config-commit responds) — a
         // fire-and-forget Task.Run would race that response under load
         // instead of reliably beating it.
-        EngineEnabled = EngineEnabledAsync().GetAwaiter().GetResult();
+        // Guarded: this runs on the settings writer's stack after the write
+        // already committed, so a transient read failure must not turn a
+        // committed PUT into a 500 — nor skip the rebuild scheduled below,
+        // which reads the switch again anyway.
+        try
+        {
+            EngineEnabled = EngineEnabledAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex,
+                "Could not refresh the master switch after a settings change; the rebuild will read it");
+        }
         var delay = TimeSpan.FromSeconds(persistenceOptions.Value.RebuildDebounceSeconds);
         _ = Task.Run(async () =>
         {

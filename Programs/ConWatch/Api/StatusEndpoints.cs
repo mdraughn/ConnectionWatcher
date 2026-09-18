@@ -25,14 +25,18 @@ public static class StatusEndpoints
         {
             var engine = host.Engine;
             var now = time.GetUtcNow();
-            var verdict = EngineHealth.Classify(engine, host.EngineEnabled, now);
+            var verdict = EngineHealth.Classify(engine, host.EngineEnabled, now, host.LastStartFailure);
             var body = new
             {
                 // A deliberately disabled node is a healthy archive (200) — container
-                // healthchecks must not flag it; 503 stays for enabled-but-down and stalled.
+                // healthchecks must not flag it; 503 stays for enabled-but-down,
+                // stalled, and config the validator rejected (ConfigInvalid).
                 Status = verdict.Status,
                 Enabled = host.EngineEnabled,
                 EngineRunning = engine is not null,
+                // Null unless the last start attempt failed validation: the
+                // operator's actual repair instruction.
+                StartFailure = host.LastStartFailure,
                 Stalled = verdict.Stalled,
                 SilenceSeconds = verdict.SilenceFor?.TotalSeconds,
                 TargetCount = engine?.Monitors.Count ?? 0,
