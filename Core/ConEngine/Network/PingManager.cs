@@ -26,6 +26,17 @@ public class PingManager : IDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly TimeProvider _timeProvider;
     private bool _stopped;
+    private long _lastResultTicks; // UTC ticks of the last routed result; 0 = none yet
+
+    /// <summary>When the pump last handed a result to its subscribers; null before the first.</summary>
+    public DateTimeOffset? LastResultUtc
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref _lastResultTicks);
+            return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+    }
 
     // Plain Subject: the engine subscribes before any controller exists, so
     // nothing ever needs a replay.
@@ -129,8 +140,19 @@ public class PingManager : IDisposable
             _log.LogDebug("PingManager message processing started");
             await foreach (var routed in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
-                LogPingResult(routed.Result);
-                _pingResultSubject.OnNext(routed);
+                try
+                {
+                    LogPingResult(routed.Result);
+                    _pingResultSubject.OnNext(routed);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Subscribers run inline. One bad observer must not end
+                    // result processing for the life of the engine.
+                    _log.LogError(ex, "A ping result subscriber threw for target {TargetId}; result skipped",
+                        routed.TargetId);
+                }
+                Volatile.Write(ref _lastResultTicks, routed.Result.Timestamp.UtcTicks);
             }
         }
         catch (OperationCanceledException)

@@ -70,6 +70,19 @@ public class WatcherEngine
     /// <summary>Suspicion bursts, corroboration sweeps, and glitch episodes.</summary>
     public SuspicionCoordinator? Suspicion { get; private set; }
 
+    /// <summary>When the result pump last delivered a result; null before the first.</summary>
+    public DateTimeOffset? LastResultUtc => _manager?.LastResultUtc;
+
+    /// <summary>When StartAsync ran (engine clock).</summary>
+    public DateTimeOffset StartedUtc { get; private set; }
+
+    /// <summary>
+    /// Silence longer than this from an engine with active monitors means the
+    /// pump or every controller is stuck: three normal intervals plus one
+    /// timeout of the slowest configured profile.
+    /// </summary>
+    public TimeSpan StallAfter { get; private set; } = TimeSpan.FromMinutes(5);
+
     /// <summary>Sub-Faltering loss episodes worth recording.</summary>
     public IObservable<GlitchEvent> GlitchSource => _glitchSubject;
     private readonly System.Reactive.Subjects.Subject<GlitchEvent> _glitchSubject = new();
@@ -101,6 +114,11 @@ public class WatcherEngine
         _graph = TargetGraph.FromOptions(_options);
         _log.LogInformation("WatcherEngine starting: {TargetCount} targets, {PoolCount} pools",
             _graph.Targets.Count, _graph.Pools.Count);
+
+        StartedUtc = _timeProvider.GetUtcNow();
+        var profiles = _graph.Targets.Values.Where(t => t.Enabled).Select(_graph.ProfileFor).ToList();
+        if (profiles.Count > 0)
+            StallAfter = profiles.Max(p => p.NormalInterval) * 3 + profiles.Max(p => p.PingTimeout);
 
         // Pool membership index for phase staggering: targetId -> (memberIndex, memberCount).
         var poolPosition = new Dictionary<Guid, (int index, int count)>();
@@ -311,25 +329,37 @@ public class WatcherEngine
                 }
             }
 
-            if (current is null)
+            try
             {
-                if (answers.Count == 0)
+                if (current is null)
                 {
-                    // Not activated yet: retry with backoff until DNS answers.
-                    try { await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { return; }
-                    backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
-                    continue;
+                    if (answers.Count == 0)
+                    {
+                        // Not activated yet: retry with backoff until DNS answers.
+                        try { await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { return; }
+                        backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
+                        continue;
+                    }
+                    current = answers[0];
+                    Activate(monitor, current);
                 }
-                current = answers[0];
-                Activate(monitor, current);
+                else if (answers.Count > 0 && !answers.Contains(current))
+                {
+                    _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
+                        monitor.Target.Name, current, answers[0]);
+                    current = answers[0];
+                    await RepointAsync(monitor, current).ConfigureAwait(false);
+                }
             }
-            else if (answers.Count > 0 && !answers.Contains(current))
+            catch (ObjectDisposedException) when (ct.IsCancellationRequested)
             {
-                _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
-                    monitor.Target.Name, current, answers[0]);
-                current = answers[0];
-                await RepointAsync(monitor, current).ConfigureAwait(false);
+                return; // the manager stopped under us
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogError(ex, "{Target}: activating/re-pointing failed; will retry at the next refresh",
+                    monitor.Target.Name);
             }
 
             // Sleep until the refresh interval or a Down transition, whichever first.
