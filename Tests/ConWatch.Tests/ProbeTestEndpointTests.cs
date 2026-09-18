@@ -52,4 +52,15 @@ public class ProbeTestEndpointTests : IDisposable
             new { address = "10.1.10.1" });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Unresolvable_hostname_reports_the_resolver_reason()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/targets/probe-test",
+            new { address = "nonexistent.invalid" });
+        response.EnsureSuccessStatusCode();
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("resolvedIp").ValueKind);
+        Assert.False(string.IsNullOrEmpty(body.GetProperty("resolutionError").GetString()));
+    }
 }

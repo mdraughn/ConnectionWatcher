@@ -281,8 +281,18 @@ public class WatcherEngine
             {
                 var result = await resolver.ResolveAsync(hostname, 5000).ConfigureAwait(false);
                 answers = result.IPv4Addresses.ToList();
-                if (answers.Count == 0 && current is null)
-                    monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
+                if (current is null)
+                {
+                    if (!result.Success)
+                        monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {result.Status}");
+                    else if (answers.Count == 0)
+                        monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
+                }
+                else if (!result.Success)
+                {
+                    _log.LogDebug("DNS refresh failed for {Hostname} ({Status}); keeping {Ip}",
+                        hostname, result.Status, current);
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
