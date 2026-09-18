@@ -140,4 +140,21 @@ public class MasterEnableTests : IDisposable
 
         Assert.Equal(before + 1, host.RebuildCount);
     }
+
+    [Fact]
+    public async Task Unconditional_rebuild_runs_without_a_preceding_write_but_the_stale_check_skips()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+        await Task.Delay(500); // let the seeding rebuilds settle
+        var before = host.RebuildCount;
+
+        Assert.True(await host.RebuildIfStaleAsync()); // nothing changed since the last rebuild: no-op
+        Assert.Equal(before, host.RebuildCount);
+
+        Assert.True(await host.RebuildAsync());        // unconditional: runs
+        Assert.Equal(before + 1, host.RebuildCount);
+    }
 }

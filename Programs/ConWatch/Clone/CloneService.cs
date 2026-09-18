@@ -69,7 +69,7 @@ public class CloneService(IHttpClientFactory httpFactory,
             return CloneOutcome.Fail(400, "import-failed", ex.Message);
         }
 
-        if (!await host.ForceRebuildAsync()) // deterministic parked-archive state before answering
+        if (!await host.RebuildAsync()) // deterministic parked-archive state before answering
             return CloneOutcome.Fail(500, "rebuild-failed",
                 "The clone was imported but the archive could not be prepared; see this node's log.");
         log.LogInformation("Cloned from {Source}: {Targets} targets, {Transitions} transitions",
@@ -146,7 +146,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         {
             [SettingKeys.EngineEnabled] = "true",
         });
-        if (!await host.ForceRebuildAsync())
+        if (!await host.RebuildAsync())
             return CloneOutcome.Fail(500, "rebuild-failed",
                 "Data was final-synced but the engine could not start; see this node's log. The source is disabled.");
         log.LogInformation("Took over from {Source}: {Transitions} transitions final-synced",

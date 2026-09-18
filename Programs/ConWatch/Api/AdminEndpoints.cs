@@ -33,7 +33,7 @@ public static class AdminEndpoints
             {
                 [SettingKeys.EngineEnabled] = request.Enabled ? "true" : "false",
             });
-            if (!await host.RebuildAsync()) // effective before we answer
+            if (!await host.RebuildIfStaleAsync()) // effective before we answer
                 return Results.Json(new { errors = new[] { "The engine could not be rebuilt; see the log." } },
                     statusCode: 500);
             return Results.NoContent();
@@ -153,7 +153,7 @@ public static class AdminEndpoints
                 [SettingKeys.RetentionRunHourUtc] = "3",
             });
             loggerFactory.CreateLogger("Admin").LogWarning("FACTORY RESET performed by administrator");
-            if (!await host.ForceRebuildAsync())
+            if (!await host.RebuildAsync())
                 return Results.Json(new { errors = new[] { "The engine could not be rebuilt; see the log." } },
                     statusCode: 500);
             return Results.NoContent();
