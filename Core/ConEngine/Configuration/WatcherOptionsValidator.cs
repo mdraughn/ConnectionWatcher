@@ -108,6 +108,10 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
             }
             if (p.MinUsableSample < 1 || p.MinUsableSample > p.HistorySize)
                 failures.Add($"Profile '{profileName}': MinUsableSample must be between 1 and HistorySize ({p.HistorySize}).");
+            if (p.FalteringThreshold >= p.RespondingThreshold)
+                failures.Add($"Profile '{profileName}': FalteringThreshold ({p.FalteringThreshold}) must be below RespondingThreshold ({p.RespondingThreshold}), or the state flaps on every sample between them.");
+            if (p.DownThreshold >= p.RecoveringThreshold)
+                failures.Add($"Profile '{profileName}': DownThreshold ({p.DownThreshold}) must be below RecoveringThreshold ({p.RecoveringThreshold}).");
         }
 
         return failures.Count > 0
