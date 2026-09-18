@@ -35,17 +35,17 @@ public class ConWatchMcpTools(WatcherHostService host,
     public async Task<string> GetCurrentStatus()
     {
         var engine = host.Engine;
-        var verdict = engine?.Verdict;
+        var current = engine?.Verdict?.Current;
         return JsonSerializer.Serialize(new
         {
             monitoringEnabled = await host.EngineEnabledAsync(),
             version = BuildInfo.Version,
             builtUtc = BuildInfo.BuiltUtc,
-            verdict = verdict is null ? null : new
+            verdict = current is null ? null : new
             {
-                state = verdict.CurrentVerdict.ToString(),
-                detail = verdict.CurrentDetail,
-                blamedOperator = verdict.CurrentOperator,
+                state = current.State.ToString(),
+                detail = current.Detail,
+                blamedOperator = current.Operator,
             },
             targets = engine?.Monitors.Values.OrderBy(m => m.Target.Name).Select(m => new
             {

@@ -38,12 +38,17 @@ public class VerdictCoordinator : IDisposable
     private readonly List<IDisposable> _subscriptions = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
 
-    public VerdictState CurrentVerdict { get; private set; } = VerdictState.Unknown;
-    public string? CurrentDetail { get; private set; }
+    /// <summary>State, detail and blamed operator as one immutable value:
+    /// readers on other threads get a consistent triple, never a torn one.</summary>
+    public sealed record VerdictSnapshot(VerdictState State, string? Detail, string? Operator);
 
+    public VerdictSnapshot Current { get; private set; } = new(VerdictState.Unknown, null, null);
+
+    public VerdictState CurrentVerdict => Current.State;
+    public string? CurrentDetail => Current.Detail;
     /// <summary>The ISP/operator being blamed by a Link* verdict (from the
     /// blamed trunk target's Operator tag), else null.</summary>
-    public string? CurrentOperator { get; private set; }
+    public string? CurrentOperator => Current.Operator;
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
@@ -87,7 +92,7 @@ public class VerdictCoordinator : IDisposable
         {
             if (CurrentVerdict != VerdictState.Unknown)
                 return;
-            CurrentVerdict = verdict;
+            Current = new VerdictSnapshot(verdict, null, null);
             _seeded = true;
         }
     }
@@ -110,22 +115,27 @@ public class VerdictCoordinator : IDisposable
     {
         lock (_lock)
         {
-            var (verdict, detail, operatorName) = Classify();
-            CurrentDetail = detail; // detail carries live counts — always refresh
-            CurrentOperator = operatorName;
-            if (verdict == CurrentVerdict)
+            // One read per monitor: classification, detail and blame all come
+            // from the same snapshot, so the detail can never contradict the state.
+            var anchors = _anchors.Select(a => (Monitor: a, State: a.CurrentState)).ToList();
+            var ancestors = _ancestors.Select(a => (a.Monitor, a.Depth, State: a.Monitor.CurrentState)).ToList();
+            var (verdict, detail, operatorName) = Classify(anchors, ancestors);
+            var previous = Current;
+            if (verdict == previous.State)
+            {
+                Current = previous with { Detail = detail, Operator = operatorName }; // detail carries live counts — always refresh
                 return;
+            }
             if (ignoreUnknown && verdict == VerdictState.Unknown)
                 return; // a seeded verdict outranks "no anchors determined yet"
 
-            var from = Map(CurrentVerdict);
-            CurrentVerdict = verdict;
+            Current = new VerdictSnapshot(verdict, detail, operatorName);
             var transition = new TargetTransition
             {
                 Kind = TransitionSubjectKind.Verdict,
                 TargetId = SubjectId,
                 TargetName = "Internet",
-                From = from,
+                From = Map(previous.State),
                 To = Map(verdict),
                 Timestamp = _time.GetUtcNow(),
                 Reason = new TransitionReason
@@ -140,7 +150,9 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
-    private (VerdictState, string, string? Operator) Classify()
+    private (VerdictState, string, string? Operator) Classify(
+        IReadOnlyList<(TargetMonitor Monitor, HostState State)> anchors,
+        IReadOnlyList<(TargetMonitor Monitor, int Depth, HostState State)> ancestors)
     {
         // Link verdicts name the blamed hop's operator ("Comcast") when tagged.
         static (VerdictState, string, string?) Blame(VerdictState verdict, TargetMonitor monitor, string state)
@@ -152,30 +164,30 @@ public class VerdictCoordinator : IDisposable
             return (verdict, wording, op);
         }
 
-        var downAncestor = _ancestors.Where(a => a.Monitor.CurrentState == HostState.Down)
+        var downAncestor = ancestors.Where(a => a.State == HostState.Down)
             .OrderByDescending(a => a.Depth).FirstOrDefault();
         if (downAncestor.Monitor is not null)
             return Blame(VerdictState.LinkDown, downAncestor.Monitor, "Down");
 
-        var faltAncestor = _ancestors.Where(a => a.Monitor.CurrentState == HostState.Faltering)
+        var faltAncestor = ancestors.Where(a => a.State == HostState.Faltering)
             .OrderByDescending(a => a.Depth).FirstOrDefault();
         if (faltAncestor.Monitor is not null)
             return Blame(VerdictState.LinkDegraded, faltAncestor.Monitor, "Faltering");
 
-        var determined = _anchors.Where(a => a.CurrentState
+        var determined = anchors.Where(a => a.State
             is not (HostState.Initializing or HostState.Starting)).ToList();
         if (determined.Count == 0)
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
-        var degraded = determined.Where(a => a.CurrentState
+        var degraded = determined.Where(a => a.State
             is HostState.Down or HostState.Faltering or HostState.Recovering).ToList();
-        string List() => string.Join(", ", degraded.Select(a => $"{a.Target.Name}={a.CurrentState}"));
+        string List() => string.Join(", ", degraded.Select(a => $"{a.Monitor.Target.Name}={a.State}"));
 
         // Weather needs INDEPENDENT evidence. Anchors that share an operator
         // ("Microsoft" four times, one per A record) share a path and fail
         // together, so they count once; untagged anchors count individually.
-        var determinedUnits = CountOperators(determined);
-        var degradedUnits = CountOperators(degraded);
+        var determinedUnits = CountOperators(determined.Select(a => a.Monitor));
+        var degradedUnits = CountOperators(degraded.Select(a => a.Monitor));
         var grouped = degradedUnits != degraded.Count || determinedUnits != determined.Count;
 
         // With fewer independent anchors than the weather threshold, weather can
@@ -189,7 +201,7 @@ public class VerdictCoordinator : IDisposable
         if (degradedUnits < _weatherThreshold)
         {
             var sharedOperator = degraded.Count > 1 && degradedUnits == 1
-                ? $" — all {degraded[0].Target.Operator}" : "";
+                ? $" — all {degraded[0].Monitor.Target.Operator}" : "";
             return (VerdictState.SiteIncident, $"SiteIncident: {List()}{sharedOperator}{qualifier}", null);
         }
         var counts = grouped

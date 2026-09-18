@@ -61,7 +61,8 @@ public class PoolCoordinator : IDisposable
     {
         lock (_lock)
         {
-            var states = _members.Select(m => m.CurrentState).ToList();
+            var members = _members.Select(m => (m.Target.Name, State: m.CurrentState)).ToList();
+            var states = members.Select(m => m.State).ToList();
 
             HostState next;
             if (states.All(s => s is HostState.Initializing or HostState.Starting))
@@ -78,8 +79,7 @@ public class PoolCoordinator : IDisposable
 
             var from = CurrentState;
             CurrentState = next;
-            var detail = string.Join(", ",
-                _members.Select(m => $"{m.Target.Name}={m.CurrentState}"));
+            var detail = string.Join(", ", members.Select(m => $"{m.Name}={m.State}"));
             var transition = new TargetTransition
             {
                 Kind = TransitionSubjectKind.Pool,

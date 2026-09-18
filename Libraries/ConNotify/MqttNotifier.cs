@@ -195,13 +195,14 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 StateMapping.TargetPayload(monitor.CurrentState), retain: true, ct);
         }
 
-        var verdict = engine.Verdict?.CurrentVerdict.ToString() ?? "Unknown";
+        var current = engine.Verdict?.Current;
+        var verdict = current?.State.ToString() ?? "Unknown";
         await PublishAsync(client, _topics.VerdictState, verdict, retain: true, ct);
         await PublishAsync(client, _topics.VerdictAttributes,
             System.Text.Json.JsonSerializer.Serialize(new
             {
-                detail = engine.Verdict?.CurrentDetail,
-                @operator = engine.Verdict?.CurrentOperator,
+                detail = current?.Detail,
+                @operator = current?.Operator,
             }), retain: true, ct);
         await PublishAsync(client, _topics.InternetState, StateMapping.InternetPayload(verdict), retain: true, ct);
 
