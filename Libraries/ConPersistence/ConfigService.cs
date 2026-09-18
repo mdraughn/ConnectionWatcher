@@ -281,9 +281,9 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                 return result;
             await db.SaveChangesAsync();
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
         {
-            _log.LogDebug(ex, "Config mutation rejected by database constraint");
+            _log.LogDebug(ex, "Config mutation rejected by a uniqueness constraint");
             return ConfigResult.Fail(ConfigErrorKind.Validation,
                 "Change violates a uniqueness constraint (duplicate name or address).");
         }
