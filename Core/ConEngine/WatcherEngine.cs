@@ -70,7 +70,7 @@ public class WatcherEngine
     /// <summary>Suspicion bursts, corroboration sweeps, and glitch episodes.</summary>
     public SuspicionCoordinator? Suspicion { get; private set; }
 
-    /// <summary>When the result pump last delivered a result; null before the first.</summary>
+    /// <summary>When the result pump last processed a result end to end; null before the first.</summary>
     public DateTimeOffset? LastResultUtc => _manager?.LastResultUtc;
 
     /// <summary>When StartAsync ran (engine clock).</summary>
@@ -78,8 +78,8 @@ public class WatcherEngine
 
     /// <summary>
     /// Silence longer than this from an engine with active monitors means the
-    /// pump or every controller is stuck: three normal intervals plus one
-    /// timeout of the slowest configured profile.
+    /// pump or every controller is stuck: three times the longest configured
+    /// normal interval plus the longest configured ping timeout.
     /// </summary>
     public TimeSpan StallAfter { get; private set; } = TimeSpan.FromMinutes(5);
 
@@ -211,7 +211,17 @@ public class WatcherEngine
                     var result = routed.Result;
                     monitor.Discipline.OnPingResult(result.Success);
                     monitor.RecordPingResult(result);
-                    _pingSampleSubject.OnNext((monitor.Target.Id, result));
+                    try
+                    {
+                        _pingSampleSubject.OnNext((monitor.Target.Id, result));
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // Host observers ride this stream; one of them throwing must
+                        // not starve suspicion or the stall stamp.
+                        _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed",
+                            monitor.Target.Name);
+                    }
                     Suspicion?.OnPingSample(monitor.Target.Id, result);
                 }
             },

@@ -28,7 +28,7 @@ public class PingManager : IDisposable
     private bool _stopped;
     private long _lastResultTicks; // UTC ticks of the last routed result; 0 = none yet
 
-    /// <summary>When the pump last handed a result to its subscribers; null before the first.</summary>
+    /// <summary>When the pump last processed a result end to end; null before the first.</summary>
     public DateTimeOffset? LastResultUtc
     {
         get
@@ -144,15 +144,16 @@ public class PingManager : IDisposable
                 {
                     LogPingResult(routed.Result);
                     _pingResultSubject.OnNext(routed);
+                    Volatile.Write(ref _lastResultTicks, routed.Result.Timestamp.UtcTicks);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // Subscribers run inline. One bad observer must not end
-                    // result processing for the life of the engine.
+                    // result processing for the life of the engine. The stamp
+                    // is not advanced: it means "last result fully processed".
                     _log.LogError(ex, "A ping result subscriber threw for target {TargetId}; result skipped",
                         routed.TargetId);
                 }
-                Volatile.Write(ref _lastResultTicks, routed.Result.Timestamp.UtcTicks);
             }
         }
         catch (OperationCanceledException)

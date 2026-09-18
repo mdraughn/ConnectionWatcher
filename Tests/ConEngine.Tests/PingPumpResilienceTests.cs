@@ -37,6 +37,7 @@ public class PingPumpResilienceTests
             Interlocked.Increment(ref thrown);
             throw new InvalidOperationException("observer bug");
         });
+        Assert.Null(engine.LastResultUtc);
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);
         try
@@ -45,6 +46,10 @@ public class PingPumpResilienceTests
             var afterFirstThrow = Volatile.Read(ref delivered);
             await Eventually(() => Volatile.Read(ref delivered) >= afterFirstThrow + 5);
             Assert.NotNull(engine.LastResultUtc);
+            Assert.True(engine.LastResultUtc >= engine.StartedUtc);
+            var stampAfterThrow = engine.LastResultUtc;
+            await Task.Delay(200);
+            Assert.True(engine.LastResultUtc > stampAfterThrow);
         }
         finally
         {
@@ -57,6 +62,7 @@ public class PingPumpResilienceTests
     public async Task Stall_threshold_follows_the_slowest_profile()
     {
         var options = OneTarget();
+        options.Profiles["Fast"].PingTimeoutSeconds = 7;
         options.Profiles["Slow"] = new PingProfileConfig { NormalIntervalSeconds = 100, PingTimeoutSeconds = 5 };
         options.Targets.Add(new TargetConfig { Name = "Far", Address = "203.0.113.9", Profile = "Slow" });
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
@@ -66,7 +72,7 @@ public class PingPumpResilienceTests
         await engine.StartAsync(cts.Token);
         try
         {
-            Assert.Equal(TimeSpan.FromSeconds(305), engine.StallAfter);
+            Assert.Equal(TimeSpan.FromSeconds(307), engine.StallAfter);
         }
         finally
         {
