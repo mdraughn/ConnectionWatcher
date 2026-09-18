@@ -287,6 +287,8 @@ Each step is one small PR with its own failing-first test. Safety first, then du
 15. **S6, S7, S9, S11**: persistence folder moves, `SnapshotImporter` on DI, atomic setup, delete the root shells. (moves)
 16. **Section 3 dedupe**: `TargetRow.CopyFrom`, one profile mapping pair, `TransitionDto`, `ApiResults.Error`, snapshot records, streaming exports, `GatewayDiscovery` parallel, dead members. (many tiny PRs)
 
+**Status 2026-09-18 (later the same day):** steps 1–9 and 11 landed in full and step 10 in part (the snapshot-once half; the publish-outside-lock outbox is deferred) on branch `review-2026-09-18` via `plans/2026-09-18-review-fixes.md`; E1 additionally gained a `ConfigInvalid` health status for a stored config the stricter validator now rejects. Steps 12–16 and the deferred items are listed in `plans/2026-09-18-review-fixes-followups.md`.
+
 Decisions needed from the owner before starting:
 
 1. **E4**: is the intended sweep cadence 30 s or 60 s? The coordinator says one, the discipline enforces the other. **DECIDED 2026-09-18: 60 s. Delete `SweepCooldown`; the discipline's guard is the only rule.**
