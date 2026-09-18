@@ -1,4 +1,5 @@
 using ConCore;
+using ConEngine;
 using ConPersistence.Rollups;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -14,7 +15,7 @@ namespace ConPersistence.Services;
 /// </summary>
 public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
     TimeProvider timeProvider, ILogger<RollupCollector> log,
-    int maxConsecutiveFailures = 20) : BackgroundService
+    int maxConsecutiveFailures = 20) : BackgroundService, IEngineObserver
 {
     private readonly RollupAccumulator _accumulator = new();
     private readonly SemaphoreSlim _flushLock = new(1, 1);
@@ -29,6 +30,14 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
         _subscription = source.Subscribe(
             s => _accumulator.AddSample(s.TargetId, s.Result),
             ex => log.LogError(ex, "Ping sample stream error"));
+    }
+
+    public void Attach(WatcherEngine engine) => Attach(engine.PingSampleSource);
+
+    public void Detach()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

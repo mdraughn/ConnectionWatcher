@@ -148,8 +148,11 @@ public static class ConWatchServices
     /// Hosted services start in registration order and stop in reverse. The
     /// consumers (recorders, retention, notifiers, broadcaster) come first so
     /// they are listening before the engine emits; the engine host comes LAST
-    /// so it stops before any consumer closes its channel. Schema migration
-    /// happens before any of them, in DatabaseStartup.PrepareAsync.
+    /// so it stops before any consumer closes its channel — its token is
+    /// ApplicationStopping, which fires before any StopAsync, and detaching
+    /// every IEngineObserver on the way out (registration order below) is the
+    /// second guarantee. Schema migration happens before any of them, in
+    /// DatabaseStartup.PrepareAsync.
     /// </summary>
     public static IServiceCollection AddConWatchHostedServices(this IServiceCollection services)
     {
@@ -162,6 +165,16 @@ public static class ConWatchServices
         services.AddHostedService<ConNotify.HeartbeatNotifier>();
         services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());
         services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
+
+        // Engine observers attach in THIS order on every engine start and detach
+        // on stop/disable; recorders first so nothing is emitted before they listen.
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<TransitionRecorder>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<GlitchRecorder>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<RollupCollector>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<StatusBroadcaster>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<Metrics.MetricsCounters>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<ConNotify.WebhookNotifier>());
         return services;
     }
 }

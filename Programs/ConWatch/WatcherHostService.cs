@@ -30,10 +30,7 @@ public class WatcherHostService(
     TransitionRecorder recorder,
     GlitchRecorder glitchRecorder,
     RollupCollector collector,
-    StatusBroadcaster broadcaster,
-    Metrics.MetricsCounters metricsCounters,
-    ConNotify.MqttNotifier mqttNotifier,
-    ConNotify.WebhookNotifier webhookNotifier) : IHostedService
+    IEnumerable<IEngineObserver> observers) : IHostedService
 {
     private readonly ILogger<WatcherHostService> _log = loggerFactory.CreateLogger<WatcherHostService>();
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
@@ -53,6 +50,12 @@ public class WatcherHostService(
     /// <summary>The master enable switch as last read by StartEngineAsync; the
     /// health, status and metrics endpoints read this instead of the database.</summary>
     public bool EngineEnabled { get; private set; } = true;
+
+    private void DetachObservers()
+    {
+        foreach (var observer in observers)
+            observer.Detach();
+    }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -102,6 +105,7 @@ public class WatcherHostService(
             {
                 Engine = null;
                 await engine.StopAsync();
+                DetachObservers();
             }
         }
         finally
@@ -121,6 +125,7 @@ public class WatcherHostService(
         {
             // Archive mode: no engine, but everything recorded so far must be
             // on disk — a take-over snapshots this node right after disabling.
+            DetachObservers();
             await recorder.FlushAsync();
             await glitchRecorder.FlushAsync();
             await collector.FlushAllAsync();
@@ -148,13 +153,8 @@ public class WatcherHostService(
         };
         var engine = new WatcherEngine(timeProvider, pingFactory, resolverFactory,
             loggerFactory, Options.Create(options), Options.Create(effectiveVerdict));
-        recorder.Attach(engine.TransitionSource);
-        glitchRecorder.Attach(engine.GlitchSource);
-        collector.Attach(engine.PingSampleSource);
-        broadcaster.Attach(engine);
-        metricsCounters.Attach(engine);
-        mqttNotifier.Attach(engine);
-        webhookNotifier.Attach(engine);
+        foreach (var observer in observers)
+            observer.Attach(engine);
         await engine.StartAsync(_appStopping, seed);
         Engine = engine;
         _log.LogInformation("Engine started with {Count} targets{Warm}",
@@ -310,6 +310,14 @@ public class WatcherHostService(
                 if (await WarmRestartEnabledAsync())
                     seed = BuildSeedFromEngine(engine);
                 await engine.StopAsync();
+                // No explicit DetachObservers() here: StartEngineAsync below
+                // either re-Attach()es every observer to the new engine (each
+                // Attach() disposes its own prior subscription — no gap, no
+                // "disabled" push) or, if the master switch flipped off while
+                // rebuilding, its archive branch is the one that detaches. A
+                // detach here too would fire StatusBroadcaster's disabled
+                // snapshot on every ordinary config-driven rebuild, not just a
+                // real disable.
             }
             await StartEngineAsync(seed);
         }

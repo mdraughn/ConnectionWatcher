@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 
@@ -79,6 +80,40 @@ public class SignalRTests : IAsyncLifetime
             var gap = seen[i].At - seen[i - 1].At;
             Assert.True(gap >= TimeSpan.FromMilliseconds(200),
                 $"Snapshots {i - 1}->{i} only {gap.TotalMilliseconds:F0}ms apart");
+        }
+    }
+
+    [Fact]
+    public async Task Disabling_the_engine_pushes_one_disabled_snapshot_and_then_no_live_ones()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(() =>
+        {
+            lock (_snapshots)
+                return Task.FromResult(_snapshots.Any(s => s.Snapshot.GetProperty("targets").GetArrayLength() > 0));
+        });
+
+        var off = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Engine.Enabled"] = "false" });
+        Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
+
+        await ConfigApiTests.Eventually(() =>
+        {
+            lock (_snapshots)
+                return Task.FromResult(_snapshots.Any(s =>
+                    s.Snapshot.TryGetProperty("enabled", out var e) && e.ValueKind == JsonValueKind.False));
+        });
+
+        // After the disabled snapshot nothing live-looking may follow.
+        DateTime disabledAt;
+        lock (_snapshots)
+            disabledAt = _snapshots.First(s =>
+                s.Snapshot.TryGetProperty("enabled", out var e) && e.ValueKind == JsonValueKind.False).At;
+        await Task.Delay(2500); // more than two broadcaster cadences
+        lock (_snapshots)
+        {
+            var after = _snapshots.Where(s => s.At > disabledAt).ToList();
+            Assert.DoesNotContain(after, s => s.Snapshot.GetProperty("targets").GetArrayLength() > 0);
         }
     }
 }

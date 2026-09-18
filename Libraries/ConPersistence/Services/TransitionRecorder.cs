@@ -1,3 +1,4 @@
+using ConEngine;
 using ConEngine.Events;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,8 @@ public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
     : ChannelRecorder<TargetTransition>(log, capacity, retryDelay: retryDelay)
 {
     protected override string EventNoun => "transitions";
+
+    protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
 
     protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
     {

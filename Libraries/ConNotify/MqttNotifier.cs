@@ -14,7 +14,7 @@ namespace ConNotify;
 /// changes; refreshes discovery + all states on every (re)connect and engine
 /// rebuild. Publishes on transitions — never per ping.
 /// </summary>
-public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : BackgroundService
+public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : BackgroundService, IEngineObserver
 {
     /// <summary>
     /// Everything the session loop reacts to travels through ONE channel with
@@ -67,6 +67,18 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 ex => log.LogError(ex, "Transition stream error in MQTT notifier"));
         }
         _inbox.Refresh();
+    }
+
+    public void Detach()
+    {
+        lock (_lock)
+        {
+            _subscription?.Dispose();
+            _subscription = null;
+            _engine = null;
+        }
+        // The session itself ends on the Engine.Enabled reconfigure poke and
+        // publishes availability=offline on the way out (Task 1.1).
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

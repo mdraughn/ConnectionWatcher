@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using ConEngine;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +13,7 @@ namespace ConPersistence.Services;
 /// </summary>
 /// <typeparam name="TEvent">The engine event being persisted.</typeparam>
 public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, int batchSize = 500,
-    TimeSpan? retryDelay = null) : BackgroundService
+    TimeSpan? retryDelay = null) : BackgroundService, IEngineObserver
 {
     // DropOldest is the right policy for transitions: the NEWEST row per subject
     // is what warm start seeds from, so under a long database outage the recent
@@ -34,6 +35,9 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
     /// <summary>Writes one whole batch. Throwing keeps the batch pending for the next flush.</summary>
     protected abstract Task WriteBatchAsync(IReadOnlyList<TEvent> batch, CancellationToken ct);
 
+    /// <summary>Which of the engine's streams this recorder persists.</summary>
+    protected abstract IObservable<TEvent> SourceOf(WatcherEngine engine);
+
     /// <summary>Subscribes to an event stream, replacing any prior subscription.</summary>
     public void Attach(IObservable<TEvent> source)
     {
@@ -41,6 +45,14 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
         _subscription = source.Subscribe(
             e => _channel.Writer.TryWrite(e),
             ex => log.LogError(ex, "{Noun} stream error", EventNoun));
+    }
+
+    public void Attach(WatcherEngine engine) => Attach(SourceOf(engine));
+
+    public void Detach()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

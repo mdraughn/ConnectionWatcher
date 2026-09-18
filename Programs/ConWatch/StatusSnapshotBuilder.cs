@@ -42,6 +42,6 @@ public static class StatusSnapshotBuilder
             State = p.CurrentState.ToString(),
         }).OrderBy(p => p.Name).ToList();
 
-        return new { Verdict = verdict, Targets = targets, Pools = pools };
+        return new { Enabled = true, Verdict = verdict, Targets = targets, Pools = pools };
     }
 }

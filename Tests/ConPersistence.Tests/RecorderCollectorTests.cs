@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
+using ConEngine;
 using ConEngine.Events;
 using ConEngine.Tracking;
 using ConPersistence.Services;
@@ -281,6 +282,7 @@ public class RecorderCollectorTests : IDisposable
         private int _writes;
         public int Writes => _writes;
         protected override string EventNoun => "test events";
+        protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
         protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
         {
             if (Interlocked.Increment(ref _writes) == 1)
@@ -330,6 +332,7 @@ public class RecorderCollectorTests : IDisposable
     private sealed class LoggedRecorder(ILogger log, int capacity) : ChannelRecorder<TargetTransition>(log, capacity)
     {
         protected override string EventNoun => "test events";
+        protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
         protected override Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct) => Task.CompletedTask;
     }
 

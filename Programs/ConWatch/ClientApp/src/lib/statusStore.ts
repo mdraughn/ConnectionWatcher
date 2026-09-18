@@ -10,12 +10,14 @@ export interface StoreState {
   recentTransitions: TransitionEvent[];
   latestTransition: TransitionEvent | null;
   connected: boolean;
+  disabled: boolean;
 }
 
 export function createStatusStore() {
   let state: StoreState = {
     verdict: null, targets: [], pools: [],
     recentTransitions: [], latestTransition: null, connected: false,
+    disabled: false,
   };
   const listeners = new Set<() => void>();
 
@@ -36,6 +38,7 @@ export function createStatusStore() {
       state.verdict = snap.verdict;
       state.targets = snap.targets;
       state.pools = snap.pools;
+      state.disabled = snap.enabled === false;
       notify();
     },
     applyTransition(t: TransitionEvent): void {

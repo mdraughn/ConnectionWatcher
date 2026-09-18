@@ -28,6 +28,7 @@ export interface VerdictStatus {
 }
 
 export interface Snapshot {
+  enabled?: boolean;
   verdict: VerdictStatus | null;
   targets: TargetStatus[];
   pools: PoolStatus[];

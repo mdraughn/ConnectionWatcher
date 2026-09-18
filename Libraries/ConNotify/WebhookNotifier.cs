@@ -14,7 +14,7 @@ namespace ConNotify;
 /// failed delivery is logged and dropped — webhooks are fire-and-forget.
 /// </summary>
 public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFactory, ILogger<WebhookNotifier> log)
-    : BackgroundService
+    : BackgroundService, IEngineObserver
 {
     private readonly Channel<TargetTransition> _queue = Channel.CreateBounded<TargetTransition>(
         new BoundedChannelOptions(500) { FullMode = BoundedChannelFullMode.DropOldest });
@@ -27,6 +27,12 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
         _subscription = engine.TransitionSource.Subscribe(
             t => _queue.Writer.TryWrite(t),
             ex => log.LogError(ex, "Transition stream error in webhook notifier"));
+    }
+
+    public void Detach()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
