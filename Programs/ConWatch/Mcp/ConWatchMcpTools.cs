@@ -95,7 +95,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             Math.Clamp(limit, 1, 500), before: null, subjectName);
         return JsonSerializer.Serialize(rows.Select(t => new
         {
-            TimestampUtc = DateTime.SpecifyKind(t.TimestampUtc, DateTimeKind.Utc),
+            TimestampUtc = t.TimestampUtc,
             t.SubjectName, t.SubjectKind, t.FromState, t.ToState,
             t.Trigger, t.Detail, t.Verdict,
         }), Json);
@@ -118,8 +118,8 @@ public class ConWatchMcpTools(WatcherHostService host,
             Math.Clamp(limit, 1, 500));
         return JsonSerializer.Serialize(rows.Select(g => new
         {
-            StartUtc = DateTime.SpecifyKind(g.StartUtc, DateTimeKind.Utc),
-            EndUtc = DateTime.SpecifyKind(g.EndUtc, DateTimeKind.Utc),
+            StartUtc = g.StartUtc,
+            EndUtc = g.EndUtc,
             g.TargetName,
             @class = g.Class == 1 ? "Internet" : "Target",
             g.LostCount, g.SampleCount, g.Detail,

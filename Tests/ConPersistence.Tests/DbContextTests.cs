@@ -87,4 +87,25 @@ public class DbContextTests : IDisposable
         db.Rollups.Add(new RollupRow { TargetId = targetId, PeriodStartUtc = period, Resolution = "Minute", PingCount = 2 });
         Assert.Throws<DbUpdateException>(() => db.SaveChanges());
     }
+
+    [Fact]
+    public async Task DateTimes_read_back_with_utc_kind()
+    {
+        var stamp = new DateTime(2026, 9, 18, 12, 0, 0, DateTimeKind.Utc);
+        using (var db = new ConWatchDbContext(_options))
+        {
+            db.Transitions.Add(new TransitionRow
+            {
+                TimestampUtc = stamp, SubjectId = Guid.NewGuid(), SubjectName = "Router",
+                FromState = "Responding", ToState = "Down", Trigger = "ThresholdCrossed",
+            });
+            await db.SaveChangesAsync();
+        }
+        using (var db = new ConWatchDbContext(_options))
+        {
+            var row = await db.Transitions.SingleAsync();
+            Assert.Equal(DateTimeKind.Utc, row.TimestampUtc.Kind);
+            Assert.Equal(stamp, row.TimestampUtc);
+        }
+    }
 }

@@ -6,7 +6,7 @@
     // Dual-time cell: a <time> the script localizes, over the fixed UTC value.
     // Without JS only the UTC text shows — never a wrong or unlabeled time.
     Func<DateTime, string, object> Dual = (utc, format) =>
-        Html.Raw($"<time class=\"cw-lt\" datetime=\"{new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)):O}\"></time>" +
+        Html.Raw($"<time class=\"cw-lt\" datetime=\"{new DateTimeOffset(utc):O}\"></time>" +
                  $"<span class=\"cw-utc\">{utc.ToString(format)} UTC</span>");
 }
 
