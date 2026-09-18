@@ -29,11 +29,26 @@ export interface IncidentStats {
   unreachableMs: number;
 }
 
-export function incidents(transitions: TransitionEvent[], rangeEndIso: string): IncidentStats {
+/**
+ * Range-start seeding: the state before the first transition is that
+ * transition's `from` (as ribbonSegments assumes). A Down or Unreachable
+ * window already open when the range starts counts from rangeStart.
+ * Limitation: with no in-range transition the pre-window state is unknown
+ * and nothing is counted — the API sends no pre-window row.
+ */
+export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
+  rangeEndIso: string): IncidentStats {
   let outageCount = 0;
   let longestOutageMs = 0;
   let unreachableMs = 0;
   let open: { kind: "outage" | "unreach"; start: number } | null = null;
+  const openingState = transitions[0]?.from;
+  if (openingState === "Down") {
+    open = { kind: "outage", start: Date.parse(rangeStartIso) };
+    outageCount++;
+  } else if (openingState === "Unreachable") {
+    open = { kind: "unreach", start: Date.parse(rangeStartIso) };
+  }
 
   const close = (atMs: number) => {
     if (!open) return;

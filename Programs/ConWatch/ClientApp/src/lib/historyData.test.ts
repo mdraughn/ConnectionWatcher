@@ -29,7 +29,7 @@ describe("incidents (split semantics)", () => {
       t("2026-08-20T01:00:00Z", "Down"),
       t("2026-08-20T01:10:00Z", "Recovering", "Down"),
       t("2026-08-20T01:12:00Z", "Responding", "Recovering"),
-    ], "2026-08-20T06:00:00Z");
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
     expect(stats.outageCount).toBe(1);
     expect(stats.longestOutageMs).toBe(12 * 60_000);
     expect(stats.unreachableMs).toBe(0);
@@ -40,13 +40,13 @@ describe("incidents (split semantics)", () => {
       t("2026-08-20T05:00:00Z", "Unreachable", "Responding", "ParentDown"),
       t("2026-08-20T05:01:00Z", "Starting", "Unreachable", "ParentRecovered"),
       t("2026-08-20T05:03:00Z", "Responding", "Starting"),
-    ], "2026-08-20T06:00:00Z");
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
     expect(stats.outageCount).toBe(0);
     expect(stats.unreachableMs).toBe(60_000);
   });
 
   it("an open outage runs to range end", () => {
-    const stats = incidents([t("2026-08-20T01:00:00Z", "Down")], "2026-08-20T02:00:00Z");
+    const stats = incidents([t("2026-08-20T01:00:00Z", "Down")], "2026-08-20T00:00:00Z", "2026-08-20T02:00:00Z");
     expect(stats.outageCount).toBe(1);
     expect(stats.longestOutageMs).toBe(60 * 60_000);
   });
@@ -57,7 +57,7 @@ describe("incidents (split semantics)", () => {
       t("2026-08-20T01:05:00Z", "Unreachable", "Down", "ParentDown"),
       t("2026-08-20T01:10:00Z", "Starting", "Unreachable", "ParentRecovered"),
       t("2026-08-20T01:12:00Z", "Responding", "Starting"),
-    ], "2026-08-20T06:00:00Z");
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
     expect(stats.outageCount).toBe(1);
     expect(stats.longestOutageMs).toBe(5 * 60_000);
     expect(stats.unreachableMs).toBe(5 * 60_000);
@@ -68,9 +68,25 @@ describe("incidents (split semantics)", () => {
       t("2026-08-20T01:00:00Z", "Down"),
       t("2026-08-20T01:03:00Z", "Starting", "Starting", "AddressChanged"),
       t("2026-08-20T01:05:00Z", "Responding", "Starting"),
-    ], "2026-08-20T06:00:00Z");
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
     expect(stats.outageCount).toBe(1);
     expect(stats.longestOutageMs).toBe(5 * 60_000);
+  });
+
+  it("an outage already open at the range start counts from the range start", () => {
+    const stats = incidents([
+      t("2026-08-20T01:00:00Z", "Responding", "Down"),
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(1);
+    expect(stats.longestOutageMs).toBe(60 * 60_000);
+  });
+
+  it("an unreachable window already open at the range start counts from the range start", () => {
+    const stats = incidents([
+      t("2026-08-20T00:30:00Z", "Starting", "Unreachable", "ParentRecovered"),
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(0);
+    expect(stats.unreachableMs).toBe(30 * 60_000);
   });
 });
 
@@ -96,7 +112,7 @@ describe("clipAtReset", () => {
 
   it("stats after clipping exclude the pre-reset outage", () => {
     const { transitions } = clipAtReset(list);
-    const stats = incidents(transitions, "2026-08-20T06:00:00Z");
+    const stats = incidents(transitions, "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
     expect(stats.outageCount).toBe(0);
     expect(stats.longestOutageMs).toBe(0);
   });

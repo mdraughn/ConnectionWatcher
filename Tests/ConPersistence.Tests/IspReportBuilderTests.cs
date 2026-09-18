@@ -127,6 +127,31 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Target_outage_open_at_the_window_start_counts_from_the_window_start()
+    {
+        await AddTransition(_googleId, "Google", From.AddHours(-2), "Down");
+        await AddTransition(_googleId, "Google", From.AddHours(1), "Responding");
+
+        var report = await _builder.BuildAsync(From, To);
+
+        var google = report.Targets.Single(t => t.Name == "Google");
+        Assert.Equal(1, google.OutageCount);
+        Assert.Equal(TimeSpan.FromHours(1), google.LongestOutage);
+    }
+
+    [Fact]
+    public async Task Target_down_for_the_whole_window_is_one_outage_the_length_of_the_window()
+    {
+        await AddTransition(_googleId, "Google", From.AddDays(-3), "Down");
+
+        var report = await _builder.BuildAsync(From, To);
+
+        var google = report.Targets.Single(t => t.Name == "Google");
+        Assert.Equal(1, google.OutageCount);
+        Assert.Equal(To - From, google.LongestOutage);
+    }
+
+    [Fact]
     public async Task Uptime_uses_post_reset_rollups_and_anchor_aggregate_weights()
     {
         await AddTransition(_googleId, "Google", From.AddHours(3), "Starting", "HistoryReset");
