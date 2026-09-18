@@ -50,6 +50,10 @@ public class WatcherHostService(
 
     public bool EngineRunning => Engine is not null;
 
+    /// <summary>The master enable switch as last read by StartEngineAsync; the
+    /// health, status and metrics endpoints read this instead of the database.</summary>
+    public bool EngineEnabled { get; private set; } = true;
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         // Schema migration happened in DatabaseStartup.PrepareAsync before any
@@ -112,7 +116,8 @@ public class WatcherHostService(
 
     private async Task StartEngineAsync(EngineSeed? seed = null)
     {
-        if (!await EngineEnabledAsync())
+        EngineEnabled = await EngineEnabledAsync();
+        if (!EngineEnabled)
         {
             // Archive mode: no engine, but everything recorded so far must be
             // on disk — a take-over snapshots this node right after disabling.

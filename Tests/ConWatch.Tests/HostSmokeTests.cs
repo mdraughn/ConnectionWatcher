@@ -22,6 +22,7 @@ public class HostSmokeTests : IDisposable
         Assert.NotNull(health);
         Assert.True(health.EngineRunning);
         Assert.Equal(0, health.TargetCount);
+        Assert.False(health.Stalled);
 
         // Migration ran and builtin profiles were seeded.
         Assert.True(File.Exists(_factory.DbPath));
@@ -31,5 +32,5 @@ public class HostSmokeTests : IDisposable
         Assert.Equal(2, await db.Profiles.CountAsync());
     }
 
-    private sealed record HealthDto(string Status, bool EngineRunning, int TargetCount);
+    private sealed record HealthDto(string Status, bool EngineRunning, int TargetCount, bool Stalled);
 }

@@ -70,25 +70,6 @@ locked.MapAdmin();
 locked.MapSetup();
 SettingsEndpoints.MapSettings(locked, open: api);
 
-api.MapGet("/health", async (WatcherHostService host, TimeProvider time) =>
-{
-    var engine = host.Engine;
-    var enabled = await host.EngineEnabledAsync();
-    var body = new
-    {
-        // A deliberately disabled node is a healthy archive (200) — container
-        // healthchecks must not flag it; 503 stays for enabled-but-down.
-        Status = engine is not null ? "Healthy" : enabled ? "EngineDown" : "Disabled",
-        Enabled = enabled,
-        EngineRunning = engine is not null,
-        TargetCount = engine?.Monitors.Count ?? 0,
-        TimestampUtc = time.GetUtcNow(),
-        Version = BuildInfo.Version,
-        BuiltUtc = BuildInfo.BuiltUtc,
-    };
-    return engine is not null || !enabled ? Results.Ok(body) : Results.Json(body, statusCode: 503);
-});
-
 try
 {
     app.Run();

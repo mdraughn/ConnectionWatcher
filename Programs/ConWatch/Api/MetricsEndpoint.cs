@@ -16,14 +16,11 @@ namespace ConWatch.Api;
 public static class MetricsEndpoint
 {
     public static void MapMetrics(this WebApplication app) =>
-        app.MapGet("/metrics", async (WatcherHostService host, MetricsCounters counters) =>
-        {
-            var enabled = await host.EngineEnabledAsync();
-            return Results.Text(Render(host.Engine, counters, enabled),
-                "text/plain; version=0.0.4", Encoding.UTF8);
-        });
+        app.MapGet("/metrics", (WatcherHostService host, MetricsCounters counters, TimeProvider time) =>
+            Results.Text(Render(host.Engine, counters, host.EngineEnabled, time.GetUtcNow()),
+                "text/plain; version=0.0.4", Encoding.UTF8));
 
-    internal static string Render(WatcherEngine? engine, MetricsCounters counters, bool enabled)
+    internal static string Render(WatcherEngine? engine, MetricsCounters counters, bool enabled, DateTimeOffset now)
     {
         var sb = new StringBuilder();
 
@@ -32,6 +29,13 @@ public static class MetricsEndpoint
 
         Family(sb, "conwatch_engine_enabled", "gauge", "1 when monitoring is enabled, 0 in archive mode.");
         sb.Append("conwatch_engine_enabled ").Append(enabled ? 1 : 0).Append('\n');
+
+        if (engine?.LastResultUtc is { } last)
+        {
+            Family(sb, "conwatch_last_sample_age_seconds", "gauge", "Seconds since the engine last processed a ping result.");
+            sb.Append("conwatch_last_sample_age_seconds ")
+              .Append((now - last).TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
+        }
 
         if (engine is not null)
         {
