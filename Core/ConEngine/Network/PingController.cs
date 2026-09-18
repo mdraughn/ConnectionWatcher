@@ -78,6 +78,8 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
                         break;
 
                     var reply = await ping.PingAsync(_timeoutMsProvider!()).ConfigureAwait(false);
+                    if (_cancellationToken.IsCancellationRequested)
+                        break; // a reply that raced our stop is not evidence about the host
                     log.LogTrace("Ping result for {ipAddress}: {reply}", ipAddress, reply);
                     SendMessage(reply);
                 }

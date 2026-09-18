@@ -59,11 +59,7 @@ public class PingTransceiverIcmp : IPingTransceiver
         {
             return new PingResult(_ipAddress, false, 0, $"PingException: {ex.Message}");
         }
-        catch (OperationCanceledException)
-        {
-            return new PingResult(_ipAddress, false, 0, "Cancelled");
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new PingResult(_ipAddress, false, 0, $"Error: {ex.Message}");
         }

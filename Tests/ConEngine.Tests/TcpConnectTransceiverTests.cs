@@ -44,4 +44,14 @@ public class TcpConnectTransceiverTests
         var result = await probe.PingAsync(500);
         Assert.False(result.Success);
     }
+
+    [Fact]
+    public async Task Engine_cancellation_throws_instead_of_reporting_loss()
+    {
+        using var cts = new CancellationTokenSource();
+        using var probe = new TcpConnectTransceiver(IPAddress.Parse("192.0.2.1"), 80, cts.Token);
+        var task = probe.PingAsync(5000);
+        cts.CancelAfter(100);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+    }
 }

@@ -112,4 +112,42 @@ public class PingControllerTests
         Assert.True(healed.Result.Success);
         cts.Cancel();
     }
+
+    /// <summary>The OLD production transceiver behavior: cancellation comes back
+    /// as a failed sample. The controller must still not forward it.</summary>
+    private sealed class CancelReportingFactory : IPingTransceiverFactory
+    {
+        public IPingTransceiver Create(IPAddress ip, ProbeSpec probe, CancellationToken ct) => new Probe(ip, ct);
+
+        private sealed class Probe(IPAddress ip, CancellationToken ct) : IPingTransceiver
+        {
+            public IPAddress IpAddress => ip;
+
+            public async Task<PingResult> PingAsync(int timeoutMs)
+            {
+                try { await Task.Delay(Timeout.Infinite, ct); }
+                catch (OperationCanceledException) { }
+                return new PingResult(ip, false, 0, "Cancelled");
+            }
+
+            public void Dispose() { }
+        }
+    }
+
+    [Fact]
+    public async Task A_probe_cancelled_mid_flight_writes_nothing_to_the_channel()
+    {
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
+        using var cts = new CancellationTokenSource();
+        using var controller = new PingController(new CancelReportingFactory(), NullLogger.Instance);
+
+        _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
+            new FixedIntervalCadence(TimeSpan.FromMilliseconds(1), TimeProvider.System),
+            () => 60_000, cts.Token);
+        await Task.Delay(100); // the loop is inside its first (hanging) probe
+
+        await controller.StopAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(channel.Reader.TryRead(out _), "a cancelled probe must not become a lost sample");
+    }
 }

@@ -37,19 +37,15 @@ public sealed class TcpConnectTransceiver(IPAddress ipAddress, int port,
         {
             return new PingResult(ipAddress, true, stopwatch.ElapsedMilliseconds, "Refused");
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new PingResult(ipAddress, false, 0, "Cancelled");
-        }
-        catch (OperationCanceledException)
-        {
-            return new PingResult(ipAddress, false, 0, "TimedOut");
+            return new PingResult(ipAddress, false, 0, "TimedOut"); // our own timeout token
         }
         catch (SocketException ex)
         {
             return new PingResult(ipAddress, false, 0, ex.SocketErrorCode.ToString());
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new PingResult(ipAddress, false, 0, ex.Message);
         }

@@ -66,19 +66,7 @@ namespace ConInfrastructure
                     resolutionTimeMs: stopwatch.ElapsedMilliseconds
                 );
             }
-            catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
-            {
-                // Handle cancellation from the instance token
-                stopwatch.Stop();
-                return new DomainResolutionResult(
-                    domainName,
-                    success: false,
-                    Array.AsReadOnly(Array.Empty<IPAddress>()),
-                    status: "Cancelled",
-                    resolutionTimeMs: stopwatch.ElapsedMilliseconds
-                );
-            }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (!_cancellationToken.IsCancellationRequested)
             {
                 // Handle timeout cancellation
                 stopwatch.Stop();
@@ -123,7 +111,7 @@ namespace ConInfrastructure
                     resolutionTimeMs: stopwatch.ElapsedMilliseconds
                 );
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Handle any other unexpected exceptions
                 stopwatch.Stop();

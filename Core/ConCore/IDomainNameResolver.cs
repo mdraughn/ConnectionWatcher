@@ -7,6 +7,8 @@ namespace ConCore
     {
         /// <summary>
         /// Resolves the configured domain name to IP addresses.
+        /// Cancellation of the token given at construction propagates as
+        /// OperationCanceledException; a timeout is a failed result.
         /// </summary>
         /// <param name="domainName"></param>
         /// <param name="timeoutMs">Timeout in milliseconds for the resolution operation.</param>

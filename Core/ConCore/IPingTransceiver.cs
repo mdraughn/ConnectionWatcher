@@ -15,6 +15,8 @@ namespace ConCore
         /// <summary>
         /// Launches an async reachability probe (ICMP echo request or TCP connect,
         /// depending on the implementation) against the configured IP address.
+        /// Cancellation of the token given at construction propagates as
+        /// OperationCanceledException; a timeout is a failed result.
         /// </summary>
         /// <param name="timeoutMs"></param>
         /// <returns>A task that represents the asynchronous ping operation. The task result contains the ping result.</returns>
