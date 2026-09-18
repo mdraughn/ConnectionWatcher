@@ -139,6 +139,49 @@ public class RecorderCollectorTests : IDisposable
     }
 
     [Fact]
+    public async Task Background_loop_retries_a_failed_batch_without_waiting_for_another_event()
+    {
+        var recorder = new TransitionRecorder(new FailingOnceDbFactory(_factory),
+            NullLogger<TransitionRecorder>.Instance, retryDelay: TimeSpan.FromMilliseconds(50));
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        await recorder.StartAsync(CancellationToken.None); // runs ExecuteAsync
+
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Google", HostState.Down));
+
+        // One event, one failed write, no second event: the row must still land.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            await using var check = _factory.CreateDbContext();
+            if (await check.Transitions.CountAsync() == 1)
+                break;
+            await Task.Delay(25);
+        }
+        await recorder.StopAsync(CancellationToken.None);
+
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(1, await db.Transitions.CountAsync());
+    }
+
+    [Fact]
+    public async Task A_full_channel_drops_the_oldest_and_keeps_the_newest()
+    {
+        var recorder = new TransitionRecorder(_factory, NullLogger<TransitionRecorder>.Instance, capacity: 2);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        source.OnNext(Transition(TransitionSubjectKind.Target, "First", HostState.Down));
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Second", HostState.Down));
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Third", HostState.Down));
+
+        await recorder.FlushAsync();
+
+        await using var db = _factory.CreateDbContext();
+        var names = await db.Transitions.Select(t => t.SubjectName).OrderBy(n => n).ToListAsync();
+        Assert.Equal(["Second", "Third"], names); // DropOldest: the newest row is what warm start seeds from
+    }
+
+    [Fact]
     public async Task A_failed_rollup_write_is_retried_next_flush()
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));

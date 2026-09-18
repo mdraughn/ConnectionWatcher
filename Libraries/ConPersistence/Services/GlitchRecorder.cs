@@ -12,7 +12,8 @@ namespace ConPersistence.Services;
 /// why batches must stay whole.
 /// </summary>
 public class GlitchRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
-    ILogger<GlitchRecorder> log) : ChannelRecorder<GlitchEvent>(log)
+    ILogger<GlitchRecorder> log, TimeSpan? retryDelay = null, int capacity = 1000)
+    : ChannelRecorder<GlitchEvent>(log, capacity, retryDelay: retryDelay)
 {
     protected override string EventNoun => "glitches";
 

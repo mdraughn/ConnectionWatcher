@@ -46,7 +46,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Shutdown: flush every open bucket (partial minutes included).
             try { await FlushAllAsync(CancellationToken.None).ConfigureAwait(false); }

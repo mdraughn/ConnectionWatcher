@@ -53,7 +53,7 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
                         [SettingKeys.RetentionLastRunUtc] = timeProvider.GetUtcNow().ToString("O"),
                     }).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 return;
             }
