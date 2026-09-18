@@ -43,6 +43,10 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
         }
     }
 
+    /// <summary>Pure teardown: drop the subscription and every reference to the
+    /// engine. Pushing the disabled snapshot is a separate, explicit step the
+    /// host takes only on the archive path — see <see cref="PushDisabledAsync"/>.
+    /// Idempotent (safe to call when already detached).</summary>
     public void Detach()
     {
         lock (_lock)
@@ -51,11 +55,21 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
             _subscription = null;
             _engine = null;
         }
-        // Open tabs were rendered live; one final push flips them to archive
-        // mode. Routed through the same send gate as every other statusChanged
-        // push so a still-in-flight live send (dispatched a moment ago, before
-        // this Detach) is guaranteed to land on the wire first.
-        _ = SendStatusChangedAsync(DisabledSnapshot);
+    }
+
+    /// <summary>Tells every open tab the node is now an archive: one push of the
+    /// disabled snapshot. Called by the host from the archive path only, after
+    /// Detach(), so a plain restart or an ordinary rebuild never flips a dashboard.</summary>
+    public async Task PushDisabledAsync()
+    {
+        try
+        {
+            await SendStatusChangedAsync(DisabledSnapshot).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Failed pushing the disabled snapshot to clients");
+        }
     }
 
     private async Task OnTransitionAsync(WatcherEngine engine, TargetTransition t)
@@ -133,7 +147,26 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
         var snapshot = StatusSnapshotBuilder.Build(engine);
         if (snapshot is null)
             return;
-        await SendStatusChangedAsync(snapshot).ConfigureAwait(false);
+
+        // Re-check under the gate: the engine read above (and the build it
+        // fed) happened outside any lock held across the wait, so a Detach()
+        // (or a reattach) can land in the gap between that read and actually
+        // getting the gate. Without this, a stale live snapshot can still
+        // overtake — or be overtaken out of turn by — a disabled push.
+        await _sendGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_engine, engine))
+                    return;
+            }
+            await hub.Clients.All.SendAsync("statusChanged", snapshot).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
     }
 
     /// <summary>

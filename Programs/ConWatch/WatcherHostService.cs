@@ -30,6 +30,7 @@ public class WatcherHostService(
     TransitionRecorder recorder,
     GlitchRecorder glitchRecorder,
     RollupCollector collector,
+    StatusBroadcaster broadcaster,
     IEnumerable<IEngineObserver> observers) : IHostedService
 {
     private readonly ILogger<WatcherHostService> _log = loggerFactory.CreateLogger<WatcherHostService>();
@@ -126,6 +127,7 @@ public class WatcherHostService(
             // Archive mode: no engine, but everything recorded so far must be
             // on disk — a take-over snapshots this node right after disabling.
             DetachObservers();
+            await broadcaster.PushDisabledAsync();
             await recorder.FlushAsync();
             await glitchRecorder.FlushAsync();
             await collector.FlushAllAsync();
@@ -310,16 +312,16 @@ public class WatcherHostService(
                 if (await WarmRestartEnabledAsync())
                     seed = BuildSeedFromEngine(engine);
                 await engine.StopAsync();
-                // No explicit DetachObservers() here: StartEngineAsync below
-                // either re-Attach()es every observer to the new engine (each
-                // Attach() disposes its own prior subscription — no gap, no
-                // "disabled" push) or, if the master switch flipped off while
-                // rebuilding, its archive branch is the one that detaches. A
-                // detach here too would fire StatusBroadcaster's disabled
-                // snapshot on every ordinary config-driven rebuild, not just a
-                // real disable.
+                DetachObservers();
             }
             await StartEngineAsync(seed);
+            // Covers StartEngineAsync's other early return (config validation
+            // failed) as well as the archive branch (which already detached
+            // itself) — Detach() is idempotent, so a harmless double call
+            // there just guarantees no observer is left attached whenever the
+            // rebuild didn't end with a running engine.
+            if (Engine is null)
+                DetachObservers();
         }
         catch (Exception ex)
         {

@@ -92,6 +92,9 @@ public class SignalRTests : IAsyncLifetime
             lock (_snapshots)
                 return Task.FromResult(_snapshots.Any(s => s.Snapshot.GetProperty("targets").GetArrayLength() > 0));
         });
+        lock (_snapshots)
+            Assert.All(_snapshots.Where(s => s.Snapshot.GetProperty("targets").GetArrayLength() > 0),
+                s => Assert.True(s.Snapshot.GetProperty("enabled").GetBoolean()));
 
         var off = await _client.PutAsJsonAsync("/api/v1/settings",
             new Dictionary<string, string?> { ["Engine.Enabled"] = "false" });
@@ -113,7 +116,8 @@ public class SignalRTests : IAsyncLifetime
         lock (_snapshots)
         {
             var after = _snapshots.Where(s => s.At > disabledAt).ToList();
-            Assert.DoesNotContain(after, s => s.Snapshot.GetProperty("targets").GetArrayLength() > 0);
+            Assert.DoesNotContain(after, s =>
+                !s.Snapshot.TryGetProperty("enabled", out var e) || e.ValueKind != JsonValueKind.False);
         }
     }
 }
