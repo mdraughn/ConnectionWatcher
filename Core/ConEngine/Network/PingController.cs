@@ -92,6 +92,8 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
                 {
                     // Fault isolation: report a failed sample and keep the loop alive.
                     log.LogError(pingEx, "Error pinging {ipAddress}", ipAddress);
+                    if (_cancellationToken.IsCancellationRequested)
+                        break; // a fault that raced our stop is not evidence about the host
                     SendMessage(new PingResult(ipAddress, false, 0, $"Ping error: {pingEx.Message}"));
                 }
             }
