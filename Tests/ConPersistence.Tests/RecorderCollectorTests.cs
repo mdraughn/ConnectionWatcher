@@ -200,6 +200,53 @@ public class RecorderCollectorTests : IDisposable
         Assert.Equal(1, row.PingCount);
     }
 
+    [Fact]
+    public async Task A_late_sample_for_a_minute_still_pending_after_a_failed_write_merges_instead_of_poisoning()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var collector = new RollupCollector(new FailingOnceDbFactory(_factory), time, NullLogger<RollupCollector>.Instance);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source);
+        var target = Guid.NewGuid();
+        var minute0 = DateTimeOffset.Parse("2026-09-01T00:00:00Z");
+
+        source.OnNext((target, new PingResult(Ip, true, 10, timestamp: minute0.AddSeconds(5))));
+        time.Advance(TimeSpan.FromSeconds(65)); // minute 0 closed
+        await Assert.ThrowsAsync<InvalidOperationException>(() => collector.FlushClosedAsync());
+
+        // A reply stamped inside minute 0 consumed after the tick that closed it:
+        // a SECOND bucket with the same key joins the pending one.
+        source.OnNext((target, new PingResult(Ip, true, 30, timestamp: minute0.AddSeconds(59))));
+        time.Advance(TimeSpan.FromSeconds(60));
+        await collector.FlushClosedAsync(); // used to hit the UNIQUE index forever
+
+        await using var db = _factory.CreateDbContext();
+        var row = await db.Rollups.SingleAsync(r => r.TargetId == target);
+        Assert.Equal(2, row.PingCount);
+        Assert.Equal(2, row.SuccessCount);
+        Assert.Equal(20.0, row.RttAvg);
+        Assert.Equal(30, row.RttMax);
+    }
+
+    [Fact]
+    public async Task Pending_buckets_are_dropped_after_too_many_consecutive_failures()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var collector = new RollupCollector(new FailingNTimesDbFactory(_factory, failures: 2), time,
+            NullLogger<RollupCollector>.Instance, maxConsecutiveFailures: 2);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source);
+        var target = Guid.NewGuid();
+        source.OnNext((target, new PingResult(Ip, true, 10, timestamp: time.GetUtcNow())));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => collector.FlushAllAsync()); // 1st failure
+        await Assert.ThrowsAsync<InvalidOperationException>(() => collector.FlushAllAsync()); // 2nd: cap hit, dropped
+        await collector.FlushAllAsync(); // database works again; nothing left to write
+
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(0, await db.Rollups.CountAsync());
+    }
+
     /// <summary>A recorder whose first write raises a cancellation that is NOT the host's.</summary>
     private sealed class ForeignCancelOnceRecorder(IDbContextFactory<ConWatchDbContext> dbFactory)
         : ChannelRecorder<TargetTransition>(NullLogger.Instance, retryDelay: TimeSpan.FromMilliseconds(50))

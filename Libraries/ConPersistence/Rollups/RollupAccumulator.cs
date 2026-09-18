@@ -16,6 +16,19 @@ public class RollupBucket(Guid targetId, DateTime periodStartUtc)
     public double RttAvg => SuccessCount > 0 ? (double)RttSum / SuccessCount : 0;
     /// <summary>RttMin, or 0 when the bucket has no successful pings.</summary>
     public long EffectiveMin => SuccessCount > 0 ? RttMin : 0;
+
+    /// <summary>Folds another bucket for the same target and minute into this one.</summary>
+    public void Absorb(RollupBucket other)
+    {
+        PingCount += other.PingCount;
+        if (other.SuccessCount > 0)
+        {
+            RttSum += other.RttSum;
+            RttMin = Math.Min(RttMin, other.RttMin);
+            RttMax = Math.Max(RttMax, other.RttMax);
+            SuccessCount += other.SuccessCount;
+        }
+    }
 }
 
 /// <summary>
