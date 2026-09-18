@@ -1,4 +1,4 @@
-using ConPersistence.Dto;
+﻿using ConPersistence.Dto;
 
 namespace ConPersistence.Tests;
 
@@ -141,8 +141,8 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.True(result.Success);
 
         await using var db = _factory.CreateDbContext();
-        var marker = Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-            .ToListAsync(db.Transitions).Result.Single();
+        var marker = (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+            .ToListAsync(db.Transitions)).Single();
         Assert.Equal(expectedTrigger, marker.Trigger);
         Assert.Equal(routerId, marker.SubjectId);
         Assert.Equal("Target", marker.SubjectKind);
@@ -161,8 +161,8 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         });
         Assert.True(result.Success);
         await using var db = _factory.CreateDbContext();
-        Assert.Equal(0, Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-            .CountAsync(db.Transitions).Result);
+        Assert.Equal(0, await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+            .CountAsync(db.Transitions));
     }
 
     [Fact]

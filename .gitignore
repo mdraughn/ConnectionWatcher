@@ -362,6 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 data/
+data-preview/
 .superpowers/
 
 Programs/ConWatch/ClientApp/node_modules/

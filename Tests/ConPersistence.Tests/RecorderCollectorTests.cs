@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
 using ConEngine.Events;
@@ -52,7 +52,7 @@ public class RecorderCollectorTests : IDisposable
         Assert.Equal(5, rows.Count);
         Assert.Equal(3, rows.Count(r => r.SubjectKind == "Target"));
         Assert.Equal(1, rows.Count(r => r.SubjectKind == "Pool"));
-        var verdictRow = Assert.Single(rows.Where(r => r.SubjectKind == "Verdict"));
+        var verdictRow = Assert.Single(rows, r => r.SubjectKind == "Verdict");
         Assert.Equal("InternetWeather", verdictRow.Verdict);
         Assert.Equal("VerdictChanged", verdictRow.Trigger);
         Assert.Equal(0.5, verdictRow.SuccessRate);

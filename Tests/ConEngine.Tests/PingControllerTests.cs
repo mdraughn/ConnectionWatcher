@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Threading.Channels;
 using ConCore;
 using ConEngine.Network;
@@ -30,7 +30,7 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(factory, NullLogger.Instance);
 
-        controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
+        _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => 1000, cts.Token);
 
@@ -49,8 +49,8 @@ public class PingControllerTests
 
         using var controllerA = new PingController(factory, NullLogger.Instance);
         using var controllerB = new PingController(factory, NullLogger.Instance);
-        controllerA.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
-        controllerB.Launch(Guid.NewGuid(), IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
+        _ = controllerA.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
+        _ = controllerB.Launch(Guid.NewGuid(), IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
 
         await Collect(channel.Reader, 2);
         controllerA.Stop();
@@ -72,7 +72,7 @@ public class PingControllerTests
         using var controller = new PingController(factory, NullLogger.Instance);
 
         bool bursting = false;
-        controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
+        _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => bursting ? 1000 : 3000, cts.Token);
 
@@ -96,7 +96,7 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(factory, NullLogger.Instance);
 
-        controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
+        _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
             () => 1000, cts.Token);
 

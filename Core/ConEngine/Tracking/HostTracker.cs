@@ -48,10 +48,15 @@ public class HostTracker
     /// <summary>True while running on an unconfirmed warm-restart presumption.</summary>
     public bool Assumed => _analysisEngine.Assumed;
 
-    /// <summary>Stream of status snapshots (one per recorded sample or command).</summary>
+    /// <summary>
+    /// Stream of status snapshots (one per recorded sample or command).
+    /// Diagnostic surface: the engine's own consumer, TargetMonitor, uses the
+    /// AnalysisOutcome each command returns; these streams exist so a test or
+    /// a tool can watch a tracker without wrapping it.
+    /// </summary>
     public IObservable<HostStatus> HostStatusSource => _hostStatusSubject;
 
-    /// <summary>Stream of state transitions with structured reasons.</summary>
+    /// <summary>Stream of state transitions with structured reasons (see <see cref="HostStatusSource"/>).</summary>
     public IObservable<AnalysisTransition> HostStateChangeSource => _stateChangeSubject;
 
     /// <summary>Gets the current count of items in the history buffer.</summary>

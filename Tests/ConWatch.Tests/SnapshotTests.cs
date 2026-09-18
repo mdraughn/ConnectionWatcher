@@ -98,7 +98,7 @@ public class SnapshotTests : IDisposable
                 await client.GetStringAsync("/api/v1/status"));
             var statusTargets = status.GetProperty("targets").EnumerateArray().ToList();
             var restoredNames = statusTargets
-                .Select(t => t.GetProperty("name").GetString()).OrderBy(n => n).ToList();
+                .Select(t => t.GetProperty("name").GetString()!).OrderBy(n => n).ToList();
             var originalNames = snapshot.Config.Targets.Select(t => t.Name).OrderBy(n => n).ToList();
             Assert.Equal(originalNames, restoredNames);
 

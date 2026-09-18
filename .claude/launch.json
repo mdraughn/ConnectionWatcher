@@ -10,7 +10,7 @@
         "-c", "Release",
         "--",
         "--urls", "http://localhost:18099",
-        "--Persistence:DbPath", "C:\\Users\\mark\\AppData\\Local\\Temp\\claude\\C--Users-mark-OneDrive-Projects-ConnectionWatcher\\a57409f8-8e14-4ba3-9a99-b84d1dfabce7\\scratchpad\\preview\\conwatch.db"
+        "--Persistence:DbPath", "data-preview/conwatch.db"
       ],
       "port": 18099
     }

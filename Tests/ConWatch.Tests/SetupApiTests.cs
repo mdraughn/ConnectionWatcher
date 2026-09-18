@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConInfrastructure.Discovery;
@@ -114,8 +114,8 @@ public class SetupApiTests : IDisposable
             new SetupApplyRequest(Router, new SetupTarget("Outer IP", "203.0.113.23"), ["8.8.8.8"]));
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
-        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
-        Assert.Equal("Router", targets!.Single(t => t.Name == "Outer IP").Parent);
+        var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
+        Assert.Equal("Router", targets.Single(t => t.Name == "Outer IP").Parent);
         Assert.Equal("Outer IP", targets.Single(t => t.Address == "8.8.8.8").Parent);
     }
 
@@ -126,8 +126,8 @@ public class SetupApiTests : IDisposable
             new SetupApplyRequest(Router, null, ["8.8.8.8", "1.1.1.1", "203.0.113.9"]));
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
-        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
-        Assert.Equal("Google", targets!.Single(t => t.Address == "8.8.8.8").Operator);
+        var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
+        Assert.Equal("Google", targets.Single(t => t.Address == "8.8.8.8").Operator);
         Assert.Equal("Cloudflare", targets.Single(t => t.Address == "1.1.1.1").Operator);
         Assert.Null(targets.Single(t => t.Address == "203.0.113.9").Operator); // not in the catalog
     }
@@ -140,8 +140,8 @@ public class SetupApiTests : IDisposable
                 ["8.8.8.8"], IspName: "Comcast"));
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
-        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
-        Assert.Equal("Comcast", targets!.Single(t => t.Name == "Outer IP").Operator);
+        var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
+        Assert.Equal("Comcast", targets.Single(t => t.Name == "Outer IP").Operator);
         Assert.Null(targets.Single(t => t.Name == "Router").Operator); // Mark's own gear
     }
 

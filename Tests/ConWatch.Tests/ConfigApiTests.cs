@@ -143,8 +143,8 @@ public class ConfigApiTests : IDisposable
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var after = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
-        Assert.Equal("Router", after!.Single(t => t.Name == "Modem").Parent);
+        var after = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
+        Assert.Equal("Router", after.Single(t => t.Name == "Modem").Parent);
         Assert.Equal("Modem", after.Single(t => t.Name == "Google").Parent);
         Assert.Equal("Modem", after.Single(t => t.Name == "Cloudflare").Parent);
     }
