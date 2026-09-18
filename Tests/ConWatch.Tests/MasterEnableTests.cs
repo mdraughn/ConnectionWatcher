@@ -64,6 +64,23 @@ public class MasterEnableTests : IDisposable
     }
 
     [Fact]
+    public async Task Settings_toggle_is_reflected_by_health_before_the_rebuild_lands()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+
+        var off = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Engine.Enabled"] = "false" });
+        Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
+
+        // The cached switch flips on the settings event, not on the rebuild:
+        // a reload right after the PUT must already say enabled=false.
+        var health = await GetJson("/api/v1/health");
+        Assert.False(health.GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
     public async Task Snapshot_never_carries_per_node_keys()
     {
         await ConfigApiTests.SeedHomeAsync(_client);

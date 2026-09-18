@@ -333,6 +333,14 @@ public class WatcherHostService(
             cts = CancellationTokenSource.CreateLinkedTokenSource(_appStopping);
             _debounceCts = cts;
         }
+        // Settings can flip the master switch; the endpoints must not report
+        // the old value while the rebuild debounce runs. Read it synchronously
+        // here rather than inside the Task.Run below: SetManyAsync awaits its
+        // write before raising this event, so this line runs on the caller's
+        // own async call stack (before the PUT/config-commit responds) — a
+        // fire-and-forget Task.Run would race that response under load
+        // instead of reliably beating it.
+        EngineEnabled = EngineEnabledAsync().GetAwaiter().GetResult();
         var delay = TimeSpan.FromSeconds(persistenceOptions.Value.RebuildDebounceSeconds);
         _ = Task.Run(async () =>
         {
