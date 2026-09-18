@@ -21,8 +21,8 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
     private readonly Channel<TEvent> _channel = Channel.CreateBounded<TEvent>(
         new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest },
         // A field initializer cannot touch instance members (no `this` yet), so
-        // the message names the event, whose ToString says which kind it is.
-        dropped => log.LogWarning("Recorder channel full; dropped {Event}", dropped));
+        // the message names the event's CLR type rather than EventNoun.
+        dropped => log.LogWarning("{Kind} channel full; dropped {Event}", typeof(TEvent).Name, dropped));
     private readonly SemaphoreSlim _flushLock = new(1, 1);
     private readonly TimeSpan _retryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
     private List<TEvent>? _pending; // a batch whose write failed; retried first
@@ -58,7 +58,7 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
                 {
                     await FlushAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
                     log.LogError(ex, "Failed writing {Noun}; retrying in {Delay}", EventNoun, _retryDelay);
                     await Task.Delay(_retryDelay, stoppingToken).ConfigureAwait(false);

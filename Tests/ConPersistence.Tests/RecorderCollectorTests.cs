@@ -5,6 +5,7 @@ using ConEngine.Events;
 using ConEngine.Tracking;
 using ConPersistence.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
@@ -197,5 +198,80 @@ public class RecorderCollectorTests : IDisposable
         await using var db = _factory.CreateDbContext();
         var row = await db.Rollups.SingleAsync(r => r.TargetId == target);
         Assert.Equal(1, row.PingCount);
+    }
+
+    /// <summary>A recorder whose first write raises a cancellation that is NOT the host's.</summary>
+    private sealed class ForeignCancelOnceRecorder(IDbContextFactory<ConWatchDbContext> dbFactory)
+        : ChannelRecorder<TargetTransition>(NullLogger.Instance, retryDelay: TimeSpan.FromMilliseconds(50))
+    {
+        private int _writes;
+        public int Writes => _writes;
+        protected override string EventNoun => "test events";
+        protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _writes) == 1)
+                throw new OperationCanceledException("a timeout inside the write, not host stop");
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            db.Transitions.AddRange(batch.Select(t => new ConPersistence.Entities.TransitionRow
+            {
+                TimestampUtc = t.Timestamp.UtcDateTime, SubjectId = t.TargetId, SubjectName = t.TargetName,
+                FromState = t.From.ToString(), ToState = t.To.ToString(), Trigger = t.Reason.Trigger.ToString(),
+            }));
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    [Fact]
+    public async Task A_cancellation_that_is_not_host_stop_is_retried_not_fatal()
+    {
+        var recorder = new ForeignCancelOnceRecorder(_factory);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        await recorder.StartAsync(CancellationToken.None);
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Google", HostState.Down));
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && recorder.Writes < 2)
+            await Task.Delay(25);
+        await recorder.StopAsync(CancellationToken.None);
+
+        Assert.True(recorder.Writes >= 2, "the foreign cancellation must be retried");
+        Assert.False(recorder.ExecuteTask!.IsFaulted, "the pump must not fault");
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(1, await db.Transitions.CountAsync());
+    }
+
+    private sealed class CapturingLogger : ILogger
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (Entries) Entries.Add((logLevel, formatter(state, exception)));
+        }
+    }
+
+    private sealed class LoggedRecorder(ILogger log, int capacity) : ChannelRecorder<TargetTransition>(log, capacity)
+    {
+        protected override string EventNoun => "test events";
+        protected override Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public void An_evicted_event_is_logged_as_a_warning()
+    {
+        var log = new CapturingLogger();
+        var recorder = new LoggedRecorder(log, capacity: 2);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        source.OnNext(Transition(TransitionSubjectKind.Target, "First", HostState.Down));
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Second", HostState.Down));
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Third", HostState.Down));
+
+        var warning = Assert.Single(log.Entries, e => e.Level == LogLevel.Warning);
+        Assert.Contains("channel full", warning.Message);
+        Assert.Contains("First", warning.Message);
     }
 }

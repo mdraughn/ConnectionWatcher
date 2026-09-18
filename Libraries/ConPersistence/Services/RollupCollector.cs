@@ -40,7 +40,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
                 {
                     await FlushClosedAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
                     log.LogError(ex, "Failed writing rollups; will retry next cycle");
                 }
