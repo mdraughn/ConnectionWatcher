@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ConWatch.Tests;
 
@@ -62,5 +64,29 @@ public class ProbeTestEndpointTests : IDisposable
         var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("resolvedIp").ValueKind);
         Assert.False(string.IsNullOrEmpty(body.GetProperty("resolutionError").GetString()));
+    }
+
+    [Fact]
+    public async Task Name_that_resolves_only_to_ipv6_reports_no_ipv4_address()
+    {
+        var dns = new ConEngine.Tests.Fakes.FakeDomainNameResolverFactory();
+        dns.Answers["v6only.example"] = [System.Net.IPAddress.Parse("2001:db8::1")];
+        using var factory = new ConWatchFactory
+        {
+            TestServices = services =>
+            {
+                services.RemoveAll<ConCore.IDomainNameResolverFactory>();
+                services.AddSingleton<ConCore.IDomainNameResolverFactory>(dns);
+            },
+        };
+        var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/targets/probe-test",
+            new { address = "v6only.example" });
+        response.EnsureSuccessStatusCode();
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("resolvedIp").ValueKind);
+        Assert.Equal("The name resolved, but to no IPv4 address.", body.GetProperty("resolutionError").GetString());
+        Assert.Empty(body.GetProperty("resolvedIps").EnumerateArray());
     }
 }
