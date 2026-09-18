@@ -42,6 +42,21 @@ public class WatcherHostService(
     // Set under _rebuildLock by StopAsync: a rebuild queued behind it must not
     // start a new engine after shutdown.
     private bool _stopped;
+    private int _rebuildCount;
+    // Generation of the most recent config/settings write OnConfigChanged
+    // observed, and the highest generation an actual rebuild has reflected.
+    // RebuildAsync's skip check compares the two so a direct call correctly
+    // supersedes — rather than merely races — a debounced rebuild scheduled
+    // for the very same write: with RebuildDebounceSeconds at 0 (tests), the
+    // debounced Task.Run can finish before the direct caller even reaches
+    // its own Cancel() call, so cancellation-timing alone can't make this
+    // deterministic; comparing against a generation captured from the
+    // shared write event, by both sides, can. Both guarded by _debounceLock.
+    private long _currentGeneration;
+    private long _servicedGeneration;
+
+    /// <summary>Rebuilds that actually ran (not the ones refused after stop). Test-visible.</summary>
+    public int RebuildCount => Volatile.Read(ref _rebuildCount);
 
     /// <summary>The running engine, or null before start / mid-rebuild.</summary>
     public WatcherEngine? Engine { get; private set; }
@@ -95,7 +110,7 @@ public class WatcherHostService(
     {
         configService.ConfigChanged -= OnConfigChanged;
         settingsStore.SettingsChanged -= OnConfigChanged;
-        lock (_debounceLock) { _debounceCts?.Cancel(); }
+        lock (_debounceLock) { _debounceCts?.Cancel(); _debounceCts?.Dispose(); _debounceCts = null; }
         // Serialize with any in-flight rebuild: two concurrent engine.StopAsync
         // calls race inside the coordinators' Dispose.
         await _rebuildLock.WaitAsync(CancellationToken.None);
@@ -290,17 +305,51 @@ public class WatcherHostService(
         return seed;
     }
 
-    /// <summary>Stops the engine and rebuilds it from current DB config.</summary>
-    public async Task RebuildAsync()
+    /// <summary>
+    /// Stops the engine and rebuilds it from current DB config. A direct call
+    /// supersedes any debounced rebuild still pending or already under way
+    /// for the same settings write, so an Engine.Enabled toggle rebuilds
+    /// once, not twice: it's a no-op (still returns true — the settings are
+    /// already reflected) once a rebuild has already serviced the generation
+    /// this call targets. Returns false when the rebuild itself failed (the
+    /// caller decides whether that is a 500).
+    /// </summary>
+    public Task<bool> RebuildAsync() => RebuildInternalAsync(allowSkip: true);
+
+    /// <summary>
+    /// Same as <see cref="RebuildAsync"/>, but always performs the rebuild
+    /// instead of treating it as already covered. For callers whose
+    /// triggering write doesn't flow through OnConfigChanged — factory
+    /// reset's raw table deletes, the snapshot importer clone and take-over
+    /// use (S7: it bypasses the DI ConfigService singleton) — the generation
+    /// check can't tell "a rebuild already reflects my write" from "stale",
+    /// so skipping would risk leaving the engine running against data that
+    /// no longer matches the database.
+    /// </summary>
+    public Task<bool> ForceRebuildAsync() => RebuildInternalAsync(allowSkip: false);
+
+    private async Task<bool> RebuildInternalAsync(bool allowSkip)
     {
+        long targetGeneration;
+        lock (_debounceLock)
+        {
+            _debounceCts?.Cancel();
+            targetGeneration = _currentGeneration;
+        }
         await _rebuildLock.WaitAsync();
         try
         {
             if (_stopped)
             {
                 _log.LogDebug("Rebuild requested after shutdown; ignored");
-                return;
+                return false;
             }
+            if (allowSkip && targetGeneration <= Volatile.Read(ref _servicedGeneration))
+            {
+                _log.LogDebug("A rebuild already reflects the current settings; skipped");
+                return true;
+            }
+            Interlocked.Increment(ref _rebuildCount);
             _log.LogInformation("Rebuilding engine after config change");
             EngineSeed? seed = null;
             if (Engine is { } engine)
@@ -322,10 +371,15 @@ public class WatcherHostService(
             // rebuild didn't end with a running engine.
             if (Engine is null)
                 DetachObservers();
+            // The only writer: always inside _rebuildLock.
+            if (targetGeneration > _servicedGeneration)
+                Volatile.Write(ref _servicedGeneration, targetGeneration);
+            return true;
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Engine rebuild failed");
+            return false;
         }
         finally
         {
@@ -338,6 +392,7 @@ public class WatcherHostService(
         CancellationTokenSource cts;
         lock (_debounceLock)
         {
+            _currentGeneration++;
             _debounceCts?.Cancel();
             _debounceCts?.Dispose();
             cts = CancellationTokenSource.CreateLinkedTokenSource(_appStopping);

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
 
@@ -121,5 +122,22 @@ public class MasterEnableTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, right.StatusCode);
         await ConfigApiTests.Eventually(async () =>
             (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+    }
+
+    [Fact]
+    public async Task M2M_engine_toggle_rebuilds_exactly_once()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+        await Task.Delay(500); // let the seeding rebuilds settle
+        var before = host.RebuildCount;
+
+        var off = await _client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false });
+        Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
+        await Task.Delay(500); // a second, debounced rebuild would land in here
+
+        Assert.Equal(before + 1, host.RebuildCount);
     }
 }
