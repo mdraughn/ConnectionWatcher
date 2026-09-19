@@ -42,18 +42,15 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
             try
             {
                 await using var db = await dbFactory.CreateDbContextAsync(stoppingToken).ConfigureAwait(false);
-                var converted = await pass.RunAsync(db, timeProvider.GetUtcNow().UtcDateTime,
+                await pass.RunAsync(db, timeProvider.GetUtcNow().UtcDateTime,
                     await EffectiveOptionsAsync().ConfigureAwait(false), stoppingToken).ConfigureAwait(false);
-                if (converted > 0)
-                    await db.Database.ExecuteSqlRawAsync("PRAGMA incremental_vacuum;", stoppingToken)
-                        .ConfigureAwait(false);
                 if (settingsStore is not null)
                     await settingsStore.SetManyAsync(new Dictionary<string, string?>
                     {
                         [SettingKeys.RetentionLastRunUtc] = timeProvider.GetUtcNow().ToString("O"),
                     }).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 return;
             }

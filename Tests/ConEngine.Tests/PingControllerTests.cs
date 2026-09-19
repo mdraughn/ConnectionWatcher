@@ -28,7 +28,7 @@ public class PingControllerTests
         var factory = new FakePingTransceiverFactory();
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(factory, NullLogger.Instance);
+        using var controller = new PingController(factory, NullLogger.Instance, TimeProvider.System);
 
         _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
@@ -47,8 +47,8 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         var cadence = new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System);
 
-        using var controllerA = new PingController(factory, NullLogger.Instance);
-        using var controllerB = new PingController(factory, NullLogger.Instance);
+        using var controllerA = new PingController(factory, NullLogger.Instance, TimeProvider.System);
+        using var controllerB = new PingController(factory, NullLogger.Instance, TimeProvider.System);
         _ = controllerA.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
         _ = controllerB.Launch(Guid.NewGuid(), IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
 
@@ -69,7 +69,7 @@ public class PingControllerTests
         var factory = new FakePingTransceiverFactory();
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(factory, NullLogger.Instance);
+        using var controller = new PingController(factory, NullLogger.Instance, TimeProvider.System);
 
         bool bursting = false;
         _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
@@ -94,7 +94,7 @@ public class PingControllerTests
         factory.SetThrow(IpA, true);
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(factory, NullLogger.Instance);
+        using var controller = new PingController(factory, NullLogger.Instance, TimeProvider.System);
 
         _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
@@ -111,5 +111,62 @@ public class PingControllerTests
             healed = await channel.Reader.ReadAsync(cts2.Token);
         Assert.True(healed.Result.Success);
         cts.Cancel();
+    }
+
+    /// <summary>The OLD production transceiver behavior: cancellation comes back
+    /// as a failed sample. The controller must still not forward it.</summary>
+    private sealed class CancelReportingFactory : IPingTransceiverFactory
+    {
+        public IPingTransceiver Create(IPAddress ip, ProbeSpec probe, CancellationToken ct) => new Probe(ip, ct);
+
+        private sealed class Probe(IPAddress ip, CancellationToken ct) : IPingTransceiver
+        {
+            public IPAddress IpAddress => ip;
+
+            public async Task<PingResult> PingAsync(int timeoutMs)
+            {
+                try { await Task.Delay(Timeout.Infinite, ct); }
+                catch (OperationCanceledException) { }
+                return new PingResult(ip, false, 0, "Cancelled");
+            }
+
+            public void Dispose() { }
+        }
+    }
+
+    [Fact]
+    public async Task A_probe_cancelled_mid_flight_writes_nothing_to_the_channel()
+    {
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
+        using var cts = new CancellationTokenSource();
+        using var controller = new PingController(new CancelReportingFactory(), NullLogger.Instance, TimeProvider.System);
+
+        _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
+            new FixedIntervalCadence(TimeSpan.FromMilliseconds(1), TimeProvider.System),
+            () => 60_000, cts.Token);
+        await Task.Delay(100); // the loop is inside its first (hanging) probe
+
+        await controller.StopAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(channel.Reader.TryRead(out _), "a cancelled probe must not become a lost sample");
+    }
+
+    [Fact]
+    public async Task Results_carry_the_engine_clock_not_the_wall_clock()
+    {
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(
+            DateTimeOffset.Parse("2030-01-01T00:00:00Z"));
+        var factory = new FakePingTransceiverFactory();
+        var channel = Channel.CreateUnbounded<RoutedPingResult>();
+        using var cts = new CancellationTokenSource();
+        using var controller = new PingController(factory, NullLogger.Instance, time);
+
+        _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
+            new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
+            () => 1000, cts.Token);
+
+        var result = (await Collect(channel.Reader, 1)).Single();
+        cts.Cancel();
+        Assert.Equal(DateTimeOffset.Parse("2030-01-01T00:00:00Z"), result.Result.Timestamp);
     }
 }

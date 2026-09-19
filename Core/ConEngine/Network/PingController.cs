@@ -10,7 +10,8 @@ namespace ConEngine.Network;
 /// Runs the probe loop for one IP address: waits on its cadence, sends one
 /// probe through its transceiver, reports the result on the shared channel.
 /// </summary>
-public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILogger log) : IDisposable
+public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILogger log,
+    TimeProvider timeProvider) : IDisposable
 {
     private readonly Lock _lock = new();
     private bool _disposed;
@@ -78,6 +79,8 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
                         break;
 
                     var reply = await ping.PingAsync(_timeoutMsProvider!()).ConfigureAwait(false);
+                    if (_cancellationToken.IsCancellationRequested)
+                        break; // a reply that raced our stop is not evidence about the host
                     log.LogTrace("Ping result for {ipAddress}: {reply}", ipAddress, reply);
                     SendMessage(reply);
                 }
@@ -90,6 +93,8 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
                 {
                     // Fault isolation: report a failed sample and keep the loop alive.
                     log.LogError(pingEx, "Error pinging {ipAddress}", ipAddress);
+                    if (_cancellationToken.IsCancellationRequested)
+                        break; // a fault that raced our stop is not evidence about the host
                     SendMessage(new PingResult(ipAddress, false, 0, $"Ping error: {pingEx.Message}"));
                 }
             }
@@ -137,8 +142,12 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
     {
         if (_resultWriter is null)
             return;
+        // Stamp from the engine clock: everything downstream (burst-loss windows,
+        // rollup minutes, warm-start gaps) is TimeProvider time.
+        var stamped = new PingResult(result.IpAddress, result.Success, result.RoundtripTime,
+            result.Message, timeProvider.GetUtcNow());
         // If the channel is closed this fails quietly; the manager is shutting down.
-        if (!_resultWriter.TryWrite(new RoutedPingResult(_targetId, result)))
+        if (!_resultWriter.TryWrite(new RoutedPingResult(_targetId, stamped)))
             log.LogDebug("[{ipAddress}] result dropped: channel closed", _ipAddress);
     }
 

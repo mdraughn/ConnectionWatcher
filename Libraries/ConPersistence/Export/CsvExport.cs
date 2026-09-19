@@ -71,7 +71,7 @@ public static class CsvExport
     }
 
     private static string Iso(DateTime utc) =>
-        DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture);
+        utc.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture);
 
     private static string Num(double? value) =>
         value?.ToString(CultureInfo.InvariantCulture) ?? "";

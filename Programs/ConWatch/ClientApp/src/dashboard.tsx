@@ -83,7 +83,7 @@ function App({ store, topology, initial }: {
     return { from: new Date(to.getTime() - 24 * 3_600_000), to };
   });
 
-  if (initial.engineDisabled) {
+  if (initial.engineDisabled || state.disabled) {
     // Archive mode: everything DB-backed keeps working; no live states, no
     // pretense of them.
     return (

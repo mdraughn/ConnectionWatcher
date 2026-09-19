@@ -170,4 +170,24 @@ public class WatcherOptionsValidatorTests
         o.Targets[0].Probe = "tcp:8443";
         Assert.False(Validate(o).Failed);
     }
+
+    [Fact]
+    public void Responding_threshold_below_faltering_threshold_fails()
+    {
+        var o = ValidHome();
+        o.Profiles["Flappy"] = new PingProfileConfig { RespondingThreshold = 0.5, FalteringThreshold = 0.75 };
+        var result = Validate(o);
+        Assert.True(result.Failed);
+        Assert.Contains("FalteringThreshold", result.FailureMessage);
+    }
+
+    [Fact]
+    public void Recovering_threshold_below_down_threshold_fails()
+    {
+        var o = ValidHome();
+        o.Profiles["Flappy"] = new PingProfileConfig { DownThreshold = 0.3, RecoveringThreshold = 0.25 };
+        var result = Validate(o);
+        Assert.True(result.Failed);
+        Assert.Contains("RecoveringThreshold", result.FailureMessage);
+    }
 }

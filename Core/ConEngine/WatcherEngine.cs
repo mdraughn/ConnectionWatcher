@@ -70,6 +70,19 @@ public class WatcherEngine
     /// <summary>Suspicion bursts, corroboration sweeps, and glitch episodes.</summary>
     public SuspicionCoordinator? Suspicion { get; private set; }
 
+    /// <summary>When the result pump last processed a result end to end; null before the first.</summary>
+    public DateTimeOffset? LastResultUtc => _manager?.LastResultUtc;
+
+    /// <summary>When StartAsync ran (engine clock).</summary>
+    public DateTimeOffset StartedUtc { get; private set; }
+
+    /// <summary>
+    /// Silence longer than this from an engine with active monitors means the
+    /// pump or every controller is stuck: three times the longest configured
+    /// normal interval plus the longest configured ping timeout.
+    /// </summary>
+    public TimeSpan StallAfter { get; private set; } = TimeSpan.FromMinutes(5);
+
     /// <summary>Sub-Faltering loss episodes worth recording.</summary>
     public IObservable<GlitchEvent> GlitchSource => _glitchSubject;
     private readonly System.Reactive.Subjects.Subject<GlitchEvent> _glitchSubject = new();
@@ -101,6 +114,11 @@ public class WatcherEngine
         _graph = TargetGraph.FromOptions(_options);
         _log.LogInformation("WatcherEngine starting: {TargetCount} targets, {PoolCount} pools",
             _graph.Targets.Count, _graph.Pools.Count);
+
+        StartedUtc = _timeProvider.GetUtcNow();
+        var profiles = _graph.Targets.Values.Where(t => t.Enabled).Select(_graph.ProfileFor).ToList();
+        if (profiles.Count > 0)
+            StallAfter = profiles.Max(p => p.NormalInterval) * 3 + profiles.Max(p => p.PingTimeout);
 
         // Pool membership index for phase staggering: targetId -> (memberIndex, memberCount).
         var poolPosition = new Dictionary<Guid, (int index, int count)>();
@@ -184,7 +202,7 @@ public class WatcherEngine
 
         // Ping plumbing: one manager, one controller per target, results
         // routed by target id (targets may share an address).
-        _manager = new PingManager(_pingFactory, ct, _loggerFactory);
+        _manager = new PingManager(_pingFactory, ct, _loggerFactory, _timeProvider);
         _subscriptions.Add(_manager.PingResultSource.Subscribe(
             routed =>
             {
@@ -193,7 +211,19 @@ public class WatcherEngine
                     var result = routed.Result;
                     monitor.Discipline.OnPingResult(result.Success);
                     monitor.RecordPingResult(result);
-                    _pingSampleSubject.OnNext((monitor.Target.Id, result));
+                    try
+                    {
+                        _pingSampleSubject.OnNext((monitor.Target.Id, result));
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException
+                        || !ct.IsCancellationRequested)
+                    {
+                        // Host observers ride this stream; one of them throwing must
+                        // not starve suspicion or the stall stamp — including when
+                        // it throws a cancellation of its own, which is not ours.
+                        _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed",
+                            monitor.Target.Name);
+                    }
                     Suspicion?.OnPingSample(monitor.Target.Id, result);
                 }
             },
@@ -281,8 +311,18 @@ public class WatcherEngine
             {
                 var result = await resolver.ResolveAsync(hostname, 5000).ConfigureAwait(false);
                 answers = result.IPv4Addresses.ToList();
-                if (answers.Count == 0 && current is null)
-                    monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
+                if (current is null)
+                {
+                    if (!result.Success)
+                        monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {result.Status}");
+                    else if (answers.Count == 0)
+                        monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
+                }
+                else if (!result.Success)
+                {
+                    _log.LogDebug("DNS refresh failed for {Hostname} ({Status}); keeping {Ip}",
+                        hostname, result.Status, current);
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -301,25 +341,43 @@ public class WatcherEngine
                 }
             }
 
-            if (current is null)
+            try
             {
-                if (answers.Count == 0)
+                if (current is null)
                 {
-                    // Not activated yet: retry with backoff until DNS answers.
-                    try { await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { return; }
-                    backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
-                    continue;
+                    if (answers.Count == 0)
+                    {
+                        // Not activated yet: retry with backoff until DNS answers.
+                        try { await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { return; }
+                        backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
+                        continue;
+                    }
+                    // Adopt the answer only once the call it feeds has
+                    // returned: the catch below promises a retry at the next
+                    // refresh, which it can only keep if a throw leaves
+                    // `current` as it was.
+                    var next = answers[0];
+                    Activate(monitor, next);
+                    current = next;
                 }
-                current = answers[0];
-                Activate(monitor, current);
+                else if (answers.Count > 0 && !answers.Contains(current))
+                {
+                    _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
+                        monitor.Target.Name, current, answers[0]);
+                    var next = answers[0];
+                    await RepointAsync(monitor, next).ConfigureAwait(false);
+                    current = next;
+                }
             }
-            else if (answers.Count > 0 && !answers.Contains(current))
+            catch (ObjectDisposedException) when (ct.IsCancellationRequested)
             {
-                _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
-                    monitor.Target.Name, current, answers[0]);
-                current = answers[0];
-                await RepointAsync(monitor, current).ConfigureAwait(false);
+                return; // the manager stopped under us
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogError(ex, "{Target}: activating/re-pointing failed; will retry at the next refresh",
+                    monitor.Target.Name);
             }
 
             // Sleep until the refresh interval or a Down transition, whichever first.
@@ -351,7 +409,7 @@ public class WatcherEngine
         foreach (var pool in _poolCoordinators)
             pool.Dispose();
         if (_manager is { } manager)
-            await manager.StopAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await manager.StopAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         foreach (var monitor in _monitors.Values)
             monitor.Dispose();
 

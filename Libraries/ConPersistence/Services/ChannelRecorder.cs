@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using ConEngine;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -8,14 +9,23 @@ namespace ConPersistence.Services;
 /// Shared shape of the event recorders: events from an engine stream flow
 /// through a bounded channel (the engine never blocks on the database), a
 /// background loop drains them in batches, and a batch whose write fails
-/// stays pending and is retried before anything newer is read.
+/// stays pending and is retried on a timer, not on the next event.
 /// </summary>
 /// <typeparam name="TEvent">The engine event being persisted.</typeparam>
-public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, int batchSize = 500) : BackgroundService
+public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, int batchSize = 500,
+    TimeSpan? retryDelay = null) : BackgroundService, IEngineObserver
 {
+    // DropOldest is the right policy for transitions: the NEWEST row per subject
+    // is what warm start seeds from, so under a long database outage the recent
+    // past matters more than the distant. TryWrite never reports the eviction
+    // (it returns false only for a completed channel), so the drop is logged here.
     private readonly Channel<TEvent> _channel = Channel.CreateBounded<TEvent>(
-        new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest });
+        new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest },
+        // A field initializer cannot touch instance members (no `this` yet), so
+        // the message names the event's CLR type rather than EventNoun.
+        dropped => log.LogWarning("{Kind} channel full; dropped {Event}", typeof(TEvent).Name, dropped));
     private readonly SemaphoreSlim _flushLock = new(1, 1);
+    private readonly TimeSpan _retryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
     private List<TEvent>? _pending; // a batch whose write failed; retried first
     private IDisposable? _subscription;
 
@@ -25,37 +35,49 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
     /// <summary>Writes one whole batch. Throwing keeps the batch pending for the next flush.</summary>
     protected abstract Task WriteBatchAsync(IReadOnlyList<TEvent> batch, CancellationToken ct);
 
+    /// <summary>Which of the engine's streams this recorder persists.</summary>
+    protected abstract IObservable<TEvent> SourceOf(WatcherEngine engine);
+
     /// <summary>Subscribes to an event stream, replacing any prior subscription.</summary>
     public void Attach(IObservable<TEvent> source)
     {
         _subscription?.Dispose();
         _subscription = source.Subscribe(
-            e =>
-            {
-                if (!_channel.Writer.TryWrite(e))
-                    log.LogWarning("{Noun} channel full; dropped {Event}", EventNoun, e);
-            },
+            e => _channel.Writer.TryWrite(e),
             ex => log.LogError(ex, "{Noun} stream error", EventNoun));
+    }
+
+    public void Attach(WatcherEngine engine) => Attach(SourceOf(engine));
+
+    public void Detach()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            while (await _channel.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
+            while (true)
             {
+                // With a batch still pending, do not wait for a NEW event: the
+                // retry is due on the timer, not on the next transition (which
+                // on a quiet link can be hours away).
+                if (_pending is null && !await _channel.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
+                    break;
                 try
                 {
                     await FlushAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
-                    log.LogError(ex, "Failed writing {Noun}; retrying in 5s", EventNoun);
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
+                    log.LogError(ex, "Failed writing {Noun}; retrying in {Delay}", EventNoun, _retryDelay);
+                    await Task.Delay(_retryDelay, stoppingToken).ConfigureAwait(false);
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Shutdown: drain what's left without a token.
             try { await FlushAsync(CancellationToken.None).ConfigureAwait(false); }

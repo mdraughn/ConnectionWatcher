@@ -15,6 +15,15 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionWatcher");
 
+// Shutdown budget (see docs/superpowers/reviews/2026-09-18-codebase-review.md, H5):
+// the engine stops in <= 2+2 s, the notifiers say goodbye in <= 2 s, and the
+// recorders' final flush gets the rest. 25 s sits under the 30 s
+// stop_grace_period in deploy/docker/compose.yaml; under the Windows SCM the
+// host-shutdown kill timeout can be as low as 5 s, but the normal path
+// (engine <= 4 s, MQTT goodbye <= 2 s, then the flushes) finishes well inside
+// that.
+builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(25));
+
 // Registrations live in ConWatchServices, one method per concern.
 builder.Services
     .AddConWatchOptions(builder.Configuration)
@@ -69,25 +78,6 @@ locked.MapTraceroute();
 locked.MapAdmin();
 locked.MapSetup();
 SettingsEndpoints.MapSettings(locked, open: api);
-
-api.MapGet("/health", async (WatcherHostService host, TimeProvider time) =>
-{
-    var engine = host.Engine;
-    var enabled = await host.EngineEnabledAsync();
-    var body = new
-    {
-        // A deliberately disabled node is a healthy archive (200) — container
-        // healthchecks must not flag it; 503 stays for enabled-but-down.
-        Status = engine is not null ? "Healthy" : enabled ? "EngineDown" : "Disabled",
-        Enabled = enabled,
-        EngineRunning = engine is not null,
-        TargetCount = engine?.Monitors.Count ?? 0,
-        TimestampUtc = time.GetUtcNow(),
-        Version = BuildInfo.Version,
-        BuiltUtc = BuildInfo.BuiltUtc,
-    };
-    return engine is not null || !enabled ? Results.Ok(body) : Results.Json(body, statusCode: 503);
-});
 
 try
 {

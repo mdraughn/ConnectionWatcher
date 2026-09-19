@@ -289,4 +289,22 @@ public class VerdictCoordinatorTests
         Assert.Equal(HostState.Responding, t.From);
         Assert.Equal(HostState.Responding, t.To);
     }
+
+    [Fact]
+    public void Current_is_one_snapshot_whose_detail_matches_its_state()
+    {
+        Feed("Google", 5, true); Feed("Cloudflare", 5, true); Feed("Quad9", 5, true);
+        Feed("Modem", 5, true); Feed("Router", 5, true);
+        var healthy = _verdict.Current;
+        Assert.Equal(VerdictState.Healthy, healthy.State);
+        Assert.StartsWith("Healthy", healthy.Detail);
+
+        Feed("Modem", 10, false);
+        var down = _verdict.Current;
+        Assert.Equal(VerdictState.LinkDown, down.State);
+        Assert.StartsWith("LinkDown", down.Detail);
+        Assert.Equal("Comcast", down.Operator);
+        // The earlier snapshot is untouched: readers holding it never see a torn pair.
+        Assert.Equal(VerdictState.Healthy, healthy.State);
+    }
 }

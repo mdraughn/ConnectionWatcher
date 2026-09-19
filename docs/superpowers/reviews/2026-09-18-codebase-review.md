@@ -173,7 +173,7 @@ Evidence: `ChannelRecorder.cs:16-17` uses `BoundedChannelFullMode.DropOldest`; w
 
 ### H6. Smaller host items (LOW)
 
-- **Winning debounce CTS never disposed.** `WatcherHostService.cs:323-344` disposes superseded sources at `:327`, but the one that survives the delay and runs `RebuildAsync` is dropped without `Dispose()`, retaining its registration on `ApplicationStopping` for the life of the process; `StopAsync:90` cancels but does not dispose. One registration leaked per settings edit. Fix: `using var _ = cts;` inside the lambda once past the delay; dispose in `StopAsync`.
+- **Debounce CTS at stop.** Re-checked 2026-09-18 while planning: `OnConfigChanged:326-327` disposes the previous source on every change, winner or not, so at most one is outstanding; only `StopAsync:90` leaves one behind. Fixed there in the follow-up plan's Task 4.2.
 - **Admin gate.** `AdminGate.cs:43-49` delays 1 s per failed attempt on the request's own thread, so parallel attempts are bounded only by PBKDF2 cost; `/auth/set-password` (`AuthEndpoints.cs:48-57`) re-signs the caller but every other browser's cookie stays valid. Fine for a LAN tool; it is the only lock on the take-over channel, which is open to the network. Fix: a global `SemaphoreSlim(1)` around failed verifications; a "password generation" claim checked in `OnValidatePrincipal`.
 - **`/health`, `/metrics`, `/status` hit the database per call** for `Engine.Enabled` (`WatcherHostService.cs:110-111` opens a context and `FindAsync`s), with the Docker HEALTHCHECK every 10 s and the tray every 5 s. The host service already decided enabled/disabled in `StartEngineAsync:115`. Fix: a `bool EngineEnabled` set there.
 - **Broadcaster ordering.** `StatusBroadcaster.cs:86-100` gates under the lock but sends outside it; a cadence tick and a transition-triggered send 250 ms apart can deliver the older snapshot last. Fix: a `seq` in the payload the client ignores if older, or serialize sends.
@@ -286,6 +286,8 @@ Each step is one small PR with its own failing-first test. Safety first, then du
 14. **S4**: pure `HostTracker`, drop `StatusSource`. (small)
 15. **S6, S7, S9, S11**: persistence folder moves, `SnapshotImporter` on DI, atomic setup, delete the root shells. (moves)
 16. **Section 3 dedupe**: `TargetRow.CopyFrom`, one profile mapping pair, `TransitionDto`, `ApiResults.Error`, snapshot records, streaming exports, `GatewayDiscovery` parallel, dead members. (many tiny PRs)
+
+**Status 2026-09-18 (later the same day):** steps 1–9 and 11 landed in full and step 10 in part (the snapshot-once half; the publish-outside-lock outbox is deferred) on branch `review-2026-09-18` via `plans/2026-09-18-review-fixes.md`; E1 additionally gained a `ConfigInvalid` health status for a stored config the stricter validator now rejects. Steps 12–16 and the deferred items are listed in `plans/2026-09-18-review-fixes-followups.md`.
 
 Decisions needed from the owner before starting:
 

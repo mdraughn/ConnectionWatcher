@@ -24,7 +24,19 @@ public class PingManager : IDisposable
     private readonly Task _messageProcessingTask;
     private readonly ILogger<PingManager> _log;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly TimeProvider _timeProvider;
     private bool _stopped;
+    private long _lastResultTicks; // UTC ticks of the last routed result; 0 = none yet
+
+    /// <summary>When the pump last processed a result end to end; null before the first.</summary>
+    public DateTimeOffset? LastResultUtc
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref _lastResultTicks);
+            return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+    }
 
     // Plain Subject: the engine subscribes before any controller exists, so
     // nothing ever needs a replay.
@@ -33,12 +45,14 @@ public class PingManager : IDisposable
 
     public PingManager(IPingTransceiverFactory pingTransceiverFactory,
         CancellationToken globalCancellationToken,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        TimeProvider timeProvider)
     {
         _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<PingManager>();
         _pingTransceiverFactory = pingTransceiverFactory ?? throw new ArgumentNullException(nameof(pingTransceiverFactory));
         _globalCancellationToken = globalCancellationToken;
+        _timeProvider = timeProvider;
 
         var resultChannel = Channel.CreateUnbounded<RoutedPingResult>();
         _resultWriter = resultChannel.Writer;
@@ -63,7 +77,7 @@ public class PingManager : IDisposable
             if (!_pingControllers.TryGetValue(targetId, out var controller))
             {
                 var controllerLogger = _loggerFactory.CreateLogger($"ConEngine.Network.PingController[{ipAddress}]");
-                controller = new PingController(_pingTransceiverFactory, controllerLogger);
+                controller = new PingController(_pingTransceiverFactory, controllerLogger, _timeProvider);
                 controller.Launch(targetId, ipAddress, _resultWriter, probe, cadence, timeoutMsProvider, _globalCancellationToken);
                 _pingControllers[targetId] = controller;
                 _log.LogInformation("Created PingController for {IpAddress} (target {TargetId})", ipAddress, targetId);
@@ -126,8 +140,24 @@ public class PingManager : IDisposable
             _log.LogDebug("PingManager message processing started");
             await foreach (var routed in _resultReader.ReadAllAsync(_globalCancellationToken))
             {
-                LogPingResult(routed.Result);
-                _pingResultSubject.OnNext(routed);
+                try
+                {
+                    LogPingResult(routed.Result);
+                    _pingResultSubject.OnNext(routed);
+                    Volatile.Write(ref _lastResultTicks, routed.Result.Timestamp.UtcTicks);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException
+                    || !_globalCancellationToken.IsCancellationRequested)
+                {
+                    // Subscribers run inline. One bad observer must not end
+                    // result processing for the life of the engine — not even
+                    // when its bug is a cancellation of its own (an HTTP call
+                    // that timed out): only OUR cancellation ends the pump.
+                    // The stamp is not advanced: it means "last result fully
+                    // processed".
+                    _log.LogError(ex, "A ping result subscriber threw for target {TargetId}; result skipped",
+                        routed.TargetId);
+                }
             }
         }
         catch (OperationCanceledException)

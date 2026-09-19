@@ -33,7 +33,9 @@ public static class AdminEndpoints
             {
                 [SettingKeys.EngineEnabled] = request.Enabled ? "true" : "false",
             });
-            await host.RebuildAsync(); // effective before we answer
+            if (!await host.RebuildIfStaleAsync()) // effective before we answer
+                return Results.Json(new { errors = new[] { "The engine could not be rebuilt; see the log." } },
+                    statusCode: 500);
             return Results.NoContent();
         });
     }
@@ -63,15 +65,12 @@ public static class AdminEndpoints
                     Rollups = await db.Rollups.CountAsync(),
                     Settings = await db.Settings.CountAsync(),
                 },
-                // Stamp the kind: SQLite loads these Unspecified, and a bare
-                // DateTime serializes without the +00:00 the browser needs.
                 OldestTransitionUtc = AsUtc(oldestTransition),
                 OldestRollupUtc = AsUtc(oldestRollup),
                 LastRetentionRunUtc = await settings.GetAsync(SettingKeys.RetentionLastRunUtc),
             });
 
-            static DateTimeOffset? AsUtc(DateTime? dt) => dt is { } d
-                ? new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Utc)) : null;
+            static DateTimeOffset? AsUtc(DateTime? dt) => dt is { } d ? new DateTimeOffset(d) : null;
         });
 
         // Tests the broker with the values in the form, saved or not.
@@ -154,7 +153,9 @@ public static class AdminEndpoints
                 [SettingKeys.RetentionRunHourUtc] = "3",
             });
             loggerFactory.CreateLogger("Admin").LogWarning("FACTORY RESET performed by administrator");
-            await host.RebuildAsync();
+            if (!await host.RebuildAsync())
+                return Results.Json(new { errors = new[] { "The engine could not be rebuilt; see the log." } },
+                    statusCode: 500);
             return Results.NoContent();
         });
     }

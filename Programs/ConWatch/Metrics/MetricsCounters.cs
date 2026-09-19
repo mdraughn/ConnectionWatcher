@@ -10,7 +10,7 @@ namespace ConWatch.Metrics;
 /// recorders do. Totals survive engine rebuilds and reset only with the
 /// process — which rate() is built to absorb.
 /// </summary>
-public class MetricsCounters
+public class MetricsCounters : IEngineObserver
 {
     private readonly Lock _lock = new();
     private readonly List<IDisposable> _subscriptions = [];
@@ -36,6 +36,18 @@ public class MetricsCounters
                 _transitions.AddOrUpdate(t.TargetName, 1, (_, n) => n + 1)));
             _subscriptions.Add(engine.GlitchSource.Subscribe(_ =>
                 Interlocked.Increment(ref _glitches)));
+        }
+    }
+
+    /// <summary>Drops the subscription; the accumulated totals are process-lifetime
+    /// counters and are kept.</summary>
+    public void Detach()
+    {
+        lock (_lock)
+        {
+            foreach (var subscription in _subscriptions)
+                subscription.Dispose();
+            _subscriptions.Clear();
         }
     }
 }

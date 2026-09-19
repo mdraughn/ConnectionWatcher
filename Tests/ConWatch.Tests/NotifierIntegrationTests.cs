@@ -248,6 +248,80 @@ public class NotifierIntegrationTests
         }
     }
 
+    [SkippableFact]
+    public async Task Mqtt_settings_change_after_traffic_reconnects_on_the_new_base_topic()
+    {
+        Skip.IfNot(DockerAvailable(), "Docker engine is not running");
+
+        var brokerPort = FreePort();
+        string containerId = RunDocker(
+            $"run -d --rm -p {brokerPort}:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf").Trim();
+        Skip.If(containerId.Length == 0, "Mosquitto container failed to start");
+        try
+        {
+            await WaitForPortAsync(brokerPort);
+
+            var messages = new Dictionary<string, string>();
+            using var subscriber = new MqttClientFactory().CreateMqttClient();
+            subscriber.ApplicationMessageReceivedAsync += e =>
+            {
+                lock (messages)
+                    messages[e.ApplicationMessage.Topic] = e.ApplicationMessage.ConvertPayloadToString() ?? "";
+                return Task.CompletedTask;
+            };
+            await subscriber.ConnectAsync(new MqttClientOptionsBuilder()
+                .WithTcpServer("127.0.0.1", brokerPort).Build());
+            await subscriber.SubscribeAsync("conwatch/#");
+            await subscriber.SubscribeAsync("renamed/#");
+
+            using var factory = new ConWatchFactory();
+            var client = factory.CreateClient();
+            await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+            {
+                ["Mqtt.Enabled"] = "true",
+                ["Mqtt.Host"] = "127.0.0.1",
+                ["Mqtt.Port"] = brokerPort.ToString(),
+            });
+            await ConfigApiTests.SeedHomeAsync(client);
+
+            // Traffic first: every processed item used to orphan one wake waiter.
+            await ConfigApiTests.Eventually(() =>
+            {
+                lock (messages)
+                    return Task.FromResult(
+                        messages.GetValueOrDefault("conwatch/availability") == "online" &&
+                        messages.Any(m => m.Key.StartsWith("conwatch/target/") && m.Value == "ON"));
+            });
+
+            // ONE settings change must end the session and reconnect under the new base topic.
+            await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+            {
+                ["Mqtt.BaseTopic"] = "renamed",
+            });
+            await ConfigApiTests.Eventually(() =>
+            {
+                lock (messages)
+                    return Task.FromResult(
+                        messages.GetValueOrDefault("renamed/availability") == "online" &&
+                        messages.GetValueOrDefault("conwatch/availability") == "offline");
+            }, timeoutMs: 15000);
+
+            // The first transition after the reconnect must be published, not eaten
+            // by an orphaned reader from the previous session.
+            factory.Pings.SetUp(IPAddress.Parse("192.168.1.1"), false);
+            await ConfigApiTests.Eventually(() =>
+            {
+                lock (messages)
+                    return Task.FromResult(messages.Keys.Any(k => k.StartsWith("renamed/target/")) &&
+                        messages.Any(m => m.Key.StartsWith("renamed/target/") && m.Value == "OFF"));
+            }, timeoutMs: 15000);
+        }
+        finally
+        {
+            RunDocker($"rm -f {containerId}");
+        }
+    }
+
     private static string RunDocker(string args)
     {
         var psi = new ProcessStartInfo("docker", args)

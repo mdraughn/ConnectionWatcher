@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
 
@@ -64,6 +65,23 @@ public class MasterEnableTests : IDisposable
     }
 
     [Fact]
+    public async Task Settings_toggle_is_reflected_by_health_before_the_rebuild_lands()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+
+        var off = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Engine.Enabled"] = "false" });
+        Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
+
+        // The cached switch flips on the settings event, not on the rebuild:
+        // a reload right after the PUT must already say enabled=false.
+        var health = await GetJson("/api/v1/health");
+        Assert.False(health.GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
     public async Task Snapshot_never_carries_per_node_keys()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
@@ -104,5 +122,39 @@ public class MasterEnableTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, right.StatusCode);
         await ConfigApiTests.Eventually(async () =>
             (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+    }
+
+    [Fact]
+    public async Task M2M_engine_toggle_rebuilds_exactly_once()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+        await Task.Delay(500); // let the seeding rebuilds settle
+        var before = host.RebuildCount;
+
+        var off = await _client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false });
+        Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
+        await Task.Delay(500); // a second, debounced rebuild would land in here
+
+        Assert.Equal(before + 1, host.RebuildCount);
+    }
+
+    [Fact]
+    public async Task Unconditional_rebuild_runs_without_a_preceding_write_but_the_stale_check_skips()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
+        await Task.Delay(500); // let the seeding rebuilds settle
+        var before = host.RebuildCount;
+
+        Assert.True(await host.RebuildIfStaleAsync()); // nothing changed since the last rebuild: no-op
+        Assert.Equal(before, host.RebuildCount);
+
+        Assert.True(await host.RebuildAsync());        // unconditional: runs
+        Assert.Equal(before + 1, host.RebuildCount);
     }
 }

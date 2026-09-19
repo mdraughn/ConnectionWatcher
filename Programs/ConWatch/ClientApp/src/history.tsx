@@ -124,7 +124,7 @@ function App({ subjects }: { subjects: Subject[] }) {
     ? rollups.filter((p) => p.periodStart >= resetAt)
     : rollups;
 
-  const stats = incidents(clipped, to.toISOString());
+  const stats = incidents(clipped, (resetAt ?? from.toISOString()), to.toISOString());
   const uptime = subject.kind === "target" ? uptimePercent(measuredRollups) : null;
   const totalSuccess = measuredRollups.reduce((n, p) => n + p.successCount, 0);
   const avgRtt = totalSuccess > 0

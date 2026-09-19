@@ -324,7 +324,9 @@ must name the bridge network.
 deployment: the multi-arch image is published to
 `ghcr.io/mdraughn/conwatch` by CI on every merge and runs in production on
 Synology Container Manager. `Build-Images.ps1` builds the same image
-locally (amd64 + arm64 via cross-compilation) when you want to.
+locally (amd64 + arm64 via cross-compilation) when you want to. The compose
+file sets `stop_grace_period: 30s` so the last minute of rollups is written
+on stop; if you run the image with `docker run`, add `--stop-timeout 30`.
 
 ## Development
 

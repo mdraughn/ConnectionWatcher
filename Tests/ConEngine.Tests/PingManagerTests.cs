@@ -32,7 +32,7 @@ public class PingManagerTests
     public async Task StopAsync_with_ten_hanging_controllers_finishes_within_the_grace_period()
     {
         using var cts = new CancellationTokenSource();
-        var manager = new PingManager(new HangingFactory(), cts.Token, NullLoggerFactory.Instance);
+        var manager = new PingManager(new HangingFactory(), cts.Token, NullLoggerFactory.Instance, TimeProvider.System);
         var cadence = new FixedIntervalCadence(TimeSpan.FromMilliseconds(1), TimeProvider.System);
         for (int i = 1; i <= 10; i++)
             manager.GetOrCreateController(Guid.NewGuid(), IPAddress.Parse($"10.9.0.{i}"), ProbeSpec.Icmp, cadence, () => 60_000);

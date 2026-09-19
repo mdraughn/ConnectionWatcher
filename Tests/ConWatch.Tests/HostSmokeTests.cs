@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using ConPersistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace ConWatch.Tests;
 
@@ -22,6 +23,7 @@ public class HostSmokeTests : IDisposable
         Assert.NotNull(health);
         Assert.True(health.EngineRunning);
         Assert.Equal(0, health.TargetCount);
+        Assert.False(health.Stalled);
 
         // Migration ran and builtin profiles were seeded.
         Assert.True(File.Exists(_factory.DbPath));
@@ -31,5 +33,12 @@ public class HostSmokeTests : IDisposable
         Assert.Equal(2, await db.Profiles.CountAsync());
     }
 
-    private sealed record HealthDto(string Status, bool EngineRunning, int TargetCount);
+    [Fact]
+    public void Host_shutdown_ceiling_fits_under_the_container_grace()
+    {
+        var options = _factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<HostOptions>>().Value;
+        Assert.Equal(TimeSpan.FromSeconds(25), options.ShutdownTimeout);
+    }
+
+    private sealed record HealthDto(string Status, bool EngineRunning, int TargetCount, bool Stalled);
 }

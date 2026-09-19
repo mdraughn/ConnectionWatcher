@@ -1,3 +1,4 @@
+using ConEngine;
 using ConEngine.Events;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -12,9 +13,12 @@ namespace ConPersistence.Services;
 /// why batches must stay whole.
 /// </summary>
 public class GlitchRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
-    ILogger<GlitchRecorder> log) : ChannelRecorder<GlitchEvent>(log)
+    ILogger<GlitchRecorder> log, TimeSpan? retryDelay = null, int capacity = 1000)
+    : ChannelRecorder<GlitchEvent>(log, capacity, retryDelay: retryDelay)
 {
     protected override string EventNoun => "glitches";
+
+    protected override IObservable<GlitchEvent> SourceOf(WatcherEngine engine) => engine.GlitchSource;
 
     protected override async Task WriteBatchAsync(IReadOnlyList<GlitchEvent> batch, CancellationToken ct)
     {

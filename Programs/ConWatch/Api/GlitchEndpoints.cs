@@ -22,8 +22,8 @@ public static class GlitchEndpoints
                 {
                     g.Id, g.TargetId, g.TargetName,
                     Class = g.Class == 1 ? "Internet" : "Target",
-                    StartUtc = new DateTimeOffset(DateTime.SpecifyKind(g.StartUtc, DateTimeKind.Utc)),
-                    EndUtc = new DateTimeOffset(DateTime.SpecifyKind(g.EndUtc, DateTimeKind.Utc)),
+                    StartUtc = new DateTimeOffset(g.StartUtc),
+                    EndUtc = new DateTimeOffset(g.EndUtc),
                     g.LostCount, g.SampleCount, g.Detail,
                 }).ToList(),
             });

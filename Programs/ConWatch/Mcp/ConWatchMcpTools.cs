@@ -35,17 +35,17 @@ public class ConWatchMcpTools(WatcherHostService host,
     public async Task<string> GetCurrentStatus()
     {
         var engine = host.Engine;
-        var verdict = engine?.Verdict;
+        var current = engine?.Verdict?.Current;
         return JsonSerializer.Serialize(new
         {
             monitoringEnabled = await host.EngineEnabledAsync(),
             version = BuildInfo.Version,
             builtUtc = BuildInfo.BuiltUtc,
-            verdict = verdict is null ? null : new
+            verdict = current is null ? null : new
             {
-                state = verdict.CurrentVerdict.ToString(),
-                detail = verdict.CurrentDetail,
-                blamedOperator = verdict.CurrentOperator,
+                state = current.State.ToString(),
+                detail = current.Detail,
+                blamedOperator = current.Operator,
             },
             targets = engine?.Monitors.Values.OrderBy(m => m.Target.Name).Select(m => new
             {
@@ -95,7 +95,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             Math.Clamp(limit, 1, 500), before: null, subjectName);
         return JsonSerializer.Serialize(rows.Select(t => new
         {
-            TimestampUtc = DateTime.SpecifyKind(t.TimestampUtc, DateTimeKind.Utc),
+            TimestampUtc = t.TimestampUtc,
             t.SubjectName, t.SubjectKind, t.FromState, t.ToState,
             t.Trigger, t.Detail, t.Verdict,
         }), Json);
@@ -118,8 +118,8 @@ public class ConWatchMcpTools(WatcherHostService host,
             Math.Clamp(limit, 1, 500));
         return JsonSerializer.Serialize(rows.Select(g => new
         {
-            StartUtc = DateTime.SpecifyKind(g.StartUtc, DateTimeKind.Utc),
-            EndUtc = DateTime.SpecifyKind(g.EndUtc, DateTimeKind.Utc),
+            StartUtc = g.StartUtc,
+            EndUtc = g.EndUtc,
             g.TargetName,
             @class = g.Class == 1 ? "Internet" : "Target",
             g.LostCount, g.SampleCount, g.Detail,

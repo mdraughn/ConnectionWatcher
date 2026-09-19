@@ -1,5 +1,6 @@
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace ConPersistence;
 
@@ -67,5 +68,15 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
         {
             e.HasKey(s => s.Key);
         });
+
+        // Every DateTime column is UTC by construction (the *Utc suffix is the
+        // rule), but SQLite has no kind and EF loads them Unspecified. Restore
+        // the kind on read so JSON serializers emit the Z and no caller has to
+        // SpecifyKind by hand. Storage format is unchanged: no migration.
+        var utc = new ValueConverter<DateTime, DateTime>(
+            v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            foreach (var property in entity.GetProperties().Where(p => p.ClrType == typeof(DateTime)))
+                property.SetValueConverter(utc);
     }
 }

@@ -58,7 +58,7 @@ Re-checked while writing this plan and **dropped**: the review's H6 "winning deb
 
 **Why the shape below:** `MqttNotifier.cs:110-118` creates a fresh `_queue.Reader.ReadAsync` and a fresh `_wake.WaitAsync` on every loop turn and abandons the loser. Abandoned semaphore waiters stay queued and eat the next `Release()`; abandoned channel readers stay registered and eat the next transition. With every input travelling through `_queue` there is exactly one reader and nothing to orphan.
 
-- [ ] **Step 1: Write the failing integration test (Docker-backed; skips without Docker)**
+- [x] **Step 1: Write the failing integration test (Docker-backed; skips without Docker)**
 
 Add to `Tests/ConWatch.Tests/NotifierIntegrationTests.cs`, after `Mqtt_publishes_availability_discovery_and_states_to_a_real_broker`:
 
@@ -138,7 +138,7 @@ Add to `Tests/ConWatch.Tests/NotifierIntegrationTests.cs`, after `Mqtt_publishes
     }
 ```
 
-- [ ] **Step 2: Write the failing unit test for the inbox rule**
+- [x] **Step 2: Write the failing unit test for the inbox rule**
 
 Create `Tests/ConNotify.Tests/MqttNotifierInboxTests.cs`. This tests the private inbox through a small public seam added in Step 4 (`MqttNotifier.Inbox`), so the rule "one poke, one reconfigure, nothing orphaned" is checked without a broker.
 
@@ -194,7 +194,7 @@ public class MqttNotifierInboxTests
 }
 ```
 
-- [ ] **Step 3: Run to verify they fail**
+- [x] **Step 3: Run to verify they fail**
 
 Run: `dotnet test Tests/ConNotify.Tests --filter "FullyQualifiedName~MqttNotifierInboxTests"`
 Expected: build FAILS with "'MqttNotifier' does not contain a definition for 'Inbox'".
@@ -202,7 +202,7 @@ Expected: build FAILS with "'MqttNotifier' does not contain a definition for 'In
 Run (only if Docker is up): `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~Mqtt_settings_change_after_traffic"`
 Expected: FAIL at the second `Eventually` ("Condition not met within timeout"): the base-topic change is swallowed by an orphaned waiter.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Replace `Libraries/ConNotify/MqttNotifier.cs:19-24` (the `Refresh` record, `_queue`, `_wake`, `_lock` fields) with:
 
@@ -294,7 +294,7 @@ Replace the session loop (`:107-124`) with:
 
 In `PublishTransitionAsync` (`:206`) replace `_queue.Writer.TryWrite(new Refresh());` with `_inbox.Refresh();`. Delete every remaining reference to `_wake` and the old `Refresh` record (the compiler will list them).
 
-- [ ] **Step 5: Run the notify suite and the Docker test**
+- [x] **Step 5: Run the notify suite and the Docker test**
 
 Run: `dotnet test Tests/ConNotify.Tests`
 Expected: all pass, including the two new inbox tests.
@@ -302,7 +302,7 @@ Expected: all pass, including the two new inbox tests.
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~NotifierIntegrationTests"`
 Expected: all pass (the two MQTT tests skip without Docker; with Docker both pass).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Libraries/ConNotify/MqttNotifier.cs Tests/ConNotify.Tests/MqttNotifierInboxTests.cs Tests/ConWatch.Tests/NotifierIntegrationTests.cs
@@ -329,7 +329,7 @@ git commit -m "fix(notify): MQTT reconfigure travels through the inbox channel; 
 - Consumes: `IPingTransceiver.PingAsync(int timeoutMs)`, `IDomainNameResolver.ResolveAsync(string, int)` (signatures unchanged).
 - Produces: a documented contract on both interfaces: an `OperationCanceledException` from the token given at construction propagates; a probe *timeout* is still a failed `PingResult` ("TimedOut").
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace `Cancellation_ends_an_in_flight_ping_before_its_timeout` in `Tests/ConEngine.Tests/PingTransceiverIcmpTests.cs` with:
 
@@ -438,12 +438,12 @@ Add to `Tests/ConEngine.Tests/PingControllerTests.cs` (inside the class):
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConEngine.Tests --filter "FullyQualifiedName~PingTransceiverIcmpTests|FullyQualifiedName~TcpConnectTransceiverTests|FullyQualifiedName~DomainNameResolverDnsTests|FullyQualifiedName~A_probe_cancelled"`
 Expected: `Cancellation_ends_an_in_flight_ping_before_its_timeout_and_throws`, `Engine_cancellation_throws_instead_of_reporting_loss`, `Cancelled_token_throws_instead_of_reporting_a_failed_lookup`, and `A_probe_cancelled_mid_flight_writes_nothing_to_the_channel` FAIL (no exception thrown / one item in the channel). `Unknown_host_is_a_failed_result_with_a_reason` passes already.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Libraries/ConInfrastructure/PingTransceiverIcmp.cs`: replace the three catch blocks at lines 58-69 with:
 
@@ -491,12 +491,12 @@ Expected: `Cancellation_ends_an_in_flight_ping_before_its_timeout_and_throws`, `
 
 Add to the `<summary>` of `IPingTransceiver.PingAsync` (`Core/ConCore/IPingTransceiver.cs:15-21`) and `IDomainNameResolver.ResolveAsync` (`Core/ConCore/IDomainNameResolver.cs:8-14`): "Cancellation of the token given at construction propagates as OperationCanceledException; a timeout is a failed result."
 
-- [ ] **Step 4: Run the engine suite**
+- [x] **Step 4: Run the engine suite**
 
 Run: `dotnet test Tests/ConEngine.Tests`
 Expected: all pass (157 + 4 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Libraries/ConInfrastructure Core/ConEngine/Network/PingController.cs Core/ConCore Tests/ConEngine.Tests
@@ -519,7 +519,7 @@ git commit -m "fix(infra): cancellation propagates from transceivers and the res
 - Consumes: `DomainResolutionResult.Success`, `.Status` (record unchanged, decision 6).
 - Produces: `FakeDomainNameResolverFactory.Failures` (`ConcurrentDictionary<string, string>`: name → status text returned as a *failed result*); `/targets/probe-test` response gains `resolutionError` (string, null on success).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `Tests/ConEngine.Tests/Fakes/FakeDomainNameResolverFactory.cs` add a property next to `Answers`:
 
@@ -585,12 +585,12 @@ Add to `Tests/ConWatch.Tests/ProbeTestEndpointTests.cs` (use the file's existing
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConEngine.Tests --filter "FullyQualifiedName~Lookup_failure_reason"` → FAIL (the detail says "No IPv4 address for 'site.example'").
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~Unresolvable_hostname_reports"` → FAIL (`resolutionError` property missing).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Core/ConEngine/WatcherEngine.cs`, replace lines 280-302 (the try/catch around the resolve) with:
 
@@ -725,12 +725,12 @@ public sealed class DomainNameResolverDns(CancellationToken cancellationToken) :
 }
 ```
 
-- [ ] **Step 4: Run the engine and web suites**
+- [x] **Step 4: Run the engine and web suites**
 
 Run: `dotnet test Tests/ConEngine.Tests` and `dotnet test Tests/ConWatch.Tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Core/ConEngine/WatcherEngine.cs Programs/ConWatch/Api/ProbeTestEndpoint.cs Libraries/ConInfrastructure/DomainNameResolverDns.cs Tests/ConEngine.Tests Tests/ConWatch.Tests/ProbeTestEndpointTests.cs
@@ -751,7 +751,7 @@ git commit -m "fix(dns): the real lookup failure reason reaches the transition a
 **Interfaces:**
 - Produces: `PingController(IPingTransceiverFactory pingTransceiverFactory, ILogger log, TimeProvider timeProvider)`; `PingManager(IPingTransceiverFactory, CancellationToken, ILoggerFactory, TimeProvider timeProvider)`. Task 2.4 reads the stamped `Result.Timestamp`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `Tests/ConEngine.Tests/PingControllerTests.cs`:
 
@@ -776,12 +776,12 @@ Add to `Tests/ConEngine.Tests/PingControllerTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConEngine.Tests --filter "FullyQualifiedName~Results_carry_the_engine_clock"`
 Expected: build FAILS ("no overload for PingController takes 3 arguments").
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `PingController.cs` line 13:
 
@@ -813,12 +813,12 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
 
 Existing tests: every `new PingController(factory, NullLogger.Instance)` in `PingControllerTests.cs` becomes `new PingController(factory, NullLogger.Instance, TimeProvider.System)` (and the `CancelReportingFactory` one from Task 2.1); `PingManagerTests.cs:35` becomes `new PingManager(new HangingFactory(), cts.Token, NullLoggerFactory.Instance, TimeProvider.System)`.
 
-- [ ] **Step 4: Run the engine suite**
+- [x] **Step 4: Run the engine suite**
 
 Run: `dotnet test Tests/ConEngine.Tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Core/ConEngine Tests/ConEngine.Tests
@@ -836,7 +836,7 @@ git commit -m "fix(engine): ping results are stamped from the engine clock, not 
 **Interfaces:**
 - Produces: `PingManager.LastResultUtc` (`DateTimeOffset?`, null until the first routed result), `WatcherEngine.LastResultUtc` (`DateTimeOffset?`, forwards to the manager), `WatcherEngine.StartedUtc` (`DateTimeOffset`, set in `StartAsync`), `WatcherEngine.StallAfter` (`TimeSpan`: the longest configured `NormalInterval` × 3 plus the longest `PingTimeout`, computed in `StartAsync`). Task 2.5 reads all three.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `Tests/ConEngine.Tests/PingPumpResilienceTests.cs`:
 
@@ -920,12 +920,12 @@ public class PingPumpResilienceTests
 }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConEngine.Tests --filter "FullyQualifiedName~PingPumpResilienceTests"`
 Expected: build FAILS ("'WatcherEngine' does not contain a definition for 'LastResultUtc'"). After adding the members but before the loop change, `A_throwing_sample_subscriber_does_not_stop_the_pump` FAILS at the second `Eventually` (the pump died on the first throw).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Core/ConEngine/Network/PingManager.cs`: add after line 27:
 
@@ -1046,12 +1046,12 @@ In `ResolveAndActivateAsync`, wrap the activate/re-point block (lines 304-323) s
             }
 ```
 
-- [ ] **Step 4: Run the engine suite**
+- [x] **Step 4: Run the engine suite**
 
 Run: `dotnet test Tests/ConEngine.Tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Core/ConEngine Tests/ConEngine.Tests/PingPumpResilienceTests.cs
@@ -1075,7 +1075,7 @@ git commit -m "fix(engine): the result pump survives a throwing subscriber and s
 - Consumes: `WatcherEngine.LastResultUtc`, `StartedUtc`, `StallAfter` (Task 2.4).
 - Produces: `WatcherHostService.EngineEnabled` (`bool`, set by `StartEngineAsync`, defaults true); `EngineHealth.Classify(WatcherEngine? engine, bool enabled, DateTimeOffset now)` returning `EngineHealth.Verdict(string Status, bool Stalled, TimeSpan? SilenceFor)`; `/health` body gains `stalled` (bool) and `silenceSeconds` (number|null); status `EngineStalled` (503). `/metrics` gains `conwatch_last_sample_age_seconds` (gauge; absent before the first sample).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `Tests/ConWatch.Tests/EngineHealthTests.cs`:
 
@@ -1169,12 +1169,12 @@ In `Tests/ConWatch.Tests/HostSmokeTests.cs:34` extend the DTO and add an asserti
 
 and after `Assert.Equal(0, health.TargetCount);`: `Assert.False(health.Stalled);`.
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~EngineHealthTests|FullyQualifiedName~HostSmokeTests"`
 Expected: build FAILS ("The name 'EngineHealth' does not exist").
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `Programs/ConWatch/EngineHealth.cs`:
 
@@ -1306,12 +1306,12 @@ and after the `conwatch_engine_enabled` family (line 34) add:
 
 Fix any other caller of `MetricsEndpoint.Render` (grep `Render(` in `Tests/ConWatch.Tests`; pass `DateTimeOffset.UtcNow` there).
 
-- [ ] **Step 4: Run the web suite**
+- [x] **Step 4: Run the web suite**
 
 Run: `dotnet test Tests/ConWatch.Tests`
 Expected: all pass (`MasterEnableTests` still sees "Healthy"/"Disabled"; `ApiSurfaceLockTests` may list `/health` under a new file: update its expected map if it pins routes to files).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Programs/ConWatch Tests/ConWatch.Tests
@@ -1333,7 +1333,7 @@ git commit -m "feat(health): /health detects a stalled engine, lives with /statu
 
 The publish-outside-the-lock half of E3 (a per-coordinator outbox like `TargetMonitor`'s) is deferred to plan B; this task removes the second-read problem only.
 
-- [ ] **Step 1: Write the test for the snapshot record**
+- [x] **Step 1: Write the test for the snapshot record**
 
 Add to `Tests/ConEngine.Tests/VerdictCoordinatorTests.cs`:
 
@@ -1359,12 +1359,12 @@ Add to `Tests/ConEngine.Tests/VerdictCoordinatorTests.cs`:
 
 (`Feed` is the fixture's existing helper at `VerdictCoordinatorTests.cs:57`.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConEngine.Tests --filter "FullyQualifiedName~Current_is_one_snapshot"`
 Expected: build FAILS ("does not contain a definition for 'Current'").
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `VerdictCoordinator.cs`: replace lines 41-46 with:
 
@@ -1525,12 +1525,12 @@ Replace `Classify` (`:143-199`) with a snapshot-driven version:
 
 Readers: `StatusSnapshotBuilder.cs:16-23` reads `var current = v.Current;` once and uses `current.State.ToString()`, `current.Detail`, `current.Operator`; `ConWatchMcpTools.cs:44-49` the same; `MqttNotifier.cs:175-182` reads `var current = engine.Verdict?.Current;` once and uses `current?.State.ToString() ?? "Unknown"`, `current?.Detail`, `current?.Operator`.
 
-- [ ] **Step 4: Run the engine, web and notify suites**
+- [x] **Step 4: Run the engine, web and notify suites**
 
 Run: `dotnet test ConnectionWatcher.sln`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Core/ConEngine/Topology Programs/ConWatch/StatusSnapshotBuilder.cs Programs/ConWatch/Mcp/ConWatchMcpTools.cs Libraries/ConNotify/MqttNotifier.cs Tests/ConEngine.Tests/VerdictCoordinatorTests.cs
@@ -1546,7 +1546,7 @@ git commit -m "refactor(engine): coordinators classify from one snapshot; verdic
 - Modify: `Core/ConEngine/Configuration/WatcherOptionsValidator.cs:93-111`
 - Test: `Tests/ConEngine.Tests/WatcherOptionsValidatorTests.cs` (add two tests)
 
-- [ ] **Step 1: Write the failing validator tests**
+- [x] **Step 1: Write the failing validator tests**
 
 Add to `Tests/ConEngine.Tests/WatcherOptionsValidatorTests.cs`:
 
@@ -1572,12 +1572,12 @@ Add to `Tests/ConEngine.Tests/WatcherOptionsValidatorTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConEngine.Tests --filter "FullyQualifiedName~threshold"`
 Expected: both FAIL (`result.Failed` is false).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `WatcherOptionsValidator.cs`, inside the profile loop after the `[0, 1]` checks (line 108):
 
@@ -1601,12 +1601,12 @@ Expected: both FAIL (`result.Failed` is false).
     }
 ```
 
-- [ ] **Step 4: Run the engine suite**
+- [x] **Step 4: Run the engine suite**
 
 Run: `dotnet test Tests/ConEngine.Tests`
 Expected: all pass (`SuspicionCoordinatorTests` are unchanged: they advance 120 s between sweeps).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Core/ConEngine Tests/ConEngine.Tests/WatcherOptionsValidatorTests.cs
@@ -1627,7 +1627,7 @@ git commit -m "fix(engine): validator rejects misordered thresholds; the discipl
 **Interfaces:**
 - Produces: `ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, int batchSize = 500, TimeSpan? retryDelay = null)`; `TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger<TransitionRecorder> log, TimeSpan? retryDelay = null, int capacity = 1000)`; `GlitchRecorder` gains the same two optional parameters. Production callers (DI) pass nothing.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `Tests/ConPersistence.Tests/RecorderCollectorTests.cs`:
 
@@ -1676,12 +1676,12 @@ Add to `Tests/ConPersistence.Tests/RecorderCollectorTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests --filter "FullyQualifiedName~Background_loop_retries|FullyQualifiedName~A_full_channel_drops"`
 Expected: build FAILS (no `retryDelay`/`capacity` parameters on `TransitionRecorder`). After adding the parameters but before the loop change, `Background_loop_retries_a_failed_batch_without_waiting_for_another_event` FAILS with count 0.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `ChannelRecorder.cs` lines 14-19:
 
@@ -1767,12 +1767,12 @@ public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
 
 Also fix the stale comment at `ChannelRecorder.cs:53` (it now prints the real delay) and note in the class summary that a failed batch is retried on a timer.
 
-- [ ] **Step 4: Run the persistence suite**
+- [x] **Step 4: Run the persistence suite**
 
 Run: `dotnet test Tests/ConPersistence.Tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Libraries/ConPersistence/Services Tests/ConPersistence.Tests/RecorderCollectorTests.cs
@@ -1792,7 +1792,7 @@ git commit -m "fix(persistence): recorders retry a pending batch on the timer, l
 **Interfaces:**
 - Produces: `RollupBucket.Absorb(RollupBucket other)`; `RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider timeProvider, ILogger<RollupCollector> log, int maxConsecutiveFailures = 20)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `Tests/ConPersistence.Tests/FailingNTimesDbFactory.cs`:
 
@@ -1874,12 +1874,12 @@ Add to `RecorderCollectorTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests --filter "FullyQualifiedName~A_late_sample_for_a_minute|FullyQualifiedName~Pending_buckets_are_dropped"`
 Expected: the first FAILS with a `DbUpdateException` (UNIQUE constraint) on the second flush; the second fails to build (`maxConsecutiveFailures`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `RollupAccumulator.cs`, inside `RollupBucket` after `EffectiveMin`:
 
@@ -1994,12 +1994,12 @@ Replace lines 57-100 (`FlushClosedAsync`, `FlushAllAsync`, `WriteAsync`) with:
     }
 ```
 
-- [ ] **Step 4: Run the persistence suite**
+- [x] **Step 4: Run the persistence suite**
 
 Run: `dotnet test Tests/ConPersistence.Tests`
 Expected: all pass, including `Collector_writes_closed_minutes_and_merges_duplicates` and `A_failed_rollup_write_is_retried_next_flush`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Libraries/ConPersistence/Rollups/RollupAccumulator.cs Libraries/ConPersistence/Services/RollupCollector.cs Tests/ConPersistence.Tests
@@ -2020,7 +2020,7 @@ git commit -m "fix(persistence): rollup collector merges duplicate pending bucke
 **Interfaces:**
 - Produces: `historyData.incidents(transitions, rangeStartIso, rangeEndIso)` (three arguments; was two). The page derives the state at the range start from the first in-range transition's `from`, exactly as `ribbonSegments` already does; with no in-range transition the counters stay zero (the API sends no pre-window row; noted as a limitation in the function comment).
 
-- [ ] **Step 1: Write the failing report tests**
+- [x] **Step 1: Write the failing report tests**
 
 Add to `Tests/ConPersistence.Tests/IspReportBuilderTests.cs`:
 
@@ -2051,12 +2051,12 @@ Add to `Tests/ConPersistence.Tests/IspReportBuilderTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests --filter "FullyQualifiedName~Target_outage_open_at|FullyQualifiedName~Target_down_for_the_whole_window"`
 Expected: both FAIL with OutageCount 0.
 
-- [ ] **Step 3: Implement the report side**
+- [x] **Step 3: Implement the report side**
 
 `IspReportBuilder.cs`, replace lines 192-197 (the per-target loop body up to `ComputeIncidents`) with:
 
@@ -2097,12 +2097,12 @@ Change the `ComputeIncidents` signature (`:222`) and seed `open` from the openin
 
 (the `Close` local and the loop are unchanged).
 
-- [ ] **Step 4: Run the persistence suite**
+- [x] **Step 4: Run the persistence suite**
 
 Run: `dotnet test Tests/ConPersistence.Tests`
 Expected: all pass (`Target_rows_honor_history_reset_clipping` still passes: the reset row's `ToState` is "Starting", which seeds nothing).
 
-- [ ] **Step 5: Write the failing page test**
+- [x] **Step 5: Write the failing page test**
 
 In `Programs/ConWatch/ClientApp/src/lib/historyData.test.ts`, add to the `incidents (split semantics)` block:
 
@@ -2126,12 +2126,12 @@ In `Programs/ConWatch/ClientApp/src/lib/historyData.test.ts`, add to the `incide
 
 and change every existing `incidents(list, endIso)` call in that file to `incidents(list, "2026-08-20T00:00:00Z", endIso)`.
 
-- [ ] **Step 6: Run to verify it fails**
+- [x] **Step 6: Run to verify it fails**
 
 Run: `cd Programs/ConWatch/ClientApp && npm test`
 Expected: the two new tests FAIL (TypeScript arity error or `outageCount` 0).
 
-- [ ] **Step 7: Implement the page side**
+- [x] **Step 7: Implement the page side**
 
 `historyData.ts`, replace lines 30-34 (the signature and the `open` initializer) with:
 
@@ -2160,12 +2160,12 @@ export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
 
 `history.tsx:127`: `const stats = incidents(clipped, (resetAt ?? from.toISOString()), to.toISOString());` (after a reset inside the window, the clipped series starts at the reset).
 
-- [ ] **Step 8: Run the client tests and build**
+- [x] **Step 8: Run the client tests and build**
 
 Run: `cd Programs/ConWatch/ClientApp && npm test && npm run build`
 Expected: all pass; build clean (the built bundle under `wwwroot/js` is ignored by git).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add Libraries/ConPersistence/Report/IspReportBuilder.cs Tests/ConPersistence.Tests/IspReportBuilderTests.cs Programs/ConWatch/ClientApp/src/lib/historyData.ts Programs/ConWatch/ClientApp/src/lib/historyData.test.ts Programs/ConWatch/ClientApp/src/history.tsx
@@ -2184,7 +2184,7 @@ git commit -m "fix(report,history): an outage open at the window start counts fr
 
 **Interfaces:** no signature changes. Behavior change (documented): `/export/*?format=json` and `/export/snapshot` timestamps now end in `Z`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `Tests/ConPersistence.Tests/DbContextTests.cs`:
 
@@ -2225,12 +2225,12 @@ Add to `Tests/ConWatch.Tests/ExportApiTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests --filter "FullyQualifiedName~DateTimes_read_back"` → FAIL (`Kind` is `Unspecified`).
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~Json_export_timestamps"` → FAIL (no `Z`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `ConWatchDbContext.cs`: add `using Microsoft.EntityFrameworkCore.Storage.ValueConversion;` and, at the END of `OnModelCreating` (after the `SettingRow` block):
 
@@ -2255,7 +2255,7 @@ Then drop the hand stamps (each becomes a plain read of a now-Utc value):
 - `Pages/Report.cshtml:9`: `new DateTimeOffset(utc):O` in place of `new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)):O`
 - `CsvExport.cs:74`: `utc.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture)`
 
-- [ ] **Step 4: Confirm no migration is needed and run all suites**
+- [x] **Step 4: Confirm no migration is needed and run all suites**
 
 Run: `dotnet tool restore` then `dotnet ef migrations has-pending-model-changes --project Libraries/ConPersistence --startup-project Programs/ConWatch` (the tool is pinned in `dotnet-tools.json`)
 Expected: "No changes have been made to the model since the last migration."
@@ -2263,7 +2263,7 @@ Expected: "No changes have been made to the model since the last migration."
 Run: `dotnet test ConnectionWatcher.sln`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Libraries/ConPersistence Programs/ConWatch Tests
@@ -2285,7 +2285,7 @@ git commit -m "fix(persistence): DateTime columns read back as UTC; JSON export 
 
 The review's second half of P4 (one read snapshot for `LoadWatcherOptionsAsync`) is **not** done here: Microsoft.Data.Sqlite's default transaction is `BEGIN IMMEDIATE`, which would make every config read take the write lock; a deferred read transaction needs the raw `SqliteConnection.BeginTransaction(deferred: true)` threaded through EF. Plan B, with the config-folder move.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Tests/ConPersistence.Tests/SqliteErrorsTests.cs`:
 
@@ -2314,12 +2314,12 @@ public class SqliteErrorsTests
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConPersistence.Tests --filter "FullyQualifiedName~SqliteErrorsTests"`
 Expected: build FAILS ("The name 'SqliteErrors' does not exist").
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `Libraries/ConPersistence/SqliteErrors.cs`:
 
@@ -2361,12 +2361,12 @@ public static class SqliteErrors
 
 (`RetentionPass.RunAsync` keeps returning the converted count: the retention tests assert on it and the log lines use it. Space reclamation is the Data page's VACUUM, owner decision 2026-09-18.)
 
-- [ ] **Step 4: Run the persistence suite**
+- [x] **Step 4: Run the persistence suite**
 
 Run: `dotnet test Tests/ConPersistence.Tests`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Libraries/ConPersistence Tests/ConPersistence.Tests/SqliteErrorsTests.cs
@@ -2404,7 +2404,7 @@ public interface IEngineObserver
 - `WatcherHostService(..., IEnumerable<IEngineObserver> observers)` replaces the four notifier/broadcaster/metrics parameters; the three recorder parameters stay for the archive-mode flush.
 - Snapshot JSON gains `enabled: true`; the disabled snapshot is `{ enabled: false, verdict: null, targets: [], pools: [] }` (the `/status` archive shape).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `Tests/ConWatch.Tests/SignalRTests.cs`:
 
@@ -2446,12 +2446,12 @@ Add to `Tests/ConWatch.Tests/SignalRTests.cs`:
 
 (`SignalRTests` needs `using System.Net.Http.Json;` for `PutAsJsonAsync`.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~Disabling_the_engine_pushes"`
 Expected: FAIL at the second `Eventually`: no snapshot carries `enabled: false`; live snapshots from the dead engine keep arriving.
 
-- [ ] **Step 3: The interface and the observers**
+- [x] **Step 3: The interface and the observers**
 
 Create `Core/ConEngine/IEngineObserver.cs` with the interface from the Interfaces block above (namespace `ConEngine`).
 
@@ -2534,7 +2534,7 @@ and in `SendSnapshotAsync` the existing `if (snapshot is null) return;` already 
 
 `StatusSnapshotBuilder.cs:44`: `return new { Enabled = true, Verdict = verdict, Targets = targets, Pools = pools };`
 
-- [ ] **Step 4: The host service and registrations**
+- [x] **Step 4: The host service and registrations**
 
 `WatcherHostService.cs` constructor: delete the parameters `StatusBroadcaster broadcaster`, `Metrics.MetricsCounters metricsCounters`, `ConNotify.MqttNotifier mqttNotifier`, `ConNotify.WebhookNotifier webhookNotifier` and add `IEnumerable<IEngineObserver> observers` (add `using ConEngine;` if missing). Keep `recorder`, `glitchRecorder`, `collector` (archive flush).
 
@@ -2587,7 +2587,7 @@ In `StopAsync` (`:97-101`) and `RebuildAsync` (`:299-308`), call `DetachObserver
 
 Update the summary comment at `ConWatchServices.cs:147-152`: the engine stops before the consumers because its token is `ApplicationStopping` (which fires before any `StopAsync`); registration order is the second guarantee.
 
-- [ ] **Step 5: The client flips to archive mode on the disabled snapshot**
+- [x] **Step 5: The client flips to archive mode on the disabled snapshot**
 
 `src/lib/types.ts:30-34`: add `enabled?: boolean;` to `Snapshot`.
 
@@ -2595,12 +2595,12 @@ Update the summary comment at `ConWatchServices.cs:147-152`: the engine stops be
 
 `src/dashboard.tsx:86`: `if (initial.engineDisabled || state.disabled) {` in place of `if (initial.engineDisabled) {`.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `dotnet test ConnectionWatcher.sln` and `cd Programs/ConWatch/ClientApp && npm test && npm run build`
 Expected: all pass. `RecorderCollectorTests` still compile against `Attach(IObservable<T>)`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add Core/ConEngine/IEngineObserver.cs Libraries Programs Tests/ConWatch.Tests/SignalRTests.cs
@@ -2621,7 +2621,7 @@ git commit -m "refactor(host): one IEngineObserver with Detach; a disabled node 
 **Interfaces:**
 - Produces: `WatcherHostService.RebuildAsync()` returns `Task<bool>` (true when the engine state matches the settings afterwards); `WatcherHostService.RebuildCount` (`int`, test-visible, incremented per rebuild that ran).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `Tests/ConWatch.Tests/MasterEnableTests.cs`:
 
@@ -2646,12 +2646,12 @@ Add to `Tests/ConWatch.Tests/MasterEnableTests.cs`:
 
 (`MasterEnableTests` needs `using Microsoft.Extensions.DependencyInjection;`.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~rebuilds_exactly_once"`
 Expected: build FAILS (`RebuildCount` missing); after adding the counter alone it FAILS with `before + 2`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `WatcherHostService.cs`: add a field and property near `_stopped`:
 
@@ -2731,12 +2731,12 @@ In `StopAsync` (`:90`): `lock (_debounceLock) { _debounceCts?.Cancel(); _debounc
 
 Review correction: in `docs/superpowers/reviews/2026-09-18-codebase-review.md`, section H6, replace the "Winning debounce CTS never disposed" bullet's first sentence with: "**Debounce CTS at stop.** Re-checked 2026-09-18 while planning: `OnConfigChanged:326-327` disposes the previous source on every change, winner or not, so at most one is outstanding; only `StopAsync:90` leaves one behind. Fixed there in the follow-up plan's Task 4.2."
 
-- [ ] **Step 4: Run the web suite**
+- [x] **Step 4: Run the web suite**
 
 Run: `dotnet test Tests/ConWatch.Tests`
 Expected: all pass (`CloneTests` still get 200/OK on the happy paths).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Programs/ConWatch Tests/ConWatch.Tests docs/superpowers/reviews/2026-09-18-codebase-review.md
@@ -2755,7 +2755,7 @@ git commit -m "fix(host): a direct rebuild supersedes the debounced one and repo
 - Modify: `README.md` (Docker paragraph, ~line 322)
 - Test: `Tests/ConWatch.Tests/HostSmokeTests.cs` (add one test)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `Tests/ConWatch.Tests/HostSmokeTests.cs`:
 
@@ -2768,12 +2768,12 @@ Add to `Tests/ConWatch.Tests/HostSmokeTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConWatch.Tests --filter "FullyQualifiedName~Host_shutdown_ceiling"`
 Expected: FAIL (default is 30 s).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Program.cs`, after `builder.Services.AddWindowsService(...)` (line 16):
 
@@ -2818,12 +2818,12 @@ builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSe
 
 `README.md` Docker paragraph (line 322): append "The compose file sets `stop_grace_period: 30s` so the last minute of rollups is written on stop; if you run the image with `docker run`, add `--stop-timeout 30`."
 
-- [ ] **Step 4: Run the web and engine suites**
+- [x] **Step 4: Run the web and engine suites**
 
 Run: `dotnet test Tests/ConWatch.Tests` and `dotnet test Tests/ConEngine.Tests`
 Expected: all pass (`PingManagerTests` passes its own grace explicitly).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add deploy/docker/compose.yaml Programs/ConWatch/Program.cs Core/ConEngine/WatcherEngine.cs Libraries/ConNotify/MqttNotifier.cs README.md Tests/ConWatch.Tests/HostSmokeTests.cs
@@ -2834,7 +2834,7 @@ git commit -m "fix(host): shutdown budget - 30 s container grace, 25 s host ceil
 
 ## Finishing
 
-- [ ] Run the whole suite once more: `dotnet test ConnectionWatcher.sln` and `cd Programs/ConWatch/ClientApp && npm test`. Record the counts in the review's README row for 2026-09-18 ("Follow-up plan" column) and tick the review's section-5 steps this plan covered (1–5, 7–9, 11 in full; 6 and 10 in part).
+- [x] Run the whole suite once more: `dotnet test ConnectionWatcher.sln` and `cd Programs/ConWatch/ClientApp && npm test`. Record the counts in the review's README row for 2026-09-18 ("Follow-up plan" column) and tick the review's section-5 steps this plan covered (1–5, 7–9, 11 in full; 6 and 10 in part).
 - [ ] Merge to master with `git merge --no-ff review-2026-09-18` when Mark says so. Never push.
 
 ## Self-review notes

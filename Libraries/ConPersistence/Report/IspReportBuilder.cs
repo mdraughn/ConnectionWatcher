@@ -192,9 +192,14 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         var rows = new List<TargetReportRow>();
         foreach (var target in targets)
         {
-            var effective = (transitionsBySubject.GetValueOrDefault(target.Id) ?? [])
-                .Where(t => t.TimestampUtc > effectiveFrom[target.Id]).ToList();
-            var stats = ComputeIncidents(effective, toUtc);
+            var all = transitionsBySubject.GetValueOrDefault(target.Id) ?? [];
+            var start = effectiveFrom[target.Id];
+            // The state the target was in when the (clipped) window opened, so
+            // an outage that began before it is counted from the window start —
+            // the same rule BuildEpisodesAsync applies to the link verdict.
+            var openingState = all.LastOrDefault(t => t.TimestampUtc <= start)?.ToState;
+            var effective = all.Where(t => t.TimestampUtc > start).ToList();
+            var stats = ComputeIncidents(effective, start, toUtc, openingState);
             double? uptime = totals.TryGetValue(target.Id, out var t) && t.Pings > 0
                 ? 100.0 * t.Successes / t.Pings : null;
             rows.Add(new TargetReportRow(target.Name, target.Address,
@@ -218,13 +223,23 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
 
     private record IncidentTotals(int OutageCount, TimeSpan LongestOutage, TimeSpan UnreachableTime);
 
-    /// <summary>C# twin of the History page's split incident semantics.</summary>
-    private static IncidentTotals ComputeIncidents(IReadOnlyList<TransitionRow> orderedRows, DateTime rangeEndUtc)
+    /// <summary>C# twin of the History page's split incident semantics. An
+    /// outage or unreachable window already open at rangeStart counts from
+    /// rangeStart (owner decision 2026-09-18: one rule everywhere).</summary>
+    private static IncidentTotals ComputeIncidents(IReadOnlyList<TransitionRow> orderedRows,
+        DateTime rangeStartUtc, DateTime rangeEndUtc, string? openingState)
     {
         int outageCount = 0;
         var longestOutage = TimeSpan.Zero;
         var unreachable = TimeSpan.Zero;
-        (string Kind, DateTime Start)? open = null;
+        (string Kind, DateTime Start)? open = openingState switch
+        {
+            "Down" => ("outage", rangeStartUtc),
+            "Unreachable" => ("unreach", rangeStartUtc),
+            _ => null,
+        };
+        if (open is { Kind: "outage" })
+            outageCount++;
 
         void Close(DateTime at)
         {

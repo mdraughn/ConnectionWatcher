@@ -16,7 +16,6 @@ namespace ConEngine.Topology;
 /// </summary>
 public class SuspicionCoordinator : IDisposable
 {
-    private static readonly TimeSpan SweepCooldown = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan CoalesceGap = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan CorrelationSlack = TimeSpan.FromSeconds(10);
     private const int CloseAfterSuccesses = 5;
@@ -49,7 +48,6 @@ public class SuspicionCoordinator : IDisposable
     private readonly Dictionary<Guid, DateTimeOffset> _lastGlitchEnd = new();
     private readonly List<RecentGlitch> _recentAnchorGlitches = new();
     private readonly List<RecentGlitch> _recentTrunkGlitches = new();
-    private DateTimeOffset? _lastSweep;
 
     private readonly Subject<GlitchEvent> _glitchSubject = new();
     public IObservable<GlitchEvent> GlitchSource => _glitchSubject;
@@ -153,12 +151,11 @@ public class SuspicionCoordinator : IDisposable
         _priorStates[targetId] = stateNow;
     }
 
+    /// <summary>Bursts every anchor and trunk target. Rate limiting is the
+    /// discipline's job: PingDiscipline.SuspicionGuard refuses a new burst
+    /// within 60 s of the last one on that target (owner decision 2026-09-18).</summary>
     private void Sweep()
     {
-        var now = _time.GetUtcNow();
-        if (_lastSweep is { } last && now - last < SweepCooldown)
-            return;
-        _lastSweep = now;
         foreach (var monitor in _sweepSet)
             monitor.Discipline.TriggerBurst();
     }

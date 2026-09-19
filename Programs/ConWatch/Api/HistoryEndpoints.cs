@@ -21,7 +21,7 @@ public static class HistoryEndpoints
             var items = rows.Select(r => new
             {
                 r.Id,
-                Timestamp = new DateTimeOffset(DateTime.SpecifyKind(r.TimestampUtc, DateTimeKind.Utc)),
+                Timestamp = new DateTimeOffset(r.TimestampUtc),
                 r.SubjectId, r.SubjectName, r.SubjectKind,
                 From = r.FromState, To = r.ToState, r.Trigger,
                 r.SuccessRate, r.SampleSize, r.BurstLossRate,
@@ -59,7 +59,7 @@ public static class HistoryEndpoints
                 Resolution = resolved,
                 Points = rows.Select(r => new
                 {
-                    PeriodStart = new DateTimeOffset(DateTime.SpecifyKind(r.PeriodStartUtc, DateTimeKind.Utc)),
+                    PeriodStart = new DateTimeOffset(r.PeriodStartUtc),
                     r.PingCount, r.SuccessCount, r.RttAvg, r.RttMin, r.RttMax,
                 }).ToList(),
             });

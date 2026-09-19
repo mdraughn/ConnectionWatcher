@@ -35,6 +35,22 @@ public class MetricsEndpointTests : IDisposable
         Assert.Contains("# TYPE conwatch_build_info gauge", body);
         Assert.Contains("conwatch_build_info{version=\"", body);
         Assert.Contains("# TYPE conwatch_engine_enabled gauge", body);
+        Assert.DoesNotContain("conwatch_last_sample_age_seconds ", body);
+    }
+
+    [Fact]
+    public async Task Last_sample_age_is_exposed_once_results_flow()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        string body = "";
+        await ConfigApiTests.Eventually(async () =>
+        {
+            body = await ScrapeAsync();
+            return body.Contains("conwatch_last_sample_age_seconds ");
+        });
+        Assert.Contains("# TYPE conwatch_last_sample_age_seconds gauge", body);
+        var age = Value(body, "conwatch_last_sample_age_seconds");
+        Assert.InRange(age, 0, 60);
     }
 
     [Fact]

@@ -87,4 +87,14 @@ public class ExportApiTests : IDisposable
         var response = await _client.GetAsync("/api/v1/export/transitions?format=xml");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Json_export_timestamps_carry_the_utc_marker()
+    {
+        await SeedRows(1);
+        var body = await (await _client.GetAsync("/api/v1/export/transitions?format=json")).Content.ReadAsStringAsync();
+        Assert.Matches("\"timestampUtc\":\"[^\"]+Z\"", body);
+        var snapshot = await (await _client.GetAsync("/api/v1/export/snapshot")).Content.ReadAsStringAsync();
+        Assert.Matches("\"periodStartUtc\":\"[^\"]+Z\"", snapshot);
+    }
 }

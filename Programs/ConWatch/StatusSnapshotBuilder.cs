@@ -13,12 +13,13 @@ public static class StatusSnapshotBuilder
         if (engine is null)
             return null;
 
-        var verdict = engine.Verdict is { } v
+        var current = engine.Verdict?.Current;
+        var verdict = current is { } c
             ? new
             {
-                State = v.CurrentVerdict.ToString(),
-                Detail = v.CurrentDetail,
-                Operator = v.CurrentOperator,
+                State = c.State.ToString(),
+                Detail = c.Detail,
+                Operator = c.Operator,
             }
             : null;
         var targets = engine.Monitors.Values.Select(m => new
@@ -41,6 +42,6 @@ public static class StatusSnapshotBuilder
             State = p.CurrentState.ToString(),
         }).OrderBy(p => p.Name).ToList();
 
-        return new { Verdict = verdict, Targets = targets, Pools = pools };
+        return new { Enabled = true, Verdict = verdict, Targets = targets, Pools = pools };
     }
 }

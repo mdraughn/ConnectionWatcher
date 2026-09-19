@@ -19,6 +19,7 @@ public static class ProbeTestEndpoint
             CancellationToken ct) =>
         {
             List<IPAddress> answers;
+            string? resolutionError = null;
             if (IPAddress.TryParse(request.Address, out var literal))
             {
                 answers = [literal];
@@ -28,12 +29,17 @@ public static class ProbeTestEndpoint
                 using var resolver = resolvers.Create(ct);
                 var resolution = await resolver.ResolveAsync(request.Address, 5000);
                 answers = resolution.IPv4Addresses.ToList();
+                if (!resolution.Success)
+                    resolutionError = resolution.Status;
+                else if (answers.Count == 0)
+                    resolutionError = "The name resolved, but to no IPv4 address.";
             }
             var resolvedIps = answers.Select(a => a.ToString()).ToList();
             var ip = answers.FirstOrDefault();
             if (ip is null)
                 return Results.Ok(new { request.Address, ResolvedIp = (string?)null,
-                    ResolvedIps = resolvedIps, Results = Array.Empty<object>() });
+                    ResolvedIps = resolvedIps, ResolutionError = resolutionError,
+                    Results = Array.Empty<object>() });
 
             var ports = (ProbePolicy.IsPrivate(request.Address)
                     ? new[] { 80, 443, 8080, 8443 } : ProbePolicy.PublicPorts)
@@ -52,6 +58,6 @@ public static class ProbeTestEndpoint
                     RttMs = result.RoundtripTime, Message = result.Message };
             }));
             return Results.Ok(new { request.Address, ResolvedIp = ip.ToString(),
-                ResolvedIps = resolvedIps, Results = results });
+                ResolvedIps = resolvedIps, ResolutionError = (string?)null, Results = results });
         });
 }

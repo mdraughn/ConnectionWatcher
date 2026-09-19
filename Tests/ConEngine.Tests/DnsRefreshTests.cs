@@ -119,4 +119,34 @@ public class DnsRefreshTests
             await engine.StopAsync();
         }
     }
+
+    [Fact]
+    public async Task Lookup_failure_reason_reaches_the_transition()
+    {
+        var pings = new FakePingTransceiverFactory();
+        var dns = new FakeDomainNameResolverFactory();
+        dns.Failures["site.example"] = "Host not found";
+        var engine = new WatcherEngine(TimeProvider.System, pings, dns, NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(HostnameTarget()),
+            dnsRefreshInterval: TimeSpan.FromMilliseconds(100));
+        var transitions = new List<ConEngine.Events.TargetTransition>();
+        engine.TransitionSource.Subscribe(t => { lock (transitions) transitions.Add(t); });
+        using var cts = new CancellationTokenSource();
+        await engine.StartAsync(cts.Token);
+        try
+        {
+            await Eventually(() =>
+            {
+                lock (transitions)
+                    return transitions.Any(t =>
+                        t.Reason.Trigger == ConEngine.Events.TransitionTrigger.ResolutionFailed &&
+                        t.Reason.Detail!.Contains("Host not found"));
+            });
+        }
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
+    }
 }
