@@ -30,7 +30,7 @@ public static class ConWatchApp
 
 `RunAsync` contains everything `Program.cs` does now (the `WebApplicationOptions` with the SCM content-root pin, `AddWindowsService`, the 25 s `ShutdownTimeout`, the service registrations, `DatabaseStartup.PrepareAsync`, the middleware and endpoint map). `AddSystemd()` is added beside `AddWindowsService()`; both are inert outside their host. `WebApplicationFactory<Program>` in `ConWatch.Tests` keeps working because `Program` still exists as the entry point.
 
-A new configuration source is added in `RunAsync`, in front of the built-in defaults: the machine config file from section 3, mapped as `Urls` ← `listenUrl` and `Persistence:DbPath` ← `<dataDir>\conwatch.db`. Command-line arguments and `CONWATCH_`-prefixed environment variables still win because they are added after it. The container never has the file, so nothing changes there.
+The host does not read the config file itself. `conwatch serve` resolves the listen URL and data folder (flag > `CONWATCH_*` env > machine file > default) and passes them to `RunAsync` as ordinary host arguments (`--urls`, `--Persistence:DbPath`), so the service binary path stays `conwatch.exe serve` and the container, which never runs through the CLI, is unaffected.
 
 ### 2.2 `Libraries/ConConfig` (new, tiny)
 
