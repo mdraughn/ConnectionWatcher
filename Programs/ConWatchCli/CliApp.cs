@@ -54,9 +54,14 @@ public static class CliApp
             s.Err.WriteLine(ex.Message);
             return ExitCodes.ServiceControlFailed;
         }
+        catch (Exception ex)
+        {
+            s.Err.WriteLine(ex.Message);
+            return ExitCodes.ServiceControlFailed;
+        }
     }
 
     /// <summary>Runs <paramref name="body"/> inline when elevated, else relaunches with the original arguments.</summary>
     public static Task<int> Elevated(CliServices s, string[] rawArgs, Func<Task<int>> body, CancellationToken ct) =>
-        s.Elevation.IsElevated ? Guarded(s, body) : s.Elevation.RelaunchElevatedAsync(rawArgs, ct);
+        s.Elevation.IsElevated ? Guarded(s, body) : Guarded(s, () => s.Elevation.RelaunchElevatedAsync(rawArgs, ct));
 }

@@ -37,7 +37,15 @@ try
 
     using var cts = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-    return await CliApp.RunAsync(args2, services, cts.Token);
+    try
+    {
+        return await CliApp.RunAsync(args2, services, cts.Token);
+    }
+    catch (Exception ex)
+    {
+        error.WriteLine(ex.ToString());
+        return ConWatchCli.ExitCodes.ServiceControlFailed;
+    }
 }
 finally
 {
