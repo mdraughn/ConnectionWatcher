@@ -98,6 +98,14 @@ begin
       Result := False;
     end;
   end;
+  if CurPageID = UrlPage.ID then
+  begin
+    if (Pos('http://', Lowercase(UrlPage.Values[0])) <> 1) and (Pos('https://', Lowercase(UrlPage.Values[0])) <> 1) then
+    begin
+      MsgBox('Enter an http:// or https:// address.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
 end;
 
 function DashboardUrl(Param: string): string;
@@ -169,7 +177,13 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
 begin
+  if CurUninstallStep = usUninstall then
+  begin
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM conwatch-tray.exe /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
   if CurUninstallStep = usPostUninstall then
   begin
     if MsgBox('Also delete the measurement data and config in' + #13#10 +
