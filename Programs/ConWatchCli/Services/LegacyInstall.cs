@@ -28,7 +28,7 @@ public static partial class LegacyInstall
                     break;
                 }
             }
-            catch (JsonException) { /* unreadable → nothing to migrate */ }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { /* unreadable → nothing to migrate */ }
         }
 
         string? listen = null;

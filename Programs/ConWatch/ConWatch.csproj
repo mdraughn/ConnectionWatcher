@@ -28,8 +28,8 @@
          exe) - whichever is written last silently wins, and the loader then fails to find
          ConWatch.ConWatchApp inside what is actually the conwatch.exe bytes. This is a build/
          runtime necessity, not a namespace change: the C# namespace stays "ConWatch"
-         everywhere. Deployment paths that hardcode the old filename (Dockerfile,
-         deploy/windows/install-service.ps1) were updated to match. -->
+         everywhere. Deployment paths that hardcode the old filename (Dockerfile) were
+         updated to match. -->
     <AssemblyName>ConWatchHost</AssemblyName>
   </PropertyGroup>
 

@@ -9,7 +9,7 @@ public static class TrayCommands
     public static Command Build(CliServices s)
     {
         var tray = new Command("tray", "Start the tray companion now, or register/unregister it to start when you sign in.");
-        tray.SetAction((_, ct) => CliApp.Guarded(s, () =>
+        tray.SetAction((_, _) => CliApp.Guarded(s, () =>
         {
             if (!s.TrayLauncher.Launch(s.TrayExePath))
             {

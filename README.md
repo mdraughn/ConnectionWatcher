@@ -311,7 +311,9 @@ running the server too: point it at the NAS with `conwatch tray install --url ht
 with `conwatch.exe` and `conwatch-tray.exe`, re-registers the service, moves
 your tray URL from `contray.json` into the new config file, and removes the
 old `Watcher\` and `Tray\` folders. The `Install-*.ps1` scripts and
-`deploy/windows/*.ps1` are gone.
+`deploy/windows/*.ps1` are gone. The tray reads the machine config when it
+starts, so after `conwatch config set` restart the tray to pick up a new
+installed default.
 
 **Reverse proxy / HTTPS** — ConWatch is proxy-friendly by construction: it
 emits only relative URLs and never reads scheme, host, or client IP, so an

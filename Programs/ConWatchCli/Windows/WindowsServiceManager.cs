@@ -10,7 +10,7 @@ namespace ConWatchCli.Windows;
 /// <summary>
 /// sc.exe for registration and recovery, ServiceController for state,
 /// netsh for the firewall rule, a .url file for the Start Menu shortcut.
-/// Mirrors what deploy/windows/install-service.ps1 used to do.
+/// Mirrors what the 0.9 install-service.ps1 script used to do.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowsServiceManager(TextWriter log) : IServiceManager
