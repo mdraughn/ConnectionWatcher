@@ -17,7 +17,8 @@ public static class CliApp
         root.Subcommands.Add(VersionCommand.Build(s));
         root.Subcommands.Add(ServeCommand.Build(s));
         root.Subcommands.Add(ServiceCommands.Build(s, rawArgs));
-        // Tasks 7, 8 add: ConfigCommands.Build(s, rawArgs), TrayCommands.Build(s)
+        root.Subcommands.Add(ConfigCommands.Build(s, rawArgs));
+        // Task 8 adds: TrayCommands.Build(s)
         return root;
     }
 
