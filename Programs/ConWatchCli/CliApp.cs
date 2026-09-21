@@ -16,7 +16,8 @@ public static class CliApp
             $"Machine config: {s.Paths.MachineFile}\nPer-user tray config: {s.Paths.UserFile}");
         root.Subcommands.Add(VersionCommand.Build(s));
         root.Subcommands.Add(ServeCommand.Build(s));
-        // Tasks 5, 7, 8 add: ServiceCommands.Build(s, rawArgs), ConfigCommands.Build(s, rawArgs), TrayCommands.Build(s)
+        root.Subcommands.Add(ServiceCommands.Build(s, rawArgs));
+        // Tasks 7, 8 add: ConfigCommands.Build(s, rawArgs), TrayCommands.Build(s)
         return root;
     }
 
