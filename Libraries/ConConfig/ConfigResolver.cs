@@ -72,7 +72,7 @@ public static class ConfigResolver
             error = null;
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             error = $"'{dir}' cannot be created: {ex.Message}";
             return false;

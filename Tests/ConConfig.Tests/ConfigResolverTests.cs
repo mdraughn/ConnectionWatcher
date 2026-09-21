@@ -95,5 +95,19 @@ public sealed class ConfigResolverTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void Validate_data_dir_rejects_rooted_path_with_invalid_characters()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root = Directory.CreateTempSubdirectory("conconfig").FullName;
+        try
+        {
+            var badPath = Path.Combine(root, "bad<dir");
+            Assert.False(ConfigResolver.ValidateDataDir(badPath, out var error));
+            Assert.NotNull(error);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private static (string, ConfigSource) Pair(Resolved<string> r) => (r.Value, r.Source);
 }
