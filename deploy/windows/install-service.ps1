@@ -33,9 +33,9 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     throw "Run this script from an elevated (Administrator) PowerShell."
 }
 
-$exe = Join-Path $AppDir "ConWatch.exe"
+$exe = Join-Path $AppDir "ConWatchHost.exe"
 if (-not (Test-Path $exe)) {
-    throw "ConWatch.exe not found in '$AppDir'. Point -AppDir at a 'dotnet publish' output."
+    throw "ConWatchHost.exe not found in '$AppDir'. Point -AppDir at a 'dotnet publish' output."
 }
 
 # --- Pick the port: honor -Port, else probe 8080 upward. Pinned forever. ---

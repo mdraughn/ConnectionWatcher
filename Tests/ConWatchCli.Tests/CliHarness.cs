@@ -1,0 +1,49 @@
+using ConConfig;
+using ConWatchCli;
+
+namespace ConWatchCli.Tests;
+
+/// <summary>Runs the real grammar over fakes and a temp config root.</summary>
+public sealed class CliHarness : IDisposable
+{
+    public string Root { get; } = Directory.CreateTempSubdirectory("conwatchcli").FullName;
+    public ConfigPaths Paths { get; }
+    public FakeServiceManager Services { get; } = new();
+    public FakeElevation Elevation { get; }
+    public FakeHealthProbe Health { get; } = new();
+    public FakePortProbe Ports { get; } = new();
+    public FakeTrayLauncher TrayLauncher { get; set; } = new();
+    public FakeTrayAutostart TrayAutostart { get; } = new();
+    public Dictionary<string, string?> Env { get; } = new();
+    public string[]? ServeArgs { get; private set; }
+    public string AppDir => Path.Combine(Root, "app");
+
+    public CliHarness(bool elevated = true)
+    {
+        Paths = ConfigPaths.UnderTemp(Root);
+        Elevation = new FakeElevation(elevated);
+        Directory.CreateDirectory(AppDir);
+    }
+
+    public async Task<(int Code, string Out, string Err)> RunAsync(params string[] args)
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var services = new CliServices(
+            Paths, Services, Elevation, Health, Ports, TrayLauncher, TrayAutostart,
+            Serve: (a, _) => { ServeArgs = a; return Task.FromResult(0); },
+            Env: name => Env.GetValueOrDefault(name),
+            AppDir: AppDir,
+            CliExePath: Path.Combine(AppDir, "conwatch.exe"),
+            Out: output, Err: error, Version: "9.9.9-test+abc");
+        var code = await CliApp.RunAsync(args, services, CancellationToken.None);
+        return (code, output.ToString(), error.ToString());
+    }
+
+    public void WriteMachine(ConWatchConfig config) => ConfigFile.WriteAtomic(Paths.MachineFile, config);
+    public void WriteUser(ConWatchConfig config) => ConfigFile.WriteAtomic(Paths.UserFile, config);
+    public ConWatchConfig? Machine => ConfigFile.TryRead(Paths.MachineFile, out _);
+    public ConWatchConfig? User => ConfigFile.TryRead(Paths.UserFile, out _);
+
+    public void Dispose() => Directory.Delete(Root, recursive: true);
+}

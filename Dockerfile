@@ -54,4 +54,4 @@ EXPOSE 8080
 # unready for half a minute. 10s keeps that gate short at negligible cost.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://localhost:8080/api/v1/health || exit 1
-ENTRYPOINT ["dotnet", "ConWatch.dll"]
+ENTRYPOINT ["dotnet", "ConWatchHost.dll"]

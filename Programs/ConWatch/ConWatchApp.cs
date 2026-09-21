@@ -25,6 +25,15 @@ public static class ConWatchApp
         {
             Args = args,
             ContentRootPath = isWindowsService || pinContentRoot ? AppContext.BaseDirectory : null,
+            // ASP.NET Core's default Application Parts discovery (which finds this
+            // assembly's Razor Pages) keys off WebApplicationOptions.ApplicationName,
+            // which otherwise defaults to Assembly.GetEntryAssembly() - correct when this
+            // process IS conwatch.exe, but wrong for any other caller (notably the host
+            // smoke test, and potentially a future non-Windows entry point), where the
+            // real entry assembly (e.g. a test host) has no Razor Pages of its own and "/"
+            // 404s. Pinning it to this assembly's own name makes discovery independent of
+            // who calls RunAsync.
+            ApplicationName = typeof(ConWatchApp).Assembly.GetName().Name,
         });
         builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionWatcher");
         builder.Services.AddSystemd();

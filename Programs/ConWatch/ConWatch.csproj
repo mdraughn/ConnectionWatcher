@@ -20,6 +20,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Version, Company and Product come from Directory.Build.props. -->
+    <!-- AssemblyName is explicitly "ConWatchHost", not the default "ConWatch": the new
+         ConWatchCli project (Programs/ConWatchCli) must be named exactly "conwatch", and on a
+         case-insensitive filesystem "conwatch.dll"/"conwatch.exe" and "ConWatch.dll"/
+         "ConWatch.exe" address the SAME path once both land in ConWatchCli's own output
+         directory (a P2P dependency's build output is always copied beside the referencing
+         exe) - whichever is written last silently wins, and the loader then fails to find
+         ConWatch.ConWatchApp inside what is actually the conwatch.exe bytes. This is a build/
+         runtime necessity, not a namespace change: the C# namespace stays "ConWatch"
+         everywhere. Deployment paths that hardcode the old filename (Dockerfile,
+         deploy/windows/install-service.ps1) were updated to match. -->
+    <AssemblyName>ConWatchHost</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
