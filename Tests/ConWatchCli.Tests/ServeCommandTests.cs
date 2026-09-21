@@ -10,6 +10,7 @@ public sealed class ServeCommandTests
         using var h = new CliHarness();
         var (code, _, _) = await h.RunAsync("serve");
         Assert.Equal(0, code);
+        Assert.NotNull(h.ServeArgs);
         Assert.Equal(["--urls", ConfigResolver.DefaultListenUrl, "--Persistence:DbPath", Path.Combine(h.Paths.DefaultDataDir, "conwatch.db")], h.ServeArgs);
     }
 

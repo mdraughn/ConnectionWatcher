@@ -93,6 +93,7 @@ public sealed class ConfigCommandTests
         using var h = new CliHarness(elevated: false);
         h.Elevation.RelaunchCode = 7;
         Assert.Equal(7, (await h.RunAsync("config", "set", "server-url", "http://nas:8080")).Code);
+        Assert.NotNull(h.Elevation.RelaunchArgs);
         Assert.Equal(["config", "set", "server-url", "http://nas:8080"], h.Elevation.RelaunchArgs);
         Assert.Null(h.Machine);
 
@@ -100,6 +101,41 @@ public sealed class ConfigCommandTests
         Assert.Equal("http://me:8080", h.User!.ServerUrl);
 
         Assert.Equal(0, (await h.RunAsync("config", "show")).Code);
+    }
+
+    [Fact]
+    public async Task Set_fails_with_config_invalid_when_the_machine_file_cannot_be_opened()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var h = new CliHarness();
+        h.WriteMachine(new ConWatchConfig(ServerUrl: "http://keep:1"));
+        FileStream? locker = null;
+        try
+        {
+            locker = new FileStream(h.Paths.MachineFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            var (code, _, error) = await h.RunAsync("config", "set", "server-url", "http://nas:8080");
+            Assert.Equal(ExitCodes.ConfigInvalid, code);
+            Assert.Contains(h.Paths.MachineFile, error);
+            Assert.False(File.Exists(h.Paths.MachineFile + ".corrupt"));
+        }
+        finally
+        {
+            locker?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Set_preserves_unknown_properties_in_the_machine_file()
+    {
+        using var h = new CliHarness();
+        Directory.CreateDirectory(Path.GetDirectoryName(h.Paths.MachineFile)!);
+        File.WriteAllText(h.Paths.MachineFile, """{ "serverUrl": "http://keep:1", "future": { "x": 1 } }""");
+        var (code, _, _) = await h.RunAsync("config", "set", "listen-url", "http://0.0.0.0:7070");
+        Assert.Equal(0, code);
+        var text = File.ReadAllText(h.Paths.MachineFile);
+        Assert.Contains("future", text);
+        Assert.Equal("http://keep:1", h.Machine!.ServerUrl);
+        Assert.Equal("http://0.0.0.0:7070", h.Machine.ListenUrl);
     }
 
     [Fact]
