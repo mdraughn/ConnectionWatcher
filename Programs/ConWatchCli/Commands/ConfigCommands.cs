@@ -69,7 +69,9 @@ public static class ConfigCommands
     private static int Apply(CliServices s, string key, string value, bool perUser)
     {
         var path = perUser ? s.Paths.UserFile : s.Paths.MachineFile;
-        var current = ConfigFile.TryRead(path, out var warn) ?? new ConWatchConfig();
+        var current = ConfigFile.TryRead(path, out var warn, out var unreadable) ?? new ConWatchConfig();
+        if (warn is not null && unreadable)
+            throw new ConfigException($"{path} could not be read: {warn}");
         if (warn is not null)
         {
             File.Move(path, path + ".corrupt", overwrite: true);
@@ -77,21 +79,23 @@ public static class ConfigCommands
         }
 
         ConWatchConfig next;
+        string stored;
         switch (key)
         {
             case "listen-url":
             case "server-url":
                 if (!ConfigResolver.ValidateUrl(value, out var urlError)) throw new ConfigException(urlError!);
-                var url = value.TrimEnd('/');
-                next = key == "listen-url" ? current with { ListenUrl = url } : current with { ServerUrl = url };
+                stored = value.TrimEnd('/');
+                next = key == "listen-url" ? current with { ListenUrl = stored } : current with { ServerUrl = stored };
                 break;
             default: // data-dir
                 if (!ConfigResolver.ValidateDataDir(value, out var dirError)) throw new ConfigException(dirError!);
-                next = current with { DataDir = value };
+                stored = value;
+                next = current with { DataDir = stored };
                 break;
         }
         ConfigFile.WriteAtomic(path, next);
-        s.Out.WriteLine($"{key} = {value}  written to {path}");
+        s.Out.WriteLine($"{key} = {stored}  written to {path}");
         if (!perUser && key != "server-url")
             s.Out.WriteLine("restart the service to pick this up: conwatch service stop, then conwatch service start.");
         return ExitCodes.Ok;

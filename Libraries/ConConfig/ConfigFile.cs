@@ -11,9 +11,20 @@ public static class ConfigFile
     /// Missing → null with no error. Malformed → null with an error message
     /// that names the path. Never throws for I/O or parse problems.
     /// </summary>
-    public static ConWatchConfig? TryRead(string path, out string? error)
+    public static ConWatchConfig? TryRead(string path, out string? error) => TryRead(path, out error, out _);
+
+    /// <summary>
+    /// Same as the two-argument overload, but also reports whether the
+    /// failure was <paramref name="unreadable"/> (the file could not be
+    /// opened at all: <see cref="IOException"/>/<see cref="UnauthorizedAccessException"/>)
+    /// as opposed to malformed (bad JSON/shape). Callers that must not
+    /// silently treat "someone else has it open" as "reset to defaults"
+    /// use <paramref name="unreadable"/> to tell the two apart.
+    /// </summary>
+    public static ConWatchConfig? TryRead(string path, out string? error, out bool unreadable)
     {
         error = null;
+        unreadable = false;
         if (!File.Exists(path))
             return null;
         try
@@ -33,7 +44,13 @@ public static class ConfigFile
                 Notifications: node["notifications"]?.GetValue<bool>())
             { Extra = extra };
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException or FormatException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"{path}: {ex.Message}";
+            unreadable = true;
+            return null;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
             error = $"{path}: {ex.Message}";
             return null;

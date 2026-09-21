@@ -1,5 +1,6 @@
 using System.CommandLine;
 using ConConfig;
+using ConWatchCli.Services;
 
 namespace ConWatchCli.Commands;
 
@@ -23,7 +24,9 @@ public static class ServeCommand
     /// <summary>Resolves listen URL and data dir (flag > env > machine > default) into host arguments.</summary>
     public static string[] HostArguments(CliServices s, string? urlFlag, string? dataFlag)
     {
-        var machine = ConfigFile.TryRead(s.Paths.MachineFile, out var warning);
+        var machine = ConfigFile.TryRead(s.Paths.MachineFile, out var warning, out var unreadable);
+        if (warning is not null && unreadable)
+            throw new ConfigException($"{s.Paths.MachineFile} could not be read: {warning}");
         if (warning is not null)
             s.Err.WriteLine($"warning: ignoring malformed config {warning}");
         var listen = ConfigResolver.ListenUrl(s.Paths, machine, urlFlag, s.Env(ConfigResolver.EnvListenUrl));

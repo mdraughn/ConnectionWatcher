@@ -28,6 +28,31 @@ public sealed class ConfigFileTests : IDisposable
     }
 
     [Fact]
+    public void Malformed_json_is_reported_as_not_unreadable()
+    {
+        var path = File("bad.json");
+        System.IO.File.WriteAllText(path, "{ not json");
+        var config = ConfigFile.TryRead(path, out var error, out var unreadable);
+        Assert.Null(config);
+        Assert.NotNull(error);
+        Assert.False(unreadable);
+    }
+
+    [Fact]
+    public void A_file_that_cannot_be_opened_is_reported_as_unreadable()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var path = File("locked.json");
+        System.IO.File.WriteAllText(path, """{ "listenUrl": "http://0.0.0.0:8080" }""");
+        using var locker = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var config = ConfigFile.TryRead(path, out var error, out var unreadable);
+        Assert.Null(config);
+        Assert.True(unreadable);
+        Assert.NotNull(error);
+        Assert.Contains(path, error);
+    }
+
+    [Fact]
     public void Reads_known_properties_and_keeps_unknown_ones()
     {
         var path = File("conwatch.json");
