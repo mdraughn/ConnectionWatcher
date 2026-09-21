@@ -18,12 +18,14 @@ try
 {
     var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
     var appDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+    IServiceManager serviceManager = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsServiceManager(output) : new UnsupportedServiceManager();
+    IElevation elevation = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsElevation(output) : new NotElevatable();
     var services = new CliServices(
         Paths: ConfigPaths.Default(),
-        Services: new UnsupportedServiceManager(),      // Task 6 swaps in WindowsServiceManager on Windows
-        Elevation: new AlwaysElevated(),                // Task 6 swaps in WindowsElevation on Windows
-        Health: new UnsupportedHealthProbe(),           // Task 6 swaps in HttpHealthProbe
-        Ports: new UnsupportedPortProbe(),              // Task 6 swaps in TcpPortProbe
+        Services: serviceManager,
+        Elevation: elevation,
+        Health: new HttpHealthProbe(),
+        Ports: new TcpPortProbe(),
         TrayLauncher: new UnsupportedTrayLauncher(),    // Task 8
         TrayAutostart: new UnsupportedTrayAutostart(),  // Task 8
         Serve: (hostArgs, ct) => ConWatch.ConWatchApp.RunAsync(hostArgs, pinContentRoot: true, ct),
@@ -51,16 +53,12 @@ static (string[] Args, string? OutputFile) StripOutputOption(string[] args)
 
 public partial class Program { }
 
-file sealed class AlwaysElevated : IElevation
+/// <summary>Non-Windows: there is no UAC; run inline and let the OS refuse.</summary>
+file sealed class NotElevatable : IElevation
 {
     public bool IsElevated => true;
     public Task<int> RelaunchElevatedAsync(string[] args, CancellationToken ct) => Task.FromResult(ExitCodes.Ok);
 }
-file sealed class UnsupportedHealthProbe : IHealthProbe
-{
-    public Task<HealthResult> ProbeAsync(string serverUrl, CancellationToken ct) => Task.FromResult(new HealthResult(null, "not implemented", 0));
-}
-file sealed class UnsupportedPortProbe : IPortProbe { public bool IsFree(int port) => true; }
 file sealed class UnsupportedTrayLauncher : ITrayLauncher { public bool Launch(string trayExePath) => false; }
 file sealed class UnsupportedTrayAutostart : ITrayAutostart
 {
