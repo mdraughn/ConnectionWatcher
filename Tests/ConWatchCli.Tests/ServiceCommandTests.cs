@@ -49,6 +49,25 @@ public sealed class ServiceCommandTests
     }
 
     [Fact]
+    public async Task Install_with_a_different_port_rewrites_the_server_url_port_keeping_scheme_and_host()
+    {
+        using var h = new CliHarness();
+        h.WriteMachine(new ConWatchConfig(ListenUrl: "http://0.0.0.0:8080", ServerUrl: "http://localhost:8080"));
+        await h.RunAsync("service", "install", "--port", "9090");
+        Assert.Equal("http://localhost:9090", h.Services.Installed!.ServerUrl);
+        Assert.Equal("http://localhost:9090", h.Machine!.ServerUrl);
+    }
+
+    [Fact]
+    public async Task Install_with_the_same_port_leaves_a_custom_server_url_host_alone()
+    {
+        using var h = new CliHarness();
+        h.WriteMachine(new ConWatchConfig(ServerUrl: "http://nas:7000"));
+        await h.RunAsync("service", "install", "--port", "7000");
+        Assert.Equal("http://nas:7000", h.Services.Installed!.ServerUrl);
+    }
+
+    [Fact]
     public async Task Install_url_and_port_together_is_a_usage_error()
     {
         using var h = new CliHarness();
@@ -90,13 +109,26 @@ public sealed class ServiceCommandTests
     {
         using var h = new CliHarness(elevated: false);
         h.Elevation.RelaunchCode = ExitCodes.ElevationDeclined;
+        h.Services.Status = new ServiceStatus(ServiceState.Stopped, "\"x\" serve", true);
         foreach (var args in new[] { new[] { "service", "install", "--port", "1" }, ["service", "uninstall"], ["service", "start"], ["service", "stop"] })
         {
             var (code, _, _) = await h.RunAsync(args);
             Assert.Equal(ExitCodes.ElevationDeclined, code);
             Assert.Equal(args, h.Elevation.RelaunchArgs);
         }
-        Assert.Empty(h.Services.Calls);
+        Assert.DoesNotContain("install", h.Services.Calls);
+        Assert.DoesNotContain("uninstall", h.Services.Calls);
+        Assert.DoesNotContain("start", h.Services.Calls);
+        Assert.DoesNotContain("stop", h.Services.Calls);
+    }
+
+    [Fact]
+    public async Task Simple_commands_do_not_elevate_when_the_service_is_not_installed()
+    {
+        using var h = new CliHarness(elevated: false);
+        var (code, _, _) = await h.RunAsync("service", "start");
+        Assert.Equal(ExitCodes.NotInstalled, code);
+        Assert.Null(h.Elevation.RelaunchArgs);
     }
 
     [Fact]

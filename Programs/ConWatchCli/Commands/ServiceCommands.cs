@@ -42,6 +42,8 @@ public static class ServiceCommands
             if (!ConfigResolver.ValidateUrl(listen, out var urlError)) throw new ConfigException(urlError!);
             if (!ConfigResolver.ValidateDataDir(dataDir, out var dirError)) throw new ConfigException(dirError!);
             var serverUrl = machine?.ServerUrl ?? legacy.ServerUrl ?? ConfigResolver.ListenToServerUrl(listen);
+            if (ConfigResolver.PortOf(serverUrl) != ConfigResolver.PortOf(listen))
+                serverUrl = new UriBuilder(serverUrl) { Port = ConfigResolver.PortOf(listen) }.Uri.ToString().TrimEnd('/');
 
             var next = (machine ?? new ConWatchConfig()) with { ListenUrl = listen, DataDir = dataDir, ServerUrl = serverUrl };
             ConfigFile.WriteAtomic(s.Paths.MachineFile, next);
@@ -77,17 +79,20 @@ public static class ServiceCommands
     private static Command Simple(CliServices s, string[] rawArgs, string name, string description, Func<IServiceManager, Func<CancellationToken, Task>> pick)
     {
         var cmd = new Command(name, description);
-        cmd.SetAction((_, ct) => CliApp.Elevated(s, rawArgs, async () =>
+        cmd.SetAction((_, ct) => CliApp.Guarded(s, async () =>
         {
             if ((await s.Services.StatusAsync(ct)).State == ServiceState.NotInstalled)
             {
                 s.Err.WriteLine("The ConnectionWatcher service is not installed. Run: conwatch service install");
                 return ExitCodes.NotInstalled;
             }
-            await pick(s.Services)(ct);
-            s.Out.WriteLine($"ConnectionWatcher service: {name} done.");
-            return ExitCodes.Ok;
-        }, ct));
+            return await CliApp.Elevated(s, rawArgs, async () =>
+            {
+                await pick(s.Services)(ct);
+                s.Out.WriteLine($"ConnectionWatcher service: {name} done.");
+                return ExitCodes.Ok;
+            }, ct);
+        }));
         return cmd;
     }
 
