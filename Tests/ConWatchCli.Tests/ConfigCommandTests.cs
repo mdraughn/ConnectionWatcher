@@ -101,4 +101,18 @@ public sealed class ConfigCommandTests
 
         Assert.Equal(0, (await h.RunAsync("config", "show")).Code);
     }
+
+    [Fact]
+    public async Task Set_moves_a_malformed_file_aside_instead_of_overwriting_it()
+    {
+        using var h = new CliHarness();
+        Directory.CreateDirectory(Path.GetDirectoryName(h.Paths.MachineFile)!);
+        File.WriteAllText(h.Paths.MachineFile, "{ nope");
+        var (code, _, error) = await h.RunAsync("config", "set", "server-url", "http://nas:8080");
+        Assert.Equal(0, code);
+        Assert.Equal("http://nas:8080", h.Machine!.ServerUrl);
+        Assert.True(File.Exists(h.Paths.MachineFile + ".corrupt"));
+        Assert.Equal("{ nope", File.ReadAllText(h.Paths.MachineFile + ".corrupt"));
+        Assert.Contains(".corrupt", error);
+    }
 }

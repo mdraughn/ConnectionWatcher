@@ -70,7 +70,11 @@ public static class ConfigCommands
     {
         var path = perUser ? s.Paths.UserFile : s.Paths.MachineFile;
         var current = ConfigFile.TryRead(path, out var warn) ?? new ConWatchConfig();
-        if (warn is not null) s.Err.WriteLine($"warning: replacing malformed config {warn}");
+        if (warn is not null)
+        {
+            File.Move(path, path + ".corrupt", overwrite: true);
+            s.Err.WriteLine($"warning: {path} was not valid JSON; moved to {path}.corrupt and replaced");
+        }
 
         ConWatchConfig next;
         switch (key)
