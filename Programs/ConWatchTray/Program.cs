@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace ConTray;
+namespace ConWatchTray;
 
 internal static class Program
 {

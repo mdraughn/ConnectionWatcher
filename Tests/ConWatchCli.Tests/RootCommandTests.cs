@@ -11,7 +11,9 @@ public sealed class RootCommandTests
         Assert.Contains("serve", output);
         Assert.Contains("version", output);
         Assert.Contains("conwatch.json", output);
-        // Task 8 extends this with "service", "config", "tray" once they exist.
+        Assert.Contains("service", output);
+        Assert.Contains("config", output);
+        Assert.Contains("tray", output);
     }
 
     [Fact]

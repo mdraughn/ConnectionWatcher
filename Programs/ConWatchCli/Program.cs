@@ -20,14 +20,15 @@ try
     var appDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
     IServiceManager serviceManager = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsServiceManager(output) : new UnsupportedServiceManager();
     IElevation elevation = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsElevation(output) : new NotElevatable();
+    ITrayAutostart trayAutostart = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsTrayAutostart() : new UnsupportedTrayAutostart();
     var services = new CliServices(
         Paths: ConfigPaths.Default(),
         Services: serviceManager,
         Elevation: elevation,
         Health: new HttpHealthProbe(),
         Ports: new TcpPortProbe(),
-        TrayLauncher: new UnsupportedTrayLauncher(),    // Task 8
-        TrayAutostart: new UnsupportedTrayAutostart(),  // Task 8
+        TrayLauncher: new ProcessTrayLauncher(),
+        TrayAutostart: trayAutostart,
         Serve: (hostArgs, ct) => ConWatch.ConWatchApp.RunAsync(hostArgs, pinContentRoot: true, ct),
         Env: Environment.GetEnvironmentVariable,
         AppDir: appDir,
@@ -57,7 +58,6 @@ file sealed class NotElevatable : IElevation
     public bool IsElevated => true;
     public Task<int> RelaunchElevatedAsync(string[] args, CancellationToken ct) => Task.FromResult(ExitCodes.Ok);
 }
-file sealed class UnsupportedTrayLauncher : ITrayLauncher { public bool Launch(string trayExePath) => false; }
 file sealed class UnsupportedTrayAutostart : ITrayAutostart
 {
     public bool IsInstalled => false;

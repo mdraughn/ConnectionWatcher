@@ -1,4 +1,4 @@
-namespace ConTray;
+namespace ConWatchTray;
 
 /// <summary>
 /// The Settings dialog: server URL override with test-before-save, a way back

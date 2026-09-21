@@ -17,6 +17,7 @@ public sealed class CliHarness : IDisposable
     public Dictionary<string, string?> Env { get; } = new();
     public string[]? ServeArgs { get; private set; }
     public string AppDir => Path.Combine(Root, "app");
+    public string TrayExePath() => Path.Combine(AppDir, OperatingSystem.IsWindows() ? "conwatch-tray.exe" : "conwatch-tray");
 
     public CliHarness(bool elevated = true)
     {

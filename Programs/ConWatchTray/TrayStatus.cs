@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ConTray;
+namespace ConWatchTray;
 
 public enum TrayState
 {
