@@ -81,13 +81,23 @@ public sealed class WindowsServiceManager(TextWriter log) : IServiceManager
         var binary = key.GetValue("ImagePath") as string;
         var autoStart = key.GetValue("Start") is int start && start == 2;
         using var sc = new ServiceController(Name);
-        var state = sc.Status switch
+        try
         {
-            ServiceControllerStatus.Running => ServiceState.Running,
-            ServiceControllerStatus.Stopped => ServiceState.Stopped,
-            _ => ServiceState.Other,
-        };
-        return Task.FromResult(new ServiceStatus(state, binary, autoStart, state == ServiceState.Other ? sc.Status.ToString() : null));
+            var state = sc.Status switch
+            {
+                ServiceControllerStatus.Running => ServiceState.Running,
+                ServiceControllerStatus.Stopped => ServiceState.Stopped,
+                _ => ServiceState.Other,
+            };
+            return Task.FromResult(new ServiceStatus(state, binary, autoStart, state == ServiceState.Other ? sc.Status.ToString() : null));
+        }
+        catch (InvalidOperationException)
+        {
+            // The registry key exists but the SCM can't report status, e.g. ERROR_SERVICE_MARKED_FOR_DELETE (1072)
+            // while a prior delete is still pending. Report it rather than throwing so callers like
+            // WaitUntilGoneAsync can keep polling until the entry actually disappears.
+            return Task.FromResult(new ServiceStatus(ServiceState.Other, binary, autoStart, "marked for deletion"));
+        }
     }
 
     private Task StopIfRunningAsync(CancellationToken ct)
@@ -120,9 +130,11 @@ public sealed class WindowsServiceManager(TextWriter log) : IServiceManager
         var psi = new ProcessStartInfo(exe) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var a in args) psi.ArgumentList.Add(a);
         using var p = Process.Start(psi) ?? throw new ServiceControlException($"could not start {exe}");
-        var stdout = p.StandardOutput.ReadToEnd();
-        var stderr = p.StandardError.ReadToEnd();
+        var stdoutTask = p.StandardOutput.ReadToEndAsync();
+        var stderrTask = p.StandardError.ReadToEndAsync();
         p.WaitForExit();
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
         if (p.ExitCode != 0 && !allowFailure)
             throw new ServiceControlException($"{exe} {string.Join(' ', args)} failed (exit {p.ExitCode}): {(stderr + stdout).Trim()}");
     }

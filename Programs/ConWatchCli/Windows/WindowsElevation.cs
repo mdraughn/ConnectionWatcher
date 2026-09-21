@@ -46,13 +46,19 @@ public sealed class WindowsElevation(TextWriter output) : IElevation
 
         using (child)
         {
-            await child.WaitForExitAsync(ct);
-            if (File.Exists(capture))
+            try
             {
-                output.Write(await File.ReadAllTextAsync(capture, ct));
-                File.Delete(capture);
+                await child.WaitForExitAsync(ct);
+                if (File.Exists(capture))
+                    output.Write(await File.ReadAllTextAsync(capture, ct));
+                return child.ExitCode;
             }
-            return child.ExitCode;
+            finally
+            {
+                // Clean up the capture file even if the wait above is cancelled; the elevated
+                // child is left running (we never kill it), it just writes to a file no one reads.
+                try { if (File.Exists(capture)) File.Delete(capture); } catch { /* best effort */ }
+            }
         }
     }
 }
