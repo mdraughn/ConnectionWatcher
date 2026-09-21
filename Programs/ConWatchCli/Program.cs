@@ -16,7 +16,7 @@ if (outputFile is not null)
 
 try
 {
-    var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+    var version = typeof(ConWatchCli.CliApp).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
     var appDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
     IServiceManager serviceManager = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsServiceManager(output) : new UnsupportedServiceManager();
     IElevation elevation = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsElevation(output) : new NotElevatable();
@@ -50,8 +50,6 @@ static (string[] Args, string? OutputFile) StripOutputOption(string[] args)
         return (args, null);
     return (args.Where((_, i) => i != at && i != at + 1).ToArray(), args[at + 1]);
 }
-
-public partial class Program { }
 
 /// <summary>Non-Windows: there is no UAC; run inline and let the OS refuse.</summary>
 file sealed class NotElevatable : IElevation
