@@ -46,12 +46,14 @@ Filename: "{code:DashboardUrl}"; Description: "Open the ConnectionWatcher dashbo
     Flags: postinstall shellexec skipifsilent
 
 [UninstallRun]
-; "tray uninstall" is not listed here because [UninstallRun] has no
-; runasoriginaluser flag (only [Run] does), and the tray autostart entry
-; lives in the signed-in user's HKCU; it runs from CurUninstallStepChanged
-; below via ExecAsOriginalUser instead, at the same point in the sequence.
+; The tray autostart entry is removed for the account running the
+; uninstaller (the signed-in admin on a single-user machine): Inno cannot
+; run as the original user during uninstall (no runasoriginaluser support
+; in [UninstallRun], and ExecAsOriginalUser is not supported at uninstall
+; time either), so there is no way to reach another user's HKCU here.
 Filename: "{app}\conwatch.exe"; Parameters: "service stop"; RunOnceId: "StopService"; Flags: runhidden waituntilterminated
 Filename: "{app}\conwatch.exe"; Parameters: "service uninstall"; RunOnceId: "RemoveService"; Flags: runhidden waituntilterminated
+Filename: "{app}\conwatch.exe"; Parameters: "tray uninstall"; RunOnceId: "RemoveTray"; Flags: runhidden waituntilterminated
 
 [Code]
 var
@@ -167,13 +169,7 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  ResultCode: Integer;
 begin
-  if CurUninstallStep = usUninstall then
-  begin
-    ExecAsOriginalUser(ExpandConstant('{app}\conwatch.exe'), 'tray uninstall', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
   if CurUninstallStep = usPostUninstall then
   begin
     if MsgBox('Also delete the measurement data and config in' + #13#10 +
