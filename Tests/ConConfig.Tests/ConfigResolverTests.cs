@@ -68,6 +68,14 @@ public sealed class ConfigResolverTests
     public void Port_of_reads_the_port(string listen, int port) =>
         Assert.Equal(port, ConfigResolver.PortOf(listen));
 
+    [Fact]
+    public void With_port_of_replaces_the_port_but_keeps_the_host()
+    {
+        Assert.Equal("http://nas:9090", ConfigResolver.WithPortOf("http://nas:8080", "http://0.0.0.0:9090"));
+        Assert.Equal("http://localhost:9090", ConfigResolver.WithPortOf("http://localhost:8080", "http://0.0.0.0:9090"));
+        Assert.Equal("http://nas:8080", ConfigResolver.WithPortOf("http://nas:8080", "http://0.0.0.0:8080"));
+    }
+
     [Theory]
     [InlineData("http://nas:8080", true)]
     [InlineData("https://nas:8443/", true)]

@@ -80,13 +80,27 @@ public static class ConfigCommands
 
         ConWatchConfig next;
         string stored;
+        string? newServerUrl = null;
         switch (key)
         {
             case "listen-url":
             case "server-url":
                 if (!ConfigResolver.ValidateUrl(value, out var urlError)) throw new ConfigException(urlError!);
                 stored = value.TrimEnd('/');
-                next = key == "listen-url" ? current with { ListenUrl = stored } : current with { ServerUrl = stored };
+                if (key == "listen-url")
+                {
+                    next = current with { ListenUrl = stored };
+                    if (current.ServerUrl is { Length: > 0 } existingServerUrl &&
+                        ConfigResolver.PortOf(existingServerUrl) != ConfigResolver.PortOf(stored))
+                    {
+                        newServerUrl = ConfigResolver.WithPortOf(existingServerUrl, stored);
+                        next = next with { ServerUrl = newServerUrl };
+                    }
+                }
+                else
+                {
+                    next = current with { ServerUrl = stored };
+                }
                 break;
             default: // data-dir
                 if (!ConfigResolver.ValidateDataDir(value, out var dirError)) throw new ConfigException(dirError!);
@@ -96,7 +110,11 @@ public static class ConfigCommands
         }
         ConfigFile.WriteAtomic(path, next);
         s.Out.WriteLine($"{key} = {stored}  written to {path}");
-        if (!perUser && key != "server-url")
+        if (newServerUrl is not null)
+            s.Out.WriteLine($"server-url = {newServerUrl}  (port follows listen-url)");
+        if (!perUser && key == "listen-url")
+            s.Out.WriteLine("Note: the firewall rule and Start Menu shortcut are refreshed only by: conwatch service install --url <listen-url>  (that also restarts the service).");
+        else if (!perUser && key == "data-dir")
             s.Out.WriteLine("restart the service to pick this up: conwatch service stop, then conwatch service start.");
         return ExitCodes.Ok;
     }

@@ -43,14 +43,36 @@ public sealed class ConfigCommandTests
     public async Task Set_listen_url_writes_the_machine_file_and_keeps_other_values()
     {
         using var h = new CliHarness();
-        h.WriteMachine(new ConWatchConfig(DataDir: @"D:\keep", ServerUrl: "http://keep:1"));
+        h.WriteMachine(new ConWatchConfig(DataDir: @"D:\keep", ServerUrl: "http://keep:7070"));
         var (code, output, _) = await h.RunAsync("config", "set", "listen-url", "http://0.0.0.0:7070/");
         Assert.Equal(0, code);
         Assert.Equal("http://0.0.0.0:7070", h.Machine!.ListenUrl);
         Assert.Equal(@"D:\keep", h.Machine.DataDir);
-        Assert.Equal("http://keep:1", h.Machine.ServerUrl);
+        Assert.Equal("http://keep:7070", h.Machine.ServerUrl);
         Assert.Contains(h.Paths.MachineFile, output);
-        Assert.Contains("restart", output);
+        Assert.Contains("service install", output);
+    }
+
+    [Fact]
+    public async Task Set_listen_url_rewrites_the_server_url_port_and_says_so()
+    {
+        using var h = new CliHarness();
+        h.WriteMachine(new ConWatchConfig(ListenUrl: "http://0.0.0.0:8080", ServerUrl: "http://localhost:8080"));
+        var (code, output, _) = await h.RunAsync("config", "set", "listen-url", "http://0.0.0.0:9090");
+        Assert.Equal(0, code);
+        Assert.Equal("http://localhost:9090", h.Machine!.ServerUrl);
+        Assert.Contains("service install", output);
+    }
+
+    [Fact]
+    public async Task Set_listen_url_leaves_the_server_url_alone_when_the_port_matches()
+    {
+        using var h = new CliHarness();
+        h.WriteMachine(new ConWatchConfig(ServerUrl: "http://nas:8080"));
+        var (code, output, _) = await h.RunAsync("config", "set", "listen-url", "http://0.0.0.0:8080");
+        Assert.Equal(0, code);
+        Assert.Equal("http://nas:8080", h.Machine!.ServerUrl);
+        Assert.DoesNotContain("port follows listen-url", output);
     }
 
     [Fact]
@@ -129,12 +151,12 @@ public sealed class ConfigCommandTests
     {
         using var h = new CliHarness();
         Directory.CreateDirectory(Path.GetDirectoryName(h.Paths.MachineFile)!);
-        File.WriteAllText(h.Paths.MachineFile, """{ "serverUrl": "http://keep:1", "future": { "x": 1 } }""");
+        File.WriteAllText(h.Paths.MachineFile, """{ "serverUrl": "http://keep:7070", "future": { "x": 1 } }""");
         var (code, _, _) = await h.RunAsync("config", "set", "listen-url", "http://0.0.0.0:7070");
         Assert.Equal(0, code);
         var text = File.ReadAllText(h.Paths.MachineFile);
         Assert.Contains("future", text);
-        Assert.Equal("http://keep:1", h.Machine!.ServerUrl);
+        Assert.Equal("http://keep:7070", h.Machine!.ServerUrl);
         Assert.Equal("http://0.0.0.0:7070", h.Machine.ListenUrl);
     }
 

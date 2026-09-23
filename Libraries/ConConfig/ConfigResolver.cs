@@ -47,6 +47,14 @@ public static class ConfigResolver
 
     public static int PortOf(string listenUrl) => new Uri(ListenToServerUrl(listenUrl)).Port;
 
+    /// <summary>Rewrites <paramref name="serverUrl"/>'s port to match <paramref name="listenUrl"/>'s, keeping its host. No-op if the ports already match.</summary>
+    public static string WithPortOf(string serverUrl, string listenUrl)
+    {
+        var port = PortOf(listenUrl);
+        if (PortOf(serverUrl) == port) return serverUrl;
+        return new UriBuilder(serverUrl) { Port = port }.Uri.ToString().TrimEnd('/');
+    }
+
     public static bool ValidateUrl(string url, out string? error)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&

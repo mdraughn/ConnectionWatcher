@@ -42,8 +42,7 @@ public static class ServiceCommands
             if (!ConfigResolver.ValidateUrl(listen, out var urlError)) throw new ConfigException(urlError!);
             if (!ConfigResolver.ValidateDataDir(dataDir, out var dirError)) throw new ConfigException(dirError!);
             var serverUrl = machine?.ServerUrl ?? legacy.ServerUrl ?? ConfigResolver.ListenToServerUrl(listen);
-            if (ConfigResolver.PortOf(serverUrl) != ConfigResolver.PortOf(listen))
-                serverUrl = new UriBuilder(serverUrl) { Port = ConfigResolver.PortOf(listen) }.Uri.ToString().TrimEnd('/');
+            serverUrl = ConfigResolver.WithPortOf(serverUrl, listen);
 
             var next = (machine ?? new ConWatchConfig()) with { ListenUrl = listen, DataDir = dataDir, ServerUrl = serverUrl };
             ConfigFile.WriteAtomic(s.Paths.MachineFile, next);
