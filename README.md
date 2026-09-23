@@ -291,7 +291,7 @@ same folder and the same commands; the wizard just clicks them for you.
 | `conwatch service install\|uninstall\|start\|stop` | Manage the Windows service (elevates once). |
 | `conwatch service status` | Installed? Running? Which port and data folder? Does the dashboard answer? |
 | `conwatch config show` | Every setting and where it came from. |
-| `conwatch config set listen-url\|data-dir\|server-url <value>` | Change one; the service reads it on its next start. |
+| `conwatch config set listen-url\|data-dir\|server-url <value>` | Change one; listen-url/data-dir take effect on the next service start. To change the port use service install --port. |
 | `conwatch tray` / `conwatch tray install\|uninstall` | Start the tray now / at sign-in. |
 
 Settings live in `%ProgramData%\DSoftCo\ConnectionWatcher\conwatch.json`
@@ -299,7 +299,9 @@ Settings live in `%ProgramData%\DSoftCo\ConnectionWatcher\conwatch.json`
 `%AppData%\DSoftCo\ConnectionWatcher\tray.json` written by the tray's
 Settings dialog or `conwatch config set server-url <url> --user`. Data stays
 in `%ProgramData%\DSoftCo\ConnectionWatcher\data`. Uninstalling never deletes
-either without asking.
+either without asking. To move the dashboard to another port, run
+`conwatch service install --port <n>` again; it re-pins the port, firewall
+rule and shortcut and restarts the service.
 
 **Tray companion** — `conwatch-tray.exe`: green/orange/red/gray at a glance;
 double-click opens the dashboard; right-click for History, the ISP report,

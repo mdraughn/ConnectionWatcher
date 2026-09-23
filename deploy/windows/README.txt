@@ -17,10 +17,8 @@ Config:  %ProgramData%\DSoftCo\ConnectionWatcher\conwatch.json
 Data:    %ProgramData%\DSoftCo\ConnectionWatcher\data
 Tray:    %AppData%\DSoftCo\ConnectionWatcher\tray.json   (per user)
 
-Change the port later:
-     conwatch config set listen-url http://0.0.0.0:9090
-     conwatch service stop
-     conwatch service start
+Change the port later (re-registers the firewall rule and shortcut, restarts the service):
+     conwatch service install --port 9090
 
 Remove:  conwatch service uninstall
          conwatch tray uninstall
