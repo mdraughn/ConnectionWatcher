@@ -55,6 +55,9 @@ Filename: "{app}\conwatch.exe"; Parameters: "service stop"; RunOnceId: "StopServ
 Filename: "{app}\conwatch.exe"; Parameters: "service uninstall"; RunOnceId: "RemoveService"; Flags: runhidden waituntilterminated
 Filename: "{app}\conwatch.exe"; Parameters: "tray uninstall"; RunOnceId: "RemoveTray"; Flags: runhidden waituntilterminated
 
+[UninstallDelete]
+Type: dirifempty; Name: "{app}"
+
 [Code]
 var
   PortPage: TInputQueryWizardPage;
@@ -186,9 +189,9 @@ begin
   end;
   if CurUninstallStep = usPostUninstall then
   begin
-    if MsgBox('Also delete the measurement data and config in' + #13#10 +
-              ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher') + '?' + #13#10#13#10 +
-              'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    if MsgBox('Delete the ConnectionWatcher measurement history and config?' + #13#10#13#10 +
+              ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher') + #13#10#13#10 +
+              'Yes permanently deletes your measurement database. No keeps it for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
       DelTree(ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher'), True, True, True);
   end;
 end;
