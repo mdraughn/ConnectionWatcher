@@ -3335,9 +3335,9 @@ git commit -m "docs: install section around the conwatch command, zip, config fi
 Run: `dotnet test ConnectionWatcher.sln -c Debug` and `cd Programs/ConWatch/ClientApp; npx vitest run`
 Expected: every project green, 0 warnings in the build output. Record counts in the report.
 
-- [ ] **Step 2: Manual checklist (record each line's result in the report; do not skip)**
+- [x] **Step 2: Manual checklist (record each line's result in the report; do not skip)**
 
-Status 2026-09-21: items 9 (help, `bogus`, `service status` when not installed) and `config show` verified against `staging\app` from an unelevated shell; items 1–8, 10 and 11 need a person at the UAC prompt and are still open. Two more passes were added by the final review: re-run `service install --port 9090` over an 8080 install and confirm `service status` probes 9090; uninstall with the tray running and confirm the program folder is removed.
+Status 2026-09-23: all eleven items run with Mark at the keyboard, plus the port-change pass (8080→9090) and an uninstall with the tray running. Findings fixed in fix wave 2 (commits b152c0e..4fa33e6): `config set listen-url` now keeps `serverUrl` on the same port and points at `service install --port`; `conwatch tray` reports an already-running tray (including the 0.9 `ConTray.exe`, which shares the mutex); the uninstaller removes the empty program folder and the data-deletion prompt spells out its consequence. Re-tested after the fixes: install, already-running tray message, uninstall answering No keeps config and database.
 
 From an **unelevated** PowerShell in `staging\app` after `.\Build-Installer.ps1`:
 
