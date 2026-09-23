@@ -55,6 +55,9 @@ public interface ITrayLauncher
 {
     /// <summary>Starts the tray exe and returns; false when the exe is missing.</summary>
     bool Launch(string trayExePath);
+
+    /// <summary>A description like "conwatch-tray.exe (PID 1234)" when a tray process is already running, else null.</summary>
+    string? RunningInstance();
 }
 
 public interface ITrayAutostart

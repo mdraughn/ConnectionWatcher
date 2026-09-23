@@ -41,7 +41,9 @@ public sealed class FakePortProbe : IPortProbe
 public sealed class FakeTrayLauncher(bool present = true) : ITrayLauncher
 {
     public string? Launched { get; private set; }
+    public string? Running { get; set; }
     public bool Launch(string trayExePath) { if (!present) return false; Launched = trayExePath; return true; }
+    public string? RunningInstance() => Running;
 }
 
 public sealed class FakeTrayAutostart : ITrayAutostart

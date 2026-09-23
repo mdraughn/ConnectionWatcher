@@ -11,6 +11,13 @@ public static class TrayCommands
         var tray = new Command("tray", "Start the tray companion now, or register/unregister it to start when you sign in.");
         tray.SetAction((_, _) => CliApp.Guarded(s, () =>
         {
+            if (s.TrayLauncher.RunningInstance() is { } running)
+            {
+                s.Out.WriteLine($"The tray is already running: {running}");
+                if (running.Contains("ConTray.exe"))
+                    s.Out.WriteLine("Close it (right-click, Exit) and run conwatch tray again to start the new tray.");
+                return Task.FromResult(ExitCodes.Ok);
+            }
             if (!s.TrayLauncher.Launch(s.TrayExePath))
             {
                 s.Err.WriteLine($"{Path.GetFileName(s.TrayExePath)} not found beside conwatch.");
