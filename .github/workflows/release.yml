@@ -44,7 +44,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: installer
-          path: dist/ConnectionWatcher-Setup-*.exe
+          path: |
+            dist/ConnectionWatcher-Setup-*.exe
+            dist/ConnectionWatcher-*-win-x64.zip
           if-no-files-found: error
 
   release:
@@ -61,12 +63,17 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/ConnectionWatcher-Setup-*.exe
+          files: |
+            dist/ConnectionWatcher-Setup-*.exe
+            dist/ConnectionWatcher-*-win-x64.zip
           prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
           generate_release_notes: true
           body: |
             **Container:** `docker pull ghcr.io/${{ github.repository_owner }}/conwatch:${{ steps.ver.outputs.version }}`
             (multi-arch: amd64 + arm64). A stable release also moves `latest`.
 
-            **Windows:** `ConnectionWatcher-Setup-${{ steps.ver.outputs.version }}.exe` below.
-            The installer is not code-signed yet, so SmartScreen will ask you to confirm.
+            **Windows:** `ConnectionWatcher-Setup-${{ steps.ver.outputs.version }}.exe` (wizard) or
+            `ConnectionWatcher-${{ steps.ver.outputs.version }}-win-x64.zip` (unzip, then `conwatch service install`).
+            Neither is code-signed yet, so SmartScreen will ask you to confirm.
+            Upgrading from 0.9: the installer replaces `ConWatch.exe`/`ConTray.exe` with `conwatch.exe`/`conwatch-tray.exe`,
+            re-registers the service, and moves your tray URL into the new config file automatically.

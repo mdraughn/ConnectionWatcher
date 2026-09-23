@@ -27,6 +27,8 @@ jobs:
       - run: dotnet test Tests/ConEngine.Tests -c Debug
       - run: dotnet test Tests/ConPersistence.Tests -c Debug
       - run: dotnet test Tests/ConWatch.Tests -c Debug
+      - run: dotnet test Tests/ConConfig.Tests -c Debug
+      - run: dotnet test Tests/ConWatchCli.Tests -c Debug
 
   client:
     runs-on: ubuntu-latest

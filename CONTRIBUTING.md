@@ -11,7 +11,10 @@ requests are the most useful contributions.
   `http://localhost:8080`, SQLite DB in `./data`).
 - Frontend loop: `npm run watch` in `Programs/ConWatch/ClientApp` beside the
   running server.
-- `ConTray` (the tray companion) is Windows-only; everything else is
+- `Programs/ConWatchCli` is the `conwatch` command (help, `serve`, service,
+  config, tray); `Programs/ConWatchTray` is the tray companion and is
+  Windows-only. Run the command from source with
+  `dotnet run --project Programs/ConWatchCli -- --help`. Everything else is
   cross-platform.
 
 ## Tests
@@ -23,6 +26,8 @@ suites are the safety net that lets refactors land quickly.
 dotnet test Tests/ConEngine.Tests -c Debug
 dotnet test Tests/ConPersistence.Tests -c Debug
 dotnet test Tests/ConWatch.Tests -c Debug
+dotnet test Tests/ConConfig.Tests -c Debug
+dotnet test Tests/ConWatchCli.Tests -c Debug
 cd Programs/ConWatch/ClientApp && npx vitest run
 ```
 
@@ -54,8 +59,7 @@ Two channels, one source:
   ```
 
   This publishes the image as `1.2.3`, `1.2`, `1` and moves `latest`,
-  builds `ConnectionWatcher-Setup-1.2.3.exe` on a Windows runner, and
-  creates a GitHub Release with generated notes and the installer attached.
+  builds `ConnectionWatcher-Setup-1.2.3.exe` and `ConnectionWatcher-1.2.3-win-x64.zip` on a Windows runner (`Build-Installer.ps1`), and creates a GitHub Release with generated notes and both attached.
   A tag with a suffix (`v1.2.3-rc1`) becomes a GitHub *pre-release*, gets
   only its own image tag, and never moves `latest`.
 

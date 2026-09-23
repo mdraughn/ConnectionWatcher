@@ -73,7 +73,7 @@
 **Interfaces:**
 - Produces: `ConConfig.ConWatchConfig`, `ConConfig.ConfigSource`, `ConConfig.Resolved<T>`, `ConConfig.ConfigPaths`, `ConConfig.ConfigFile.TryRead/WriteAtomic` exactly as written below. Tasks 2, 6, 7 consume them.
 
-- [ ] **Step 1: Create the projects and add them to the solution**
+- [x] **Step 1: Create the projects and add them to the solution**
 
 ```powershell
 dotnet new classlib -n ConConfig -o Libraries/ConConfig -f net10.0
@@ -122,7 +122,7 @@ Replace `Tests/ConConfig.Tests/ConConfig.Tests.csproj` with the same package set
 </Project>
 ```
 
-- [ ] **Step 2: Write the model and paths (no test needed; pure data)**
+- [x] **Step 2: Write the model and paths (no test needed; pure data)**
 
 `Libraries/ConConfig/ConWatchConfig.cs`:
 
@@ -215,7 +215,7 @@ public sealed class ConfigPaths
 }
 ```
 
-- [ ] **Step 3: Write the failing tests for `ConfigFile`**
+- [x] **Step 3: Write the failing tests for `ConfigFile`**
 
 `Tests/ConConfig.Tests/ConfigFileTests.cs`:
 
@@ -292,12 +292,12 @@ public sealed class ConfigFileTests : IDisposable
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [x] **Step 4: Run the tests to verify they fail**
 
 Run: `dotnet test Tests/ConConfig.Tests -c Debug`
 Expected: build error, `ConfigFile` does not exist.
 
-- [ ] **Step 5: Implement `ConfigFile`**
+- [x] **Step 5: Implement `ConfigFile`**
 
 `Libraries/ConConfig/ConfigFile.cs`:
 
@@ -375,12 +375,12 @@ public static class ConfigFile
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `dotnet test Tests/ConConfig.Tests -c Debug`
 Expected: 5 passed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add Libraries/ConConfig Tests/ConConfig.Tests ConnectionWatcher.sln
@@ -399,7 +399,7 @@ git commit -m "feat(config): ConConfig library - config model, well-known paths,
 - Consumes: Task 1 types.
 - Produces: `ConfigResolver.ListenUrl(paths, machine, flag, env)`, `DataDir(...)`, `ServerUrl(paths, user, machine)`, `Notifications(user)`, `ListenToServerUrl(string)`, `PortOf(string)`, `ValidateUrl(string, out string? error)`, `ValidateDataDir(string, out string? error)`, constants `DefaultListenUrl`, `FallbackServerUrl`, env names `EnvListenUrl = "CONWATCH_URLS"`, `EnvDataDir = "CONWATCH_DATADIR"`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `Tests/ConConfig.Tests/ConfigResolverTests.cs`:
 
@@ -505,12 +505,12 @@ public sealed class ConfigResolverTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test Tests/ConConfig.Tests -c Debug`
 Expected: build error, `ConfigResolver` does not exist.
 
-- [ ] **Step 3: Implement `ConfigResolver`**
+- [x] **Step 3: Implement `ConfigResolver`**
 
 `Libraries/ConConfig/ConfigResolver.cs`:
 
@@ -606,12 +606,12 @@ public static class ConfigResolver
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test Tests/ConConfig.Tests -c Debug`
 Expected: all passed (5 + 8 theories/facts).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Libraries/ConConfig Tests/ConConfig.Tests
@@ -630,13 +630,13 @@ git commit -m "feat(config): ConfigResolver - precedence, wildcard listen-to-ser
 **Interfaces:**
 - Produces: `ConWatch.ConWatchApp.RunAsync(string[] args, bool pinContentRoot = false, CancellationToken ct = default) : Task<int>`. Task 5 consumes it.
 
-- [ ] **Step 1: Add the systemd package**
+- [x] **Step 1: Add the systemd package**
 
 ```powershell
 dotnet add Programs/ConWatch package Microsoft.Extensions.Hosting.Systemd --version 10.0.11
 ```
 
-- [ ] **Step 2: Create `ConWatchApp.cs` with the body of today's `Program.cs`**
+- [x] **Step 2: Create `ConWatchApp.cs` with the body of today's `Program.cs`**
 
 Move everything from `Programs/ConWatch/Program.cs` between the `using` lines and the final `public partial class Program { }` into the method below. Only the marked lines change.
 
@@ -694,7 +694,7 @@ public static class ConWatchApp
 }
 ```
 
-- [ ] **Step 3: Replace `Program.cs`**
+- [x] **Step 3: Replace `Program.cs`**
 
 ```csharp
 return await ConWatch.ConWatchApp.RunAsync(args);
@@ -702,12 +702,12 @@ return await ConWatch.ConWatchApp.RunAsync(args);
 public partial class Program { }
 ```
 
-- [ ] **Step 4: Build and run the existing suite**
+- [x] **Step 4: Build and run the existing suite**
 
 Run: `dotnet build Programs/ConWatch -c Debug` then `dotnet test Tests/ConWatch.Tests -c Debug`
 Expected: 0 warnings; the same pass count as before this task (record it in the report).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Programs/ConWatch/ConWatchApp.cs Programs/ConWatch/Program.cs Programs/ConWatch/ConWatch.csproj
@@ -726,7 +726,7 @@ git commit -m "refactor(host): lift startup into ConWatchApp.RunAsync; AddSystem
 - Consumes: `ConConfig.*` (Tasks 1–2), `ConWatch.ConWatchApp.RunAsync` (Task 3).
 - Produces: everything in `Seams.cs`, `CliServices`, `ExitCodes`, `CliApp.RunAsync(string[] args, CliServices s, CancellationToken ct)`, `CliApp.Guarded`, `CliApp.Elevated`, and the test harness `CliHarness`. Tasks 5–8 add commands by adding one `static Command Build(CliServices s, string[] rawArgs)` per file and registering it in `CliApp.BuildRoot`.
 
-- [ ] **Step 1: Create the projects**
+- [x] **Step 1: Create the projects**
 
 `Programs/ConWatchCli/ConWatchCli.csproj` (Web SDK on purpose: it makes the referenced host's static web assets and Razor application parts flow into this exe's build and publish):
 
@@ -786,7 +786,7 @@ git commit -m "refactor(host): lift startup into ConWatchApp.RunAsync; AddSystem
 dotnet sln add Programs/ConWatchCli Tests/ConWatchCli.Tests
 ```
 
-- [ ] **Step 2: Write the seams**
+- [x] **Step 2: Write the seams**
 
 `Programs/ConWatchCli/Services/Seams.cs`:
 
@@ -902,7 +902,7 @@ public sealed record CliServices(
 }
 ```
 
-- [ ] **Step 3: Write the failing tests and the harness**
+- [x] **Step 3: Write the failing tests and the harness**
 
 `Tests/ConWatchCli.Tests/Fakes.cs`:
 
@@ -1162,12 +1162,12 @@ public sealed class HostSmokeTests
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [x] **Step 4: Run the tests to verify they fail**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: build errors (`CliApp` missing).
 
-- [ ] **Step 5: Implement `CliApp`, `version`, `serve`, and `Program`**
+- [x] **Step 5: Implement `CliApp`, `version`, `serve`, and `Program`**
 
 `Programs/ConWatchCli/CliApp.cs`:
 
@@ -1381,17 +1381,17 @@ public sealed class UnsupportedServiceManager : IServiceManager
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: 8 passed (3 root, 4 serve, 1 smoke). If the smoke test's `/` returns 404, the Razor application part did not flow: confirm `ConWatchCli.csproj` uses `Microsoft.NET.Sdk.Web` and that `obj/.../conwatch.MvcApplicationPartsAssemblyInfo.cs` names `ConWatch`.
 
-- [ ] **Step 7: Run it for real once**
+- [x] **Step 7: Run it for real once**
 
 Run: `dotnet run --project Programs/ConWatchCli -- --help` and `dotnet run --project Programs/ConWatchCli -- version`
 Expected: help lists `version` and `serve`; version prints `conwatch 0.9.0-dev+<sha>`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add Programs/ConWatchCli Tests/ConWatchCli.Tests ConnectionWatcher.sln
@@ -1411,7 +1411,7 @@ git commit -m "feat(cli): conwatch command scaffold - seams, help, version, serv
 - Consumes: Task 4 seams and harness.
 - Produces: `ServiceCommands.Build(CliServices s, string[] rawArgs)`, `LegacyInstall.Detect(string appDir, string? serviceBinaryPath) : LegacyValues(string? ServerUrl, string? ListenUrl)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `Tests/ConWatchCli.Tests/LegacyInstallTests.cs`:
 
@@ -1624,12 +1624,12 @@ public sealed class ServiceCommandTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: build errors (`LegacyInstall`, and `service` unknown → the harness tests fail at runtime with usage errors).
 
-- [ ] **Step 3: Implement `LegacyInstall`**
+- [x] **Step 3: Implement `LegacyInstall`**
 
 `Programs/ConWatchCli/Services/LegacyInstall.cs`:
 
@@ -1681,7 +1681,7 @@ public static partial class LegacyInstall
 }
 ```
 
-- [ ] **Step 4: Implement `ServiceCommands` and register it**
+- [x] **Step 4: Implement `ServiceCommands` and register it**
 
 `Programs/ConWatchCli/Commands/ServiceCommands.cs`:
 
@@ -1813,12 +1813,12 @@ public static class ServiceCommands
 
 In `CliApp.BuildRoot` add `root.Subcommands.Add(ServiceCommands.Build(s, rawArgs));` after `ServeCommand`.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: all pass (8 from Task 4 + 4 legacy + 12 service).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add Programs/ConWatchCli Tests/ConWatchCli.Tests
@@ -1837,7 +1837,7 @@ git commit -m "feat(cli): service install/uninstall/start/stop/status with port 
 - Consumes: Task 4 seams.
 - Produces: `HttpHealthProbe(HttpMessageHandler? handler = null, TimeSpan? timeout = null)`, `TcpPortProbe`, `WindowsServiceManager(TextWriter log)`, `WindowsElevation(TextWriter output)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `Tests/ConWatchCli.Tests/HttpHealthProbeTests.cs`:
 
@@ -1928,12 +1928,12 @@ public sealed class TcpPortProbeTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: build errors (`HttpHealthProbe`, `TcpPortProbe` missing).
 
-- [ ] **Step 3: Implement the probes**
+- [x] **Step 3: Implement the probes**
 
 `Programs/ConWatchCli/Services/HttpHealthProbe.cs`:
 
@@ -2007,12 +2007,12 @@ public sealed class TcpPortProbe : IPortProbe
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: all pass.
 
-- [ ] **Step 5: Implement the Windows service manager (no unit test; exercised by the manual checklist in Task 11)**
+- [x] **Step 5: Implement the Windows service manager (no unit test; exercised by the manual checklist in Task 11)**
 
 `Programs/ConWatchCli/Windows/WindowsServiceManager.cs`:
 
@@ -2148,7 +2148,7 @@ public sealed class WindowsServiceManager(TextWriter log) : IServiceManager
 }
 ```
 
-- [ ] **Step 6: Implement elevation**
+- [x] **Step 6: Implement elevation**
 
 `Programs/ConWatchCli/Windows/WindowsElevation.cs`:
 
@@ -2213,7 +2213,7 @@ public sealed class WindowsElevation(TextWriter output) : IElevation
 }
 ```
 
-- [ ] **Step 7: Wire them in `Program.cs`**
+- [x] **Step 7: Wire them in `Program.cs`**
 
 Replace the placeholder lines and delete the `AlwaysElevated`, `UnsupportedHealthProbe`, `UnsupportedPortProbe` file-local classes:
 
@@ -2240,12 +2240,12 @@ file sealed class NotElevatable : IElevation
 
 `Microsoft.Win32.Registry` ships in the shared framework for `net10.0`; if the build cannot find it, add `<PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />` to `ConWatchCli.csproj`.
 
-- [ ] **Step 8: Build with warnings as errors for the platform analyzer**
+- [x] **Step 8: Build with warnings as errors for the platform analyzer**
 
 Run: `dotnet build Programs/ConWatchCli -c Debug -warnaserror:CA1416`
 Expected: succeeds. Any CA1416 means a Windows-only call escaped the `[SupportedOSPlatform("windows")]` classes or the `OperatingSystem.IsWindows()` guard.
 
-- [ ] **Step 9: Run all CLI tests, then commit**
+- [x] **Step 9: Run all CLI tests, then commit**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: all pass.
@@ -2268,7 +2268,7 @@ git commit -m "feat(cli): HTTP health probe, TCP port probe, Windows service man
 - Consumes: Task 4 harness, `ConfigFile`, `ConfigResolver`.
 - Produces: `ConfigCommands.Build(CliServices s, string[] rawArgs)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `Tests/ConWatchCli.Tests/ConfigCommandTests.cs`:
 
@@ -2379,12 +2379,12 @@ public sealed class ConfigCommandTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: the eight new tests fail with usage errors (`config` unknown).
 
-- [ ] **Step 3: Implement and register**
+- [x] **Step 3: Implement and register**
 
 `Programs/ConWatchCli/Commands/ConfigCommands.cs`:
 
@@ -2488,12 +2488,12 @@ public static class ConfigCommands
 
 In `CliApp.BuildRoot` add `root.Subcommands.Add(ConfigCommands.Build(s, rawArgs));`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Programs/ConWatchCli Tests/ConWatchCli.Tests
@@ -2516,7 +2516,7 @@ git commit -m "feat(cli): config show / config set with provenance, validation, 
 - Consumes: `ConfigPaths.LegacyUserFile`, `ConfigResolver`, `ConfigFile`, seams `ITrayLauncher`/`ITrayAutostart`.
 - Produces: `LegacyTrayFile.TryRead(string path) : ConWatchConfig?`, `TrayCommands.Build(CliServices s)`.
 
-- [ ] **Step 1: Failing test for the legacy per-user file**
+- [x] **Step 1: Failing test for the legacy per-user file**
 
 `Tests/ConConfig.Tests/LegacyTrayFileTests.cs`:
 
@@ -2582,7 +2582,7 @@ public static class LegacyTrayFile
 
 Run: `dotnet test Tests/ConConfig.Tests -c Debug` → all pass.
 
-- [ ] **Step 2: Move the tray project**
+- [x] **Step 2: Move the tray project**
 
 ```powershell
 git mv Programs/ConTray Programs/ConWatchTray
@@ -2617,7 +2617,7 @@ Remove-Item -Recurse -Force Programs/ConWatchTray/bin, Programs/ConWatchTray/obj
 </Project>
 ```
 
-- [ ] **Step 3: Rewrite `TraySettings.cs` over ConConfig (same public surface `Program.cs` and `SettingsForm.cs` use)**
+- [x] **Step 3: Rewrite `TraySettings.cs` over ConConfig (same public surface `Program.cs` and `SettingsForm.cs` use)**
 
 ```csharp
 using ConConfig;
@@ -2678,7 +2678,7 @@ public sealed class TraySettings
 
 Build: `dotnet build Programs/ConWatchTray -c Debug` → 0 warnings. `SettingsForm.cs` compiles unchanged because every member it uses still exists.
 
-- [ ] **Step 4: Failing tests for the tray commands**
+- [x] **Step 4: Failing tests for the tray commands**
 
 `Tests/ConWatchCli.Tests/TrayCommandTests.cs`:
 
@@ -2745,7 +2745,7 @@ Add to `CliHarness`: `public string TrayExePath() => Path.Combine(AppDir, Operat
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug` → the five fail with usage errors.
 
-- [ ] **Step 5: Implement the tray commands and real launcher/autostart**
+- [x] **Step 5: Implement the tray commands and real launcher/autostart**
 
 `Programs/ConWatchCli/Commands/TrayCommands.cs`:
 
@@ -2862,14 +2862,14 @@ public sealed class WindowsTrayAutostart : ITrayAutostart
 
 In `Program.cs`: `TrayLauncher: new ProcessTrayLauncher()`, and `ITrayAutostart trayAutostart = OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsTrayAutostart() : new UnsupportedTrayAutostart();` (keep the `UnsupportedTrayAutostart` file-local class; delete `UnsupportedTrayLauncher`). In `CliApp.BuildRoot` add `root.Subcommands.Add(TrayCommands.Build(s));`.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Extend `RootCommandTests.No_arguments_prints_help_and_returns_zero` with `Assert.Contains("service", output); Assert.Contains("config", output); Assert.Contains("tray", output);` and drop its "Task 8 extends" comment.
 
 Run: `dotnet test Tests/ConWatchCli.Tests -c Debug` and `dotnet build ConnectionWatcher.sln -c Debug`
 Expected: all pass; solution builds with 0 warnings; `Programs/ConTray` no longer exists; `grep -rn "ConTray" --include=*.cs --include=*.csproj --include=*.sln .` returns nothing outside `docs/` and `staging/`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add -A Programs/ConTray Programs/ConWatchTray Programs/ConWatchCli Libraries/ConConfig Tests ConnectionWatcher.sln
@@ -2888,14 +2888,14 @@ git commit -m "feat(tray): move ConTray to ConWatchTray (conwatch-tray.exe) over
 - Consumes: the two exes and their exit codes (Tasks 4–8).
 - Produces: `staging/app/`, `dist/ConnectionWatcher-Setup-<v>.exe`, `dist/ConnectionWatcher-<v>-win-x64.zip`.
 
-- [ ] **Step 1: Delete the scripts**
+- [x] **Step 1: Delete the scripts**
 
 ```powershell
 git rm Build-Tray.ps1 Build-Watcher.ps1 Publish-Tray.ps1 Publish-Watcher.ps1 Install-Tray.ps1 Install-Watcher.ps1 Uninstall-Tray.ps1 Uninstall-Watcher.ps1
 git rm deploy/windows/common.ps1 deploy/windows/install-service.ps1 deploy/windows/uninstall-service.ps1 deploy/windows/install-tray.ps1 deploy/windows/uninstall-tray.ps1 deploy/windows/configure-tray.ps1
 ```
 
-- [ ] **Step 2: Write `deploy/windows/README.txt`**
+- [x] **Step 2: Write `deploy/windows/README.txt`**
 
 ```text
 ConnectionWatcher - manual install (Windows, x64)
@@ -2927,7 +2927,7 @@ Remove:  conwatch service uninstall
          then delete the folder. Data and config are left in place.
 ```
 
-- [ ] **Step 3: Rewrite `Build-Installer.ps1`**
+- [x] **Step 3: Rewrite `Build-Installer.ps1`**
 
 ```powershell
 # Builds ConnectionWatcher-Setup-<version>.exe and
@@ -2989,7 +2989,7 @@ Write-Host "Installer ready: $(Join-Path $dist "ConnectionWatcher-Setup-$Version
 Write-Host "Zip ready:       $zip" -ForegroundColor Green
 ```
 
-- [ ] **Step 4: Rewrite `deploy/windows/installer.iss`**
+- [x] **Step 4: Rewrite `deploy/windows/installer.iss`**
 
 ```ini
 ; ConnectionWatcher Windows installer (Inno Setup 6).
@@ -3169,7 +3169,7 @@ begin
 end;
 ```
 
-- [ ] **Step 5: Workflows**
+- [x] **Step 5: Workflows**
 
 `.github/workflows/release.yml`: in the `installer` job's upload step and the `release` job's `files`, replace the single pattern with both:
 
@@ -3207,7 +3207,7 @@ and in the release `body`, replace the Windows paragraph with:
       - run: dotnet test Tests/ConWatchCli.Tests -c Debug
 ```
 
-- [ ] **Step 6: Build the installer and the zip locally**
+- [x] **Step 6: Build the installer and the zip locally**
 
 Run: `.\Build-Installer.ps1`
 Expected: `staging\app` contains `conwatch.exe`, `conwatch-tray.exe`, `ConWatch.dll`, `wwwroot\`, `appsettings.json`, `README.txt`, `LICENSE`, and no `ConWatch.exe`; `dist\` has the Setup exe and the zip. Record the folder size and file count in the report (the design expects roughly the size of one of the old folders, about 125 MB, not two).
@@ -3215,7 +3215,7 @@ Expected: `staging\app` contains `conwatch.exe`, `conwatch-tray.exe`, `ConWatch.
 Run: `& staging\app\conwatch.exe --help` and `& staging\app\conwatch.exe config show`
 Expected: help; four `(default)` lines (or your machine's existing values).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add -A Build-Installer.ps1 deploy/windows .github/workflows Build-Tray.ps1 Build-Watcher.ps1 Publish-Tray.ps1 Publish-Watcher.ps1 Install-Tray.ps1 Install-Watcher.ps1 Uninstall-Tray.ps1 Uninstall-Watcher.ps1
@@ -3229,7 +3229,7 @@ git commit -m "build: one staging folder, thinned Inno wizard over conwatch, zip
 **Files:**
 - Modify: `README.md` (lines 36–39 and the whole "Running unattended" section up to "**Reverse proxy / HTTPS**"), `CONTRIBUTING.md` (Dev setup bullet about ConTray; Tests block; Releases paragraph)
 
-- [ ] **Step 1: README quick-start pointer (replace the two sentences that mention `Install-Watcher.ps1`)**
+- [x] **Step 1: README quick-start pointer (replace the two sentences that mention `Install-Watcher.ps1`)**
 
 ```markdown
 Windows installers ship with each release on the
@@ -3238,7 +3238,7 @@ Setup wizard and a zip. Either way the result is one folder with the
 `conwatch` command — see [Running unattended](#running-unattended).
 ```
 
-- [ ] **Step 2: README "Running unattended" section (replace everything from `## Running unattended` up to, not including, `**Reverse proxy / HTTPS**`)**
+- [x] **Step 2: README "Running unattended" section (replace everything from `## Running unattended` up to, not including, `**Reverse proxy / HTTPS**`)**
 
 ````markdown
 ## Running unattended
@@ -3293,7 +3293,7 @@ old `Watcher\` and `Tray\` folders. The `Install-*.ps1` scripts and
 
 ````
 
-- [ ] **Step 3: CONTRIBUTING**
+- [x] **Step 3: CONTRIBUTING**
 
 Replace the ConTray bullet under "Dev setup":
 
@@ -3314,7 +3314,7 @@ dotnet test Tests/ConWatchCli.Tests -c Debug
 
 In Releases, replace `builds `ConnectionWatcher-Setup-1.2.3.exe` on a Windows runner, and creates a GitHub Release with generated notes and the installer attached.` with `builds `ConnectionWatcher-Setup-1.2.3.exe` and `ConnectionWatcher-1.2.3-win-x64.zip` on a Windows runner (`Build-Installer.ps1`), and creates a GitHub Release with generated notes and both attached.`
 
-- [ ] **Step 4: Check for stale references and commit**
+- [x] **Step 4: Check for stale references and commit**
 
 Run: `grep -rn "Install-Watcher\|Install-Tray\|install-service\|configure-tray\|ConTray\.exe\|contray\.json" README.md CONTRIBUTING.md Programs Libraries Tests --include=*.md --include=*.cs --include=*.cshtml`
 Expected: only `LegacyInstall.cs`, `TraySettings.cs`, and the README "Upgrading from 0.9" paragraph.
@@ -3330,12 +3330,14 @@ git commit -m "docs: install section around the conwatch command, zip, config fi
 
 **Files:** none (verification only; the spec §2.1 already states that `serve` resolves config and passes host arguments).
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 Run: `dotnet test ConnectionWatcher.sln -c Debug` and `cd Programs/ConWatch/ClientApp; npx vitest run`
 Expected: every project green, 0 warnings in the build output. Record counts in the report.
 
-- [ ] **Step 2: Manual checklist (record each line's result in the report; do not skip)**
+- [x] **Step 2: Manual checklist (record each line's result in the report; do not skip)**
+
+Status 2026-09-23: all eleven items run with Mark at the keyboard, plus the port-change pass (8080→9090) and an uninstall with the tray running. Findings fixed in fix wave 2 (commits b152c0e..4fa33e6): `config set listen-url` now keeps `serverUrl` on the same port and points at `service install --port`; `conwatch tray` reports an already-running tray (including the 0.9 `ConTray.exe`, which shares the mutex); the uninstaller removes the empty program folder and the data-deletion prompt spells out its consequence. Re-tested after the fixes: install, already-running tray message, uninstall answering No keeps config and database.
 
 From an **unelevated** PowerShell in `staging\app` after `.\Build-Installer.ps1`:
 

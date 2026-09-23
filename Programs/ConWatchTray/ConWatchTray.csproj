@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>conwatch-tray</AssemblyName>
+    <RootNamespace>ConWatchTray</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyTitle>ConnectionWatcher Tray</AssemblyTitle>
+    <!-- Version, Company and Product come from Directory.Build.props. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Libraries\ConConfig\ConConfig.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -34,9 +34,9 @@ Image tags: `latest` is the newest stable release (also `1.2.3`, `1.2`, `1`
 to pin a line); `edge` is the newest build from `master`, for people who
 like to live there. Every build also carries a `sha-<commit>` tag. Windows
 installers ship with each release on the
-[Releases page](https://github.com/mdraughn/ConnectionWatcher/releases). On Windows,
-`.\Install-Watcher.ps1` installs it as a service instead — see
-[Running unattended](#running-unattended).
+[Releases page](https://github.com/mdraughn/ConnectionWatcher/releases): a
+Setup wizard and a zip. Either way the result is one folder with the
+`conwatch` command — see [Running unattended](#running-unattended).
 
 ## Running from source
 
@@ -265,48 +265,57 @@ increase(conwatch_transitions_total[1h])      # instability by target
 
 ## Running unattended
 
-**The easy way** — from the repo root, no parameters, self-elevating:
+**Wizard** — run `ConnectionWatcher-Setup-<version>.exe`. It installs to
+`C:\Program Files\DSoftCo\ConnectionWatcher`, asks for the dashboard port,
+registers the service, opens the firewall, starts the tray companion at
+sign-in, and opens the dashboard. Uncheck "Install and start the service"
+on a machine that only needs the tray, and it asks for the server URL instead.
+
+**Zip** — unzip `ConnectionWatcher-<version>-win-x64.zip` anywhere and, from
+a terminal in that folder:
 
 ```powershell
-.\Install-Watcher.ps1
+conwatch service install --port 8080
+conwatch tray install
+conwatch service status
 ```
 
-```powershell
-.\Install-Tray.ps1
-```
+The first command asks for administrator rights once. Both installs are the
+same folder and the same commands; the wizard just clicks them for you.
 
-`Install-Watcher` publishes to `C:\Program Files\DSoftCo\ConnectionWatcher\Watcher`,
-installs the service (data in `C:\ProgramData\DSoftCo\ConnectionWatcher\data`),
-and opens the dashboard. `Install-Tray` publishes the dot and points it at the
-installed service automatically. `Publish-*` re-deploys after changes
-(stopping/restarting the service or tray around the copy), `Build-*` is a
-quick compile check, and `Uninstall-*` removes service/autostart while leaving
-files and data in place.
+**The `conwatch` command** does everything else:
 
-**By hand** — publish anywhere and run the deploy scripts with parameters:
+| Command | What it does |
+|---|---|
+| `conwatch serve` | Run the watcher in the foreground (this is also what the service runs). |
+| `conwatch service install\|uninstall\|start\|stop` | Manage the Windows service (elevates once). |
+| `conwatch service status` | Installed? Running? Which port and data folder? Does the dashboard answer? |
+| `conwatch config show` | Every setting and where it came from. |
+| `conwatch config set listen-url\|data-dir\|server-url <value>` | Change one; listen-url/data-dir take effect on the next service start. To change the port use service install --port. |
+| `conwatch tray` / `conwatch tray install\|uninstall` | Start the tray now / at sign-in. |
 
-```powershell
-dotnet publish Programs/ConWatch -c Release -o C:\ConWatch
-powershell -ExecutionPolicy Bypass -File deploy/windows/install-service.ps1 -AppDir C:\ConWatch
-```
+Settings live in `%ProgramData%\DSoftCo\ConnectionWatcher\conwatch.json`
+(listen URL, data folder, the tray's server URL) with a per-user override in
+`%AppData%\DSoftCo\ConnectionWatcher\tray.json` written by the tray's
+Settings dialog or `conwatch config set server-url <url> --user`. Data stays
+in `%ProgramData%\DSoftCo\ConnectionWatcher\data`. Uninstalling never deletes
+either without asking. To move the dashboard to another port, run
+`conwatch service install --port <n>` again; it re-pins the port, firewall
+rule and shortcut and restarts the service.
 
-The installer picks a free port once (default 8080; `-Port` to choose), pins
-it, opens the firewall, sets restart-on-failure, creates a Start Menu
-shortcut, starts the verdict-colored tray companion, and opens the dashboard.
-`uninstall-service.ps1` removes everything except your data.
+**Tray companion** — `conwatch-tray.exe`: green/orange/red/gray at a glance;
+double-click opens the dashboard; right-click for History, the ISP report,
+Admin, and **Settings** (server URL with test-before-save, back to the
+installed default, toast notifications). It runs on machines that are not
+running the server too: point it at the NAS with `conwatch tray install --url http://nas:8080`.
 
-**Tray companion (standalone)** — the dot also installs on machines that
-*aren't* running the server (point it at the NAS or another box):
-
-```powershell
-dotnet publish Programs/ConTray -c Release -o C:\ConTray
-powershell -ExecutionPolicy Bypass -File deploy/windows/install-tray.ps1 -AppDir C:\ConTray -Url http://nas:8080
-```
-
-No elevation needed. Green/orange/red/gray at a glance; double-click opens the
-dashboard; right-click for History, the ISP report, Admin, and **Settings**
-(override the server URL, test the connection, return to the installed
-default, toggle toast notifications on state changes).
+**Upgrading from 0.9** — the wizard replaces `ConWatch.exe` and `ConTray.exe`
+with `conwatch.exe` and `conwatch-tray.exe`, re-registers the service, moves
+your tray URL from `contray.json` into the new config file, and removes the
+old `Watcher\` and `Tray\` folders. The `Install-*.ps1` scripts and
+`deploy/windows/*.ps1` are gone. The tray reads the machine config when it
+starts, so after `conwatch config set` restart the tray to pick up a new
+installed default.
 
 **Reverse proxy / HTTPS** — ConWatch is proxy-friendly by construction: it
 emits only relative URLs and never reads scheme, host, or client IP, so an
