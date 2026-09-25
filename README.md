@@ -270,6 +270,8 @@ increase(conwatch_transitions_total[1h])      # instability by target
 registers the service, opens the firewall, starts the tray companion at
 sign-in, and opens the dashboard. Uncheck "Install and start the service"
 on a machine that only needs the tray, and it asks for the server URL instead.
+Release builds are code-signed (publisher "Mark Draughn"); SmartScreen may
+still ask for confirmation until the certificate has built up reputation.
 
 **Zip** — unzip `ConnectionWatcher-<version>-win-x64.zip` anywhere and, from
 a terminal in that folder:

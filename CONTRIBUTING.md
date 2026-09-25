@@ -65,7 +65,13 @@ Two channels, one source:
 
 The version lives in one place, `Directory.Build.props` (`VersionPrefix`);
 bump it right after a release so dev builds announce the version they are
-heading toward. Installers are not code-signed yet.
+heading toward. Release builds are code-signed with Azure Artifact Signing:
+`Build-Installer.ps1 -Sign` signs the project's exes and DLLs, the
+uninstaller and the Setup exe (`deploy/windows/signing-metadata.json` names
+the account and certificate profile; `deploy/windows/Get-SigningTools.ps1`
+fetches signtool and the signing dlib). The workflow authenticates with a
+federated OIDC credential on an app registration; a workstation needs
+`az login` as a user who holds the Certificate Profile Signer role.
 
 Design notes and implementation history live in `docs/superpowers/` — often
 the fastest way to learn why something is the way it is.
