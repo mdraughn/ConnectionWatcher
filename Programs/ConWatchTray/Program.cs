@@ -27,6 +27,8 @@ internal sealed class TrayContext : ApplicationContext
 {
     private readonly NotifyIcon _icon;
     private readonly System.Windows.Forms.Timer _timer;
+    private readonly System.Windows.Forms.Timer _clickTimer;
+    private long _lastDoubleClick = long.MinValue / 2;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(3) };
     private readonly TraySettings _settings = new();
     private readonly Dictionary<TrayState, Icon> _icons = new();
@@ -53,16 +55,34 @@ internal sealed class TrayContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = menu,
         };
-        // A single left click opens the same menu as a right click. NotifyIcon
-        // only pops its ContextMenuStrip for the right button on its own; the
-        // private ShowContextMenu is how WinForms does it, and it positions the
-        // menu at the cursor and handles focus so it closes when clicked away.
+        // Left button: a single click opens the menu, a double click opens the
+        // dashboard. The menu grabs the mouse as soon as it shows, which would
+        // swallow the second click, so the single-click action waits one
+        // double-click interval and a double click cancels it.
+        _clickTimer = new System.Windows.Forms.Timer { Interval = SystemInformation.DoubleClickTime };
+        _clickTimer.Tick += (_, _) =>
+        {
+            _clickTimer.Stop();
+            ShowMenu();
+        };
+        // The second click of a double click raises MouseClick too, after
+        // MouseDoubleClick, so a click that closely follows a double click is
+        // part of it and must not re-arm the menu.
         _icon.MouseClick += (_, e) =>
         {
-            if (e.Button == MouseButtons.Left)
-                typeof(NotifyIcon).GetMethod("ShowContextMenu",
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?
-                    .Invoke(_icon, null);
+            if (e.Button != MouseButtons.Left)
+                return;
+            if (Environment.TickCount64 - _lastDoubleClick < SystemInformation.DoubleClickTime)
+                return;
+            _clickTimer.Start();
+        };
+        _icon.MouseDoubleClick += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left)
+                return;
+            _clickTimer.Stop();
+            _lastDoubleClick = Environment.TickCount64;
+            Open("");
         };
 
         _timer = new System.Windows.Forms.Timer { Interval = 5000 };
@@ -125,6 +145,16 @@ internal sealed class TrayContext : ApplicationContext
             : next.Detail is { Length: > 0 } ? next.Detail : TrayStatus.Describe(next.State);
         _icon.ShowBalloonTip(5000, title, Truncate(body, 250), icon);
     }
+
+    /// <summary>
+    /// Pops the context menu at the cursor. NotifyIcon does this itself only
+    /// for the right button; its private ShowContextMenu is how WinForms
+    /// positions the menu and gives it focus so it closes when clicked away.
+    /// </summary>
+    private void ShowMenu() =>
+        typeof(NotifyIcon).GetMethod("ShowContextMenu",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?
+            .Invoke(_icon, null);
 
     private void ShowSettings()
     {
@@ -218,6 +248,7 @@ internal sealed class TrayContext : ApplicationContext
         _icon.Visible = false;
         _icon.Dispose();
         _timer.Dispose();
+        _clickTimer.Dispose();
         _http.Dispose();
         base.ExitThreadCore();
     }

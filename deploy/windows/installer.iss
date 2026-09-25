@@ -233,14 +233,18 @@ begin
   if CurUninstallStep = usPostUninstall then
   begin
     { Two steps on purpose: Yes here, then a second confirmation, because the
-      folder holds the whole measurement history and DelTree is not undoable. }
-    if MsgBox('Delete the configuration and all the data gathered by the service?' + #13#10#13#10 +
-              ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher') + #13#10#13#10 +
-              'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      folder holds the whole measurement history and DelTree is not undoable.
+      No on the confirmation returns to the question rather than deciding it. }
+    while MsgBox('Delete the configuration and all the data gathered by the service?' + #13#10#13#10 +
+                 ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher') + #13#10#13#10 +
+                 'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES do
     begin
       if MsgBox('This permanently deletes the measurement database. It cannot be recovered.' + #13#10#13#10 +
                 'Delete it?', mbCriticalError, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
         DelTree(ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher'), True, True, True);
+        break;
+      end;
     end;
   end;
 end;
