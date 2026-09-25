@@ -144,6 +144,81 @@ public class ExportApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Transition_json_bytes_are_pinned()
+    {
+        var subject = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        long first, second;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var a = new TransitionRow
+            {
+                TimestampUtc = new DateTime(2026, 9, 18, 10, 0, 0, 123, DateTimeKind.Utc),
+                SubjectId = subject, SubjectName = "Router", SubjectKind = "Target",
+                FromState = "Responding", ToState = "Down", Trigger = "ThresholdCrossed",
+                SuccessRate = 0.1, SampleSize = 10, AvgRtt = 12.5f, Detail = "has, comma",
+            };
+            var b = new TransitionRow
+            {
+                TimestampUtc = new DateTime(2026, 9, 18, 10, 5, 0, 250, DateTimeKind.Utc),
+                SubjectId = subject, SubjectName = "Router", SubjectKind = "Target",
+                FromState = "Down", ToState = "Responding", Trigger = "ThresholdCrossed",
+            };
+            db.Transitions.AddRange(a, b);
+            await db.SaveChangesAsync();
+            (first, second) = (a.Id, b.Id);
+        }
+
+        var response = await _client.GetAsync("/api/v1/export/transitions?format=json");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal(
+            "[{\"id\":" + first + ",\"timestampUtc\":\"2026-09-18T10:00:00.123Z\"," +
+            "\"subjectId\":\"" + subject + "\",\"subjectName\":\"Router\",\"subjectKind\":\"Target\"," +
+            "\"fromState\":\"Responding\",\"toState\":\"Down\",\"trigger\":\"ThresholdCrossed\"," +
+            "\"successRate\":0.1,\"sampleSize\":10,\"burstLossRate\":null,\"ancestorId\":null," +
+            "\"detail\":\"has, comma\",\"verdict\":null,\"avgRtt\":12.5}," +
+            "{\"id\":" + second + ",\"timestampUtc\":\"2026-09-18T10:05:00.25Z\"," +
+            "\"subjectId\":\"" + subject + "\",\"subjectName\":\"Router\",\"subjectKind\":\"Target\"," +
+            "\"fromState\":\"Down\",\"toState\":\"Responding\",\"trigger\":\"ThresholdCrossed\"," +
+            "\"successRate\":null,\"sampleSize\":null,\"burstLossRate\":null,\"ancestorId\":null," +
+            "\"detail\":null,\"verdict\":null,\"avgRtt\":0}]",
+            await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Rollup_json_bytes_are_pinned()
+    {
+        var target = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        long id;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var r = new RollupRow
+            {
+                TargetId = target, PeriodStartUtc = new DateTime(2026, 9, 18, 10, 0, 0, DateTimeKind.Utc),
+                Resolution = "Minute", PingCount = 60, SuccessCount = 59, RttAvg = 12.3, RttMin = 8, RttMax = 30,
+            };
+            db.Rollups.Add(r);
+            await db.SaveChangesAsync();
+            id = r.Id;
+        }
+
+        var response = await _client.GetAsync("/api/v1/export/rollups?format=json");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal(
+            "[{\"id\":" + id + ",\"targetId\":\"" + target + "\"," +
+            "\"periodStartUtc\":\"2026-09-18T10:00:00Z\",\"resolution\":\"Minute\"," +
+            "\"pingCount\":60,\"successCount\":59,\"rttAvg\":12.3,\"rttMin\":8,\"rttMax\":30}]",
+            await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Empty_exports_are_a_header_line_or_an_empty_array()
     {
         Assert.Equal(TransitionHeader + "\n",

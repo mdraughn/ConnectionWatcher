@@ -33,7 +33,7 @@ public static class ExportEndpoints
             return IsJson(format)
                 ? Results.Json(rows, contentType: "application/json")
                 : Csv(CsvExport.TransitionHeader, rows, CsvExport.TransitionLine,
-                    $"conwatch-transitions-{stamp}.csv");
+                    $"conwatch-transitions-{stamp}.csv", http.RequestAborted);
         });
 
         api.MapGet("/export/rollups", async (HttpContext http,
@@ -56,7 +56,7 @@ public static class ExportEndpoints
             return IsJson(format)
                 ? Results.Json(rows, contentType: "application/json")
                 : Csv(CsvExport.RollupHeader, rows, CsvExport.RollupLine,
-                    $"conwatch-rollups-{stamp}.csv");
+                    $"conwatch-rollups-{stamp}.csv", http.RequestAborted);
         });
 
         // Route A of real-data testing: the complete sanitized state in one
@@ -102,7 +102,7 @@ public static class ExportEndpoints
             return IsJson(format)
                 ? Results.Json(rows, contentType: "application/json")
                 : Csv(CsvExport.GlitchHeader, rows, CsvExport.GlitchLine,
-                    $"conwatch-glitches-{stamp}.csv");
+                    $"conwatch-glitches-{stamp}.csv", http.RequestAborted);
         });
     }
 
@@ -152,16 +152,19 @@ public static class ExportEndpoints
     private static bool IsJson(string format) =>
         format.Equals("json", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Header, then one line per row, each ending in '\n'; UTF-8, no BOM.</summary>
+    /// <summary>Header, then one line per row, each ending in '\n'; UTF-8, no BOM.
+    /// A client disconnect ends the enumeration through <paramref name="cancellationToken"/>
+    /// (the request's <see cref="HttpContext.RequestAborted"/>), passed via
+    /// <see cref="IAsyncEnumerable{T}.GetAsyncEnumerator"/>/<c>WithCancellation</c>.</summary>
     private static IResult Csv<T>(string header, IAsyncEnumerable<T> rows, Func<T, string> line,
-        string fileName) =>
+        string fileName, CancellationToken cancellationToken) =>
         Results.Stream(async body =>
         {
             await using var writer = new StreamWriter(body,
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 64 * 1024, leaveOpen: true);
             await writer.WriteAsync(header);
             await writer.WriteAsync('\n');
-            await foreach (var row in rows)
+            await foreach (var row in rows.WithCancellation(cancellationToken))
             {
                 await writer.WriteAsync(line(row));
                 await writer.WriteAsync('\n');
