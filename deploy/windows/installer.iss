@@ -39,9 +39,18 @@ SignTool=signtool
 SignedUninstaller=yes
 #endif
 
+[Messages]
+; The tasks page is really the "where does the service run?" decision.
+WizardSelectTasks=What to install
+SelectTasksDesc=Run the service on this computer, or connect to one running elsewhere?
+SelectTasksLabel2=Both are normally checked. Uncheck the service if another machine already runs it, then click Next.
+
 [Tasks]
-Name: "service"; Description: "Install and start the ConnectionWatcher service on this machine"
-Name: "tray"; Description: "Start the tray companion when you sign in"
+; checkedonce: on by default, but a deliberate uncheck is remembered on reinstall.
+Name: "service"; GroupDescription: "Service:"; Flags: checkedonce; \
+    Description: "Run the ConnectionWatcher service on this computer. It does the monitoring and hosts the dashboard. Leave this unchecked if the service runs on another machine, such as a NAS."
+Name: "tray"; GroupDescription: "Tray companion:"; Flags: checkedonce; \
+    Description: "Show the connection-status icon in the tray when you sign in. It works with the service on this computer or on another machine."
 
 [Files]
 Source: "{#StagingDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -79,10 +88,16 @@ begin
   PortPage.Values[0] := '8080';
 
   UrlPage := CreateInputQueryPage(PortPage.ID,
-    'ConnectionWatcher server', 'Where is your ConnectionWatcher server?',
-    'The tray companion needs the address of the machine running the service (for example http://nas:8080).');
+    'ConnectionWatcher server', 'Where does the service run?',
+    '');  { description and default are set per visit in CurPageChanged }
   UrlPage.Add('Server URL:', False);
   UrlPage.Values[0] := 'http://localhost:8080';
+end;
+
+{ The address this computer's service will answer on, from the port page. }
+function LocalServerUrl: string;
+begin
+  Result := 'http://localhost:' + PortPage.Values[0];
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -91,7 +106,26 @@ begin
   if PageID = PortPage.ID then
     Result := not WizardIsTaskSelected('service');
   if PageID = UrlPage.ID then
-    Result := WizardIsTaskSelected('service') or not WizardIsTaskSelected('tray');
+    Result := not WizardIsTaskSelected('tray');
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = UrlPage.ID then
+  begin
+    if WizardIsTaskSelected('service') then
+    begin
+      UrlPage.Description :=
+        'The tray will connect to the service on this computer, so the address below is already right. ' +
+        'Change it only if the tray should watch a different server.';
+      UrlPage.Values[0] := LocalServerUrl;
+    end
+    else
+      UrlPage.Description :=
+        'You chose not to run the service here, so the tray needs the address of the machine that does, ' +
+        'for example http://nas:8080.' + #13#10#13#10 +
+        'Not sure yet? Keep the default; you can change it any time from the tray icon''s Settings dialog.';
+  end;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -174,7 +208,9 @@ begin
     end;
     if WizardIsTaskSelected('tray') then
     begin
-      if WizardIsTaskSelected('service') then
+      { With the service here the machine config already points the tray at
+        it; only an edited address needs the per-user override. }
+      if WizardIsTaskSelected('service') and (UrlPage.Values[0] = LocalServerUrl) then
         RunConwatchAsUser('tray install')
       else
         RunConwatchAsUser('tray install --url "' + UrlPage.Values[0] + '"');
@@ -196,9 +232,19 @@ begin
   end;
   if CurUninstallStep = usPostUninstall then
   begin
-    if MsgBox('Delete the ConnectionWatcher measurement history and config?' + #13#10#13#10 +
-              ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher') + #13#10#13#10 +
-              'Yes permanently deletes your measurement database. No keeps it for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
-      DelTree(ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher'), True, True, True);
+    { Two steps on purpose: Yes here, then a second confirmation, because the
+      folder holds the whole measurement history and DelTree is not undoable.
+      No on the confirmation returns to the question rather than deciding it. }
+    while MsgBox('Delete the configuration and all the data gathered by the service?' + #13#10#13#10 +
+                 ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher') + #13#10#13#10 +
+                 'Choose No to keep them for a later reinstall.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES do
+    begin
+      if MsgBox('This permanently deletes the measurement database. It cannot be recovered.' + #13#10#13#10 +
+                'Delete it?', mbCriticalError, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
+        DelTree(ExpandConstant('{commonappdata}\DSoftCo\ConnectionWatcher'), True, True, True);
+        break;
+      end;
+    end;
   end;
 end;
