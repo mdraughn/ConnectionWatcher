@@ -268,10 +268,14 @@ increase(conwatch_transitions_total[1h])      # instability by target
 **Wizard** — run `ConnectionWatcher-Setup-<version>.exe`. It installs to
 `C:\Program Files\DSoftCo\ConnectionWatcher`, asks for the dashboard port,
 registers the service, opens the firewall, starts the tray companion at
-sign-in, and opens the dashboard. Uncheck "Install and start the service"
-on a machine that only needs the tray, and it asks for the server URL instead.
-Release builds are code-signed (publisher "Mark Draughn"); SmartScreen may
-still ask for confirmation until the certificate has built up reputation.
+sign-in, and opens the dashboard. The first page asks whether the service
+runs on this computer or somewhere else: uncheck it on a machine that only
+needs the tray, and the next page asks for the server's address (keep the
+default if you don't know it yet; the tray's Settings dialog can change it
+later). Uninstalling removes the program, service and tray, then asks
+before touching your data. Release builds are code-signed (publisher "Mark
+Draughn"); SmartScreen may still ask for confirmation until the certificate
+has built up reputation.
 
 **Zip** — unzip `ConnectionWatcher-<version>-win-x64.zip` anywhere and, from
 a terminal in that folder:
@@ -306,9 +310,9 @@ either without asking. To move the dashboard to another port, run
 rule and shortcut and restarts the service.
 
 **Tray companion** — `conwatch-tray.exe`: green/orange/red/gray at a glance;
-double-click opens the dashboard; right-click for History, the ISP report,
-Admin, and **Settings** (server URL with test-before-save, back to the
-installed default, toast notifications). It runs on machines that are not
+double-click opens the dashboard; a single click (either button) opens the
+menu: History, the ISP report, Admin, and **Settings** (server URL with
+test-before-save, back to the installed default, toast notifications). It runs on machines that are not
 running the server too: point it at the NAS with `conwatch tray install --url http://nas:8080`.
 
 **Upgrading from 0.9** — the wizard replaces `ConWatch.exe` and `ConTray.exe`
@@ -343,13 +347,16 @@ on stop; if you run the image with `docker run`, add `--stop-timeout 30`.
 
 | Project | Purpose |
 |---|---|
-| `Programs/ConWatch` | The production app: monitoring engine + SQLite persistence + REST API |
+| `Programs/ConWatch` | The web host: monitoring engine + SQLite persistence + REST API + UI (what the container runs) |
+| `Programs/ConWatchCli` | `conwatch.exe`: hosts the same app on Windows and manages the service, config and tray |
+| `Programs/ConWatchTray` | `conwatch-tray.exe`, the Windows tray companion |
 | `Core/ConEngine` | The engine: adaptive ping disciplines, reachability tree, pools, verdict layer |
 | `Core/ConCore` | Contracts and domain primitives |
+| `Libraries/ConConfig` | The install-time config files (`conwatch.json`, `tray.json`) and their precedence |
 | `Libraries/ConInfrastructure` | Real ICMP/TCP probes, DNS, gateway discovery, traceroute |
 | `Libraries/ConPersistence` | EF Core (SQLite) schema, config store, transition/rollup recording, retention |
 | `Libraries/ConNotify` | MQTT (Home Assistant), webhook, and heartbeat notifiers |
-| `Tests/*` | xUnit suites for engine, persistence, and the full app over HTTP |
+| `Tests/*` | xUnit suites for the engine, persistence, config, the command, and the full app over HTTP |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev loop and test commands.
 Design specs and implementation plans live in `docs/superpowers/` — the
