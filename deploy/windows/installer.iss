@@ -31,6 +31,13 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName=ConnectionWatcher
 CloseApplications=yes
+#ifdef Sign
+; Build-Installer.ps1 -Sign passes /DSign and /Ssigntool=<command $f>; Inno then
+; signs the uninstaller and the Setup exe with the same Artifact Signing call
+; used for the exes inside.
+SignTool=signtool
+SignedUninstaller=yes
+#endif
 
 [Tasks]
 Name: "service"; Description: "Install and start the ConnectionWatcher service on this machine"

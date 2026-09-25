@@ -13,10 +13,14 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # OIDC token for azure/login (code signing)
 
 jobs:
   installer:
     runs-on: windows-latest
+    # The `release` environment is what the app registration's federated
+    # credential trusts (subject repo:<owner>/<repo>:environment:release).
+    environment: release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -37,9 +41,23 @@ jobs:
         shell: pwsh
         run: '"version=$($env:GITHUB_REF_NAME.TrimStart(''v''))" >> $env:GITHUB_OUTPUT'
 
-      - name: Build installer
+      # Code signing: Azure Artifact Signing, authenticated with a federated
+      # (OIDC) credential on the conwatch-release-signing app registration.
+      # The three IDs are identifiers, not secrets; they live in repository
+      # secrets so they stay out of logs.
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch signing tools
         shell: pwsh
-        run: .\Build-Installer.ps1 -Version ${{ steps.ver.outputs.version }}
+        run: .\deploy\windows\Get-SigningTools.ps1
+
+      - name: Build and sign installer
+        shell: pwsh
+        run: .\Build-Installer.ps1 -Version ${{ steps.ver.outputs.version }} -Sign
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,6 +92,6 @@ jobs:
 
             **Windows:** `ConnectionWatcher-Setup-${{ steps.ver.outputs.version }}.exe` (wizard) or
             `ConnectionWatcher-${{ steps.ver.outputs.version }}-win-x64.zip` (unzip, then `conwatch service install`).
-            Neither is code-signed yet, so SmartScreen will ask you to confirm.
+            Both are code-signed (Azure Artifact Signing, publisher "Mark Draughn"); a new certificate has little SmartScreen reputation at first, so Windows may still ask you to confirm.
             Upgrading from 0.9: the installer replaces `ConWatch.exe`/`ConTray.exe` with `conwatch.exe`/`conwatch-tray.exe`,
             re-registers the service, and moves your tray URL into the new config file automatically.
