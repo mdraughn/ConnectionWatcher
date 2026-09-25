@@ -82,7 +82,8 @@ public class ConWatchMcpTools(WatcherHostService host,
     [McpServerTool(Name = "get_transitions", ReadOnly = true)]
     [Description("The raw state-transition log (newest first): every recorded state " +
         "change for targets, pools, and the internet verdict, with trigger and evidence. " +
-        "Use for detailed digging after get_connection_report. Times are ISO-8601 UTC.")]
+        "Use for detailed digging after get_connection_report. " +
+        "Rows have the REST /api/v1/transitions shape; times are ISO-8601 UTC (+00:00).")]
     public async Task<string> GetTransitions(
         [Description("Only transitions at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only transitions at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,
@@ -94,12 +95,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             fromUtc is { } f ? TimeRange.AsUtc(f) : null,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
             Math.Clamp(limit, 1, 500), before: null, subjectName);
-        return JsonSerializer.Serialize(rows.Select(t => new
-        {
-            TimestampUtc = t.TimestampUtc,
-            t.SubjectName, t.SubjectKind, t.FromState, t.ToState,
-            t.Trigger, t.Detail, t.Verdict,
-        }), Json);
+        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r)), Json);
     }
 
     [McpServerTool(Name = "get_glitches", ReadOnly = true)]

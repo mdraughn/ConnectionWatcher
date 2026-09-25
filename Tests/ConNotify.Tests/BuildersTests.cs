@@ -136,4 +136,28 @@ public class WebhookPayloadTests
         Assert.Contains("Modem", json.GetProperty("detail").GetString());
         Assert.Equal("2026-08-24T12:00:00", json.GetProperty("timestamp").GetString()![..19]);
     }
+
+    [Fact]
+    public void Payload_is_the_transition_dto_with_a_utc_offset_timestamp()
+    {
+        var t = new TargetTransition
+        {
+            Kind = TransitionSubjectKind.Target,
+            TargetId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+            TargetName = "Router",
+            From = HostState.Responding,
+            To = HostState.Down,
+            Timestamp = DateTimeOffset.Parse("2026-08-24T12:00:00.5Z"),
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed, SuccessRate = 0.1, SampleSize = 10 },
+            AverageRoundtripTime = 12.5f,
+        };
+
+        var json = JsonSerializer.Deserialize<JsonElement>(WebhookPayload.ToJson(t));
+
+        Assert.Equal("2026-08-24T12:00:00.5+00:00", json.GetProperty("timestamp").GetString());
+        Assert.False(json.TryGetProperty("id", out _));
+        Assert.Equal(12.5, json.GetProperty("avgRtt").GetDouble());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("ancestorId").ValueKind);
+        Assert.Equal("Down", json.GetProperty("to").GetString());
+    }
 }

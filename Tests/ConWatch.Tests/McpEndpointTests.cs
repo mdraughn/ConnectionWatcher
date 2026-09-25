@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
 
@@ -113,5 +114,30 @@ public class McpEndpointTests : IDisposable
             arguments = new { limit = 10 },
         }));
         Assert.Contains("Responding", transitions);
+    }
+
+    [Fact]
+    public async Task Transitions_tool_speaks_the_rest_transition_shape()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var status = await _client.GetAsync("/api/v1/status");
+            return status.IsSuccessStatusCode &&
+                   (await status.Content.ReadAsStringAsync()).Contains("Healthy");
+        });
+        await _factory.Services.GetRequiredService<ConPersistence.Recording.TransitionRecorder>().FlushAsync();
+        await InitializeAsync();
+
+        var text = ToolText(await RpcAsync("tools/call", new
+        {
+            name = "get_transitions",
+            arguments = new { limit = 10 },
+        }));
+
+        var first = JsonSerializer.Deserialize<JsonElement>(text)[0];
+        foreach (var key in new[] { "id", "timestamp", "subjectId", "subjectName", "subjectKind", "from", "to", "trigger" })
+            Assert.True(first.TryGetProperty(key, out _), $"missing '{key}'");
+        Assert.Matches(@"\+00:00$", first.GetProperty("timestamp").GetString());
     }
 }

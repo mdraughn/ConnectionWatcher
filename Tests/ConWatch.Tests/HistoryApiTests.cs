@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConPersistence;
 using ConPersistence.Config;
+using ConPersistence.Entities;
 using ConPersistence.Recording;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -129,5 +132,32 @@ public class HistoryApiTests : IDisposable
         var ids1 = page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetInt64());
         var ids2 = page2.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetInt64());
         Assert.Empty(ids1.Intersect(ids2));
+    }
+
+    [Fact]
+    public async Task Transitions_endpoint_wire_shape_is_pinned()
+    {
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+        long id;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            var row = new TransitionRow
+            {
+                TimestampUtc = new DateTime(2026, 9, 18, 10, 0, 0, 123, DateTimeKind.Utc),
+                SubjectId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                SubjectName = "Router", SubjectKind = "Target",
+                FromState = "Responding", ToState = "Down", Trigger = "ThresholdCrossed",
+                SuccessRate = 0.1, SampleSize = 10, AvgRtt = 12.5f,
+            };
+            db.Transitions.Add(row);
+            await db.SaveChangesAsync();
+            id = row.Id;
+        }
+
+        var body = await GetJson("/api/v1/transitions?limit=1");
+
+        Assert.Equal(
+            $$"""{"id":{{id}},"timestamp":"2026-09-18T10:00:00.123+00:00","subjectId":"11111111-1111-1111-1111-111111111111","subjectName":"Router","subjectKind":"Target","from":"Responding","to":"Down","trigger":"ThresholdCrossed","successRate":0.1,"sampleSize":10,"burstLossRate":null,"ancestorId":null,"detail":null,"verdict":null,"avgRtt":12.5}""",
+            body.GetProperty("items")[0].GetRawText());
     }
 }

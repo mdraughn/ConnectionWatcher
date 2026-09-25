@@ -19,15 +19,7 @@ public static class HistoryEndpoints
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.TransitionsAsync(db, subjectId,
                 fromUtc, toUtc, limit, before, subjectName);
-            var items = rows.Select(r => new
-            {
-                r.Id,
-                Timestamp = new DateTimeOffset(r.TimestampUtc),
-                r.SubjectId, r.SubjectName, r.SubjectKind,
-                From = r.FromState, To = r.ToState, r.Trigger,
-                r.SuccessRate, r.SampleSize, r.BurstLossRate,
-                r.AncestorId, r.Detail, r.Verdict, r.AvgRtt,
-            }).ToList();
+            var items = rows.Select(r => TransitionDto.From(r)).ToList();
             long? nextBefore = rows.Count == Math.Clamp(limit, 1, 1000) ? rows.Last().Id : null;
             return Results.Ok(new { Items = items, NextBefore = nextBefore });
         });

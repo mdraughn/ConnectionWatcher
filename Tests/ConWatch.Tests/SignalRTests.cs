@@ -120,4 +120,19 @@ public class SignalRTests : IAsyncLifetime
                 !s.Snapshot.TryGetProperty("enabled", out var e) || e.ValueKind != JsonValueKind.False);
         }
     }
+
+    [Fact]
+    public async Task Transition_messages_carry_utc_offset_timestamps()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(() =>
+        {
+            lock (_transitions)
+                return Task.FromResult(_transitions.Count > 0);
+        });
+
+        lock (_transitions)
+            Assert.All(_transitions, t => Assert.Matches(
+                @"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?\+00:00$", t.GetProperty("timestamp").GetString()));
+    }
 }

@@ -1,5 +1,6 @@
 using ConEngine;
 using ConEngine.Events;
+using ConPersistence.Queries;
 using Microsoft.AspNetCore.SignalR;
 
 namespace ConWatch;
@@ -80,21 +81,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     {
         try
         {
-            await hub.Clients.All.SendAsync("transition", new
-            {
-                Timestamp = t.Timestamp,
-                SubjectId = t.TargetId,
-                SubjectName = t.TargetName,
-                SubjectKind = t.Kind.ToString(),
-                From = t.From.ToString(),
-                To = t.To.ToString(),
-                Trigger = t.Reason.Trigger.ToString(),
-                Detail = t.Reason.Detail,
-                Verdict = t.Reason.Verdict,
-                SuccessRate = t.Reason.SuccessRate,
-                SampleSize = t.Reason.SampleSize,
-                BurstLossRate = t.Reason.BurstLossRate,
-            });
+            await hub.Clients.All.SendAsync("transition", TransitionDto.From(t));
             // This transition was queued before a Detach() that may since have
             // run (the subscription is disposed, not awaited); only push a
             // snapshot if this is still the attached engine, or a rebuild's
