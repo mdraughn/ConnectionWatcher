@@ -39,14 +39,6 @@ public class CircularBuffer<T>
             _head = (_head + 1) % _capacity; // full: drop the oldest
     }
 
-    /// <summary>The most recent item, or default when empty.</summary>
-    public T? GetLatest()
-    {
-        if (_count == 0)
-            return default;
-        return _buffer[(_tail - 1 + _capacity) % _capacity];
-    }
-
     /// <summary>Items newest to oldest (lazy; enumerate under the owner's lock).</summary>
     public IEnumerable<T> InReverseOrder()
     {

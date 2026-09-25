@@ -47,7 +47,7 @@ public class WatcherEngine
     /// <summary>Default re-resolution period for hostname targets. There is
     /// no TTL to honor (System.Net.Dns hides it); five minutes tracks CDN-scale
     /// record changes without hammering the resolver.</summary>
-    public static readonly TimeSpan DefaultDnsRefreshInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan DefaultDnsRefreshInterval = TimeSpan.FromMinutes(5);
 
     public WatcherEngine(TimeProvider timeProvider, IPingTransceiverFactory pingFactory,
         IDomainNameResolverFactory resolverFactory, ILoggerFactory loggerFactory,

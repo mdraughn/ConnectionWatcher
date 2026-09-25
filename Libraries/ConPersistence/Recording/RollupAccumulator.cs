@@ -9,7 +9,7 @@ public class RollupBucket(Guid targetId, DateTime periodStartUtc)
     public DateTime PeriodStartUtc { get; } = periodStartUtc;
     public int PingCount { get; set; }
     public int SuccessCount { get; set; }
-    public long RttSum { get; set; }
+    internal long RttSum { get; set; }
     public long RttMin { get; set; } = long.MaxValue;
     public long RttMax { get; set; }
 
