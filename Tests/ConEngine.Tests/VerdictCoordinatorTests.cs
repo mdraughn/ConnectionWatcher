@@ -322,4 +322,18 @@ public class VerdictCoordinatorTests
         // The earlier snapshot is untouched: readers holding it never see a torn pair.
         Assert.Equal(VerdictState.Healthy, healthy.State);
     }
+
+    [Fact]
+    public void Verdict_transitions_are_published_outside_the_verdict_lock()
+    {
+        var results = new List<bool>();
+        using var subscription = _verdict.TransitionSource.Subscribe(_ =>
+            results.Add(Task.Run(() => _verdict.Seed(VerdictState.LinkDown)).Wait(TimeSpan.FromSeconds(2))));
+
+        AllHealthy();
+
+        Assert.NotEmpty(results);
+        Assert.All(results, r => Assert.True(r));
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict); // Seed stayed a no-op
+    }
 }
