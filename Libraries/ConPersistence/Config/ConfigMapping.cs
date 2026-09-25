@@ -29,6 +29,9 @@ internal static class ConfigMapping
     public static string? NormalizeOperator(string? op) =>
         op?.Trim() is { Length: > 0 } trimmed ? trimmed : null;
 
+    /// <summary>Addresses are stored trimmed; the validator must see the stored form.</summary>
+    public static string NormalizeAddress(string? address) => (address ?? "").Trim();
+
     // ---- profiles ----
 
     public static ProfileDto ToDto(this ProfileRow p) => new()
@@ -117,10 +120,10 @@ internal static class ConfigMapping
         Operator = t.Operator, Probe = t.Probe,
     };
 
-    /// <summary>Engine-options shape with the probe canonicalized (the validator sees what will be stored).</summary>
+    /// <summary>Engine-options shape normalized exactly as it will be stored (the validator sees what will be stored).</summary>
     public static TargetConfig ToConfig(this TargetDto t) => new()
     {
-        Id = t.Id, Name = t.Name, Address = t.Address,
+        Id = t.Id, Name = t.Name, Address = NormalizeAddress(t.Address),
         Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
         Operator = t.Operator, Probe = NormalizeProbe(t.Probe),
     };
@@ -131,6 +134,23 @@ internal static class ConfigMapping
         Parent = parentName, Profile = profileName, Enabled = t.Enabled,
         Operator = t.Operator, Probe = t.Probe,
     };
+
+    /// <summary>
+    /// Copies every editable field (not the id) from a DTO onto a row,
+    /// normalized the way every write path stores it. A new target column is
+    /// written here and in the two ToConfig/ToDto mappings, nowhere else.
+    /// </summary>
+    public static TargetRow CopyFrom(this TargetRow row, TargetDto dto, Guid profileId, Guid? parentId)
+    {
+        row.Name = dto.Name;
+        row.Address = NormalizeAddress(dto.Address);
+        row.ParentId = parentId;
+        row.ProfileId = profileId;
+        row.Enabled = dto.Enabled;
+        row.Operator = NormalizeOperator(dto.Operator);
+        row.Probe = NormalizeProbe(dto.Probe);
+        return row;
+    }
 
     // ---- pools ----
 

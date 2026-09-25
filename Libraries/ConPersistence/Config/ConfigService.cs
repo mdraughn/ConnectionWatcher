@@ -96,7 +96,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             row = existing;
 
             var oldAddress = row.Address;
-            var newAddress = dto.Address.Trim();
+            var newAddress = ConfigMapping.NormalizeAddress(dto.Address);
             if (!string.Equals(oldAddress, newAddress, StringComparison.OrdinalIgnoreCase))
             {
                 // The user must say what an address edit MEANS: correcting a
@@ -124,13 +124,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             row = new TargetRow { Id = Guid.NewGuid() };
             db.Targets.Add(row);
         }
-        row.Name = dto.Name;
-        row.Address = dto.Address.Trim();
-        row.ParentId = parentId;
-        row.ProfileId = profile.Id;
-        row.Enabled = dto.Enabled;
-        row.Operator = ConfigMapping.NormalizeOperator(dto.Operator);
-        row.Probe = ConfigMapping.NormalizeProbe(dto.Probe);
+        row.CopyFrom(dto, profile.Id, parentId);
         return ConfigResult.Ok(row.Id);
     });
 
@@ -157,17 +151,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         if (profile is null)
             return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{newTarget.Profile}'.");
 
-        var row = new TargetRow
-        {
-            Id = Guid.NewGuid(),
-            Name = newTarget.Name,
-            Address = newTarget.Address.Trim(),
-            ParentId = parents[0],
-            ProfileId = profile.Id,
-            Enabled = newTarget.Enabled,
-            Operator = ConfigMapping.NormalizeOperator(newTarget.Operator),
-            Probe = ConfigMapping.NormalizeProbe(newTarget.Probe),
-        };
+        var row = new TargetRow { Id = Guid.NewGuid() }.CopyFrom(newTarget, profile.Id, parents[0]);
         db.Targets.Add(row);
         foreach (var child in children)
             child.ParentId = row.Id;

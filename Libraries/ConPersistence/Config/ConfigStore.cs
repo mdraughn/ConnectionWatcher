@@ -87,24 +87,20 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             db.Profiles.Add(p.ToRow(id));
         }
 
-        var targetIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var rowsByName = new Dictionary<string, TargetRow>(StringComparer.OrdinalIgnoreCase);
         foreach (var t in doc.Targets)
         {
-            var id = t.Id ?? Guid.NewGuid();
-            targetIds[t.Name] = id;
-            db.Targets.Add(new TargetRow
-            {
-                Id = id, Name = t.Name, Address = t.Address.Trim(),
-                ProfileId = profileIds[t.Profile], Enabled = t.Enabled,
-                Operator = ConfigMapping.NormalizeOperator(t.Operator),
-                Probe = ConfigMapping.NormalizeProbe(t.Probe),
-            });
+            var row = new TargetRow { Id = t.Id ?? Guid.NewGuid() }
+                .CopyFrom(t, profileIds[t.Profile], parentId: null);
+            rowsByName[t.Name] = row;
+            db.Targets.Add(row);
         }
         await db.SaveChangesAsync();
 
-        // Second pass for parents (order-independent).
+        // Second pass for parents (order-independent). The rows are tracked,
+        // so this is an in-memory assignment, not one query per target.
         foreach (var t in doc.Targets.Where(t => t.Parent is { Length: > 0 }))
-            (await db.Targets.SingleAsync(r => r.Id == targetIds[t.Name])).ParentId = targetIds[t.Parent!];
+            rowsByName[t.Name].ParentId = rowsByName[t.Parent!].Id;
 
         foreach (var p in doc.Pools)
         {
@@ -112,10 +108,10 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             db.Pools.Add(new PoolRow
             {
                 Id = poolId, Name = p.Name,
-                ParentId = p.Parent is { Length: > 0 } parent ? targetIds[parent] : null,
+                ParentId = p.Parent is { Length: > 0 } parent ? rowsByName[parent].Id : null,
                 Members = p.Members.Select((m, i) => new PoolMemberRow
                 {
-                    PoolId = poolId, TargetId = targetIds[m], MemberIndex = i,
+                    PoolId = poolId, TargetId = rowsByName[m].Id, MemberIndex = i,
                 }).ToList(),
             });
         }
