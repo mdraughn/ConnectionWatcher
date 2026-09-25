@@ -10,65 +10,62 @@ namespace ConPersistence.Export;
 /// </summary>
 public static class CsvExport
 {
-    public static IEnumerable<string> TransitionLines(IEnumerable<TransitionRow> rows)
-    {
-        yield return "id,timestampUtc,subjectId,subjectName,subjectKind,from,to,trigger," +
-                     "successRate,sampleSize,burstLossRate,ancestorId,detail,verdict,avgRtt";
-        foreach (var r in rows)
-        {
-            yield return Line(
-                r.Id.ToString(CultureInfo.InvariantCulture),
-                Iso(r.TimestampUtc),
-                r.SubjectId.ToString(),
-                r.SubjectName,
-                r.SubjectKind,
-                r.FromState,
-                r.ToState,
-                r.Trigger,
-                Num(r.SuccessRate),
-                r.SampleSize?.ToString(CultureInfo.InvariantCulture) ?? "",
-                Num(r.BurstLossRate),
-                r.AncestorId?.ToString() ?? "",
-                r.Detail ?? "",
-                r.Verdict ?? "",
-                r.AvgRtt.ToString(CultureInfo.InvariantCulture));
-        }
-    }
+    public const string TransitionHeader =
+        "id,timestampUtc,subjectId,subjectName,subjectKind,from,to,trigger," +
+        "successRate,sampleSize,burstLossRate,ancestorId,detail,verdict,avgRtt";
 
-    public static IEnumerable<string> RollupLines(IEnumerable<RollupRow> rows)
-    {
-        yield return "targetId,periodStartUtc,resolution,pingCount,successCount,rttAvg,rttMin,rttMax";
-        foreach (var r in rows)
-        {
-            yield return Line(
-                r.TargetId.ToString(),
-                Iso(r.PeriodStartUtc),
-                r.Resolution,
-                r.PingCount.ToString(CultureInfo.InvariantCulture),
-                r.SuccessCount.ToString(CultureInfo.InvariantCulture),
-                r.RttAvg.ToString(CultureInfo.InvariantCulture),
-                r.RttMin.ToString(CultureInfo.InvariantCulture),
-                r.RttMax.ToString(CultureInfo.InvariantCulture));
-        }
-    }
+    public const string RollupHeader =
+        "targetId,periodStartUtc,resolution,pingCount,successCount,rttAvg,rttMin,rttMax";
 
-    public static IEnumerable<string> GlitchLines(IEnumerable<GlitchRow> rows)
-    {
-        yield return "id,targetId,targetName,class,startUtc,endUtc,lostCount,sampleCount,detail";
-        foreach (var g in rows)
-        {
-            yield return Line(
-                g.Id.ToString(CultureInfo.InvariantCulture),
-                g.TargetId.ToString(),
-                g.TargetName,
-                g.Class == 1 ? "Internet" : "Target",
-                Iso(g.StartUtc),
-                Iso(g.EndUtc),
-                g.LostCount.ToString(CultureInfo.InvariantCulture),
-                g.SampleCount.ToString(CultureInfo.InvariantCulture),
-                g.Detail ?? "");
-        }
-    }
+    public const string GlitchHeader =
+        "id,targetId,targetName,class,startUtc,endUtc,lostCount,sampleCount,detail";
+
+    public static string TransitionLine(TransitionRow r) => Line(
+        r.Id.ToString(CultureInfo.InvariantCulture),
+        Iso(r.TimestampUtc),
+        r.SubjectId.ToString(),
+        r.SubjectName,
+        r.SubjectKind,
+        r.FromState,
+        r.ToState,
+        r.Trigger,
+        Num(r.SuccessRate),
+        r.SampleSize?.ToString(CultureInfo.InvariantCulture) ?? "",
+        Num(r.BurstLossRate),
+        r.AncestorId?.ToString() ?? "",
+        r.Detail ?? "",
+        r.Verdict ?? "",
+        r.AvgRtt.ToString(CultureInfo.InvariantCulture));
+
+    public static string RollupLine(RollupRow r) => Line(
+        r.TargetId.ToString(),
+        Iso(r.PeriodStartUtc),
+        r.Resolution,
+        r.PingCount.ToString(CultureInfo.InvariantCulture),
+        r.SuccessCount.ToString(CultureInfo.InvariantCulture),
+        r.RttAvg.ToString(CultureInfo.InvariantCulture),
+        r.RttMin.ToString(CultureInfo.InvariantCulture),
+        r.RttMax.ToString(CultureInfo.InvariantCulture));
+
+    public static string GlitchLine(GlitchRow g) => Line(
+        g.Id.ToString(CultureInfo.InvariantCulture),
+        g.TargetId.ToString(),
+        g.TargetName,
+        g.Class == 1 ? "Internet" : "Target",
+        Iso(g.StartUtc),
+        Iso(g.EndUtc),
+        g.LostCount.ToString(CultureInfo.InvariantCulture),
+        g.SampleCount.ToString(CultureInfo.InvariantCulture),
+        g.Detail ?? "");
+
+    public static IEnumerable<string> TransitionLines(IEnumerable<TransitionRow> rows) =>
+        rows.Select(TransitionLine).Prepend(TransitionHeader);
+
+    public static IEnumerable<string> RollupLines(IEnumerable<RollupRow> rows) =>
+        rows.Select(RollupLine).Prepend(RollupHeader);
+
+    public static IEnumerable<string> GlitchLines(IEnumerable<GlitchRow> rows) =>
+        rows.Select(GlitchLine).Prepend(GlitchHeader);
 
     private static string Iso(DateTime utc) =>
         utc.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture);
