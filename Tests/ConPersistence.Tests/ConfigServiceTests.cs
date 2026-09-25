@@ -1,4 +1,4 @@
-﻿using ConPersistence.Dto;
+﻿using ConPersistence.Config;
 
 namespace ConPersistence.Tests;
 
@@ -116,7 +116,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Address_edit_without_kind_is_rejected()
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
         });
@@ -134,7 +134,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Address_edit_records_the_right_marker(string kind, string expectedTrigger)
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
         }, addressChange: kind);
@@ -155,7 +155,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Non_address_edit_needs_no_kind_and_records_no_marker()
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router Renamed", Address = "192.168.1.1", Profile = "Internal",
         });
@@ -169,7 +169,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Invalid_address_change_kind_is_rejected()
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
         }, addressChange: "oops");
@@ -184,7 +184,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var google = options.Targets.Single(t => t.Name == "Google").Id!.Value;
         var cloudflare = options.Targets.Single(t => t.Name == "Cloudflare").Id!.Value;
 
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "IspHop", Address = "198.51.100.11", Profile = "External",
         }, [google, cloudflare]);
@@ -204,7 +204,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var router = options.Targets.Single(t => t.Name == "Router").Id!.Value;   // parent: none
         var google = options.Targets.Single(t => t.Name == "Google").Id!.Value;   // parent: Modem
 
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "X", Address = "10.9.9.9",
         }, [router, google]);
@@ -216,7 +216,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task InsertParent_rejects_unknown_child()
     {
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "X", Address = "10.9.9.9",
         }, [Guid.NewGuid()]);
@@ -227,7 +227,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task InsertParent_rejects_empty_children()
     {
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "X", Address = "10.9.9.9",
         }, []);

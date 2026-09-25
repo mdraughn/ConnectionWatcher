@@ -1,10 +1,10 @@
-using ConPersistence.Rollups;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace ConPersistence.Services;
+namespace ConPersistence.Retention;
 
 /// <summary>
 /// Runs the retention pass once at startup, then daily at the configured UTC hour.

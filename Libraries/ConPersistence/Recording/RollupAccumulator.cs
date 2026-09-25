@@ -1,6 +1,6 @@
 using ConCore;
 
-namespace ConPersistence.Rollups;
+namespace ConPersistence.Recording;
 
 /// <summary>One in-progress minute of ping statistics for one target.</summary>
 public class RollupBucket(Guid targetId, DateTime periodStartUtc)

@@ -1,4 +1,6 @@
 using ConPersistence;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConWatch.Api;

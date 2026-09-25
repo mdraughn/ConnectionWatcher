@@ -1,7 +1,7 @@
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace ConPersistence;
+namespace ConPersistence.Queries;
 
 /// <summary>Read-side queries for the transition log and rollups.</summary>
 public static class HistoryQueries

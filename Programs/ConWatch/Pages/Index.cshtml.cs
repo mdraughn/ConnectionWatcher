@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth health,
+public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHealth health,
     Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
-    ConWatch.Auth.AdminGate gate, ConPersistence.SettingsStore settingsStore,
-    ConPersistence.ConfigStore configStore) : PageModel
+    ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
+    ConPersistence.Config.ConfigStore configStore) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -77,9 +77,9 @@ public class IndexModel(WatcherHostService host, ConPersistence.ConfigHealth hea
             TrunkNames = names.TrunkNames,
             AnchorNames = names.AnchorNames,
             WeatherThreshold = await settingsStore.GetIntAsync(
-                ConPersistence.SettingKeys.WeatherThreshold, 2),
+                ConPersistence.Settings.SettingKeys.WeatherThreshold, 2),
             EngineDisabled,
-            CloneSource = await settingsStore.GetAsync(ConPersistence.SettingKeys.CloneSourceUrl),
+            CloneSource = await settingsStore.GetAsync(ConPersistence.Settings.SettingKeys.CloneSourceUrl),
         }, JsonOptions);
         return Page();
     }

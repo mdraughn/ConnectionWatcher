@@ -1,11 +1,10 @@
 using ConCore;
 using ConEngine;
-using ConPersistence.Rollups;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace ConPersistence.Services;
+namespace ConPersistence.Recording;
 
 /// <summary>
 /// Turns the engine's per-ping sample stream into per-minute rollup rows.

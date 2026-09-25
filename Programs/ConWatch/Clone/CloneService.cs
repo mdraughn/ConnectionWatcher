@@ -2,7 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Settings;
+using ConPersistence.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConWatch.Clone;

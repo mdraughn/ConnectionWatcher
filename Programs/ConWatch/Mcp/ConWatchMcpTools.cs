@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using ConPersistence;
+using ConPersistence.Queries;
 using ConPersistence.Report;
 using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;

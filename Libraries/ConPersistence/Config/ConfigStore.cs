@@ -1,12 +1,11 @@
 using ConCore.Targets;
 using ConEngine.Configuration;
-using ConPersistence.Dto;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace ConPersistence;
+namespace ConPersistence.Config;
 
 /// <summary>
 /// Reads and seeds the monitoring configuration tables, maps rows to the

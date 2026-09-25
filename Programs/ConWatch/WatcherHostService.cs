@@ -3,7 +3,10 @@ using ConEngine;
 using ConEngine.Configuration;
 using ConEngine.Tracking;
 using ConPersistence;
-using ConPersistence.Services;
+using ConPersistence.Config;
+using ConPersistence.Queries;
+using ConPersistence.Recording;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

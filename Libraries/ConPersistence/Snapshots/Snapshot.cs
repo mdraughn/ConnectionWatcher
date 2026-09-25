@@ -1,6 +1,7 @@
+using ConPersistence.Config;
 using ConPersistence.Entities;
 
-namespace ConPersistence.Dto;
+namespace ConPersistence.Snapshots;
 
 /// <summary>
 /// The complete sanitized state of a ConnectionWatcher instance, as served by

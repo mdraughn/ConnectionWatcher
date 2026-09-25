@@ -3,7 +3,7 @@ using ConEngine;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace ConPersistence.Services;
+namespace ConPersistence.Recording;
 
 /// <summary>
 /// Shared shape of the event recorders: events from an engine stream flow

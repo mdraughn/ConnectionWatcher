@@ -2,7 +2,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConInfrastructure.Discovery;
-using ConPersistence.Dto;
+using ConPersistence.Config;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

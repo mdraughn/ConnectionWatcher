@@ -1,4 +1,5 @@
 using ConPersistence;
+using ConPersistence.Settings;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 

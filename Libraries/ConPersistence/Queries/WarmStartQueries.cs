@@ -1,7 +1,7 @@
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace ConPersistence;
+namespace ConPersistence.Queries;
 
 /// <summary>Read-side queries for warm restart: what the world looked like
 /// when this instance was last alive.</summary>

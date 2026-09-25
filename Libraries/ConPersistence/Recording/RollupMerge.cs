@@ -1,6 +1,6 @@
 using ConPersistence.Entities;
 
-namespace ConPersistence.Rollups;
+namespace ConPersistence.Recording;
 
 /// <summary>
 /// Merges rollup rows covering the same subject/period: counts sum, min/max

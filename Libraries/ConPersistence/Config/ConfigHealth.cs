@@ -1,6 +1,7 @@
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
-namespace ConPersistence;
+namespace ConPersistence.Config;
 
 /// <summary>One structured configuration warning.</summary>
 public record HealthWarning(string Code, string Message);

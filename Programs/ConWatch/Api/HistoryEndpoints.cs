@@ -1,4 +1,5 @@
 using ConPersistence;
+using ConPersistence.Queries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

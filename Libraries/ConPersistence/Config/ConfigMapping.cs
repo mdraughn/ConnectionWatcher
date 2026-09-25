@@ -3,7 +3,7 @@ using ConCore.Targets;
 using ConEngine.Configuration;
 using ConPersistence.Entities;
 
-namespace ConPersistence.Dto;
+namespace ConPersistence.Config;
 
 /// <summary>
 /// The one place that knows how profiles, targets and pools map between

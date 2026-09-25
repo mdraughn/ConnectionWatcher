@@ -1,6 +1,7 @@
+using ConPersistence.Queries;
 using Microsoft.EntityFrameworkCore;
 
-namespace ConPersistence.Services;
+namespace ConPersistence.Retention;
 
 /// <summary>Result of a user-initiated prune: what was deleted and the file
 /// size before/after the VACUUM.</summary>

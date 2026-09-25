@@ -1,5 +1,5 @@
 using ConPersistence.Entities;
-using ConPersistence.Rollups;
+using ConPersistence.Retention;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 

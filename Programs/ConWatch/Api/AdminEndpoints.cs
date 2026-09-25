@@ -1,4 +1,6 @@
 using ConPersistence;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -97,7 +99,7 @@ public static class AdminEndpoints
                 return Results.BadRequest(new { errors = new[] { "A cutoff date is required." } });
 
             await using var db = await dbFactory.CreateDbContextAsync();
-            var result = await ConPersistence.Services.DataPruner.PruneBeforeAsync(
+            var result = await ConPersistence.Retention.DataPruner.PruneBeforeAsync(
                 db, options.Value.DbPath, TimeRange.AsUtc(before));
             loggerFactory.CreateLogger("Admin").LogWarning(
                 "History PRUNED before {Before:u}: {Transitions} transitions, {Rollups} rollups, " +

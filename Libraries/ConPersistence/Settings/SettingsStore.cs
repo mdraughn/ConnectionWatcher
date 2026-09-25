@@ -1,7 +1,7 @@
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace ConPersistence;
+namespace ConPersistence.Settings;
 
 /// <summary>Well-known setting keys.</summary>
 public static class SettingKeys

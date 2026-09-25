@@ -1,6 +1,8 @@
 using System.Text;
 using ConPersistence;
+using ConPersistence.Config;
 using ConPersistence.Export;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConWatch.Api;
@@ -101,7 +103,7 @@ public static class ExportEndpoints
 
     public record FullSnapshotRequest(string? Password);
 
-    private static async Task<ConPersistence.Dto.Snapshot> BuildSnapshotAsync(
+    private static async Task<ConPersistence.Snapshots.Snapshot> BuildSnapshotAsync(
         IDbContextFactory<ConWatchDbContext> dbFactory, ConfigStore configStore,
         SettingsStore settingsStore, TimeProvider time, bool includeSecrets)
     {
@@ -113,7 +115,7 @@ public static class ExportEndpoints
             : SettingKeys.SecretKeys.Where(key => allSettings.Remove(key)).ToList();
 
         await using var db = await dbFactory.CreateDbContextAsync();
-        return new ConPersistence.Dto.Snapshot
+        return new ConPersistence.Snapshots.Snapshot
         {
             ExportedUtc = time.GetUtcNow(),
             Config = await configStore.ExportAsync(),

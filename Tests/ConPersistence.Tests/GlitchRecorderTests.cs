@@ -1,8 +1,8 @@
 using System.Reactive.Subjects;
 using ConEngine.Events;
 using ConPersistence.Entities;
-using ConPersistence.Rollups;
-using ConPersistence.Services;
+using ConPersistence.Recording;
+using ConPersistence.Retention;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConPersistence.Tests;

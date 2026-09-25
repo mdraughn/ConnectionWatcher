@@ -4,7 +4,7 @@ using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace ConPersistence.Services;
+namespace ConPersistence.Recording;
 
 /// <summary>Persists engine transitions (see <see cref="ChannelRecorder{TEvent}"/> for the mechanics).</summary>
 public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,

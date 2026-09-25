@@ -1,4 +1,4 @@
-namespace ConPersistence.Dto;
+namespace ConPersistence.Config;
 
 /// <summary>Ping profile for API/CRUD and export. Name-keyed; Id preserved when present.</summary>
 public record ProfileDto

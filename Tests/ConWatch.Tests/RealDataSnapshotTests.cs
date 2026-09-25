@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Snapshots;
 
 namespace ConWatch.Tests;
 

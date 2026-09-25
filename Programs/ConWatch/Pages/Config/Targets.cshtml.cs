@@ -1,6 +1,7 @@
 using ConCore.Targets;
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages.Config;

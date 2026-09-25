@@ -1,8 +1,9 @@
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace ConPersistence;
+namespace ConPersistence.Snapshots;
 
 /// <summary>
 /// Rebuilds a local database from a <see cref="Snapshot"/> (Route A of

@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace ConWatch.Pages;
 
 public class HistoryModel(WatcherHostService host,
-    ConPersistence.SettingsStore settingsStore,
-    ConPersistence.ConfigStore configStore) : PageModel
+    ConPersistence.Settings.SettingsStore settingsStore,
+    ConPersistence.Config.ConfigStore configStore) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -29,7 +29,7 @@ public class HistoryModel(WatcherHostService host,
         {
             // Topology roles for the cause-aligned ribbon board: anchors are
             // the verdict pool's members; trunk is their ancestor chain.
-            var anchorPoolName = await settingsStore.GetAsync(ConPersistence.SettingKeys.AnchorPool);
+            var anchorPoolName = await settingsStore.GetAsync(ConPersistence.Settings.SettingKeys.AnchorPool);
             var pool = anchorPoolName is { Length: > 0 }
                 ? engine.Graph.Pools.Values.FirstOrDefault(p =>
                     p.Name.Equals(anchorPoolName, StringComparison.OrdinalIgnoreCase))
@@ -68,7 +68,7 @@ public class HistoryModel(WatcherHostService host,
                 TrunkNames = trunk.Select(t => t.Name).ToList(),
                 AnchorNames = members.Select(m => m.Name).ToList(),
                 WeatherThreshold = await settingsStore.GetIntAsync(
-                    ConPersistence.SettingKeys.WeatherThreshold, 2),
+                    ConPersistence.Settings.SettingKeys.WeatherThreshold, 2),
             }, JsonOptions);
         }
         SubjectsJson = JsonSerializer.Serialize(subjects, JsonOptions);
@@ -111,7 +111,7 @@ public class HistoryModel(WatcherHostService host,
             TrunkNames = names.TrunkNames,
             AnchorNames = names.AnchorNames,
             WeatherThreshold = await settingsStore.GetIntAsync(
-                ConPersistence.SettingKeys.WeatherThreshold, 2),
+                ConPersistence.Settings.SettingKeys.WeatherThreshold, 2),
         }, JsonOptions);
     }
 }

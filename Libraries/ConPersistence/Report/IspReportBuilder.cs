@@ -1,6 +1,7 @@
 using ConCore.Targets;
 using ConEngine.Topology;
 using ConPersistence.Entities;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConPersistence.Report;

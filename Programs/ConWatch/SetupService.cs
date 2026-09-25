@@ -1,5 +1,6 @@
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 
 namespace ConWatch;
 

@@ -1,8 +1,10 @@
 using ConPersistence.Entities;
+using ConPersistence.Queries;
+using ConPersistence.Recording;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace ConPersistence.Rollups;
+namespace ConPersistence.Retention;
 
 /// <summary>
 /// Downsamples aged rollups: minute rows older than the minute-retention

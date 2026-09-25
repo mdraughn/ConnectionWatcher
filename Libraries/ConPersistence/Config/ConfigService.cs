@@ -1,11 +1,10 @@
 using ConEngine.Configuration;
-using ConPersistence.Dto;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace ConPersistence;
+namespace ConPersistence.Config;
 
 public enum ConfigErrorKind { None, Validation, NotFound, Conflict }
 
