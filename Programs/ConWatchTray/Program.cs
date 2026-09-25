@@ -53,10 +53,16 @@ internal sealed class TrayContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = menu,
         };
-        _icon.MouseDoubleClick += (_, e) =>
+        // A single left click opens the same menu as a right click. NotifyIcon
+        // only pops its ContextMenuStrip for the right button on its own; the
+        // private ShowContextMenu is how WinForms does it, and it positions the
+        // menu at the cursor and handles focus so it closes when clicked away.
+        _icon.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
-                Open("");
+                typeof(NotifyIcon).GetMethod("ShowContextMenu",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?
+                    .Invoke(_icon, null);
         };
 
         _timer = new System.Windows.Forms.Timer { Interval = 5000 };
