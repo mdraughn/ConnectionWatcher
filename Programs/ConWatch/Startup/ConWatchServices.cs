@@ -51,7 +51,8 @@ public static class ConWatchServices
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
         services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
         services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
-        services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery, ConInfrastructure.Discovery.GatewayDiscovery>();
+        services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery>(
+            _ => new ConInfrastructure.Discovery.GatewayDiscovery());
         services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
         services.AddSingleton<SetupService>();
         services.AddSingleton<WatcherHostService>();
