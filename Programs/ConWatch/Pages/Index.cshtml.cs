@@ -67,7 +67,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
         // Topology roles for the punchcard/ledger, from the STORED config so
         // archive mode (no engine) keeps its display attribution.
         var names = await TopologyNames.FromConfigAsync(configStore, settingsStore);
-        EngineDisabled = !await host.EngineEnabledAsync();
+        EngineDisabled = !host.EngineEnabled;
 
         InitialDataJson = JsonSerializer.Serialize(new
         {
@@ -76,8 +76,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
             PoolMembers = poolMembers,
             TrunkNames = names.TrunkNames,
             AnchorNames = names.AnchorNames,
-            WeatherThreshold = await settingsStore.GetIntAsync(
-                ConPersistence.Settings.SettingKeys.WeatherThreshold, 2),
+            WeatherThreshold = names.WeatherThreshold,
             EngineDisabled,
             CloneSource = await settingsStore.GetAsync(ConPersistence.Settings.SettingKeys.CloneSourceUrl),
         }, JsonOptions);
