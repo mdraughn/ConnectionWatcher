@@ -1,6 +1,7 @@
 using ConCore.Targets;
 using ConEngine.Configuration;
 using ConPersistence.Entities;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -118,11 +119,14 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
         await db.SaveChangesAsync();
     }
 
-    /// <summary>Maps config rows to engine options (stable ids, name references).</summary>
+    /// <summary>Maps config rows to engine options (stable ids, name references), from one snapshot.</summary>
     public async Task<WatcherOptions> LoadWatcherOptionsAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await LoadWatcherOptionsAsync(db);
+        await using var snapshot = await BeginReadSnapshotAsync(db);
+        var options = await LoadWatcherOptionsAsync(db);
+        await snapshot.CommitAsync();
+        return options;
     }
 
     /// <summary>Same, over a caller-supplied context (used mid-transaction by ConfigService).</summary>
@@ -149,11 +153,14 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
         return options;
     }
 
-    /// <summary>Whole-config document for backup/transfer.</summary>
+    /// <summary>Whole-config document for backup/transfer, from one snapshot.</summary>
     public async Task<ConfigDocument> ExportAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await ExportAsync(db);
+        await using var snapshot = await BeginReadSnapshotAsync(db);
+        var doc = await ExportAsync(db);
+        await snapshot.CommitAsync();
+        return doc;
     }
 
     /// <summary>Same, over a caller-supplied context (used mid-transaction by ConfigService).</summary>
@@ -167,5 +174,19 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             Targets = options.Targets.Select(t => t.ToDto()).ToList(),
             Pools = options.Pools.Select(p => p.ToDto()).ToList(),
         };
+    }
+
+    /// <summary>
+    /// A deferred transaction ("BEGIN", not EF's default "BEGIN IMMEDIATE"):
+    /// it takes no write lock, and in WAL mode its first read pins one
+    /// snapshot until it ends, so several queries see one state of the
+    /// database even while an import commits between them.
+    /// </summary>
+    private static async Task<SqliteTransaction> BeginReadSnapshotAsync(ConWatchDbContext db)
+    {
+        await db.Database.OpenConnectionAsync();
+        var transaction = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: true);
+        await db.Database.UseTransactionAsync(transaction);
+        return transaction;
     }
 }
