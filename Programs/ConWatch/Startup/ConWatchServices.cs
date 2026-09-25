@@ -55,6 +55,7 @@ public static class ConWatchServices
             _ => new ConInfrastructure.Discovery.GatewayDiscovery());
         services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
         services.AddSingleton<SetupService>();
+        services.AddSingleton<WarmStartSeeder>();
         services.AddSingleton<WatcherHostService>();
         return services;
     }

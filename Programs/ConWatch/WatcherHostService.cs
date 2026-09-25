@@ -4,24 +4,22 @@ using ConEngine.Configuration;
 using ConEngine.Tracking;
 using ConPersistence;
 using ConPersistence.Config;
-using ConPersistence.Queries;
 using ConPersistence.Recording;
 using ConPersistence.Settings;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ConWatch;
 
 /// <summary>
 /// Owns the engine lifecycle: seed config at startup, build the engine from
-/// DB config, attach the recorder and collector, and rebuild (debounced) when
-/// the configuration changes.
+/// DB config, attach the observers, and rebuild (debounced) when the
+/// configuration changes. Warm-start policy lives in <see cref="WarmStartSeeder"/>.
 /// </summary>
 public class WatcherHostService(
-    IDbContextFactory<ConWatchDbContext> dbFactory,
     ConfigStore store,
     ConfigService configService,
     SettingsStore settingsStore,
+    WarmStartSeeder seeder,
     IPingTransceiverFactory pingFactory,
     IDomainNameResolverFactory resolverFactory,
     TimeProvider timeProvider,
@@ -174,7 +172,7 @@ public class WatcherHostService(
             return false;
         }
 
-        seed ??= await BuildSeedFromDbAsync();
+        seed ??= await seeder.FromDbAsync();
 
         var effectiveVerdict = new VerdictOptions
         {
@@ -191,135 +189,6 @@ public class WatcherHostService(
         _log.LogInformation("Engine started with {Count} targets{Warm}",
             options.Targets.Count, seed is { IsEmpty: false } ? " (warm start)" : "");
         return true;
-    }
-
-    private async Task<bool> WarmRestartEnabledAsync() =>
-        await settingsStore.GetIntAsync(SettingKeys.WarmRestartMaxGapMinutes,
-            SettingsDefaults.WarmRestartMaxGapMinutes) > 0;
-
-    /// <summary>
-    /// Presumed states from the last recorded transitions, gated by freshness:
-    /// only when the watcher was last alive within WarmRestartMaxGapMinutes.
-    /// HistoryReset rows (repointed targets) and undeterminable states never
-    /// seed; an Unreachable seed needs an ancestor seeded Down to justify it.
-    /// </summary>
-    private async Task<EngineSeed?> BuildSeedFromDbAsync()
-    {
-        var maxGapMinutes = await settingsStore.GetIntAsync(SettingKeys.WarmRestartMaxGapMinutes,
-            SettingsDefaults.WarmRestartMaxGapMinutes);
-        if (maxGapMinutes <= 0)
-            return null;
-
-        await using var db = await dbFactory.CreateDbContextAsync();
-        var lastAlive = await WarmStartQueries.LastAliveUtcAsync(db);
-        if (lastAlive is null)
-            return null;
-        var gap = timeProvider.GetUtcNow().UtcDateTime - lastAlive.Value;
-        if (gap > TimeSpan.FromMinutes(maxGapMinutes))
-        {
-            _log.LogInformation(
-                "Cold start: watcher was last alive {Gap} ago (warm-restart window is {Max} min)",
-                gap, maxGapMinutes);
-            return null;
-        }
-
-        var options = await store.LoadWatcherOptionsAsync();
-        var targetsById = options.Targets.Where(t => t.Id is not null)
-            .ToDictionary(t => t.Id!.Value);
-        var latest = await WarmStartQueries.LatestTransitionsPerSubjectAsync(db);
-
-        var seed = new EngineSeed();
-        foreach (var row in latest)
-        {
-            if (row.Trigger == "HistoryReset")
-                continue;
-            switch (row.SubjectKind)
-            {
-                case "Target" when targetsById.TryGetValue(row.SubjectId, out var target)
-                    && Enum.TryParse<HostState>(row.ToState, out var state)
-                    && state is not (HostState.Initializing or HostState.Starting):
-                    seed.Targets[row.SubjectId] = new TargetSeed(state, target.Address, target.Probe);
-                    break;
-                case "Pool" when Enum.TryParse<HostState>(row.ToState, out var poolState)
-                    && poolState is not (HostState.Initializing or HostState.Starting):
-                    seed.Pools[row.SubjectId] = poolState;
-                    break;
-            }
-        }
-        var verdictRow = latest.FirstOrDefault(r => r.SubjectKind == "Verdict"
-            && r.Trigger != "HistoryReset");
-        if (verdictRow?.Verdict is { } verdictName &&
-            Enum.TryParse<ConEngine.Topology.VerdictState>(verdictName, out var verdict) &&
-            verdict != ConEngine.Topology.VerdictState.Unknown)
-        {
-            seed = new EngineSeed { Targets = seed.Targets, Pools = seed.Pools, Verdict = verdict };
-        }
-
-        DropUnjustifiedUnreachable(seed, targetsById);
-        if (seed.IsEmpty)
-            return null;
-        _log.LogInformation(
-            "Warm restart: last alive {Gap} ago; seeding {Targets} target(s), {Pools} pool(s), verdict {Verdict}",
-            gap, seed.Targets.Count, seed.Pools.Count, seed.Verdict?.ToString() ?? "unseeded");
-        return seed;
-    }
-
-    /// <summary>An Unreachable presumption is only coherent behind a Down
-    /// ancestor; without one, that target cold-starts instead. Config links
-    /// parents by name, so the walk goes name-by-name (depth-capped).</summary>
-    private static void DropUnjustifiedUnreachable(EngineSeed seed,
-        IReadOnlyDictionary<Guid, TargetConfig> targetsById)
-    {
-        var byName = new Dictionary<string, (Guid Id, TargetConfig Config)>(
-            StringComparer.OrdinalIgnoreCase);
-        foreach (var (id, config) in targetsById)
-            byName[config.Name] = (id, config);
-
-        foreach (var (id, targetSeed) in seed.Targets.ToList())
-        {
-            if (targetSeed.State != HostState.Unreachable)
-                continue;
-            var justified = false;
-            var parentName = targetsById.TryGetValue(id, out var t) ? t.Parent : null;
-            for (var depth = 0; depth < 20 && parentName is { Length: > 0 }; depth++)
-            {
-                if (!byName.TryGetValue(parentName, out var ancestor))
-                    break;
-                if (seed.Targets.TryGetValue(ancestor.Id, out var ancestorSeed) &&
-                    ancestorSeed.State == HostState.Down)
-                {
-                    justified = true;
-                    break;
-                }
-                parentName = ancestor.Config.Parent;
-            }
-            if (!justified)
-                seed.Targets.Remove(id);
-        }
-    }
-
-    /// <summary>Presumed states carried over from the outgoing engine on a
-    /// config rebuild (fresh by definition — no gap gate). Addresses ride
-    /// along so a repointed target cold-starts.</summary>
-    private static EngineSeed BuildSeedFromEngine(WatcherEngine engine)
-    {
-        var seed = new EngineSeed
-        {
-            Verdict = engine.Verdict is { CurrentVerdict: not ConEngine.Topology.VerdictState.Unknown } v
-                ? v.CurrentVerdict : null,
-        };
-        foreach (var (id, monitor) in engine.Monitors)
-        {
-            if (monitor.CurrentState is HostState.Initializing or HostState.Starting)
-                continue;
-            seed.Targets[id] = new TargetSeed(monitor.CurrentState, monitor.Target.Address, monitor.Target.Probe);
-        }
-        foreach (var pool in engine.PoolCoordinators)
-        {
-            if (pool.CurrentState is not (HostState.Initializing or HostState.Starting))
-                seed.Pools[pool.Pool.Id] = pool.CurrentState;
-        }
-        return seed;
     }
 
     /// <summary>
@@ -372,8 +241,8 @@ public class WatcherHostService(
                 // Carry the outgoing engine's observed states into the new one
                 // (fresh by definition) so a config edit doesn't re-measure the
                 // world; the DB-seed path stays as fallback via StartEngineAsync.
-                if (await WarmRestartEnabledAsync())
-                    seed = BuildSeedFromEngine(engine);
+                if (await seeder.EnabledAsync())
+                    seed = WarmStartSeeder.FromEngine(engine);
                 await engine.StopAsync();
                 DetachObservers();
             }
