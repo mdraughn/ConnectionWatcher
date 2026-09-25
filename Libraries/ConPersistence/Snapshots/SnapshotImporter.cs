@@ -1,7 +1,6 @@
 using ConPersistence.Config;
 using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConPersistence.Snapshots;
 
@@ -23,20 +22,23 @@ public static class SnapshotImporter
         {
             await db.Database.MigrateAsync(ct);
         }
-        await ImportAsync(factory, snapshot, ct);
+        // The CLI/test route: no host is listening, so a private ConfigService is enough.
+        await ImportAsync(factory, new ConfigService(factory, new ConfigStore(factory)), snapshot, ct);
     }
 
+    /// <summary>
+    /// Replace-all import. Config goes through <paramref name="configService"/>
+    /// (validated, atomic, id-preserving) so its ConfigChanged reaches whoever
+    /// listens to that instance — in the app, the host's rebuild.
+    /// </summary>
     public static async Task ImportAsync(IDbContextFactory<ConWatchDbContext> dbFactory,
-        Snapshot snapshot, CancellationToken ct = default)
+        ConfigService configService, Snapshot snapshot, CancellationToken ct = default)
     {
         if (snapshot.SchemaVersion != 1)
             throw new InvalidOperationException(
                 $"Snapshot schema version {snapshot.SchemaVersion} is not supported (expected 1).");
 
-        // Config first (validated, atomic, ID-preserving) — the measurement
-        // rows below reference these target GUIDs.
-        var store = new ConfigStore(dbFactory);
-        var configService = new ConfigService(dbFactory, store, NullLogger<ConfigService>.Instance);
+        // Config first — the measurement rows below reference these target GUIDs.
         var result = await configService.ImportAsync(snapshot.Config);
         if (!result.Success)
             throw new InvalidOperationException(
