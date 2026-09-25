@@ -13,25 +13,20 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
     IOptions<PersistenceOptions> options, TimeProvider timeProvider,
     ILogger<RetentionService> log, SettingsStore? settingsStore = null) : BackgroundService
 {
-    /// <summary>Appsettings values overridden by DB settings when present.</summary>
-    private async Task<PersistenceOptions> EffectiveOptionsAsync()
+    /// <summary>The settings table over appsettings, in one read per pass.</summary>
+    private async Task<(RetentionWindows Windows, int RunHourUtc)> EffectiveAsync()
     {
-        var effective = options.Value;
+        var o = options.Value;
         if (settingsStore is null)
-            return effective;
-        return new PersistenceOptions
-        {
-            DbPath = effective.DbPath,
-            RebuildDebounceSeconds = effective.RebuildDebounceSeconds,
-            MinuteRetentionDays = await settingsStore.GetIntAsync(
-                SettingKeys.MinuteRetentionDays, effective.MinuteRetentionDays),
-            HourlyRetentionMonths = await settingsStore.GetIntAsync(
-                SettingKeys.HourlyRetentionMonths, effective.HourlyRetentionMonths),
-            TransitionRetentionMonths = await settingsStore.GetIntAsync(
-                SettingKeys.TransitionRetentionMonths, effective.TransitionRetentionMonths),
-            RetentionRunHourUtc = await settingsStore.GetIntAsync(
-                SettingKeys.RetentionRunHourUtc, effective.RetentionRunHourUtc),
-        };
+            return (RetentionWindows.From(o), o.RetentionRunHourUtc);
+        var all = await settingsStore.GetAllAsync().ConfigureAwait(false);
+        int Get(string key, int fallback) =>
+            all.TryGetValue(key, out var text) && int.TryParse(text, out var value) ? value : fallback;
+        return (new RetentionWindows(
+                Get(SettingKeys.MinuteRetentionDays, o.MinuteRetentionDays),
+                Get(SettingKeys.HourlyRetentionMonths, o.HourlyRetentionMonths),
+                Get(SettingKeys.TransitionRetentionMonths, o.TransitionRetentionMonths)),
+            Get(SettingKeys.RetentionRunHourUtc, o.RetentionRunHourUtc));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,7 +38,7 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
             {
                 await using var db = await dbFactory.CreateDbContextAsync(stoppingToken).ConfigureAwait(false);
                 await pass.RunAsync(db, timeProvider.GetUtcNow().UtcDateTime,
-                    await EffectiveOptionsAsync().ConfigureAwait(false), stoppingToken).ConfigureAwait(false);
+                    (await EffectiveAsync().ConfigureAwait(false)).Windows, stoppingToken).ConfigureAwait(false);
                 if (settingsStore is not null)
                     await settingsStore.SetManyAsync(new Dictionary<string, string?>
                     {
@@ -85,7 +80,7 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
     private async Task<TimeSpan> DelayUntilNextRunAsync()
     {
         var now = timeProvider.GetUtcNow();
-        var hour = (await EffectiveOptionsAsync().ConfigureAwait(false)).RetentionRunHourUtc;
+        var hour = (await EffectiveAsync().ConfigureAwait(false)).RunHourUtc;
         var next = new DateTimeOffset(now.Year, now.Month, now.Day, hour, 0, 0, TimeSpan.Zero);
         if (next <= now)
             next = next.AddDays(1);

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConPersistence.Recording;
+using ConPersistence.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -139,5 +140,25 @@ public class AdminApiTests : IDisposable
         Assert.Equal(2, profiles!.Count); // builtins only
         var settings = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
         Assert.Equal("2", settings!["Verdict.WeatherThreshold"]); // defaults re-seeded
+    }
+
+    [Fact]
+    public async Task Factory_reset_restores_the_first_boot_settings()
+    {
+        string[] keys =
+        [
+            SettingKeys.WeatherThreshold, SettingKeys.MinuteRetentionDays, SettingKeys.HourlyRetentionMonths,
+            SettingKeys.TransitionRetentionMonths, SettingKeys.RetentionRunHourUtc,
+            SettingKeys.WarmRestartMaxGapMinutes, SettingKeys.AnchorPool,
+        ];
+        var firstBoot = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
+
+        var reset = await _client.PostAsJsonAsync("/api/v1/admin/factory-reset", new { confirm = "RESET" });
+        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
+        foreach (var key in keys)
+            Assert.True(after!.TryGetValue(key, out var value) && value == firstBoot![key],
+                $"{key}: first boot '{firstBoot![key]}', after reset '{value}'");
     }
 }

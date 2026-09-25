@@ -15,31 +15,33 @@ namespace ConPersistence.Retention;
 /// </summary>
 public class RetentionPass(ILogger log)
 {
-    /// <summary>Runs both downsampling stages. Returns the number of source rows converted.</summary>
+    /// <summary>Runs both downsampling stages and the two prunes. Returns the
+    /// rows it changed (fine rollups folded into coarser ones, plus glitches
+    /// and transitions pruned): 0 on an immediate second run.</summary>
     public async Task<int> RunAsync(ConWatchDbContext db, DateTime nowUtc,
-        PersistenceOptions options, CancellationToken ct)
+        RetentionWindows windows, CancellationToken ct)
     {
         int converted = 0;
         converted += await DownsampleAsync(db, "Minute", "Hour",
-            nowUtc.AddDays(-options.MinuteRetentionDays), TruncateToHour, ct);
+            nowUtc.AddDays(-windows.MinuteDays), TruncateToHour, ct);
         converted += await DownsampleAsync(db, "Hour", "Day",
-            nowUtc.AddMonths(-options.HourlyRetentionMonths), TruncateToDay, ct);
+            nowUtc.AddMonths(-windows.HourlyMonths), TruncateToDay, ct);
 
         // Glitches are fine-grained events; they age out with the minute data.
-        var glitchThreshold = nowUtc.AddDays(-options.MinuteRetentionDays);
+        var glitchThreshold = nowUtc.AddDays(-windows.MinuteDays);
         var pruned = await db.Glitches.Where(g => g.StartUtc < glitchThreshold)
             .ExecuteDeleteAsync(ct);
         if (pruned > 0)
         {
             log.LogInformation("Pruned {Count} glitches older than {Days} days",
-                pruned, options.MinuteRetentionDays);
+                pruned, windows.MinuteDays);
             converted += pruned;
         }
 
         // Transitions age out too — the one otherwise-unbounded table. Each
         // subject's MOST RECENT transition always survives: warm restart
         // seeds the presumed state from it, however old it is.
-        var transitionThreshold = nowUtc.AddMonths(-options.TransitionRetentionMonths);
+        var transitionThreshold = nowUtc.AddMonths(-windows.TransitionMonths);
         var latestIds = HistoryQueries.LatestTransitionIdsPerSubject(db);
         var prunedTransitions = await db.Transitions
             .Where(t => t.TimestampUtc < transitionThreshold && !latestIds.Contains(t.Id))
@@ -47,7 +49,7 @@ public class RetentionPass(ILogger log)
         if (prunedTransitions > 0)
         {
             log.LogInformation("Pruned {Count} transitions older than {Months} months",
-                prunedTransitions, options.TransitionRetentionMonths);
+                prunedTransitions, windows.TransitionMonths);
             converted += prunedTransitions;
         }
         return converted;

@@ -82,7 +82,7 @@ public class GlitchRecorderTests : IDisposable
         await using (var db = _factory.CreateDbContext())
         {
             await new RetentionPass(NullLogger.Instance).RunAsync(db, now,
-                new PersistenceOptions { MinuteRetentionDays = 90 }, CancellationToken.None);
+                RetentionWindows.From(new PersistenceOptions { MinuteRetentionDays = 90 }), CancellationToken.None);
         }
 
         await using (var check = _factory.CreateDbContext())

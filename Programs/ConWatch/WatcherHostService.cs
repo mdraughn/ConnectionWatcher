@@ -96,19 +96,10 @@ public class WatcherHostService(
         }
 
         // Appsettings values fill any settings keys not yet in the DB (upgrade
-        // path); the table is authoritative from then on.
-        var seedDefaults = new Dictionary<string, string>
-        {
-            [SettingKeys.WeatherThreshold] = verdictOptions.Value.WeatherThreshold.ToString(),
-            [SettingKeys.MinuteRetentionDays] = persistenceOptions.Value.MinuteRetentionDays.ToString(),
-            [SettingKeys.HourlyRetentionMonths] = persistenceOptions.Value.HourlyRetentionMonths.ToString(),
-            [SettingKeys.TransitionRetentionMonths] = persistenceOptions.Value.TransitionRetentionMonths.ToString(),
-            [SettingKeys.RetentionRunHourUtc] = persistenceOptions.Value.RetentionRunHourUtc.ToString(),
-            [SettingKeys.WarmRestartMaxGapMinutes] = "10",
-        };
-        if (verdictOptions.Value.AnchorPool is { Length: > 0 } anchorPool)
-            seedDefaults[SettingKeys.AnchorPool] = anchorPool;
-        await settingsStore.SeedMissingAsync(seedDefaults);
+        // path); the table is authoritative from then on. Factory reset seeds
+        // the same list.
+        await settingsStore.SeedMissingAsync(
+            SettingsDefaults.For(verdictOptions.Value, persistenceOptions.Value));
 
         await StartEngineAsync();
         configService.ConfigChanged += OnConfigChanged;
@@ -203,7 +194,8 @@ public class WatcherHostService(
     }
 
     private async Task<bool> WarmRestartEnabledAsync() =>
-        await settingsStore.GetIntAsync(SettingKeys.WarmRestartMaxGapMinutes, 10) > 0;
+        await settingsStore.GetIntAsync(SettingKeys.WarmRestartMaxGapMinutes,
+            SettingsDefaults.WarmRestartMaxGapMinutes) > 0;
 
     /// <summary>
     /// Presumed states from the last recorded transitions, gated by freshness:
@@ -213,7 +205,8 @@ public class WatcherHostService(
     /// </summary>
     private async Task<EngineSeed?> BuildSeedFromDbAsync()
     {
-        var maxGapMinutes = await settingsStore.GetIntAsync(SettingKeys.WarmRestartMaxGapMinutes, 10);
+        var maxGapMinutes = await settingsStore.GetIntAsync(SettingKeys.WarmRestartMaxGapMinutes,
+            SettingsDefaults.WarmRestartMaxGapMinutes);
         if (maxGapMinutes <= 0)
             return null;
 

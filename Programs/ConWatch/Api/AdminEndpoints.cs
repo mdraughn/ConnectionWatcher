@@ -1,3 +1,4 @@
+using ConEngine.Configuration;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;
@@ -129,7 +130,8 @@ public static class AdminEndpoints
 
         api.MapPost("/admin/factory-reset", async (ConfirmRequest request,
             IDbContextFactory<ConWatchDbContext> dbFactory, ConfigStore store,
-            SettingsStore settings, WatcherHostService host, ILoggerFactory loggerFactory) =>
+            SettingsStore settings, WatcherHostService host, ILoggerFactory loggerFactory,
+            IOptions<VerdictOptions> verdictOptions, IOptions<PersistenceOptions> persistenceOptions) =>
         {
             if (request.Confirm != "RESET")
                 return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Confirmation must be exactly 'RESET'.");
@@ -147,13 +149,8 @@ public static class AdminEndpoints
                 await tx.CommitAsync();
             }
             await store.SeedAsync(null); // builtin profiles
-            await settings.SeedMissingAsync(new Dictionary<string, string>
-            {
-                [SettingKeys.WeatherThreshold] = "2",
-                [SettingKeys.MinuteRetentionDays] = "90",
-                [SettingKeys.HourlyRetentionMonths] = "13",
-                [SettingKeys.RetentionRunHourUtc] = "3",
-            });
+            await settings.SeedMissingAsync(
+                SettingsDefaults.For(verdictOptions.Value, persistenceOptions.Value)); // as first boot
             loggerFactory.CreateLogger("Admin").LogWarning("FACTORY RESET performed by administrator");
             if (!await host.RebuildAsync())
                 return ApiResults.Error(StatusCodes.Status500InternalServerError, null,
