@@ -91,12 +91,17 @@ public class MetricsEndpointTests : IDisposable
         // 0, so panels and alerts sit blind; warm restarts (silent seeding)
         // can leave a stable target series-less for days. Every live subject
         // must appear from the very first scrape that knows the engine.
+        // Seeding posts the pool last, and each post debounces its own
+        // rebuild, so wait for the scrape that enumerates the pool: an
+        // earlier one may show the targets from an intermediate rebuild
+        // that has no "Internet" subject yet.
         var body = "";
         await ConfigApiTests.Eventually(async () =>
         {
             body = await ScrapeAsync();
-            return body.Contains("conwatch_target_up{name=\"Router\"}");
+            return body.Contains("conwatch_pool_up{name=\"Internet\"}");
         });
+        Assert.Contains("conwatch_target_up{name=\"Router\"}", body);
         Assert.Contains("conwatch_transitions_total{name=\"Router\"}", body);
         Assert.Contains("conwatch_transitions_total{name=\"Google\"}", body);
         Assert.Contains("conwatch_transitions_total{name=\"Internet\"}", body);
