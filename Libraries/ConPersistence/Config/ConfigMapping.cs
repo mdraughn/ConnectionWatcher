@@ -64,19 +64,7 @@ internal static class ConfigMapping
         RecoveringThreshold = p.RecoveringThreshold,
     };
 
-    public static PingProfileConfig ToConfig(this ProfileRow p) => new()
-    {
-        NormalIntervalSeconds = p.NormalIntervalSeconds,
-        PingTimeoutSeconds = p.PingTimeoutSeconds,
-        BurstIntervalSeconds = p.BurstIntervalSeconds,
-        BurstMaxDurationSeconds = p.BurstMaxDurationSeconds,
-        HistorySize = p.HistorySize,
-        MinUsableSample = p.MinUsableSample,
-        RespondingThreshold = p.RespondingThreshold,
-        FalteringThreshold = p.FalteringThreshold,
-        DownThreshold = p.DownThreshold,
-        RecoveringThreshold = p.RecoveringThreshold,
-    };
+    public static PingProfileConfig ToConfig(this ProfileRow p) => p.ToDto().ToConfig();
 
     public static PingProfileConfig ToConfig(this ProfileDto p) => new()
     {

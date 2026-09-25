@@ -1,20 +1,26 @@
+using ConEngine.Configuration;
+
 namespace ConPersistence.Config;
 
-/// <summary>Ping profile for API/CRUD and export. Name-keyed; Id preserved when present.</summary>
+/// <summary>Ping profile for API/CRUD and export. Name-keyed; Id preserved when present.
+/// A field the caller leaves out takes <see cref="PingProfileConfig"/>'s default,
+/// the one place those numbers are written down.</summary>
 public record ProfileDto
 {
+    private static readonly PingProfileConfig Defaults = new();
+
     public Guid? Id { get; init; }
     public required string Name { get; init; }
-    public double NormalIntervalSeconds { get; init; } = 10;
-    public double PingTimeoutSeconds { get; init; } = 3;
-    public double BurstIntervalSeconds { get; init; } = 1;
-    public double BurstMaxDurationSeconds { get; init; } = 60;
-    public int HistorySize { get; init; } = 100;
-    public int MinUsableSample { get; init; } = 10;
-    public double RespondingThreshold { get; init; } = 0.95;
-    public double FalteringThreshold { get; init; } = 0.75;
-    public double DownThreshold { get; init; } = 0.10;
-    public double RecoveringThreshold { get; init; } = 0.25;
+    public double NormalIntervalSeconds { get; init; } = Defaults.NormalIntervalSeconds;
+    public double PingTimeoutSeconds { get; init; } = Defaults.PingTimeoutSeconds;
+    public double BurstIntervalSeconds { get; init; } = Defaults.BurstIntervalSeconds;
+    public double BurstMaxDurationSeconds { get; init; } = Defaults.BurstMaxDurationSeconds;
+    public int HistorySize { get; init; } = Defaults.HistorySize;
+    public int MinUsableSample { get; init; } = Defaults.MinUsableSample;
+    public double RespondingThreshold { get; init; } = Defaults.RespondingThreshold;
+    public double FalteringThreshold { get; init; } = Defaults.FalteringThreshold;
+    public double DownThreshold { get; init; } = Defaults.DownThreshold;
+    public double RecoveringThreshold { get; init; } = Defaults.RecoveringThreshold;
 }
 
 /// <summary>Target for API/CRUD and export. Parent/Profile referenced by name.</summary>
