@@ -80,13 +80,14 @@ jobs:
       # per-arch and attestation manifests. Keep the version tags, latest and
       # edge, the newest 5 sha-* builds, and drop the rest (orphaned untagged
       # manifests included; the action understands multi-arch manifest lists,
-      # so children of kept tags are never removed). dry-run only logs.
+      # so children of kept tags are never removed). First run (2026-09-25) was a
+      # dry run: 40 of 75 versions, all old sha-* builds and orphaned manifests.
       - name: Prune old image versions
         if: github.ref == 'refs/heads/master'
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           package: conwatch
-          dry-run: true
+          dry-run: false
           delete-tags: sha-*
           keep-n-tagged: 5
           exclude-tags: latest,edge,[0-9]*
