@@ -18,7 +18,7 @@ public static class StatusEndpoints
                     Targets = Array.Empty<object>(),
                     Pools = Array.Empty<object>(),
                 });
-            return Results.Json(new { error = "Engine is not running" }, statusCode: 503);
+            return ApiResults.Error(StatusCodes.Status503ServiceUnavailable, null, "Engine is not running");
         });
 
         api.MapGet("/health", (WatcherHostService host, TimeProvider time) =>

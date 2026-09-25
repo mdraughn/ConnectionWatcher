@@ -32,7 +32,7 @@ public static class AuthEndpoints
         auth.MapPost("/login", async (LoginRequest request, AdminGate gate, HttpContext http) =>
         {
             if (!gate.IsEnabled)
-                return Results.BadRequest(new { errors = new[] { "No admin password is set." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "No admin password is set.");
             if (!await gate.VerifyOrDelayAsync(request.Password))
                 return Results.Unauthorized();
             await SignInAdminAsync(http);
@@ -48,7 +48,7 @@ public static class AuthEndpoints
         auth.MapPost("/set-password", async (SetPasswordRequest request, AdminGate gate, HttpContext http) =>
         {
             if (request.Password is not { Length: >= 4 })
-                return Results.BadRequest(new { errors = new[] { "Password must be at least 4 characters." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Password must be at least 4 characters.");
             if (!await gate.VerifyOrDelayAsync(request.Current))
                 return Results.Unauthorized();
             gate.Set(request.Password);
@@ -59,7 +59,7 @@ public static class AuthEndpoints
         auth.MapPost("/remove-password", async (RemovePasswordRequest request, AdminGate gate) =>
         {
             if (!gate.IsEnabled)
-                return Results.BadRequest(new { errors = new[] { "No admin password is set." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "No admin password is set.");
             if (!await gate.VerifyOrDelayAsync(request.Current))
                 return Results.Unauthorized();
             gate.Remove();

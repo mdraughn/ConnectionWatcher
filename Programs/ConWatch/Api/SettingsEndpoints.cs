@@ -107,7 +107,7 @@ public static class SettingsEndpoints
                 }
             }
             if (errors.Count > 0)
-                return Results.BadRequest(new { errors });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, [.. errors]);
 
             await store.SetManyAsync(values);
             return Results.NoContent();

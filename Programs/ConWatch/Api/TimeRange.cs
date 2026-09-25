@@ -46,7 +46,7 @@ public static class TimeRange
         }
         catch (ArgumentException)
         {
-            problem = Results.BadRequest(new { errors = new[] { $"'from' is not a valid timestamp: {from}" } });
+            problem = ApiResults.Error(StatusCodes.Status400BadRequest, null, $"'from' is not a valid timestamp: {from}");
             return false;
         }
         try
@@ -55,7 +55,7 @@ public static class TimeRange
         }
         catch (ArgumentException)
         {
-            problem = Results.BadRequest(new { errors = new[] { $"'to' is not a valid timestamp: {to}" } });
+            problem = ApiResults.Error(StatusCodes.Status400BadRequest, null, $"'to' is not a valid timestamp: {to}");
             return false;
         }
         return true;

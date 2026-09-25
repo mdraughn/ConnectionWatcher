@@ -31,7 +31,7 @@ public static class HistoryEndpoints
             if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
                 return problem!;
             if (fromUtc is null || toUtc is null)
-                return Results.BadRequest(new { errors = new[] { "'from' and 'to' are required." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "'from' and 'to' are required.");
 
             string resolved;
             try
@@ -41,7 +41,7 @@ public static class HistoryEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.BadRequest(new { errors = new[] { ex.Message } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, ex.Message);
             }
 
             await using var db = await dbFactory.CreateDbContextAsync();

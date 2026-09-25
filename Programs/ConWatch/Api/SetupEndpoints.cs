@@ -24,25 +24,16 @@ public static class SetupEndpoints
         api.MapPost("/setup/apply", async (SetupApplyRequest request, SetupService setup) =>
         {
             if (string.IsNullOrWhiteSpace(request.Router?.Address))
-                return Results.BadRequest(new { errors = new[] { "A router address is required." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "A router address is required.");
             return (await setup.ApplyAsync(request)).ToHttp();
         });
 
         api.MapPost("/setup/clone", async (CloneRequest request, CloneService clone,
-            CancellationToken ct) => ToHttp(await clone.CloneAsync(request.SourceUrl,
-                request.SourcePassword, request.IncludeSecrets, request.AllowInsecure, ct)));
+            CancellationToken ct) => (await clone.CloneAsync(request.SourceUrl,
+                request.SourcePassword, request.IncludeSecrets, request.AllowInsecure, ct)).ToHttp());
 
         api.MapPost("/setup/takeover", async (TakeoverRequest request, CloneService clone,
-            CancellationToken ct) => ToHttp(await clone.TakeOverAsync(request.SourcePassword,
-                request.AllowInsecure, ct)));
+            CancellationToken ct) => (await clone.TakeOverAsync(request.SourcePassword,
+                request.AllowInsecure, ct)).ToHttp());
     }
-
-    private static IResult ToHttp(CloneOutcome outcome) => outcome.Status switch
-    {
-        200 => Results.Ok(outcome.Body),
-        401 => Results.Json(new { errors = new[] { outcome.Error }, code = outcome.ErrorCode },
-            statusCode: 401),
-        _ => Results.Json(new { errors = new[] { outcome.Error }, code = outcome.ErrorCode },
-            statusCode: outcome.Status),
-    };
 }

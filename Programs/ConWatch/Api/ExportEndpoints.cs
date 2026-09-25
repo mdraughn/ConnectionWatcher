@@ -132,7 +132,7 @@ public static class ExportEndpoints
         format.Equals("json", StringComparison.OrdinalIgnoreCase);
 
     private static IResult BadFormat() =>
-        Results.BadRequest(new { errors = new[] { "format must be 'csv' or 'json'." } });
+        ApiResults.Error(StatusCodes.Status400BadRequest, null, "format must be 'csv' or 'json'.");
 
     private static IResult Csv(IEnumerable<string> lines, string fileName)
     {
