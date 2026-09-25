@@ -250,6 +250,43 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         return ConfigResult.Ok();
     }
 
+    /// <summary>
+    /// Reads the whole stored document, lets <paramref name="edit"/> change it
+    /// in memory, then validates and writes it back: one transaction, one
+    /// validation, one ConfigChanged. Ids in the document are preserved, so
+    /// rows the edit did not touch keep their identity. A failed edit or a
+    /// failed validation commits nothing.
+    /// </summary>
+    public async Task<ConfigResult> EditDocumentAsync(Func<ConfigDocument, ConfigResult> edit)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        var doc = await store.ExportAsync(db);
+        var result = edit(doc);
+        if (!result.Success)
+            return result;
+
+        var validation = new WatcherOptionsValidator().Validate(null, doc.ToOptions());
+        if (validation.Failed)
+            return ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray());
+
+        try
+        {
+            await ConfigStore.WriteDocumentAsync(db, doc);
+        }
+        catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
+        {
+            _log.LogDebug(ex, "Config edit rejected by a uniqueness constraint");
+            return ConfigResult.Fail(ConfigErrorKind.Validation,
+                "Change violates a uniqueness constraint (duplicate name or address).");
+        }
+
+        await tx.CommitAsync();
+        ConfigChanged?.Invoke();
+        return result;
+    }
+
     /// <summary>Apply a mutation, validate the whole resulting config, commit or roll back.</summary>
     private async Task<ConfigResult> MutateAsync(Func<ConWatchDbContext, Task<ConfigResult>> mutation)
     {

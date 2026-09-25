@@ -13,8 +13,7 @@ public record SetupApplyRequest(SetupTarget Router, SetupTarget? OuterIp, List<s
 /// addresses are left alone; missing pieces are created and chained
 /// Router → OuterIp? → anchors → pool "Internet" → verdict settings.
 /// </summary>
-public class SetupService(ConfigService config, ConfigStore store, SettingsStore settings,
-    ILogger<SetupService> log)
+public class SetupService(ConfigService config, SettingsStore settings, ILogger<SetupService> log)
 {
     public const string PoolName = "Internet";
 
@@ -31,94 +30,90 @@ public class SetupService(ConfigService config, ConfigStore store, SettingsStore
 
     public async Task<ConfigResult> ApplyAsync(SetupApplyRequest request)
     {
-        var existing = await store.ExportAsync();
-        string? ByAddress(string address) => existing.Targets
-            .FirstOrDefault(t => t.Address.Equals(address, StringComparison.OrdinalIgnoreCase))?.Name;
-        bool NameTaken(string name) => existing.Targets
-            .Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var routerName = "";
+        var poolName = PoolName;
+        var anchorNames = new List<string>();
 
-        // Router: reuse any target already at that address.
-        var routerName = ByAddress(request.Router.Address);
-        if (routerName is null)
+        // One read-modify-write of the whole document: the wizard is all or
+        // nothing, and the engine rebuilds once.
+        var result = await config.EditDocumentAsync(doc =>
         {
-            routerName = Unique(request.Router.Name, NameTaken);
-            var result = await config.UpsertTargetAsync(new TargetDto
+            string? ByAddress(string address) => doc.Targets
+                .FirstOrDefault(t => t.Address.Equals(address, StringComparison.OrdinalIgnoreCase))?.Name;
+            bool NameTaken(string name) => doc.Targets
+                .Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            string Add(TargetDto target)
             {
-                Name = routerName,
+                doc.Targets.Add(target);
+                return target.Name;
+            }
+
+            // Router: reuse any target already at that address.
+            routerName = ByAddress(request.Router.Address) ?? Add(new TargetDto
+            {
+                Name = Unique(request.Router.Name, NameTaken),
                 Address = request.Router.Address,
                 Profile = "Internal",
             });
-            if (!result.Success)
-                return result;
-        }
 
-        // Optional WAN address, chained under the router.
-        var pathLeaf = routerName;
-        if (request.OuterIp is { } outer)
-        {
-            var outerName = ByAddress(outer.Address);
-            if (outerName is null)
+            // Optional WAN address, chained under the router.
+            var pathLeaf = routerName;
+            if (request.OuterIp is { } outer)
             {
-                outerName = Unique(outer.Name, NameTaken);
-                var result = await config.UpsertTargetAsync(new TargetDto
+                pathLeaf = ByAddress(outer.Address) ?? Add(new TargetDto
                 {
-                    Name = outerName,
+                    Name = Unique(outer.Name, NameTaken),
                     Address = outer.Address,
                     Parent = routerName,
                     Profile = "Internal",
                     // The WAN hop is where the ISP's service begins.
                     Operator = request.IspName,
                 });
-                if (!result.Success)
-                    return result;
             }
-            pathLeaf = outerName;
-        }
 
-        // Anchors under the path leaf.
-        var anchorNames = new List<string>();
-        foreach (var address in request.AnchorAddresses.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var known = ByAddress(address);
-            if (known is not null)
+            // Anchors under the path leaf.
+            foreach (var address in request.AnchorAddresses.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                anchorNames.Add(known);
-                continue;
+                var catalogEntry = AnchorCatalog.FirstOrDefault(a => a.Address == address);
+                anchorNames.Add(ByAddress(address) ?? Add(new TargetDto
+                {
+                    Name = Unique(catalogEntry?.Name ?? address, NameTaken),
+                    Address = address, Parent = pathLeaf, Profile = "External",
+                    Operator = catalogEntry?.Operator,
+                }));
             }
-            var catalogEntry = AnchorCatalog.FirstOrDefault(a => a.Address == address);
-            var name = Unique(catalogEntry?.Name ?? address, NameTaken);
-            var result = await config.UpsertTargetAsync(new TargetDto
-            {
-                Name = name, Address = address, Parent = pathLeaf, Profile = "External",
-                Operator = catalogEntry?.Operator,
-            });
-            if (!result.Success)
-                return result;
-            anchorNames.Add(name);
-        }
 
-        // Pool: create, or union in any new members.
-        var pool = existing.Pools.FirstOrDefault(p =>
-            p.Name.Equals(PoolName, StringComparison.OrdinalIgnoreCase));
-        if (anchorNames.Count > 0)
-        {
-            var members = pool is null
-                ? anchorNames
-                : pool.Members.Concat(anchorNames.Where(n => !pool.Members.Contains(n))).ToList();
-            var poolResult = await config.UpsertPoolAsync(new PoolDto
+            // Pool: create, or union in any new members.
+            var poolIndex = doc.Pools.FindIndex(p =>
+                p.Name.Equals(PoolName, StringComparison.OrdinalIgnoreCase));
+            var pool = poolIndex >= 0 ? doc.Pools[poolIndex] : null;
+            poolName = pool?.Name ?? PoolName;
+            if (anchorNames.Count > 0)
             {
-                Id = pool?.Id, Name = pool?.Name ?? PoolName, Members = members,
-                Parent = pool?.Parent ?? pathLeaf,
-            });
-            if (!poolResult.Success)
-                return poolResult;
-        }
+                var merged = new PoolDto
+                {
+                    Id = pool?.Id,
+                    Name = poolName,
+                    Members = pool is null
+                        ? [.. anchorNames]
+                        : [.. pool.Members, .. anchorNames.Where(n => !pool.Members.Contains(n))],
+                    Parent = pool?.Parent ?? pathLeaf,
+                };
+                if (poolIndex >= 0)
+                    doc.Pools[poolIndex] = merged;
+                else
+                    doc.Pools.Add(merged);
+            }
+            return ConfigResult.Ok();
+        });
+        if (!result.Success)
+            return result;
 
         // Verdict settings: only fill what is unset.
         if (await settings.GetAsync(SettingKeys.AnchorPool) is not { Length: > 0 })
             await settings.SetManyAsync(new Dictionary<string, string?>
             {
-                [SettingKeys.AnchorPool] = pool?.Name ?? PoolName,
+                [SettingKeys.AnchorPool] = poolName,
             });
 
         log.LogInformation("Setup applied: router {Router}, {AnchorCount} anchors",

@@ -153,6 +153,12 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
     public async Task<ConfigDocument> ExportAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
+        return await ExportAsync(db);
+    }
+
+    /// <summary>Same, over a caller-supplied context (used mid-transaction by ConfigService).</summary>
+    internal async Task<ConfigDocument> ExportAsync(ConWatchDbContext db)
+    {
         var options = await LoadWatcherOptionsAsync(db);
         var profiles = await db.Profiles.AsNoTracking().ToListAsync();
         return new ConfigDocument

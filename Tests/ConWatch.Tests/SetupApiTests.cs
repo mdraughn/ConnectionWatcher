@@ -170,4 +170,31 @@ public class SetupApiTests : IDisposable
             new SetupApplyRequest(new SetupTarget("Router", ""), null, []));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Apply_is_all_or_nothing()
+    {
+        // The empty anchor address fails validation after the router and the
+        // first anchor were built: nothing may be left behind.
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8", ""]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        Assert.Empty(targets!);
+    }
+
+    [Fact]
+    public async Task Apply_raises_one_config_change()
+    {
+        var config = _factory.Services.GetRequiredService<ConfigService>();
+        var changes = 0;
+        config.ConfigChanged += () => Interlocked.Increment(ref changes);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, new SetupTarget("WAN", "203.0.113.23"), ["8.8.8.8", "1.1.1.1"]));
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(1, changes);
+    }
 }

@@ -263,4 +263,39 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.DoesNotContain(options.Targets, t => t.Name == "Bad");
         Assert.Equal(4, options.Targets.Count);
     }
+
+    [Fact]
+    public async Task EditDocument_commits_once_and_keeps_untouched_ids()
+    {
+        var routerId = await IdOf("Router");
+
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "TV", Address = "192.168.1.50", Parent = "Router", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+        Assert.Equal(routerId, await IdOf("Router"));
+        Assert.Contains((await _store.LoadWatcherOptionsAsync()).Targets, t => t.Name == "TV" && t.Parent == "Router");
+    }
+
+    [Fact]
+    public async Task EditDocument_that_fails_validation_commits_nothing()
+    {
+        var before = (await _store.LoadWatcherOptionsAsync()).Targets.Count;
+
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "Good", Address = "192.168.1.60", Profile = "Internal" });
+            doc.Targets.Add(new TargetDto { Name = "", Address = "", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Equal(0, _changeSignals);
+        Assert.Equal(before, (await _store.LoadWatcherOptionsAsync()).Targets.Count);
+    }
 }
