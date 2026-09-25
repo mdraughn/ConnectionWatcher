@@ -77,9 +77,12 @@ Copy-Item (Join-Path $PSScriptRoot "LICENSE") $app
 
 # --- Sign the project's own binaries (the runtime files are Microsoft-signed already) ---
 if ($Sign) {
-    $ours = Get-ChildItem $app -File -Include *.exe, *.dll -Recurse |
-        Where-Object { $_.Name -match "^(conwatch|Con[A-Z])" } |
-        Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne "Valid" }
+    # Case-sensitive on purpose: conwatch*.exe/dll and the Con<Pascal> project
+    # assemblies, never a third-party "con..." library that happens to ship unsigned.
+    $ours = @(Get-ChildItem $app -File -Include *.exe, *.dll -Recurse |
+        Where-Object { $_.Name -cmatch "^(conwatch|Con[A-Z])" } |
+        Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne "Valid" })
+    if ($ours.Count -eq 0) { throw "No files under $app matched the signing name pattern." }
     Write-Host "Signing $($ours.Count) file(s): $($ours.Name -join ', ')"
     & (Join-Path $staging "sign.cmd") @($ours.FullName)
     if ($LASTEXITCODE -ne 0) { throw "Signing failed (exit $LASTEXITCODE)." }
