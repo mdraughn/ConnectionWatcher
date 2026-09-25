@@ -75,3 +75,22 @@ jobs:
             APP_VERSION=${{ steps.ver.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Prune build history: every push leaves a sha-<commit> version plus its
+      # per-arch and attestation manifests. Keep the version tags, latest and
+      # edge, the newest 5 sha-* builds, and drop the rest (orphaned untagged
+      # manifests included; the action understands multi-arch manifest lists,
+      # so children of kept tags are never removed). dry-run only logs.
+      - name: Prune old image versions
+        if: github.ref == 'refs/heads/master'
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: conwatch
+          dry-run: true
+          delete-tags: sha-*
+          keep-n-tagged: 5
+          exclude-tags: latest,edge,[0-9]*
+          delete-untagged: true
+          delete-ghost-images: true
+          delete-partial-images: true
+          token: ${{ secrets.GITHUB_TOKEN }}
