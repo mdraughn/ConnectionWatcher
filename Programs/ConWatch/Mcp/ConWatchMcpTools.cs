@@ -33,33 +33,17 @@ public class ConWatchMcpTools(WatcherHostService host,
         "the user's line); LinkDegraded means their connection is losing traffic; " +
         "LinkDown means it is down. " +
         "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering.")]
-    public async Task<string> GetCurrentStatus()
+    public Task<string> GetCurrentStatus()
     {
-        var engine = host.Engine;
-        var current = engine?.Verdict?.Current;
-        return JsonSerializer.Serialize(new
+        var snapshot = StatusSnapshotBuilder.Build(host.Engine);
+        return Task.FromResult(JsonSerializer.Serialize(new
         {
-            monitoringEnabled = await host.EngineEnabledAsync(),
+            monitoringEnabled = host.EngineEnabled,
             version = BuildInfo.Version,
             builtUtc = BuildInfo.BuiltUtc,
-            verdict = current is null ? null : new
-            {
-                state = current.State.ToString(),
-                detail = current.Detail,
-                blamedOperator = current.Operator,
-            },
-            targets = engine?.Monitors.Values.OrderBy(m => m.Target.Name).Select(m => new
-            {
-                name = m.Target.Name,
-                address = m.ResolvedAddress?.ToString() ?? m.Target.Address,
-                probe = m.Target.Probe,
-                state = m.CurrentState.ToString(),
-                assumed = m.IsAssumed,
-                successRate = m.LastStatus?.Host.SuccessRate,
-                avgRttMs = m.LastStatus?.Host.AverageRoundtripTime,
-                @operator = m.Target.Operator,
-            }),
-        }, Json);
+            verdict = snapshot?.Verdict,
+            targets = snapshot?.Targets,
+        }, Json));
     }
 
     [McpServerTool(Name = "get_connection_report", ReadOnly = true)]

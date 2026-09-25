@@ -16,15 +16,6 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MinGap = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>The archive-mode snapshot: the same shape /status answers when disabled.</summary>
-    public static readonly object DisabledSnapshot = new
-    {
-        Enabled = false,
-        Verdict = (object?)null,
-        Targets = Array.Empty<object>(),
-        Pools = Array.Empty<object>(),
-    };
-
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private WatcherEngine? _engine;
@@ -68,7 +59,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     {
         try
         {
-            await SendStatusChangedAsync(DisabledSnapshot)
+            await SendStatusChangedAsync(StatusSnapshot.Disabled)
                 .WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -166,7 +157,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     /// disabled push), and without ordering, whichever SendAsync call happens
     /// to complete first wins the wire — not whichever was dispatched first.
     /// </summary>
-    private async Task SendStatusChangedAsync(object snapshot)
+    private async Task SendStatusChangedAsync(StatusSnapshot snapshot)
     {
         await _sendGate.WaitAsync().ConfigureAwait(false);
         try

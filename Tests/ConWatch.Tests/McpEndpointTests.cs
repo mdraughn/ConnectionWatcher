@@ -117,6 +117,33 @@ public class McpEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Status_tool_reports_the_status_snapshot()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var status = await _client.GetAsync("/api/v1/status");
+            return status.IsSuccessStatusCode &&
+                   (await status.Content.ReadAsStringAsync()).Contains("Healthy");
+        });
+        await InitializeAsync();
+
+        var json = JsonSerializer.Deserialize<JsonElement>(ToolText(await RpcAsync("tools/call", new
+        {
+            name = "get_current_status",
+            arguments = new { },
+        })));
+
+        Assert.True(json.GetProperty("monitoringEnabled").GetBoolean());
+        Assert.True(json.GetProperty("verdict").TryGetProperty("operator", out _));
+        var router = json.GetProperty("targets").EnumerateArray()
+            .Single(t => t.GetProperty("name").GetString() == "Router");
+        foreach (var key in new[] { "id", "address", "state", "assumed", "successRate", "avgRtt",
+                     "sampleSize", "pingCount", "operator" })
+            Assert.True(router.TryGetProperty(key, out _), $"missing '{key}'");
+    }
+
+    [Fact]
     public async Task Transitions_tool_speaks_the_rest_transition_shape()
     {
         await ConfigApiTests.SeedHomeAsync(_client);

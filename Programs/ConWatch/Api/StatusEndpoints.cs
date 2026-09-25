@@ -11,13 +11,7 @@ public static class StatusEndpoints
                 return Results.Ok(snapshot);
             // Archive mode is a healthy answer, not an error: no live states.
             if (!host.EngineEnabled)
-                return Results.Ok(new
-                {
-                    Enabled = false,
-                    Verdict = (object?)null,
-                    Targets = Array.Empty<object>(),
-                    Pools = Array.Empty<object>(),
-                });
+                return Results.Ok(StatusSnapshot.Disabled);
             return ApiResults.Error(StatusCodes.Status503ServiceUnavailable, null, "Engine is not running");
         });
 
