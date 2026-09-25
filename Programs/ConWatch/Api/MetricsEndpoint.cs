@@ -83,7 +83,7 @@ public static class MetricsEndpoint
             foreach (var p in engine.PoolCoordinators)
                 totals.TryAdd(p.Pool.Name, 0);
             if (engine.Verdict is not null)
-                totals.TryAdd("Internet", 0); // the verdict subject's name
+                totals.TryAdd(VerdictCoordinator.SubjectName, 0);
         }
         foreach (var (name, count) in totals.OrderBy(kv => kv.Key))
             Series(sb, "conwatch_transitions_total", name, count);

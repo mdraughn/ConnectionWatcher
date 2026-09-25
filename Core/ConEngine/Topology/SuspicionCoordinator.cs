@@ -222,7 +222,7 @@ public class SuspicionCoordinator : IDisposable
         _glitchSubject.OnNext(new GlitchEvent
         {
             TargetId = VerdictCoordinator.SubjectId,
-            TargetName = "Internet",
+            TargetName = VerdictCoordinator.SubjectName,
             Class = GlitchClass.Internet,
             StartUtc = start,
             EndUtc = end,

@@ -72,6 +72,21 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
+    public void Verdict_transitions_are_named_by_the_subject_constants()
+    {
+        AllHealthy();
+
+        Assert.NotEmpty(_verdictTransitions);
+        Assert.All(_verdictTransitions, t =>
+        {
+            Assert.Equal(VerdictCoordinator.SubjectId, t.TargetId);
+            Assert.Equal(VerdictCoordinator.SubjectName, t.TargetName);
+        });
+        // The name is on the wire: the metrics label and the MCP subject filter use it.
+        Assert.Equal("Internet", VerdictCoordinator.SubjectName);
+    }
+
+    [Fact]
     public void Starts_unknown_then_healthy()
     {
         Assert.Equal(VerdictState.Unknown, _verdict.CurrentVerdict);

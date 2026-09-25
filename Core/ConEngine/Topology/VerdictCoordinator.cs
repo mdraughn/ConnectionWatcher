@@ -28,6 +28,10 @@ public class VerdictCoordinator : IDisposable
     /// <summary>Fixed synthetic subject id for the "Internet" verdict stream.</summary>
     public static readonly Guid SubjectId = Guid.Parse("6E7E12E7-0000-4000-8000-000000000001");
 
+    /// <summary>The verdict subject's name in transitions, Internet-class
+    /// glitches and the metrics series.</summary>
+    public const string SubjectName = "Internet";
+
     private readonly TargetGraph _graph;
     private readonly IReadOnlyList<TargetMonitor> _anchors;
     private readonly IReadOnlyList<(TargetMonitor Monitor, int Depth)> _ancestors;
@@ -134,7 +138,7 @@ public class VerdictCoordinator : IDisposable
             {
                 Kind = TransitionSubjectKind.Verdict,
                 TargetId = SubjectId,
-                TargetName = "Internet",
+                TargetName = SubjectName,
                 From = Map(previous.State),
                 To = Map(verdict),
                 Timestamp = _time.GetUtcNow(),
