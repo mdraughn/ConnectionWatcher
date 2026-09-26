@@ -298,4 +298,40 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.Equal(0, _changeSignals);
         Assert.Equal(before, (await _store.LoadWatcherOptionsAsync()).Targets.Count);
     }
+
+    [Fact]
+    public async Task EditDocument_changing_an_existing_targets_address_is_rejected()
+    {
+        var routerId = await IdOf("Router");
+        var originalAddress = (await _store.LoadWatcherOptionsAsync())
+            .Targets.Single(t => t.Name == "Router").Address;
+
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            var i = doc.Targets.FindIndex(t => t.Id == routerId);
+            doc.Targets[i] = doc.Targets[i] with { Address = "10.10.10.10" };
+            return ConfigResult.Ok();
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("EditDocumentAsync cannot change"));
+        Assert.Equal(0, _changeSignals);
+        Assert.Equal(originalAddress, (await _store.LoadWatcherOptionsAsync())
+            .Targets.Single(t => t.Name == "Router").Address);
+    }
+
+    [Fact]
+    public async Task EditDocument_adding_a_target_without_renaming_others_still_succeeds()
+    {
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "NewGuy", Address = "192.168.1.70", Parent = "Router", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+        Assert.Contains((await _store.LoadWatcherOptionsAsync()).Targets, t => t.Name == "NewGuy" && t.Parent == "Router");
+    }
 }

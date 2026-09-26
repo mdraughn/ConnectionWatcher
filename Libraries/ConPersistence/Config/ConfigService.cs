@@ -255,7 +255,9 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
     /// in memory, then validates and writes it back: one transaction, one
     /// validation, one ConfigChanged. Ids in the document are preserved, so
     /// rows the edit did not touch keep their identity. A failed edit or a
-    /// failed validation commits nothing.
+    /// failed validation commits nothing. Cannot change an existing target's
+    /// address: that goes through <see cref="UpsertTargetAsync"/> with an
+    /// explicit addressChange, which writes the HistoryReset/AddressChanged marker.
     /// </summary>
     public async Task<ConfigResult> EditDocumentAsync(Func<ConfigDocument, ConfigResult> edit)
     {
@@ -263,9 +265,22 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         await using var tx = await db.Database.BeginTransactionAsync();
 
         var doc = await store.ExportAsync(db);
+        var addressesBefore = doc.Targets
+            .Where(t => t.Id is not null)
+            .ToDictionary(t => t.Id!.Value, t => ConfigMapping.NormalizeAddress(t.Address));
+
         var result = edit(doc);
         if (!result.Success)
             return result;
+
+        foreach (var target in doc.Targets)
+        {
+            if (target.Id is not { } id || !addressesBefore.TryGetValue(id, out var oldAddress))
+                continue;
+            if (!string.Equals(oldAddress, ConfigMapping.NormalizeAddress(target.Address), StringComparison.OrdinalIgnoreCase))
+                return ConfigResult.Fail(ConfigErrorKind.Validation,
+                    "Address edits go through UpsertTargetAsync with addressChange; EditDocumentAsync cannot change an existing target's address.");
+        }
 
         var validation = new WatcherOptionsValidator().Validate(null, doc.ToOptions());
         if (validation.Failed)
