@@ -89,20 +89,20 @@ Where the review's proposal and the code at `78bf8e8` disagree, or the review le
 
 Found at `78bf8e8`: `git status --ignored` no longer lists these three (their `bin/obj` are gone); they are empty directories, which git does not track, so this task has no commit. Also at the root: `APM/` is an untracked tree of empty folders (`APM/grafana/provisioning/datasources`) that the review did not name; it is left alone (it looks like a placeholder). `.superpowers/`, `dist/`, `staging/`, `tools/` are ignored working folders in use (brainstorm state, installer output, publish staging, code-signing tools) and are kept.
 
-- [ ] **Step 1: Confirm the three folders are empty**
+- [x] **Step 1: Confirm the three folders are empty**
 
 ```powershell
 (Get-ChildItem -Force -Recurse ConInfrastructure, ConNotify, ConPersistence | Measure-Object).Count
 ```
 Expected: `0`. If anything is listed, stop and report what it is; do not delete.
 
-- [ ] **Step 2: Delete them**
+- [x] **Step 2: Delete them**
 
 ```powershell
 Remove-Item ConInfrastructure, ConNotify, ConPersistence
 ```
 
-- [ ] **Step 3: Verify nothing referenced them**
+- [x] **Step 3: Verify nothing referenced them**
 
 Run: `dotnet build ConnectionWatcher.sln -c Debug`
 Expected: `0 Warning(s)`, `0 Error(s)`. Run `git status --short`; expected: no output (nothing tracked changed, nothing to commit).
@@ -209,12 +209,12 @@ Unchanged: `ConWatchDbContext.cs`, `DatabaseStartup.cs`, `DesignTimeFactory.cs`,
 - Consumes: nothing.
 - Produces: the namespaces in the tables above. Every later task uses them: `ConPersistence.Config.{ConfigService, ConfigStore, ConfigHealth, HealthWarning, ConfigResult, ConfigErrorKind, ConfigDocument, ProfileDto, TargetDto, PoolDto}` (and the internal `ConfigMapping`), `ConPersistence.Settings.{SettingsStore, SettingKeys}`, `ConPersistence.Recording.*`, `ConPersistence.Retention.*`, `ConPersistence.Queries.{HistoryQueries, WarmStartQueries}`, `ConPersistence.Snapshots.{Snapshot, SnapshotImporter}`.
 
-- [ ] **Step 1: Baseline**
+- [x] **Step 1: Baseline**
 
 Run: `dotnet build ConnectionWatcher.sln -c Debug` then `dotnet test ConnectionWatcher.sln -c Debug`
 Expected: 0 warnings; 0 failed. Note the passed count; after this task it must be identical (a move adds no tests).
 
-- [ ] **Step 2: Create the folders and move the files**
+- [x] **Step 2: Create the folders and move the files**
 
 ```powershell
 $p = "Libraries/ConPersistence"
@@ -241,21 +241,21 @@ git mv "$p/Services/SnapshotImporter.cs" "$p/Snapshots/SnapshotImporter.cs"
 Remove-Item "$p/Dto", "$p/Services", "$p/Rollups"   # now empty; fails loudly if not
 ```
 
-- [ ] **Step 3: Apply the header edits** (first table) to the 19 moved files.
+- [x] **Step 3: Apply the header edits** (first table) to the 19 moved files.
 
-- [ ] **Step 4: Apply the consumer edits** (second table).
+- [x] **Step 4: Apply the consumer edits** (second table).
 
-- [ ] **Step 5: Build**
+- [x] **Step 5: Build**
 
 Run: `dotnet build ConnectionWatcher.sln -c Debug`
 Expected: `0 Warning(s)`, `0 Error(s)`. If a CS0246/CS0103 names a moved type in a file the table missed, add the `using` for that type's namespace from the first table (never a `global using`).
 
-- [ ] **Step 6: Test**
+- [x] **Step 6: Test**
 
 Run: `dotnet test ConnectionWatcher.sln -c Debug`
 Expected: 0 failed, the same passed count as Step 1.
 
-- [ ] **Step 7: Check it is a pure move**
+- [x] **Step 7: Check it is a pure move**
 
 ```powershell
 git add -A Libraries/ConPersistence Libraries/ConNotify Programs/ConWatch Tests/ConPersistence.Tests Tests/ConWatch.Tests
@@ -263,7 +263,7 @@ git diff --cached -M --name-status Libraries/ConPersistence
 ```
 Expected: 19 `R0xx` lines (renames with similarity), no `D`/`A` pairs.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git commit -m "refactor: persistence folders and namespaces follow responsibilities (move only)"
@@ -286,14 +286,14 @@ git commit -m "refactor: persistence folders and namespaces follow responsibilit
 
 Kept on purpose (verified by grep at `78bf8e8`): `PingDiscipline.IsParked` and `TargetGraph.GetByName/GetPoolByName/GetChildren` (test helpers used by 10+ tests; the repo has no `InternalsVisibleTo` and the review allows leaving them); `HostAnalysisEngine`'s public setters (the class is internal); `SnapshotImporter.ImportToFileAsync` (the CLI/test route S7 keeps); `RollupCollector.FlushClosedAsync` (the background loop calls it); `DataPruner.PruneResult` (it is the `/admin/prune` response body, not test-only); `HostTracker`/`TargetMonitor` members (Task 19); `DomainResolutionResult` (decision 6: keep the shape).
 
-- [ ] **Step 1: Confirm the callers**
+- [x] **Step 1: Confirm the callers**
 
 ```powershell
 git grep -n -e "GetLatest" -e "DefaultDnsRefreshInterval" -e "RttSum" -e "controllerA.Stop()" -- Core Libraries Programs Tests
 ```
 Expected: `GetLatest` only in `CircularBuffer.cs`; `DefaultDnsRefreshInterval` only in `WatcherEngine.cs`; `RttSum` only in `RollupAccumulator.cs`; `controllerA.Stop()` once in `Tests/ConEngine.Tests/PingControllerTests.cs`. (Also run `git grep -n "\.Stop()" -- Core` and confirm the only `PingController.Stop` call is inside `PingController.StopAsync`.)
 
-- [ ] **Step 2: Move the test off `Stop()`**
+- [x] **Step 2: Move the test off `Stop()`**
 
 In `Tests/ConEngine.Tests/PingControllerTests.cs`, `Stopping_one_controller_does_not_complete_shared_channel`, replace
 
@@ -309,7 +309,7 @@ with
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~PingControllerTests"`
 Expected: PASS (the test now waits for A's loop to exit instead of sleeping).
 
-- [ ] **Step 3: Narrow and delete**
+- [x] **Step 3: Narrow and delete**
 
 `Core/ConEngine/Tracking/CircularBuffer.cs`: delete the `GetLatest()` method with its `/// <summary>The most recent item, or default when empty.</summary>` line.
 
@@ -329,12 +329,12 @@ Expected: PASS (the test now waits for A's loop to exit instead of sleeping).
     internal long RttSum { get; set; }
 ```
 
-- [ ] **Step 4: Build and test**
+- [x] **Step 4: Build and test**
 
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`.
 Run: `dotnet test ConnectionWatcher.sln -c Debug` → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Core/ConEngine Libraries/ConPersistence/Recording/RollupAccumulator.cs Tests/ConEngine.Tests/PingControllerTests.cs
@@ -356,7 +356,7 @@ git commit -m "refactor: drop or narrow dead engine and rollup members"
 
 Result order is part of the behavior and is kept: default-route candidates first, then reachable before unreachable, ties in insertion order (default routes, then `192.168.0.1`, `192.168.1.1`, `10.0.0.1`, `10.0.0.2`, `192.168.100.1`).
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConEngine.Tests/GatewayDiscoveryTests.cs`:
 
@@ -425,12 +425,12 @@ public class GatewayDiscoveryTests
 }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~GatewayDiscoveryTests"`
 Expected: build error, no `GatewayDiscovery` constructor takes two arguments.
 
-- [ ] **Step 3: Introduce the seams, still sequential**
+- [x] **Step 3: Introduce the seams, still sequential**
 
 Replace `Libraries/ConInfrastructure/Discovery/GatewayDiscovery.cs` with:
 
@@ -525,7 +525,7 @@ public class GatewayDiscovery : IGatewayDiscovery
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~GatewayDiscoveryTests"`
 Expected: `Results_keep_…` and `A_default_route_…` PASS; `Every_candidate_is_probed_at_once` FAILS with `Expected: 6, Actual: 1` (still sequential: the first two pin today's order, the third proves it measures concurrency).
 
-- [ ] **Step 4: Probe in parallel**
+- [x] **Step 4: Probe in parallel**
 
 In `DiscoverAsync`, replace the block from `var results = new List<GatewayCandidate>();` through `return Order(results);` with:
 
@@ -547,12 +547,12 @@ In `Programs/ConWatch/Startup/ConWatchServices.cs`, `AddConWatchEngine`, replace
             _ => new ConInfrastructure.Discovery.GatewayDiscovery());
 ```
 
-- [ ] **Step 5: Run to verify they pass**
+- [x] **Step 5: Run to verify they pass**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~GatewayDiscoveryTests"` → 3 passed.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; `dotnet test ConnectionWatcher.sln -c Debug` → 0 failed (`SetupApiTests` replaces the registration with `RemoveAll` + its fake, which works the same with a factory registration).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add Libraries/ConInfrastructure/Discovery/GatewayDiscovery.cs Programs/ConWatch/Startup/ConWatchServices.cs Tests/ConEngine.Tests/GatewayDiscoveryTests.cs
@@ -574,7 +574,7 @@ Moved to the front of Group B (the review lists it last) so every later persiste
 - Consumes: nothing.
 - Produces: the guard every later task relies on: any EF model change without a migration fails the suite.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `Tests/ConPersistence.Tests/MigrationsTests.cs`:
 
@@ -607,16 +607,16 @@ public class MigrationsTests
 }
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~MigrationsTests"`
 Expected: PASS. It is a characterization test: it passes on the current tree. If it FAILS on the unmodified tree, stop and report: a real missing migration is a finding for the owner, not something this plan fixes.
 
-- [ ] **Step 3: Prove it bites, then revert**
+- [x] **Step 3: Prove it bites, then revert**
 
 Temporarily add `public int Probe { get; set; }` to `GlitchRow` in `Libraries/ConPersistence/Entities/DataRows.cs`. Run the same filter. Expected: FAIL with the message above. Remove the property again (`git diff Libraries/ConPersistence/Entities` shows nothing).
 
-- [ ] **Step 4: Full suite and commit**
+- [x] **Step 4: Full suite and commit**
 
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; `dotnet test ConnectionWatcher.sln -c Debug` → 0 failed.
 
@@ -641,7 +641,7 @@ git commit -m "test: the migrations must capture the whole EF model"
 
 Decision (see table): `Address` is trimmed everywhere, including what the import validator sees; `Name` is not trimmed. A `null` address (JSON `"address": null`) now normalizes to `""`, so the validator answers "has an empty Address" (400) where the write path used to throw a `NullReferenceException` (500).
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConPersistence.Tests/TargetWriteTests.cs`:
 
@@ -752,12 +752,12 @@ public class TargetWriteTests : IAsyncLifetime, IDisposable
 }
 ```
 
-- [ ] **Step 2: Run to see which pin and which fail**
+- [x] **Step 2: Run to see which pin and which fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~TargetWriteTests"`
 Expected: the three `…stores_the_normalized_row…` tests PASS (they pin today's write paths); `Import_validates_addresses_the_way_they_will_be_stored` FAILS (`result.Success` is true: the validator saw two different strings, and two rows with the same address were stored).
 
-- [ ] **Step 3: One copy routine and one normalization**
+- [x] **Step 3: One copy routine and one normalization**
 
 In `Libraries/ConPersistence/Config/ConfigMapping.cs`, next to `NormalizeOperator`, add:
 
@@ -846,13 +846,13 @@ In `Libraries/ConPersistence/Config/ConfigStore.cs`, `WriteDocumentAsync`: repla
         await db.SaveChangesAsync();
 ```
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~TargetWriteTests"` → 4 passed.
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug` → 0 failed (`ConfigStoreTests` pins id-preserving round trips through `WriteDocumentAsync`).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Config Tests/ConPersistence.Tests/TargetWriteTests.cs
@@ -873,7 +873,7 @@ git commit -m "refactor: one TargetRow.CopyFrom; import validates addresses as s
 - Consumes: Task 2 namespaces; Task 5's migrations guard (the entity change must not move the model).
 - Produces: nothing new. The profile field list now appears in `ConfigMapping` as: `ProfileRow.ToDto()`, `PingProfile.ToDto()`, `ProfileDto.ToConfig()`, `ProfileRow.CopyFrom(ProfileDto)` (was five lists; `PingProfile.ToDto` maps a different source type and stays). The numbers 10/3/1/60/100/10/0.95/0.75/0.10/0.25 appear only in `Core/ConEngine/Configuration/WatcherOptions.cs` (`PingProfileConfig`).
 
-- [ ] **Step 1: Write the pinning tests**
+- [x] **Step 1: Write the pinning tests**
 
 `Tests/ConPersistence.Tests/ProfileMappingTests.cs`:
 
@@ -951,12 +951,12 @@ public class ProfileMappingTests : IDisposable
 }
 ```
 
-- [ ] **Step 2: Run them on the current code**
+- [x] **Step 2: Run them on the current code**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~ProfileMappingTests"`
 Expected: 3 passed (they pin today's defaults and mappings before the lists are removed).
 
-- [ ] **Step 3: One list, one set of defaults**
+- [x] **Step 3: One list, one set of defaults**
 
 `Libraries/ConPersistence/Config/ConfigDtos.cs`: add `using ConEngine.Configuration;` at the top and replace `ProfileDto` with:
 
@@ -1017,12 +1017,12 @@ public class ProfileRow
     public static PingProfileConfig ToConfig(this ProfileRow p) => p.ToDto().ToConfig();
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~ProfileMappingTests|FullyQualifiedName~MigrationsTests"` → 4 passed.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Config Libraries/ConPersistence/Entities/ConfigRows.cs Tests/ConPersistence.Tests/ProfileMappingTests.cs
@@ -1057,7 +1057,7 @@ What each surface emits today (read at `78bf8e8`, encoding verified with a scrat
 
 `Id` is omitted when null (live messages have no log row). Timestamps are forced to offset zero on the way in: a row's `TimestampUtc` is tagged `DateTimeKind.Utc` before conversion, so a row that reaches the DTO with `Kind=Unspecified` is still read as UTC, never as server-local time (`new DateTimeOffset(unspecified)` would apply the local offset).
 
-- [ ] **Step 1: Pin the REST and SignalR shapes (these pass today)**
+- [x] **Step 1: Pin the REST and SignalR shapes (these pass today)**
 
 In `Tests/ConWatch.Tests/HistoryApiTests.cs` add `using ConPersistence;`, `using ConPersistence.Entities;`, `using Microsoft.EntityFrameworkCore;` and this test:
 
@@ -1114,7 +1114,7 @@ In `Tests/ConWatch.Tests/SignalRTests.cs` add:
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~Transitions_endpoint_wire_shape_is_pinned|FullyQualifiedName~Transition_messages_carry_utc_offset_timestamps"`
 Expected: 2 passed.
 
-- [ ] **Step 2: Write the tests for the new type and the deliberate changes**
+- [x] **Step 2: Write the tests for the new type and the deliberate changes**
 
 `Tests/ConPersistence.Tests/TransitionDtoTests.cs`:
 
@@ -1261,12 +1261,12 @@ In `Tests/ConWatch.Tests/McpEndpointTests.cs` add:
 
 (and `using Microsoft.Extensions.DependencyInjection;` at the top of `McpEndpointTests.cs` if it is not there.)
 
-- [ ] **Step 3: Run to verify they fail**
+- [x] **Step 3: Run to verify they fail**
 
 Run: `dotnet test ConnectionWatcher.sln -c Debug --filter "FullyQualifiedName~TransitionDtoTests|FullyQualifiedName~Payload_is_the_transition_dto|FullyQualifiedName~Transitions_tool_speaks"`
 Expected: build error (`TransitionDto` does not exist). Temporarily excluding `TransitionDtoTests.cs` would show the webhook test failing on `"2026-08-24T12:00:00.500Z"` and the MCP test failing on a missing `from`; there is no need to do that.
 
-- [ ] **Step 4: Write the DTO**
+- [x] **Step 4: Write the DTO**
 
 `Libraries/ConPersistence/Queries/TransitionDto.cs`:
 
@@ -1350,7 +1350,7 @@ public sealed record TransitionDto
 
 (Property order is the REST order; System.Text.Json writes properties in declaration order, so the pinned REST bytes do not change.)
 
-- [ ] **Step 5: Use it everywhere**
+- [x] **Step 5: Use it everywhere**
 
 `Libraries/ConNotify/Builders.cs`: add `using ConPersistence.Queries;` and replace the body of `WebhookPayload`:
 
@@ -1385,13 +1385,13 @@ public static class WebhookPayload
 
 and in its `[Description(...)]` replace `"Times are ISO-8601 UTC."` with `"Rows have the REST /api/v1/transitions shape; times are ISO-8601 UTC (+00:00)."`. (`ConPersistence.Queries` is already imported there since Task 2.)
 
-- [ ] **Step 6: Run to verify**
+- [x] **Step 6: Run to verify**
 
 Run: `dotnet test ConnectionWatcher.sln -c Debug --filter "FullyQualifiedName~TransitionDtoTests|FullyQualifiedName~WebhookPayloadTests|FullyQualifiedName~McpEndpointTests|FullyQualifiedName~Transitions_endpoint_wire_shape_is_pinned|FullyQualifiedName~Transition_messages_carry_utc_offset_timestamps|FullyQualifiedName~HistoryApiTests|FullyQualifiedName~SignalRTests|FullyQualifiedName~NotifierIntegrationTests"`
 Expected: all pass (the existing `Payload_carries_the_transition` checks only the first 19 characters of the timestamp and stays green).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed; `npx vitest run` in `Programs/ConWatch/ClientApp` → 56 passed (`TransitionEvent` in `lib/types.ts` already treats `id` as optional and ignores unknown keys).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Queries/TransitionDto.cs Libraries/ConNotify/Builders.cs Programs/ConWatch/StatusBroadcaster.cs Programs/ConWatch/Api/HistoryEndpoints.cs Programs/ConWatch/Mcp/ConWatchMcpTools.cs Tests/ConPersistence.Tests/TransitionDtoTests.cs Tests/ConWatch.Tests/HistoryApiTests.cs Tests/ConWatch.Tests/SignalRTests.cs Tests/ConWatch.Tests/McpEndpointTests.cs Tests/ConNotify.Tests/BuildersTests.cs
@@ -1415,7 +1415,7 @@ git commit -m "refactor: one TransitionDto for REST, SignalR, MQTT, webhooks and
 
 Decision (see table): one body, `{ "errors": [...] }` plus `"code"` only when non-null. The only wire change is `GET /api/v1/status`'s 503, from `{ "error": "Engine is not running" }` to `{ "errors": ["Engine is not running"] }`.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConWatch.Tests/ErrorShapeTests.cs`:
 
@@ -1498,12 +1498,12 @@ public class ErrorShapeTests : IDisposable
 }
 ```
 
-- [ ] **Step 2: Run to verify which pass and which fail**
+- [x] **Step 2: Run to verify which pass and which fail**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~ErrorShapeTests"`
 Expected: `Bad_request…`, `Config_not_found…`, `Clone_failure…` PASS (they pin today's shapes); `Status_without_an_engine_uses_the_same_shape` FAILS (keys are `["error"]`).
 
-- [ ] **Step 3: One body**
+- [x] **Step 3: One body**
 
 Replace `Programs/ConWatch/Api/ApiResults.cs` with:
 
@@ -1546,7 +1546,7 @@ public static class ApiResults
 }
 ```
 
-- [ ] **Step 4: Replace every hand-built error body**
+- [x] **Step 4: Replace every hand-built error body**
 
 Each line below is the whole `return`/assignment as it reads at `78bf8e8`, then its replacement.
 
@@ -1608,12 +1608,12 @@ git grep -n -e "new { errors" -e "new { error " -e "errors = new\[\]" -- Program
 ```
 Expected: no output.
 
-- [ ] **Step 5: Run to verify**
+- [x] **Step 5: Run to verify**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~ErrorShapeTests"` → 4 passed.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed (`CloneTests`, `AdminLockTests`, `SettingsApiTests`, `TimeQueryApiTests` read `errors`/`code` and stay green).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add Programs/ConWatch/Api Programs/ConWatch/Auth/RequireAdminFilter.cs Tests/ConWatch.Tests/ErrorShapeTests.cs
@@ -1633,7 +1633,7 @@ git commit -m "refactor: one ApiResults.Error body; /status 503 joins the errors
 
 Decision (see table): a shape-pinning test, not explicit snapshot records. The snapshot serializes the EF entity classes (`TransitionRow`, `RollupRow`, `GlitchRow`) directly; the test fails on any added, removed or renamed key and tells the author to decide whether `SchemaVersion` moves. It serializes with `JsonSerializerOptions.Web`, the options `Results.Ok` uses for `/export/snapshot` and `CloneService` uses to read it back.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `Tests/ConPersistence.Tests/SnapshotShapeTests.cs`:
 
@@ -1704,16 +1704,16 @@ public class SnapshotShapeTests
 }
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~SnapshotShapeTests"`
 Expected: PASS (a characterization of today's document).
 
-- [ ] **Step 3: Prove it bites, then revert**
+- [x] **Step 3: Prove it bites, then revert**
 
 Temporarily rename `GlitchRow.Detail` to `Details` in `Libraries/ConPersistence/Entities/DataRows.cs` and its uses the compiler reports. Run the filter: expected FAIL on the glitch keys. Revert (`git checkout -- Libraries`), rebuild.
 
-- [ ] **Step 4: Full suite and commit**
+- [x] **Step 4: Full suite and commit**
 
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; `dotnet test ConnectionWatcher.sln -c Debug` → 0 failed.
 
@@ -1737,7 +1737,7 @@ git commit -m "test: pin the snapshot document's JSON shape"
 
 The bytes on the wire do not change: CSV is the header, then one line per row, each ending in `\n`, UTF-8 without a BOM, `text/csv`, same download name; JSON is the same array. What changes: the response has no `Content-Length` (chunked), rows are read from the database reader while the body is written, and the `DbContext` lives until the response ends (registered with `HttpResponse.RegisterForDisposeAsync`). `/export/snapshot` is one document and stays as it is (see "Left out").
 
-- [ ] **Step 1: Pin today's bytes (these pass today)**
+- [x] **Step 1: Pin today's bytes (these pass today)**
 
 In `Tests/ConWatch.Tests/ExportApiTests.cs` add:
 
@@ -1830,7 +1830,7 @@ In `Tests/ConWatch.Tests/ExportApiTests.cs` add:
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~ExportApiTests"`
 Expected: all pass (8 tests: 5 existing, 3 new).
 
-- [ ] **Step 2: Per-row CSV lines**
+- [x] **Step 2: Per-row CSV lines**
 
 In `Libraries/ConPersistence/Export/CsvExport.cs`, replace the three `…Lines` methods with:
 
@@ -1897,7 +1897,7 @@ In `Libraries/ConPersistence/Export/CsvExport.cs`, replace the three `…Lines` 
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~CsvExportTests"` → pass.
 
-- [ ] **Step 3: Stream the endpoints**
+- [x] **Step 3: Stream the endpoints**
 
 In `Programs/ConWatch/Api/ExportEndpoints.cs`: add `using ConPersistence.Entities;`; change the class summary to `/// <summary>Bulk measurement-data export: CSV or JSON, no row caps. Rows stream from the database reader to the response body; nothing is materialized.</summary>`; replace the three measurement endpoints and the `Csv` helper as below (`/export/snapshot`, `/export/snapshot/full`, `FullSnapshotRequest`, `BuildSnapshotAsync`, `IsValidFormat`, `BadFormat` stay):
 
@@ -2005,12 +2005,12 @@ and replace the old `Csv(IEnumerable<string> lines, string fileName)` helper wit
         }, "text/csv", fileName);
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~ExportApiTests"` → 8 passed (same bytes, same headers).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Export/CsvExport.cs Programs/ConWatch/Api/ExportEndpoints.cs Tests/ConWatch.Tests/ExportApiTests.cs
@@ -2033,7 +2033,7 @@ git commit -m "refactor: measurement exports stream rows instead of materializin
 
 Not changed on purpose: the Home Assistant entity name `"Internet"` in `ConNotify/Builders.cs` (an HA display name, not the subject), the glitch class label `"Internet"` in `CsvExport`/`GlitchEndpoints`/`ConWatchMcpTools` (a class, not the subject), and `SetupService.PoolName` (the pool the wizard creates).
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 In `Tests/ConEngine.Tests/VerdictCoordinatorTests.cs` add:
 
@@ -2054,12 +2054,12 @@ In `Tests/ConEngine.Tests/VerdictCoordinatorTests.cs` add:
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~Verdict_transitions_are_named"`
 Expected: build error, `VerdictCoordinator` has no `SubjectName`.
 
-- [ ] **Step 3: Add and use the constant**
+- [x] **Step 3: Add and use the constant**
 
 `Core/ConEngine/Topology/VerdictCoordinator.cs`, below `SubjectId`:
 
@@ -2075,12 +2075,12 @@ and in `Recalculate` replace `TargetName = "Internet",` with `TargetName = Subje
 
 `Programs/ConWatch/Api/MetricsEndpoint.cs`: replace `totals.TryAdd("Internet", 0); // the verdict subject's name` with `totals.TryAdd(VerdictCoordinator.SubjectName, 0);`.
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~VerdictCoordinatorTests|FullyQualifiedName~SuspicionCoordinatorTests"` → pass.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed (`MetricsEndpointTests` pins the `name="Internet"` series).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Core/ConEngine/Topology/VerdictCoordinator.cs Core/ConEngine/Topology/SuspicionCoordinator.cs Programs/ConWatch/Api/MetricsEndpoint.cs Tests/ConEngine.Tests/VerdictCoordinatorTests.cs
@@ -2105,7 +2105,7 @@ git commit -m "refactor: the verdict subject's name is one constant"
 
 Wire effect: `/api/v1/status`, SignalR `statusChanged` and the dashboard's initial blob gain `operator` on each target (additive; `lib/types.ts` ignores unknown keys). The disabled body stays `{"enabled":false,"verdict":null,"targets":[],"pools":[]}` and is now one object instead of two anonymous copies. MCP `get_current_status` now reports the same target and verdict objects: `verdict.operator` (was `blamedOperator`), `avgRtt` (was `avgRttMs`), plus `id`, `sampleSize`, `pingCount`; `successRate`/`avgRtt` are `0` rather than `null` before a target's first sample. Folded in from the followups ("`EngineEnabledAsync()` is still called per request by `ConWatchMcpTools`"): `monitoringEnabled` reads `host.EngineEnabled`, which `/health`, `/status` and `/metrics` already use, instead of a database read per call.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConWatch.Tests/StatusShapeTests.cs`:
 
@@ -2201,12 +2201,12 @@ In `Tests/ConWatch.Tests/McpEndpointTests.cs` add:
     }
 ```
 
-- [ ] **Step 2: Run to verify which fail**
+- [x] **Step 2: Run to verify which fail**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~StatusShapeTests|FullyQualifiedName~Status_tool_reports_the_status_snapshot"`
 Expected: `Disabled_status_body_is_pinned` PASSES (pins today's body); `Live_status_shape_is_pinned` FAILS (no `operator` on targets); `Status_tool_reports_the_status_snapshot` FAILS (verdict has `blamedOperator`).
 
-- [ ] **Step 3: Typed snapshot**
+- [x] **Step 3: Typed snapshot**
 
 Replace `Programs/ConWatch/StatusSnapshotBuilder.cs` with:
 
@@ -2298,12 +2298,12 @@ public static class StatusSnapshotBuilder
 
 (`Task.FromResult` keeps the tool's signature; an `async` method with no `await` would be warning CS1998.)
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~StatusShapeTests|FullyQualifiedName~McpEndpointTests|FullyQualifiedName~SignalRTests|FullyQualifiedName~MasterEnableTests|FullyQualifiedName~PageSmokeTests"` → all pass.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed; `npx vitest run` (ClientApp) → 56 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Programs/ConWatch/StatusSnapshotBuilder.cs Programs/ConWatch/Api/StatusEndpoints.cs Programs/ConWatch/StatusBroadcaster.cs Programs/ConWatch/Mcp/ConWatchMcpTools.cs Tests/ConWatch.Tests/StatusShapeTests.cs Tests/ConWatch.Tests/McpEndpointTests.cs
@@ -2332,7 +2332,7 @@ git commit -m "refactor: typed StatusSnapshot with operator; the MCP status tool
 
 Decisions (see table): factory reset now seeds the same seven keys as first boot (pinned below); `RebuildDebounceSeconds` stays in `PersistenceOptions` (public config key). `RetentionPass.RunAsync` keeps returning its count (the idempotency tests assert on it; decision 4 dropped the `incremental_vacuum` it used to feed, which is already gone), and its summary now says what the number is.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConPersistence.Tests/FileDbFactory.cs`:
 
@@ -2521,14 +2521,14 @@ In `Tests/ConWatch.Tests/AdminApiTests.cs` add `using ConPersistence.Settings;` 
     }
 ```
 
-- [ ] **Step 2: Run to verify**
+- [x] **Step 2: Run to verify**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~SettingsDefaultsTests|FullyQualifiedName~RetentionServiceTests"`
 Expected: build error (`SettingsDefaults` does not exist). Temporarily comment out `SettingsDefaultsTests.cs` and rerun: `RetentionServiceTests` PASSES (today's behavior pinned). Restore it.
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~Factory_reset_restores_the_first_boot_settings"`
 Expected: FAIL naming `Retention.TransitionMonths` (factory reset does not seed it today).
 
-- [ ] **Step 3: `SettingsDefaults`**
+- [x] **Step 3: `SettingsDefaults`**
 
 `Libraries/ConPersistence/Settings/SettingsDefaults.cs`:
 
@@ -2590,7 +2590,7 @@ and in `WarmRestartEnabledAsync` and `BuildSeedFromDbAsync` replace `GetIntAsync
                 SettingsDefaults.For(verdictOptions.Value, persistenceOptions.Value)); // as first boot
 ```
 
-- [ ] **Step 4: `RetentionWindows`**
+- [x] **Step 4: `RetentionWindows`**
 
 `Libraries/ConPersistence/Retention/RetentionWindows.cs`:
 
@@ -2651,13 +2651,13 @@ Test call sites: in `Tests/ConPersistence.Tests/RetentionTests.cs` replace the `
 
 and every `_options` argument with `_windows` (six calls; 24 is `PersistenceOptions`' default that the old field relied on). In `Tests/ConPersistence.Tests/GlitchRecorderTests.cs` replace `new PersistenceOptions { MinuteRetentionDays = 90 }` with `RetentionWindows.From(new PersistenceOptions { MinuteRetentionDays = 90 })`.
 
-- [ ] **Step 5: Run to verify**
+- [x] **Step 5: Run to verify**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug` → 0 failed (incl. `SettingsDefaultsTests`, `RetentionServiceTests`, `RetentionTests`, `GlitchRecorderTests`).
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~AdminApiTests|FullyQualifiedName~WarmRestartTests|FullyQualifiedName~SettingsApiTests"` → pass.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Settings Libraries/ConPersistence/Retention Programs/ConWatch/WatcherHostService.cs Programs/ConWatch/Api/AdminEndpoints.cs Tests/ConPersistence.Tests Tests/ConWatch.Tests/AdminApiTests.cs
@@ -2680,7 +2680,7 @@ git commit -m "refactor: one SettingsDefaults list for first boot and factory re
 
 The four members move verbatim (policy unchanged): `WarmRestartEnabledAsync` → `EnabledAsync`, `BuildSeedFromDbAsync` → `FromDbAsync`, `DropUnjustifiedUnreachable` (private static), `BuildSeedFromEngine` → `FromEngine`. The only observable difference is the log category of the three warm/cold-start lines (`ConWatch.WarmStartSeeder` instead of `ConWatch.WatcherHostService`). The existing `WarmRestartTests`, `MasterEnableTests` and `CloneTests` are the end-to-end pins; the new unit tests pin each rule directly.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConWatch.Tests/WarmStartSeederTests.cs`:
 
@@ -2836,12 +2836,12 @@ public sealed class WarmStartSeederTests : IAsyncLifetime
 }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~WarmStartSeederTests"`
 Expected: build error, `WarmStartSeeder` does not exist.
 
-- [ ] **Step 3: Move the policy**
+- [x] **Step 3: Move the policy**
 
 `Programs/ConWatch/WarmStartSeeder.cs`:
 
@@ -3014,12 +3014,12 @@ public sealed class WarmStartSeeder(IDbContextFactory<ConWatchDbContext> dbFacto
         services.AddSingleton<WarmStartSeeder>();
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~WarmStartSeederTests|FullyQualifiedName~WarmRestartTests|FullyQualifiedName~MasterEnableTests|FullyQualifiedName~CloneTests"` → all pass.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Programs/ConWatch/WarmStartSeeder.cs Programs/ConWatch/WatcherHostService.cs Programs/ConWatch/Startup/ConWatchServices.cs Tests/ConWatch.Tests/WarmStartSeederTests.cs
@@ -3041,7 +3041,7 @@ git commit -m "refactor: warm-start policy moves from the host service into Warm
 
 Decision (see table): with the DI service the singleton's `ConfigChanged` fires on import (tested below), so the host schedules its usual debounced rebuild. `CloneService` keeps a direct rebuild after each import because the clone/take-over must answer only once the node is in its new state, but calls `RebuildIfStaleAsync()` instead of `RebuildAsync()`: it services the same write as the debounced rebuild instead of running a second one (the H4 double rebuild). `RebuildIfStaleAsync` is documented as safe exactly for callers whose last write raised the event: in `CloneAsync` that is the import, in `TakeOverAsync` the `Engine.Enabled` write.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `Tests/ConPersistence.Tests/SnapshotImporterTests.cs`:
 
@@ -3077,12 +3077,12 @@ public class SnapshotImporterTests
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~SnapshotImporterTests"`
 Expected: build error, no `ImportAsync` overload takes a `ConfigService`. (Against the current three-argument method the count would be 0: it builds its own `ConfigService` whose event nobody listens to — the review's finding.)
 
-- [ ] **Step 3: Pass the service in**
+- [x] **Step 3: Pass the service in**
 
 `Libraries/ConPersistence/Snapshots/SnapshotImporter.cs`: delete `using Microsoft.Extensions.Logging.Abstractions;`; in `ImportToFileAsync` replace `await ImportAsync(factory, snapshot, ct);` with
 
@@ -3114,13 +3114,13 @@ and replace the head of `ImportAsync` down to the `result` check with:
 
 `Programs/ConWatch/Clone/CloneService.cs`: add `ConfigService configService` to the primary constructor after `IDbContextFactory<ConWatchDbContext> dbFactory,` (and `using ConPersistence.Config;`); replace both `await SnapshotImporter.ImportAsync(dbFactory, snapshot, ct);` with `await SnapshotImporter.ImportAsync(dbFactory, configService, snapshot, ct);`; replace both `host.RebuildAsync()` with `host.RebuildIfStaleAsync()`, and change the first one's comment to `// deterministic parked-archive state before answering; supersedes the import's debounced rebuild`.
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~SnapshotImporterTests"` → pass.
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~CloneTests|FullyQualifiedName~SnapshotTests|FullyQualifiedName~RealDataSnapshotTests"` → pass (the real-data test skips without `testdata/nas-snapshot.json`).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Snapshots/SnapshotImporter.cs Programs/ConWatch/Clone/CloneService.cs Tests/ConPersistence.Tests/SnapshotImporterTests.cs
@@ -3143,7 +3143,7 @@ git commit -m "refactor: snapshot import writes config through the DI ConfigServ
 
 What changes for the wizard: all or nothing (a failing anchor leaves no router or earlier anchor behind), one `ConfigChanged` and so one rebuild instead of up to four. Two failure-path details differ and are improvements: name/address lookups see targets added earlier in the same apply (the old code looked only at the pre-apply snapshot, so an anchor at the router's address became a duplicate the validator then rejected), and a uniqueness failure reports the validator's message.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 In `Tests/ConPersistence.Tests/ConfigServiceTests.cs` add:
 
@@ -3215,13 +3215,13 @@ In `Tests/ConWatch.Tests/SetupApiTests.cs` add `using ConPersistence.Config;` (a
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~EditDocument"` → build error (`EditDocumentAsync` does not exist).
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~Apply_is_all_or_nothing|FullyQualifiedName~Apply_raises_one_config_change"`
 Expected: both FAIL: the first finds 2 targets (router and 8.8.8.8 committed), the second counts 5 (router, WAN, two anchors, pool).
 
-- [ ] **Step 3: `EditDocumentAsync`**
+- [x] **Step 3: `EditDocumentAsync`**
 
 `Libraries/ConPersistence/Config/ConfigStore.cs`: replace `ExportAsync()` with
 
@@ -3290,7 +3290,7 @@ Expected: both FAIL: the first finds 2 targets (router and 8.8.8.8 committed), t
 
 (EF's `BeginTransactionAsync` on SQLite is `BEGIN IMMEDIATE`, so the read inside is serialized with every other writer.)
 
-- [ ] **Step 4: The wizard edits one document**
+- [x] **Step 4: The wizard edits one document**
 
 `Programs/ConWatch/SetupService.cs`: the primary constructor no longer needs `ConfigStore store` — change it to `SetupService(ConfigService config, SettingsStore settings, ILogger<SetupService> log)` (DI resolves it; nothing constructs it by hand). Replace `ApplyAsync` with:
 
@@ -3391,13 +3391,13 @@ Expected: both FAIL: the first finds 2 targets (router and 8.8.8.8 committed), t
 
 (`AnchorCatalog`, `PoolName`, `Unique` are unchanged.)
 
-- [ ] **Step 5: Run to verify**
+- [x] **Step 5: Run to verify**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~ConfigServiceTests"` → pass.
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~SetupApiTests|FullyQualifiedName~HostLifecycleTests"` → pass (all existing wizard tests unchanged).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Config Programs/ConWatch/SetupService.cs Tests/ConPersistence.Tests/ConfigServiceTests.cs Tests/ConWatch.Tests/SetupApiTests.cs
@@ -3424,7 +3424,7 @@ git commit -m "refactor: the setup wizard applies in one transaction with one co
 
 Owner decision 3 (2026-09-18): the trunk is the UNION of every anchor's ancestor chain, everywhere. Today three rules exist: `HistoryModel` walks the engine graph by `ParentId` when an engine runs and uses `TopologyNames` otherwise; `TopologyNames` walks the stored config by name; `TargetsModel` walks only from `pool.Parent ?? the unique shared parent`, so with anchors under two different parents it draws no pipeline while History shows both chains. After this task all three read `TopologyNames`, which reads the stored config (the graph the engine is built from), so the ribbon's roles no longer depend on whether monitoring is on, and `HistoryModel`'s double read of `host.Engine` (review H6) disappears with the engine branch. Folded in from the followups ("`EngineEnabledAsync()` is still called per request by … `Index.cshtml.cs`"): the dashboard reads `host.EngineEnabled`.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConWatch.Tests/TopologyNamesTests.cs`:
 
@@ -3570,12 +3570,12 @@ In `Tests/ConWatch.Tests/PageSmokeTests.cs` add `using System.Net.Http.Json;`, `
     }
 ```
 
-- [ ] **Step 2: Run to verify**
+- [x] **Step 2: Run to verify**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~TopologyNamesTests|FullyQualifiedName~HistoryPageTests|FullyQualifiedName~Targets_pipeline_draws_one_chain_per_anchor_parent"`
 Expected: build error (`TopologyNames.Compute` does not exist). Temporarily excluding `TopologyNamesTests.cs`: `Archive_mode_renders_the_same…` PASSES (pin) and `Targets_pipeline_draws_one_chain…` FAILS (0 pipelines: the old rule finds no single leaf).
 
-- [ ] **Step 3: One computation**
+- [x] **Step 3: One computation**
 
 Replace `Programs/ConWatch/TopologyNames.cs` with:
 
@@ -3636,7 +3636,7 @@ public static class TopologyNames
 }
 ```
 
-- [ ] **Step 4: History reads it in both modes**
+- [x] **Step 4: History reads it in both modes**
 
 Replace `Programs/ConWatch/Pages/History.cshtml.cs` with:
 
@@ -3706,7 +3706,7 @@ public class HistoryModel(SettingsStore settingsStore, ConfigStore configStore) 
 
 (The verdict subject used to appear when the running engine had a verdict, or in archive mode when the pool had members; both mean "the anchor-pool setting names an existing pool", since the validator rejects a pool without members.)
 
-- [ ] **Step 5: Targets draws one pipeline per chain**
+- [x] **Step 5: Targets draws one pipeline per chain**
 
 In `Programs/ConWatch/Pages/Config/Targets.cshtml.cs` replace the `Trunk` property with
 
@@ -3782,16 +3782,16 @@ and replace `OnGetAsync` and `ComputePipeline` with:
 
 (Where every anchor shares one parent, this renders the same single pipeline with the same anchor list as before.)
 
-- [ ] **Step 6: The dashboard**
+- [x] **Step 6: The dashboard**
 
 In `Programs/ConWatch/Pages/Index.cshtml.cs` replace `EngineDisabled = !await host.EngineEnabledAsync();` with `EngineDisabled = !host.EngineEnabled;` and, in the `InitialDataJson` object, `WeatherThreshold = await settingsStore.GetIntAsync(ConPersistence.Settings.SettingKeys.WeatherThreshold, 2),` with `WeatherThreshold = names.WeatherThreshold,`.
 
-- [ ] **Step 7: Run to verify**
+- [x] **Step 7: Run to verify**
 
 Run: `dotnet test Tests/ConWatch.Tests -c Debug --filter "FullyQualifiedName~TopologyNamesTests|FullyQualifiedName~HistoryPageTests|FullyQualifiedName~PageSmokeTests|FullyQualifiedName~MasterEnableTests"` → all pass.
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed; `npx vitest run` (ClientApp) → 56 passed.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add Programs/ConWatch/TopologyNames.cs Programs/ConWatch/Pages/History.cshtml.cs Programs/ConWatch/Pages/Config/Targets.cshtml.cs Programs/ConWatch/Pages/Config/Targets.cshtml Programs/ConWatch/Pages/Index.cshtml.cs Tests/ConWatch.Tests/TopologyNamesTests.cs Tests/ConWatch.Tests/HistoryPageTests.cs Tests/ConWatch.Tests/PageSmokeTests.cs
@@ -3814,7 +3814,7 @@ git commit -m "refactor: TopologyNames is the one trunk rule for History, Target
 
 Every call into the tracker already happens under `TargetMonitor._lock`, so the tracker's own lock is a second layer, and its two subjects were published under the monitor's lock to no production subscriber (`HostStatusSource` has no reference; `HostStateChangeSource` only two test files; `TargetMonitor.StatusSource` none), while every sample paid for a `TargetStatus` closure in the outbox. Per the Global Constraints, the only change to `TargetMonitor`'s outbox is that it no longer carries the status publication; lock order, transition queuing and the drain stay as they are.
 
-- [ ] **Step 1: Move the tracker tests onto returned outcomes (still green on the old tracker)**
+- [x] **Step 1: Move the tracker tests onto returned outcomes (still green on the old tracker)**
 
 `Tests/ConEngine.Tests/Fakes/TrackerProbe.cs`:
 
@@ -3906,7 +3906,7 @@ In `Tests/ConEngine.Tests/TargetMonitorTests.cs` add:
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~HostAnalysisEngineTests|FullyQualifiedName~WarmStartTests|FullyQualifiedName~TargetMonitorTests"`
 Expected: all pass. The tests no longer subscribe to anything; they pin the tracker's behavior through what it returns.
 
-- [ ] **Step 2: Make the tracker pure**
+- [x] **Step 2: Make the tracker pure**
 
 Replace `Core/ConEngine/Tracking/HostTracker.cs` with:
 
@@ -4010,19 +4010,19 @@ In `Core/ConEngine/Tracking/TargetMonitor.cs`:
 
 In `Tests/ConEngine.Tests/Fakes/TrackerProbe.cs` the tracker is now built with three arguments: replace `new(address, profile, time, NullLogger<HostTracker>.Instance)` with `new(address, profile, time)` and delete `using Microsoft.Extensions.Logging.Abstractions;`.
 
-- [ ] **Step 3: Confirm nothing else used what was removed**
+- [x] **Step 3: Confirm nothing else used what was removed**
 
 ```powershell
 git grep -n -e "HostStatusSource" -e "HostStateChangeSource" -e "StatusSource" -e "_statusSubject" -- Core Libraries Programs Tests
 ```
 Expected: no output.
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug` → 0 failed (incl. `WarmStartTests`, `TopologyCoordinatorTests`, `VerdictCoordinatorTests`, `DnsRefreshTests`, `ProbeThreadingTests`).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Core/ConEngine/Tracking/HostTracker.cs Core/ConEngine/Tracking/TargetMonitor.cs Tests/ConEngine.Tests/Fakes/TrackerProbe.cs Tests/ConEngine.Tests/HostAnalysisEngineTests.cs Tests/ConEngine.Tests/WarmStartTests.cs Tests/ConEngine.Tests/TargetMonitorTests.cs
@@ -4046,7 +4046,7 @@ git commit -m "refactor: HostTracker is pure; TargetMonitor drops the unused sta
 
 Why optional: the review's lock-order table shows no deadlock today; this removes the last publish-under-lock in the engine and makes the coordinators look like `TargetMonitor`. Why `TryEnter` (the followups' note): a coordinator's `Recalculate` runs inline inside some monitor's publish; a thread that finds another thread already draining this coordinator leaves its item in the queue instead of waiting, and the draining thread re-checks the queue after releasing the lock, so nothing is stranded and no thread blocks on a coordinator while inside a monitor's publish. Queue order is state order because items are enqueued under `_lock`. `System.Threading.Lock` is re-entrant, as `TargetMonitor`'s `_publishLock` relies on already.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 In `Tests/ConEngine.Tests/PoolCoordinatorTests.cs` add:
 
@@ -4086,12 +4086,12 @@ In `Tests/ConEngine.Tests/VerdictCoordinatorTests.cs` add:
     }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug --filter "FullyQualifiedName~published_outside"`
 Expected: both FAIL (`Assert.True() Failure`): today the subscriber runs inside `lock (_lock)`, so the other thread's `Seed` waits past the 2 s bound.
 
-- [ ] **Step 3: Outbox in `PoolCoordinator`**
+- [x] **Step 3: Outbox in `PoolCoordinator`**
 
 Add `using System.Collections.Concurrent;` and two fields:
 
@@ -4139,16 +4139,16 @@ and add `DrainOutbox();` as the last statement of `Recalculate`, after the `lock
     }
 ```
 
-- [ ] **Step 4: Outbox in `VerdictCoordinator`**
+- [x] **Step 4: Outbox in `VerdictCoordinator`**
 
 The same two fields and `using System.Collections.Concurrent;`. In `Recalculate`, replace `_log.LogInformation("Verdict: {Transition}", transition);` and `_transitionSubject.OnNext(transition);` with `_outbox.Enqueue(transition);` and add `DrainOutbox();` after the `lock` block. Add the same `DrainOutbox()` method as in Step 3 with the log line `_log.LogInformation("Verdict: {Transition}", transition);`.
 
-- [ ] **Step 5: Run to verify**
+- [x] **Step 5: Run to verify**
 
 Run: `dotnet test Tests/ConEngine.Tests -c Debug` → 0 failed (incl. the two new tests, `SuspicionCoordinatorTests`, `WatcherEngineTests`, `PingPumpResilienceTests`).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add Core/ConEngine/Topology/PoolCoordinator.cs Core/ConEngine/Topology/VerdictCoordinator.cs Tests/ConEngine.Tests/PoolCoordinatorTests.cs Tests/ConEngine.Tests/VerdictCoordinatorTests.cs
@@ -4169,7 +4169,7 @@ git commit -m "refactor: pool and verdict coordinators publish outside their loc
 
 Why optional: the race needs an import committing within milliseconds of a load; its effect is one failed rebuild (`KeyNotFoundException` from `profileNamesById[t.ProfileId]`, "Engine rebuild failed" until the next config change). The fix (the followups: "needs `SqliteConnection.BeginTransaction(deferred: true)` threaded through EF"): EF's own `BeginTransactionAsync` is `BEGIN IMMEDIATE`, which takes the write lock; a deferred `BEGIN` takes none, and in WAL mode its first read pins one snapshot until it ends. The overloads taking a caller's context (`ConfigService.MutateAsync`, `EditDocumentAsync`) already run inside the caller's transaction and are unchanged.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `Tests/ConPersistence.Tests/ConfigSnapshotReadTests.cs`:
 
@@ -4247,12 +4247,12 @@ public class ConfigSnapshotReadTests
 }
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug --filter "FullyQualifiedName~ConfigSnapshotReadTests"`
 Expected: both FAIL with `KeyNotFoundException` (the target read sees the new target, whose `ProfileId` is not among the profiles read before the import).
 
-- [ ] **Step 3: One deferred transaction around the reads**
+- [x] **Step 3: One deferred transaction around the reads**
 
 In `Libraries/ConPersistence/Config/ConfigStore.cs` add `using Microsoft.Data.Sqlite;`, replace the public `LoadWatcherOptionsAsync()` and `ExportAsync()` with:
 
@@ -4296,12 +4296,12 @@ and add:
     }
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 Run: `dotnet test Tests/ConPersistence.Tests -c Debug` → 0 failed (the in-memory `TestDbFactory` tests call these methods one at a time, so the shared connection never holds two transactions).
 Run: `dotnet build ConnectionWatcher.sln -c Debug` → `0 Warning(s)`; full suite → 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add Libraries/ConPersistence/Config/ConfigStore.cs Tests/ConPersistence.Tests/ConfigSnapshotReadTests.cs
