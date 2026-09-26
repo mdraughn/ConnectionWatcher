@@ -4,7 +4,6 @@ using ConCore.Targets;
 using ConEngine.Events;
 using ConEngine.Tests.Fakes;
 using ConEngine.Tracking;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
 namespace ConEngine.Tests;

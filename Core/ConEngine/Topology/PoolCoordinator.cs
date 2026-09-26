@@ -23,6 +23,11 @@ public class PoolCoordinator : IDisposable
     private readonly List<IDisposable> _subscriptions = new();
 
     private readonly Subject<TargetTransition> _transitionSubject = new();
+    /// <summary>Transitions this coordinator raises as its own state changes. A
+    /// queued transition may be delivered on another thread after the
+    /// triggering call has already returned. If a subscriber throws, any
+    /// transitions still queued behind it are delivered with the coordinator's
+    /// next transition.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public HostState CurrentState { get; private set; } = HostState.Initializing;

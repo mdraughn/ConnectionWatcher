@@ -130,7 +130,7 @@ public class WatcherHostService(
     }
 
     /// <summary>True when the master enable switch says monitor (the default).</summary>
-    public async Task<bool> EngineEnabledAsync() =>
+    private async Task<bool> EngineEnabledAsync() =>
         await settingsStore.GetAsync(SettingKeys.EngineEnabled) != "false";
 
     /// <summary>

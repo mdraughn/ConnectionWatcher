@@ -109,7 +109,10 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
         if (!result.Success)
             return result;
 
-        // Verdict settings: only fill what is unset.
+        // Verdict settings: only fill what is unset. This write happens after the
+        // config transaction above has already committed; if it fails here, the
+        // config is committed without AnchorPool set. Re-running the wizard repairs
+        // it, since this apply is additive (only fills what is unset).
         if (await settings.GetAsync(SettingKeys.AnchorPool) is not { Length: > 0 })
             await settings.SetManyAsync(new Dictionary<string, string?>
             {

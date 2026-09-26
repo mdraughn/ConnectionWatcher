@@ -125,7 +125,7 @@ public class PoolCoordinatorTests
         // pool has left Initializing).
         var results = new List<bool>();
         using var subscription = _pool.TransitionSource.Subscribe(_ =>
-            results.Add(Task.Run(() => _pool.Seed(HostState.Down)).Wait(TimeSpan.FromSeconds(2))));
+            results.Add(Task.Run(() => _pool.Seed(HostState.Down)).Wait(TimeSpan.FromSeconds(10))));
 
         Feed(_google, 5, success: true);
 

@@ -56,6 +56,11 @@ public class VerdictCoordinator : IDisposable
     /// <summary>The ISP/operator being blamed by a Link* verdict (from the
     /// blamed trunk target's Operator tag), else null.</summary>
     public string? CurrentOperator => Current.Operator;
+    /// <summary>Transitions this coordinator raises as its own state changes. A
+    /// queued transition may be delivered on another thread after the
+    /// triggering call has already returned. If a subscriber throws, any
+    /// transitions still queued behind it are delivered with the coordinator's
+    /// next transition.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,

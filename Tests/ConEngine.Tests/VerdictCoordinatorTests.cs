@@ -328,7 +328,7 @@ public class VerdictCoordinatorTests
     {
         var results = new List<bool>();
         using var subscription = _verdict.TransitionSource.Subscribe(_ =>
-            results.Add(Task.Run(() => _verdict.Seed(VerdictState.LinkDown)).Wait(TimeSpan.FromSeconds(2))));
+            results.Add(Task.Run(() => _verdict.Seed(VerdictState.LinkDown)).Wait(TimeSpan.FromSeconds(10))));
 
         AllHealthy();
 

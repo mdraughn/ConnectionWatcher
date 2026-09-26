@@ -3,7 +3,7 @@ namespace ConEngine.Tracking;
 /// <summary>
 /// A fixed-size circular buffer that keeps the most recent items; adding to
 /// a full buffer overwrites the oldest. Not thread-safe by itself: the owner
-/// (HostTracker) serializes every access under its own lock.
+/// serializes every access under TargetMonitor's own lock (TargetMonitor._lock).
 /// </summary>
 /// <typeparam name="T">The type of items stored in the buffer.</typeparam>
 public class CircularBuffer<T>
