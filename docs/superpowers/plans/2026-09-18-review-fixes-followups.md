@@ -4,12 +4,14 @@ Branch `review-2026-09-18` implemented `2026-09-18-review-fixes.md` (the correct
 
 ## Structure and dedupe (review steps 12–16, unchanged)
 
-S2 `WarmStartSeeder` + `SettingsDefaults` + `RetentionWindows`; S3 one trunk computation (`TopologyNames`) for History and Targets (owner decision: union of ancestor chains); S4 pure `HostTracker`, drop `StatusSource`; S6 persistence folder moves; S7 `SnapshotImporter` on DI; S9 atomic setup; S11 delete the root `bin/obj` shells; section 3 dedupe (`TargetRow.CopyFrom`, one profile mapping pair, `TransitionDto`, `ApiResults.Error`, snapshot records, streaming exports, `GatewayDiscovery` in parallel, dead members).
+Done on plan-b (2026-09-25).
+
+~~S2 `WarmStartSeeder` + `SettingsDefaults` + `RetentionWindows`; S3 one trunk computation (`TopologyNames`) for History and Targets (owner decision: union of ancestor chains); S4 pure `HostTracker`, drop `StatusSource`; S6 persistence folder moves; S7 `SnapshotImporter` on DI; S9 atomic setup; S11 delete the root `bin/obj` shells; section 3 dedupe (`TargetRow.CopyFrom`, one profile mapping pair, `TransitionDto`, `ApiResults.Error`, snapshot records, streaming exports, `GatewayDiscovery` in parallel, dead members).~~
 
 ## Deferred from the review (stated reasons)
 
-- E3's publish-outside-lock outbox for `PoolCoordinator`/`VerdictCoordinator` (needs a `TryEnter` drain; no deadlock exists today).
-- P4's one-snapshot read for `ConfigStore.LoadWatcherOptionsAsync` (needs `SqliteConnection.BeginTransaction(deferred: true)` threaded through EF).
+- ~~E3's publish-outside-lock outbox for `PoolCoordinator`/`VerdictCoordinator` (needs a `TryEnter` drain; no deadlock exists today).~~ Done on plan-b (2026-09-25).
+- ~~P4's one-snapshot read for `ConfigStore.LoadWatcherOptionsAsync` (needs `SqliteConnection.BeginTransaction(deferred: true)` threaded through EF).~~ Done on plan-b (2026-09-25).
 
 ## Next-plan items from the branch reviews
 
@@ -22,7 +24,7 @@ Engine
 - `Inbox` (MQTT): document that a `Reconfigure` is droppable only when no reader is live and every no-reader path re-reads settings.
 
 Host
-- `SettingsStore` should own the master switch (set from the written values before raising the event) so `WatcherHostService.OnConfigChanged` no longer does a guarded synchronous read; `EngineEnabledAsync()` is still called per request by `ConWatchMcpTools` and `Index.cshtml.cs`.
+- `SettingsStore` should own the master switch (set from the written values before raising the event) so `WatcherHostService.OnConfigChanged` no longer does a guarded synchronous read; ~~`EngineEnabledAsync()` is still called per request by `ConWatchMcpTools` and `Index.cshtml.cs`.~~ Done on plan-b (2026-09-25): `EngineEnabledAsync()` is now private to `WatcherHostService` (grepped — nothing else called it).
 - `StatusBroadcaster`: an abandoned send keeps `_sendGate` (pre-existing hub-wedge exposure); `Dispose` disposes the gate while a push may hold it; the "transition" hub message is not identity-gated; no client test for `statusStore.disabled`; five `Detach()` bodies are the same two lines with inconsistent locking (serialized by `_rebuildLock`; comment or share).
 - `StartAsync`'s boot start runs outside `_rebuildLock` (an explicit `RebuildAsync` during boot could interleave).
 - Tests with fixed delays: `MasterEnableTests` 500 ms pairs, `PingPumpResilienceTests` 200 ms then strict `>`.
@@ -38,3 +40,20 @@ Persistence
 ## Full-suite flakiness (not attributed to the branch)
 
 Ten full `ConWatch.Tests` runs (five on the branch head, five on an earlier branch commit) each showed at most one failure, four different tests, none repeating: `WarmRestartTests.Restart_resumes_states_without_new_transitions`, `SetupApiTests.Apply_is_additive_on_rerun`, `PageSmokeTests.Page_renders(/Admin)`, and one more; SQLite pool symptoms in some. The controller's own full run on the branch head was clean. To measure properly: three full runs on `8c8eeb2` versus the merge commit.
+
+## Open after plan B
+
+- The weather-threshold fallback exists in two places: `TopologyNames`/`SettingsDefaults.WeatherThreshold` and the engine's `VerdictOptions`.
+- `/export/snapshot` reads config under a snapshot, but its measurement tables are read separately (not part of that same snapshot).
+- A root-level (parentless) anchor never appears in a Targets pipeline chain.
+- `WarmStartSeeder.FromEngine` and the empty-DB path have no direct test, and the max-gap `>` boundary is unpinned.
+- `WarmStartSeederTests` re-implements `FileDbFactory` inline instead of sharing one.
+
+## Wire changes on plan-b (for the release notes)
+
+- Webhook/MQTT/MCP transition timestamps are now `+00:00` (were `Z`); MCP `get_transitions` rows use `from`/`to`.
+- `/status` 503 body is `{ "errors": [...] }`.
+- MCP `get_current_status` returns the dashboard's shape, and targets carry `operator`.
+- Factory reset seeds all seven settings.
+- The setup wizard applies all-or-nothing.
+- Targets in `/status` and SignalR carry `operator`.

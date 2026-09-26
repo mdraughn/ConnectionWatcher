@@ -163,8 +163,9 @@ watchman.
 
 **Webhooks** — one URL per line; each transition is POSTed as JSON
 (`subjectKind`, `subjectName`, `from`, `to`, `trigger`, verdict/evidence
-fields). Set *Verdict changes only* to be notified just when your internet
-weather changes rather than on every target flap.
+fields). `timestamp` is ISO-8601 with an explicit `+00:00` offset. Set
+*Verdict changes only* to be notified just when your internet weather changes
+rather than on every target flap.
 
 **Admin password** (optional) — set one on the Admin page to lock Config,
 Admin, Traceroute, and Setup (pages and APIs) behind a single site password.
