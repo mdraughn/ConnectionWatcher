@@ -32,16 +32,14 @@ public class WarmStartTests
         RecoveringThreshold = 0.25,
     };
 
-    private static (HostTracker tracker, List<AnalysisTransition> transitions, FakeTimeProvider time) Make()
+    private static (TrackerProbe tracker, List<AnalysisTransition> transitions, FakeTimeProvider time) Make()
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-11T00:00:00Z"));
-        var tracker = new HostTracker(Ip, Profile, time, NullLogger<HostTracker>.Instance);
-        var transitions = new List<AnalysisTransition>();
-        tracker.HostStateChangeSource.Subscribe(transitions.Add);
-        return (tracker, transitions, time);
+        var tracker = new TrackerProbe(Ip, Profile, time);
+        return (tracker, tracker.Transitions, time);
     }
 
-    private static void Feed(HostTracker tracker, FakeTimeProvider time, int count, bool success)
+    private static void Feed(TrackerProbe tracker, FakeTimeProvider time, int count, bool success)
     {
         for (int i = 0; i < count; i++)
         {

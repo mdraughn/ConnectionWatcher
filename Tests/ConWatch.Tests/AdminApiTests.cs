@@ -1,7 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using ConPersistence.Services;
+using ConPersistence.Recording;
+using ConPersistence.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -133,11 +134,31 @@ public class AdminApiTests : IDisposable
         var ok = await _client.PostAsJsonAsync("/api/v1/admin/factory-reset", new { confirm = "RESET" });
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
 
-        var targets = await _client.GetFromJsonAsync<List<ConPersistence.Dto.TargetDto>>("/api/v1/targets");
+        var targets = await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets");
         Assert.Empty(targets!);
-        var profiles = await _client.GetFromJsonAsync<List<ConPersistence.Dto.ProfileDto>>("/api/v1/profiles");
+        var profiles = await _client.GetFromJsonAsync<List<ConPersistence.Config.ProfileDto>>("/api/v1/profiles");
         Assert.Equal(2, profiles!.Count); // builtins only
         var settings = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
         Assert.Equal("2", settings!["Verdict.WeatherThreshold"]); // defaults re-seeded
+    }
+
+    [Fact]
+    public async Task Factory_reset_restores_the_first_boot_settings()
+    {
+        string[] keys =
+        [
+            SettingKeys.WeatherThreshold, SettingKeys.MinuteRetentionDays, SettingKeys.HourlyRetentionMonths,
+            SettingKeys.TransitionRetentionMonths, SettingKeys.RetentionRunHourUtc,
+            SettingKeys.WarmRestartMaxGapMinutes, SettingKeys.AnchorPool,
+        ];
+        var firstBoot = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
+
+        var reset = await _client.PostAsJsonAsync("/api/v1/admin/factory-reset", new { confirm = "RESET" });
+        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
+        foreach (var key in keys)
+            Assert.True(after!.TryGetValue(key, out var value) && value == firstBoot![key],
+                $"{key}: first boot '{firstBoot![key]}', after reset '{value}'");
     }
 }

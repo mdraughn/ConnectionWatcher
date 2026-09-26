@@ -2,7 +2,10 @@ using ConCore;
 using ConEngine.Configuration;
 using ConInfrastructure;
 using ConPersistence;
-using ConPersistence.Services;
+using ConPersistence.Config;
+using ConPersistence.Recording;
+using ConPersistence.Retention;
+using ConPersistence.Settings;
 using ConWatch.Auth;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -48,9 +51,11 @@ public static class ConWatchServices
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
         services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
         services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
-        services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery, ConInfrastructure.Discovery.GatewayDiscovery>();
+        services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery>(
+            _ => new ConInfrastructure.Discovery.GatewayDiscovery());
         services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
         services.AddSingleton<SetupService>();
+        services.AddSingleton<WarmStartSeeder>();
         services.AddSingleton<WatcherHostService>();
         return services;
     }

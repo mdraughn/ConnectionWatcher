@@ -1,5 +1,6 @@
 using ConEngine.Configuration;
 using ConEngine.Topology;
+using ConPersistence.Config;
 
 namespace ConPersistence.Tests;
 

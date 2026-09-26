@@ -1,6 +1,8 @@
 using ConEngine.Topology;
+using ConPersistence.Config;
 using ConPersistence.Entities;
 using ConPersistence.Report;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConPersistence.Tests;

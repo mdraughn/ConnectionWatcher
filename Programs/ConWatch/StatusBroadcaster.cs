@@ -1,5 +1,6 @@
 using ConEngine;
 using ConEngine.Events;
+using ConPersistence.Queries;
 using Microsoft.AspNetCore.SignalR;
 
 namespace ConWatch;
@@ -14,15 +15,6 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
 {
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MinGap = TimeSpan.FromMilliseconds(250);
-
-    /// <summary>The archive-mode snapshot: the same shape /status answers when disabled.</summary>
-    public static readonly object DisabledSnapshot = new
-    {
-        Enabled = false,
-        Verdict = (object?)null,
-        Targets = Array.Empty<object>(),
-        Pools = Array.Empty<object>(),
-    };
 
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
@@ -67,7 +59,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     {
         try
         {
-            await SendStatusChangedAsync(DisabledSnapshot)
+            await SendStatusChangedAsync(StatusSnapshot.Disabled)
                 .WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -80,21 +72,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     {
         try
         {
-            await hub.Clients.All.SendAsync("transition", new
-            {
-                Timestamp = t.Timestamp,
-                SubjectId = t.TargetId,
-                SubjectName = t.TargetName,
-                SubjectKind = t.Kind.ToString(),
-                From = t.From.ToString(),
-                To = t.To.ToString(),
-                Trigger = t.Reason.Trigger.ToString(),
-                Detail = t.Reason.Detail,
-                Verdict = t.Reason.Verdict,
-                SuccessRate = t.Reason.SuccessRate,
-                SampleSize = t.Reason.SampleSize,
-                BurstLossRate = t.Reason.BurstLossRate,
-            });
+            await hub.Clients.All.SendAsync("transition", TransitionDto.From(t));
             // This transition was queued before a Detach() that may since have
             // run (the subscription is disposed, not awaited); only push a
             // snapshot if this is still the attached engine, or a rebuild's
@@ -179,7 +157,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     /// disabled push), and without ordering, whichever SendAsync call happens
     /// to complete first wins the wire — not whichever was dispatched first.
     /// </summary>
-    private async Task SendStatusChangedAsync(object snapshot)
+    private async Task SendStatusChangedAsync(StatusSnapshot snapshot)
     {
         await _sendGate.WaitAsync().ConfigureAwait(false);
         try

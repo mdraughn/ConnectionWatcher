@@ -1,4 +1,5 @@
 using ConPersistence.Entities;
+using ConPersistence.Queries;
 
 namespace ConPersistence.Tests;
 

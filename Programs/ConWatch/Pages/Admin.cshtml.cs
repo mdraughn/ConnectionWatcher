@@ -1,5 +1,6 @@
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using ConWatch.Auth;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reactive.Subjects;
 using ConCore.Targets;
 using ConEngine.Events;
@@ -17,9 +18,16 @@ public class PoolCoordinator : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<PoolCoordinator> _log;
     private readonly Lock _lock = new();
+    private readonly Lock _publishLock = new();
+    private readonly ConcurrentQueue<TargetTransition> _outbox = new();
     private readonly List<IDisposable> _subscriptions = new();
 
     private readonly Subject<TargetTransition> _transitionSubject = new();
+    /// <summary>Transitions this coordinator raises as its own state changes. A
+    /// queued transition may be delivered on another thread after the
+    /// triggering call has already returned. If a subscriber throws, any
+    /// transitions still queued behind it are delivered with the coordinator's
+    /// next transition.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public HostState CurrentState { get; private set; } = HostState.Initializing;
@@ -94,8 +102,37 @@ public class PoolCoordinator : IDisposable
                     Detail = detail,
                 },
             };
-            _log.LogInformation("Pool transition: {Transition}", transition);
-            _transitionSubject.OnNext(transition);
+            // Queued under the lock (queue order is state order), published after it.
+            _outbox.Enqueue(transition);
+        }
+        DrainOutbox();
+    }
+
+    /// <summary>
+    /// Publishes queued transitions in state order, never under _lock.
+    /// TryEnter, not Enter: a thread that finds another one draining leaves
+    /// its item to that thread, which re-checks the queue after releasing the
+    /// lock — nothing is stranded, and no thread waits on this coordinator
+    /// while it may itself be inside a monitor's publish.
+    /// </summary>
+    private void DrainOutbox()
+    {
+        while (!_outbox.IsEmpty)
+        {
+            if (!_publishLock.TryEnter())
+                return;
+            try
+            {
+                while (_outbox.TryDequeue(out var transition))
+                {
+                    _log.LogInformation("Pool transition: {Transition}", transition);
+                    _transitionSubject.OnNext(transition);
+                }
+            }
+            finally
+            {
+                _publishLock.Exit();
+            }
         }
     }
 

@@ -116,4 +116,20 @@ public class PoolCoordinatorTests
         Feed(_google, 2, true); // not enough for a usable sample yet
         Assert.True(_pool.CurrentState is HostState.Initializing or HostState.Starting);
     }
+
+    [Fact]
+    public void Pool_transitions_are_published_outside_the_pool_lock()
+    {
+        // A subscriber that needs the pool's lock from ANOTHER thread must not
+        // wait for the publisher. Seed takes the lock (and is a no-op once the
+        // pool has left Initializing).
+        var results = new List<bool>();
+        using var subscription = _pool.TransitionSource.Subscribe(_ =>
+            results.Add(Task.Run(() => _pool.Seed(HostState.Down)).Wait(TimeSpan.FromSeconds(10))));
+
+        Feed(_google, 5, success: true);
+
+        Assert.NotEmpty(results);
+        Assert.All(results, r => Assert.True(r));
+    }
 }

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using ConEngine.Events;
 using ConEngine.Tracking;
+using ConPersistence.Queries;
 
 namespace ConNotify;
 
@@ -114,25 +115,11 @@ public static class HaDiscovery
         }, Options);
 }
 
-/// <summary>Webhook + MQTT transition-event body.</summary>
+/// <summary>Webhook + MQTT transition-event body: the shared transition DTO.</summary>
 public static class WebhookPayload
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
     public static string ToJson(TargetTransition t) =>
-        JsonSerializer.Serialize(new
-        {
-            Timestamp = t.Timestamp.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'"),
-            SubjectKind = t.Kind.ToString(),
-            SubjectId = t.TargetId,
-            SubjectName = t.TargetName,
-            From = t.From.ToString(),
-            To = t.To.ToString(),
-            Trigger = t.Reason.Trigger.ToString(),
-            Verdict = t.Reason.Verdict,
-            Detail = t.Reason.Detail,
-            SuccessRate = t.Reason.SuccessRate,
-            SampleSize = t.Reason.SampleSize,
-            BurstLossRate = t.Reason.BurstLossRate,
-        }, Options);
+        JsonSerializer.Serialize(TransitionDto.From(t), Options);
 }

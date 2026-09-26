@@ -2,6 +2,7 @@ using System.Threading.Channels;
 using ConEngine;
 using ConEngine.Events;
 using ConPersistence;
+using ConPersistence.Settings;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MQTTnet;

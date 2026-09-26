@@ -1,3 +1,5 @@
+using ConPersistence.Settings;
+
 namespace ConPersistence.Tests;
 
 public class SettingsStoreTests : IDisposable

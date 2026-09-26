@@ -1,5 +1,5 @@
 using ConPersistence.Entities;
-using ConPersistence.Services;
+using ConPersistence.Retention;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConPersistence.Tests;

@@ -1,4 +1,5 @@
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 
 namespace ConPersistence.Tests;
 

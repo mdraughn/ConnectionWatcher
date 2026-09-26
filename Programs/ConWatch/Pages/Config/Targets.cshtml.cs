@@ -1,6 +1,6 @@
-using ConCore.Targets;
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages.Config;
@@ -12,8 +12,8 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public ConfigDocument Config { get; private set; } = new();
     public IReadOnlyList<HealthWarning> Warnings { get; private set; } = [];
 
-    /// <summary>Root→leaf chain of targets above the anchor pool (empty = no pipeline view).</summary>
-    public List<TargetDto> Trunk { get; private set; } = [];
+    /// <summary>One root→leaf chain per distinct anchor parent (empty = no pipeline view).</summary>
+    public List<List<TargetDto>> TrunkChains { get; private set; } = [];
     public List<TargetDto> Anchors { get; private set; } = [];
     public Dictionary<string, List<TargetDto>> BranchesByTrunkName { get; private set; } = new();
 
@@ -24,41 +24,23 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
 
     public async Task OnGetAsync()
     {
-        Config = await store.ExportAsync();
+        var names = await TopologyNames.FromConfigAsync(store, settings);
+        Config = names.Config;
         Warnings = [.. await health.EvaluateAsync(), .. RuntimeHealth.RefusalWarnings(host.Engine)];
-        ComputePipeline(await settings.GetAsync(SettingKeys.AnchorPool));
-    }
-
-    private void ComputePipeline(string? anchorPoolName)
-    {
-        var pool = Config.Pools.FirstOrDefault(p =>
-            p.Name.Equals(anchorPoolName, StringComparison.OrdinalIgnoreCase));
-        if (pool is null)
-            return;
 
         var byName = Config.Targets.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
-        Anchors = pool.Members.Where(byName.ContainsKey).Select(m => byName[m]).ToList();
+        Anchors = names.AnchorNames.Select(n => byName[n]).ToList();
+        TrunkChains = names.TrunkChains.Select(chain => chain.Select(n => byName[n]).ToList()).ToList();
 
-        // Trunk leaf: the pool's parent, or the unique shared parent of its members.
-        var memberParents = Anchors.Select(a => a.Parent).Distinct().ToList();
-        var leafName = pool.Parent ?? (memberParents.Count == 1 ? memberParents[0] : null);
-        if (leafName is null || !byName.TryGetValue(leafName, out var leaf))
-            return;
-
-        var trunk = TreeWalk.ChainToRoot(leaf,
-            t => t.Parent is { Length: > 0 } parentName && byName.TryGetValue(parentName, out var p) ? p : null);
-        trunk.Reverse(); // root first
-        Trunk = trunk;
-
-        var trunkNames = trunk.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var anchorNames = Anchors.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var node in trunk)
+        var trunkNames = names.TrunkNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var anchorNames = names.AnchorNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in names.TrunkNames)
         {
             var branches = Config.Targets
-                .Where(t => t.Parent == node.Name && !trunkNames.Contains(t.Name) && !anchorNames.Contains(t.Name))
+                .Where(t => t.Parent == name && !trunkNames.Contains(t.Name) && !anchorNames.Contains(t.Name))
                 .ToList();
             if (branches.Count > 0)
-                BranchesByTrunkName[node.Name] = branches;
+                BranchesByTrunkName[name] = branches;
         }
     }
 }

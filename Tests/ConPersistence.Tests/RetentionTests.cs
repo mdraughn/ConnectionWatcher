@@ -1,5 +1,5 @@
 using ConPersistence.Entities;
-using ConPersistence.Rollups;
+using ConPersistence.Retention;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -9,7 +9,7 @@ public class RetentionTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 8, 16, 12, 0, 0, DateTimeKind.Utc);
     private readonly TestDbFactory _factory = new();
-    private readonly PersistenceOptions _options = new() { MinuteRetentionDays = 90, HourlyRetentionMonths = 13 };
+    private readonly RetentionWindows _windows = new(MinuteDays: 90, HourlyMonths: 13, TransitionMonths: 24);
     private readonly RetentionPass _pass = new(NullLogger<RetentionPass>.Instance);
     private readonly Guid _target = Guid.NewGuid();
 
@@ -41,7 +41,7 @@ public class RetentionTests : IDisposable
 
         await using (var db = _factory.CreateDbContext())
         {
-            var converted = await _pass.RunAsync(db, Now, _options, CancellationToken.None);
+            var converted = await _pass.RunAsync(db, Now, _windows, CancellationToken.None);
             Assert.True(converted > 0);
         }
 
@@ -67,10 +67,10 @@ public class RetentionTests : IDisposable
         await AddMinuteRows(Now.AddDays(-100).Date, 60, 6, 5, 10.0, 8, 15);
 
         await using (var db = _factory.CreateDbContext())
-            await _pass.RunAsync(db, Now, _options, CancellationToken.None);
+            await _pass.RunAsync(db, Now, _windows, CancellationToken.None);
         await using (var db = _factory.CreateDbContext())
         {
-            var second = await _pass.RunAsync(db, Now, _options, CancellationToken.None);
+            var second = await _pass.RunAsync(db, Now, _windows, CancellationToken.None);
             Assert.Equal(0, second);
         }
 
@@ -94,7 +94,7 @@ public class RetentionTests : IDisposable
                 });
             }
             await db.SaveChangesAsync();
-            await _pass.RunAsync(db, Now, _options, CancellationToken.None);
+            await _pass.RunAsync(db, Now, _windows, CancellationToken.None);
         }
 
         await using var check = _factory.CreateDbContext();
@@ -127,7 +127,7 @@ public class RetentionTests : IDisposable
             db.Transitions.Add(Transition(other, Now.AddYears(-4)));
             db.Transitions.Add(Transition(other, Now.AddYears(-3), "Responding"));
             await db.SaveChangesAsync();
-            await _pass.RunAsync(db, Now, _options, CancellationToken.None); // default 24 months
+            await _pass.RunAsync(db, Now, _windows, CancellationToken.None); // default 24 months
         }
 
         await using var check = _factory.CreateDbContext();
@@ -145,7 +145,7 @@ public class RetentionTests : IDisposable
             db.Transitions.Add(Transition(_target, Now.AddMonths(-23)));
             db.Transitions.Add(Transition(_target, Now.AddDays(-1), "Responding"));
             await db.SaveChangesAsync();
-            await _pass.RunAsync(db, Now, _options, CancellationToken.None);
+            await _pass.RunAsync(db, Now, _windows, CancellationToken.None);
         }
         await using var check = _factory.CreateDbContext();
         Assert.Equal(2, await check.Transitions.CountAsync());

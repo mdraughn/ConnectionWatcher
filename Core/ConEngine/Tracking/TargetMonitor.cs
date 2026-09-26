@@ -18,6 +18,7 @@ namespace ConEngine.Tracking;
 /// state order) and delivered only after it is released, serialized through
 /// <c>_publishLock</c>. Subscribers may therefore take other monitors' locks
 /// freely — nothing they can reach is held while they run.
+/// The HostTracker it owns is pure; this monitor's _lock is the only lock around it.
 /// </summary>
 public class TargetMonitor : IDisposable
 {
@@ -25,7 +26,6 @@ public class TargetMonitor : IDisposable
     public const int RefusalWarningSamples = 200;
 
     private readonly TimeProvider _timeProvider;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<TargetMonitor> _log;
     private readonly Lock _lock = new();
     private readonly Lock _publishLock = new();
@@ -43,10 +43,8 @@ public class TargetMonitor : IDisposable
     private bool _resolutionFailureReported;
     private HostState? _seedState;
 
-    // Plain subjects: every subscriber attaches before the engine activates
-    // anything, and LastStatus serves late polling consumers.
+    // A plain subject: every subscriber attaches before the engine activates anything, and LastStatus serves polling consumers.
     private readonly Subject<TargetTransition> _transitionSubject = new();
-    private readonly Subject<TargetStatus> _statusSubject = new();
 
     public TargetMonitor(Target target, PingProfile profile, PingDiscipline discipline,
         TimeProvider timeProvider, ILoggerFactory loggerFactory)
@@ -55,7 +53,6 @@ public class TargetMonitor : IDisposable
         Profile = profile;
         Discipline = discipline;
         _timeProvider = timeProvider;
-        _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<TargetMonitor>();
     }
 
@@ -65,7 +62,6 @@ public class TargetMonitor : IDisposable
     public IPAddress? ResolvedAddress { get; private set; }
 
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
-    public IObservable<TargetStatus> StatusSource => _statusSubject;
 
     /// <summary>Most recent status snapshot, for polling consumers (e.g. /status).</summary>
     public TargetStatus? LastStatus { get; private set; }
@@ -121,8 +117,7 @@ public class TargetMonitor : IDisposable
                 return;
 
             ResolvedAddress = resolvedAddress;
-            _tracker = new HostTracker(resolvedAddress, Profile, _timeProvider,
-                _loggerFactory.CreateLogger<HostTracker>());
+            _tracker = new HostTracker(resolvedAddress, Profile, _timeProvider);
             if (_seedState is { } seed)
                 QueueOutcomeLocked(_tracker.Seed(seed));
 
@@ -238,12 +233,10 @@ public class TargetMonitor : IDisposable
         if (outcome is null)
             return;
 
-        var targetStatus = new TargetStatus
+        LastStatus = new TargetStatus
         {
             TargetId = Target.Id, TargetName = Target.Name, Host = outcome.Status,
         };
-        LastStatus = targetStatus;
-        _outbox.Enqueue(() => _statusSubject.OnNext(targetStatus));
 
         if (outcome.Transition is not { } at)
             return;
@@ -294,7 +287,6 @@ public class TargetMonitor : IDisposable
     public void Dispose()
     {
         _transitionSubject.OnCompleted();
-        _statusSubject.OnCompleted();
         GC.SuppressFinalize(this);
     }
 }

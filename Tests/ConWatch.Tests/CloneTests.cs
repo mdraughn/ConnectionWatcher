@@ -199,10 +199,10 @@ public class CloneTests : IDisposable
         // the password and pulls secrets.
         var target = MakeTarget();
         var client = target.CreateClient();
-        var settings = target.Services.GetRequiredService<ConPersistence.SettingsStore>();
+        var settings = target.Services.GetRequiredService<ConPersistence.Settings.SettingsStore>();
         await settings.SetManyAsync(new Dictionary<string, string?>
         {
-            [ConPersistence.SettingKeys.CloneSourceUrl] = "http://10.0.0.5:8080/",
+            [ConPersistence.Settings.SettingKeys.CloneSourceUrl] = "http://10.0.0.5:8080/",
         });
 
         var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { sourcePassword = "pw" });

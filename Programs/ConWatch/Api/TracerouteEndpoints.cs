@@ -12,7 +12,7 @@ public static class TracerouteEndpoints
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Host))
-                return Results.BadRequest(new { errors = new[] { "'host' is required." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "'host' is required.");
             try
             {
                 var hops = await runner.RunAsync(request.Host.Trim(), ct);
@@ -20,7 +20,7 @@ public static class TracerouteEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or System.Net.Sockets.SocketException)
             {
-                return Results.BadRequest(new { errors = new[] { $"Cannot resolve '{request.Host}': {ex.Message}" } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, $"Cannot resolve '{request.Host}': {ex.Message}");
             }
         });
     }

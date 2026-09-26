@@ -1,0 +1,58 @@
+using System.Net.Http.Json;
+using System.Text.Json;
+
+namespace ConWatch.Tests;
+
+public class StatusShapeTests : IDisposable
+{
+    private readonly ConWatchFactory _factory = new();
+    private readonly HttpClient _client;
+
+    public StatusShapeTests() => _client = _factory.CreateClient();
+
+    public void Dispose() => _factory.Dispose();
+
+    private static string[] Keys(JsonElement e) =>
+        e.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray();
+
+    [Fact]
+    public async Task Live_status_shape_is_pinned()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        JsonElement status = default;
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var response = await _client.GetAsync("/api/v1/status");
+            if (!response.IsSuccessStatusCode)
+                return false;
+            status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+            return status.GetProperty("verdict").ValueKind == JsonValueKind.Object
+                && status.GetProperty("targets").GetArrayLength() == 3
+                && status.GetProperty("pools").GetArrayLength() == 1;
+        });
+
+        Assert.Equal(new[] { "enabled", "pools", "targets", "verdict" }, Keys(status));
+        Assert.Equal(new[] { "detail", "operator", "state" }, Keys(status.GetProperty("verdict")));
+        Assert.Equal(new[] { "address", "assumed", "avgRtt", "id", "name", "operator", "pingCount",
+                "probe", "sampleSize", "state", "successRate" },
+            Keys(status.GetProperty("targets")[0]));
+        Assert.Equal(new[] { "id", "name", "state" }, Keys(status.GetProperty("pools")[0]));
+    }
+
+    [Fact]
+    public async Task Disabled_status_body_is_pinned()
+    {
+        (await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Engine.Enabled"] = "false" })).EnsureSuccessStatusCode();
+
+        var body = "";
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var response = await _client.GetAsync("/api/v1/status");
+            body = await response.Content.ReadAsStringAsync();
+            return response.IsSuccessStatusCode && body.Contains("\"enabled\":false");
+        });
+
+        Assert.Equal("""{"enabled":false,"verdict":null,"targets":[],"pools":[]}""", body);
+    }
+}

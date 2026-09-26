@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using ConPersistence;
+using ConPersistence.Queries;
 using ConPersistence.Report;
 using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;
@@ -32,33 +33,17 @@ public class ConWatchMcpTools(WatcherHostService host,
         "the user's line); LinkDegraded means their connection is losing traffic; " +
         "LinkDown means it is down. " +
         "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering.")]
-    public async Task<string> GetCurrentStatus()
+    public Task<string> GetCurrentStatus()
     {
-        var engine = host.Engine;
-        var current = engine?.Verdict?.Current;
-        return JsonSerializer.Serialize(new
+        var snapshot = StatusSnapshotBuilder.Build(host.Engine);
+        return Task.FromResult(JsonSerializer.Serialize(new
         {
-            monitoringEnabled = await host.EngineEnabledAsync(),
+            monitoringEnabled = host.EngineEnabled,
             version = BuildInfo.Version,
             builtUtc = BuildInfo.BuiltUtc,
-            verdict = current is null ? null : new
-            {
-                state = current.State.ToString(),
-                detail = current.Detail,
-                blamedOperator = current.Operator,
-            },
-            targets = engine?.Monitors.Values.OrderBy(m => m.Target.Name).Select(m => new
-            {
-                name = m.Target.Name,
-                address = m.ResolvedAddress?.ToString() ?? m.Target.Address,
-                probe = m.Target.Probe,
-                state = m.CurrentState.ToString(),
-                assumed = m.IsAssumed,
-                successRate = m.LastStatus?.Host.SuccessRate,
-                avgRttMs = m.LastStatus?.Host.AverageRoundtripTime,
-                @operator = m.Target.Operator,
-            }),
-        }, Json);
+            verdict = snapshot?.Verdict,
+            targets = snapshot?.Targets,
+        }, Json));
     }
 
     [McpServerTool(Name = "get_connection_report", ReadOnly = true)]
@@ -81,7 +66,8 @@ public class ConWatchMcpTools(WatcherHostService host,
     [McpServerTool(Name = "get_transitions", ReadOnly = true)]
     [Description("The raw state-transition log (newest first): every recorded state " +
         "change for targets, pools, and the internet verdict, with trigger and evidence. " +
-        "Use for detailed digging after get_connection_report. Times are ISO-8601 UTC.")]
+        "Use for detailed digging after get_connection_report. " +
+        "Rows have the REST /api/v1/transitions shape; times are ISO-8601 UTC (+00:00).")]
     public async Task<string> GetTransitions(
         [Description("Only transitions at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only transitions at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,
@@ -93,12 +79,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             fromUtc is { } f ? TimeRange.AsUtc(f) : null,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
             Math.Clamp(limit, 1, 500), before: null, subjectName);
-        return JsonSerializer.Serialize(rows.Select(t => new
-        {
-            TimestampUtc = t.TimestampUtc,
-            t.SubjectName, t.SubjectKind, t.FromState, t.ToState,
-            t.Trigger, t.Detail, t.Verdict,
-        }), Json);
+        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r)), Json);
     }
 
     [McpServerTool(Name = "get_glitches", ReadOnly = true)]

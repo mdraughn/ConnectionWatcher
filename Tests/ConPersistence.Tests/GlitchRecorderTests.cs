@@ -1,8 +1,8 @@
 using System.Reactive.Subjects;
 using ConEngine.Events;
 using ConPersistence.Entities;
-using ConPersistence.Rollups;
-using ConPersistence.Services;
+using ConPersistence.Recording;
+using ConPersistence.Retention;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConPersistence.Tests;
@@ -82,7 +82,7 @@ public class GlitchRecorderTests : IDisposable
         await using (var db = _factory.CreateDbContext())
         {
             await new RetentionPass(NullLogger.Instance).RunAsync(db, now,
-                new PersistenceOptions { MinuteRetentionDays = 90 }, CancellationToken.None);
+                RetentionWindows.From(new PersistenceOptions { MinuteRetentionDays = 90 }), CancellationToken.None);
         }
 
         await using (var check = _factory.CreateDbContext())

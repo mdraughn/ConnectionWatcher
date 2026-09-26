@@ -3,45 +3,54 @@ using ConEngine;
 namespace ConWatch;
 
 /// <summary>
-/// Builds the status snapshot shared by GET /api/v1/status and the SignalR
-/// statusChanged push, so both surfaces always agree on shape.
+/// What GET /api/v1/status answers, the SignalR statusChanged push carries,
+/// the dashboard embeds for its first paint and the MCP status tool reports:
+/// one shape. Positional records serialize in parameter order, which is the
+/// order the anonymous objects they replace used.
 /// </summary>
+public sealed record StatusSnapshot(bool Enabled, StatusVerdict? Verdict,
+    IReadOnlyList<StatusTarget> Targets, IReadOnlyList<StatusPool> Pools)
+{
+    /// <summary>Archive mode (monitoring disabled): no live states.</summary>
+    public static StatusSnapshot Disabled { get; } = new(false, null, [], []);
+}
+
+/// <param name="Operator">The ISP blamed by a Link* verdict ("Comcast"), else null.</param>
+public sealed record StatusVerdict(string State, string? Detail, string? Operator);
+
+/// <param name="Operator">The target's operator/ISP tag, or null.</param>
+public sealed record StatusTarget(Guid Id, string Name, string Address, string? Probe, string State,
+    bool Assumed, double SuccessRate, double AvgRtt, int SampleSize, long PingCount, string? Operator);
+
+public sealed record StatusPool(Guid Id, string Name, string State);
+
 public static class StatusSnapshotBuilder
 {
-    public static object? Build(WatcherEngine? engine)
+    public static StatusSnapshot? Build(WatcherEngine? engine)
     {
         if (engine is null)
             return null;
 
-        var current = engine.Verdict?.Current;
-        var verdict = current is { } c
-            ? new
-            {
-                State = c.State.ToString(),
-                Detail = c.Detail,
-                Operator = c.Operator,
-            }
+        var verdict = engine.Verdict?.Current is { } c
+            ? new StatusVerdict(c.State.ToString(), c.Detail, c.Operator)
             : null;
-        var targets = engine.Monitors.Values.Select(m => new
-        {
-            Id = m.Target.Id,
-            Name = m.Target.Name,
-            Address = m.ResolvedAddress?.ToString() ?? m.Target.Address,
-            Probe = m.Target.Probe,
-            State = m.CurrentState.ToString(),
-            Assumed = m.IsAssumed,
-            SuccessRate = (double)(m.LastStatus?.Host.SuccessRate ?? 0f),
-            AvgRtt = (double)(m.LastStatus?.Host.AverageRoundtripTime ?? 0f),
-            SampleSize = m.LastStatus?.Host.SampleSize ?? 0,
-            PingCount = m.PingCount,
-        }).OrderBy(t => t.Name).ToList();
-        var pools = engine.PoolCoordinators.Select(p => new
-        {
-            Id = p.Pool.Id,
-            Name = p.Pool.Name,
-            State = p.CurrentState.ToString(),
-        }).OrderBy(p => p.Name).ToList();
+        var targets = engine.Monitors.Values.Select(m => new StatusTarget(
+                m.Target.Id,
+                m.Target.Name,
+                m.ResolvedAddress?.ToString() ?? m.Target.Address,
+                m.Target.Probe,
+                m.CurrentState.ToString(),
+                m.IsAssumed,
+                (double)(m.LastStatus?.Host.SuccessRate ?? 0f),
+                (double)(m.LastStatus?.Host.AverageRoundtripTime ?? 0f),
+                m.LastStatus?.Host.SampleSize ?? 0,
+                m.PingCount,
+                m.Target.Operator))
+            .OrderBy(t => t.Name).ToList();
+        var pools = engine.PoolCoordinators
+            .Select(p => new StatusPool(p.Pool.Id, p.Pool.Name, p.CurrentState.ToString()))
+            .OrderBy(p => p.Name).ToList();
 
-        return new { Enabled = true, Verdict = verdict, Targets = targets, Pools = pools };
+        return new StatusSnapshot(true, verdict, targets, pools);
     }
 }

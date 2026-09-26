@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConPersistence;
-using ConPersistence.Dto;
+using ConPersistence.Config;
+using ConPersistence.Settings;
+using ConPersistence.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConWatch.Clone;
@@ -24,7 +26,7 @@ public sealed record CloneOutcome(int Status, string? ErrorCode = null, string? 
 /// it at a second in-memory app.
 /// </summary>
 public class CloneService(IHttpClientFactory httpFactory,
-    IDbContextFactory<ConWatchDbContext> dbFactory, SettingsStore settings,
+    IDbContextFactory<ConWatchDbContext> dbFactory, ConfigService configService, SettingsStore settings,
     WatcherHostService host, ILogger<CloneService> log)
 {
     public const string HttpClientName = "clone";
@@ -62,14 +64,15 @@ public class CloneService(IHttpClientFactory httpFactory,
 
         try
         {
-            await SnapshotImporter.ImportAsync(dbFactory, snapshot, ct);
+            await SnapshotImporter.ImportAsync(dbFactory, configService, snapshot, ct);
         }
         catch (InvalidOperationException ex)
         {
             return CloneOutcome.Fail(400, "import-failed", ex.Message);
         }
 
-        if (!await host.RebuildAsync()) // deterministic parked-archive state before answering
+        // deterministic parked-archive state before answering; supersedes the import's debounced rebuild
+        if (!await host.RebuildIfStaleAsync())
             return CloneOutcome.Fail(500, "rebuild-failed",
                 "The clone was imported but the archive could not be prepared; see this node's log.");
         log.LogInformation("Cloned from {Source}: {Targets} targets, {Transitions} transitions",
@@ -132,7 +135,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         //    pre-take-over clone intact (and this node still disabled).
         try
         {
-            await SnapshotImporter.ImportAsync(dbFactory, snapshot, ct);
+            await SnapshotImporter.ImportAsync(dbFactory, configService, snapshot, ct);
         }
         catch (InvalidOperationException ex)
         {
@@ -146,7 +149,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         {
             [SettingKeys.EngineEnabled] = "true",
         });
-        if (!await host.RebuildAsync())
+        if (!await host.RebuildIfStaleAsync())
             return CloneOutcome.Fail(500, "rebuild-failed",
                 "Data was final-synced but the engine could not start; see this node's log. The source is disabled.");
         log.LogInformation("Took over from {Source}: {Transitions} transitions final-synced",

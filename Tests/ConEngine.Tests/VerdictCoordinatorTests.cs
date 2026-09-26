@@ -72,6 +72,21 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
+    public void Verdict_transitions_are_named_by_the_subject_constants()
+    {
+        AllHealthy();
+
+        Assert.NotEmpty(_verdictTransitions);
+        Assert.All(_verdictTransitions, t =>
+        {
+            Assert.Equal(VerdictCoordinator.SubjectId, t.TargetId);
+            Assert.Equal(VerdictCoordinator.SubjectName, t.TargetName);
+        });
+        // The name is on the wire: the metrics label and the MCP subject filter use it.
+        Assert.Equal("Internet", VerdictCoordinator.SubjectName);
+    }
+
+    [Fact]
     public void Starts_unknown_then_healthy()
     {
         Assert.Equal(VerdictState.Unknown, _verdict.CurrentVerdict);
@@ -306,5 +321,19 @@ public class VerdictCoordinatorTests
         Assert.Equal("Comcast", down.Operator);
         // The earlier snapshot is untouched: readers holding it never see a torn pair.
         Assert.Equal(VerdictState.Healthy, healthy.State);
+    }
+
+    [Fact]
+    public void Verdict_transitions_are_published_outside_the_verdict_lock()
+    {
+        var results = new List<bool>();
+        using var subscription = _verdict.TransitionSource.Subscribe(_ =>
+            results.Add(Task.Run(() => _verdict.Seed(VerdictState.LinkDown)).Wait(TimeSpan.FromSeconds(10))));
+
+        AllHealthy();
+
+        Assert.NotEmpty(results);
+        Assert.All(results, r => Assert.True(r));
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict); // Seed stayed a no-op
     }
 }

@@ -113,7 +113,7 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
     }
 
     /// <summary>Requests the loop to stop. Returns immediately.</summary>
-    public void Stop()
+    private void Stop()
     {
         _localCancellationTokenSource.Cancel();
     }

@@ -1,4 +1,7 @@
+using ConEngine.Configuration;
 using ConPersistence;
+using ConPersistence.Config;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -34,8 +37,8 @@ public static class AdminEndpoints
                 [SettingKeys.EngineEnabled] = request.Enabled ? "true" : "false",
             });
             if (!await host.RebuildIfStaleAsync()) // effective before we answer
-                return Results.Json(new { errors = new[] { "The engine could not be rebuilt; see the log." } },
-                    statusCode: 500);
+                return ApiResults.Error(StatusCodes.Status500InternalServerError, null,
+                    "The engine could not be rebuilt; see the log.");
             return Results.NoContent();
         });
     }
@@ -77,10 +80,10 @@ public static class AdminEndpoints
         api.MapPost("/admin/mqtt-test", async (MqttTestRequest request, CancellationToken ct) =>
         {
             if (request.Host is not { Length: > 0 })
-                return Results.BadRequest(new { errors = new[] { "Host is required." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Host is required.");
             var port = request.Port ?? 1883;
             if (port is < 1 or > 65535)
-                return Results.BadRequest(new { errors = new[] { "Port must be 1–65535." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Port must be 1–65535.");
 
             var (ok, message) = await ConNotify.MqttTester.TestAsync(
                 request.Host, port, request.Username, request.Password, ct);
@@ -92,12 +95,12 @@ public static class AdminEndpoints
             ILoggerFactory loggerFactory) =>
         {
             if (request.Confirm != "PRUNE")
-                return Results.BadRequest(new { errors = new[] { "Confirmation must be exactly 'PRUNE'." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Confirmation must be exactly 'PRUNE'.");
             if (request.BeforeUtc is not { } before || before == default(DateTime))
-                return Results.BadRequest(new { errors = new[] { "A cutoff date is required." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "A cutoff date is required.");
 
             await using var db = await dbFactory.CreateDbContextAsync();
-            var result = await ConPersistence.Services.DataPruner.PruneBeforeAsync(
+            var result = await ConPersistence.Retention.DataPruner.PruneBeforeAsync(
                 db, options.Value.DbPath, TimeRange.AsUtc(before));
             loggerFactory.CreateLogger("Admin").LogWarning(
                 "History PRUNED before {Before:u}: {Transitions} transitions, {Rollups} rollups, " +
@@ -111,7 +114,7 @@ public static class AdminEndpoints
             IDbContextFactory<ConWatchDbContext> dbFactory, ILoggerFactory loggerFactory) =>
         {
             if (request.Confirm != "CLEAR")
-                return Results.BadRequest(new { errors = new[] { "Confirmation must be exactly 'CLEAR'." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Confirmation must be exactly 'CLEAR'.");
 
             await using var db = await dbFactory.CreateDbContextAsync();
             await using (var tx = await db.Database.BeginTransactionAsync())
@@ -127,10 +130,11 @@ public static class AdminEndpoints
 
         api.MapPost("/admin/factory-reset", async (ConfirmRequest request,
             IDbContextFactory<ConWatchDbContext> dbFactory, ConfigStore store,
-            SettingsStore settings, WatcherHostService host, ILoggerFactory loggerFactory) =>
+            SettingsStore settings, WatcherHostService host, ILoggerFactory loggerFactory,
+            IOptions<VerdictOptions> verdictOptions, IOptions<PersistenceOptions> persistenceOptions) =>
         {
             if (request.Confirm != "RESET")
-                return Results.BadRequest(new { errors = new[] { "Confirmation must be exactly 'RESET'." } });
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Confirmation must be exactly 'RESET'.");
 
             await using (var db = await dbFactory.CreateDbContextAsync())
             await using (var tx = await db.Database.BeginTransactionAsync())
@@ -145,17 +149,12 @@ public static class AdminEndpoints
                 await tx.CommitAsync();
             }
             await store.SeedAsync(null); // builtin profiles
-            await settings.SeedMissingAsync(new Dictionary<string, string>
-            {
-                [SettingKeys.WeatherThreshold] = "2",
-                [SettingKeys.MinuteRetentionDays] = "90",
-                [SettingKeys.HourlyRetentionMonths] = "13",
-                [SettingKeys.RetentionRunHourUtc] = "3",
-            });
+            await settings.SeedMissingAsync(
+                SettingsDefaults.For(verdictOptions.Value, persistenceOptions.Value)); // as first boot
             loggerFactory.CreateLogger("Admin").LogWarning("FACTORY RESET performed by administrator");
             if (!await host.RebuildAsync())
-                return Results.Json(new { errors = new[] { "The engine could not be rebuilt; see the log." } },
-                    statusCode: 500);
+                return ApiResults.Error(StatusCodes.Status500InternalServerError, null,
+                    "The engine could not be rebuilt; see the log.");
             return Results.NoContent();
         });
     }

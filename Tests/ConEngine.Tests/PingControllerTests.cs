@@ -53,8 +53,7 @@ public class PingControllerTests
         _ = controllerB.Launch(Guid.NewGuid(), IpB, channel.Writer, ProbeSpec.Icmp, cadence, () => 1000, cts.Token);
 
         await Collect(channel.Reader, 2);
-        controllerA.Stop();
-        await Task.Delay(100);
+        await controllerA.StopAsync(TimeSpan.FromSeconds(1));
 
         // Channel must still be open and still carrying B's results.
         Assert.False(channel.Reader.Completion.IsCompleted);

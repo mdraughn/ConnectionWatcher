@@ -1,4 +1,4 @@
-﻿using ConPersistence.Dto;
+﻿using ConPersistence.Config;
 
 namespace ConPersistence.Tests;
 
@@ -116,7 +116,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Address_edit_without_kind_is_rejected()
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
         });
@@ -134,7 +134,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Address_edit_records_the_right_marker(string kind, string expectedTrigger)
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
         }, addressChange: kind);
@@ -155,7 +155,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Non_address_edit_needs_no_kind_and_records_no_marker()
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router Renamed", Address = "192.168.1.1", Profile = "Internal",
         });
@@ -169,7 +169,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     public async Task Invalid_address_change_kind_is_rejected()
     {
         var routerId = await IdOf("Router");
-        var result = await _service.UpsertTargetAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.UpsertTargetAsync(new ConPersistence.Config.TargetDto
         {
             Id = routerId, Name = "Router", Address = "192.168.1.254", Profile = "Internal",
         }, addressChange: "oops");
@@ -184,7 +184,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var google = options.Targets.Single(t => t.Name == "Google").Id!.Value;
         var cloudflare = options.Targets.Single(t => t.Name == "Cloudflare").Id!.Value;
 
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "IspHop", Address = "198.51.100.11", Profile = "External",
         }, [google, cloudflare]);
@@ -204,7 +204,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var router = options.Targets.Single(t => t.Name == "Router").Id!.Value;   // parent: none
         var google = options.Targets.Single(t => t.Name == "Google").Id!.Value;   // parent: Modem
 
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "X", Address = "10.9.9.9",
         }, [router, google]);
@@ -216,7 +216,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task InsertParent_rejects_unknown_child()
     {
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "X", Address = "10.9.9.9",
         }, [Guid.NewGuid()]);
@@ -227,7 +227,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task InsertParent_rejects_empty_children()
     {
-        var result = await _service.InsertParentAsync(new ConPersistence.Dto.TargetDto
+        var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
             Name = "X", Address = "10.9.9.9",
         }, []);
@@ -262,5 +262,76 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var options = await _store.LoadWatcherOptionsAsync();
         Assert.DoesNotContain(options.Targets, t => t.Name == "Bad");
         Assert.Equal(4, options.Targets.Count);
+    }
+
+    [Fact]
+    public async Task EditDocument_commits_once_and_keeps_untouched_ids()
+    {
+        var routerId = await IdOf("Router");
+
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "TV", Address = "192.168.1.50", Parent = "Router", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+        Assert.Equal(routerId, await IdOf("Router"));
+        Assert.Contains((await _store.LoadWatcherOptionsAsync()).Targets, t => t.Name == "TV" && t.Parent == "Router");
+    }
+
+    [Fact]
+    public async Task EditDocument_that_fails_validation_commits_nothing()
+    {
+        var before = (await _store.LoadWatcherOptionsAsync()).Targets.Count;
+
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "Good", Address = "192.168.1.60", Profile = "Internal" });
+            doc.Targets.Add(new TargetDto { Name = "", Address = "", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Equal(0, _changeSignals);
+        Assert.Equal(before, (await _store.LoadWatcherOptionsAsync()).Targets.Count);
+    }
+
+    [Fact]
+    public async Task EditDocument_changing_an_existing_targets_address_is_rejected()
+    {
+        var routerId = await IdOf("Router");
+        var originalAddress = (await _store.LoadWatcherOptionsAsync())
+            .Targets.Single(t => t.Name == "Router").Address;
+
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            var i = doc.Targets.FindIndex(t => t.Id == routerId);
+            doc.Targets[i] = doc.Targets[i] with { Address = "10.10.10.10" };
+            return ConfigResult.Ok();
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("EditDocumentAsync cannot change"));
+        Assert.Equal(0, _changeSignals);
+        Assert.Equal(originalAddress, (await _store.LoadWatcherOptionsAsync())
+            .Targets.Single(t => t.Name == "Router").Address);
+    }
+
+    [Fact]
+    public async Task EditDocument_adding_a_target_without_renaming_others_still_succeeds()
+    {
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "NewGuy", Address = "192.168.1.70", Parent = "Router", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+        Assert.Contains((await _store.LoadWatcherOptionsAsync()).Targets, t => t.Name == "NewGuy" && t.Parent == "Router");
     }
 }

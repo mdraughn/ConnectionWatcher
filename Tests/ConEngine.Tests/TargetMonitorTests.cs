@@ -206,4 +206,19 @@ public class TargetMonitorTests
         Assert.Equal(TransitionTrigger.ResolutionFailed, t.Reason.Trigger);
         Assert.Equal(HostState.Starting, m.CurrentState);
     }
+
+    [Fact]
+    public void LastStatus_follows_every_recorded_sample()
+    {
+        var (m, _, time) = Make();
+        m.StartTracking(Ip);
+        Assert.Null(m.LastStatus);
+
+        Feed(m, time, 3, success: true);
+        Assert.Equal(3, m.LastStatus!.Host.SampleSize);
+
+        Feed(m, time, 1, success: false);
+        Assert.Equal(4, m.LastStatus!.Host.SampleSize);
+        Assert.Equal(m.Target.Id, m.LastStatus.TargetId);
+    }
 }

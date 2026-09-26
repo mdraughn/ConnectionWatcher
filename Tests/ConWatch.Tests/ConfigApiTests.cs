@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using ConPersistence.Dto;
+using ConPersistence.Config;
 
 namespace ConWatch.Tests;
 

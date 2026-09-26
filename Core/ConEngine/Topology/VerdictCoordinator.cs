@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reactive.Subjects;
 using ConCore.Targets;
 using ConEngine.Events;
@@ -28,6 +29,10 @@ public class VerdictCoordinator : IDisposable
     /// <summary>Fixed synthetic subject id for the "Internet" verdict stream.</summary>
     public static readonly Guid SubjectId = Guid.Parse("6E7E12E7-0000-4000-8000-000000000001");
 
+    /// <summary>The verdict subject's name in transitions, Internet-class
+    /// glitches and the metrics series.</summary>
+    public const string SubjectName = "Internet";
+
     private readonly TargetGraph _graph;
     private readonly IReadOnlyList<TargetMonitor> _anchors;
     private readonly IReadOnlyList<(TargetMonitor Monitor, int Depth)> _ancestors;
@@ -35,6 +40,8 @@ public class VerdictCoordinator : IDisposable
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
     private readonly Lock _lock = new();
+    private readonly Lock _publishLock = new();
+    private readonly ConcurrentQueue<TargetTransition> _outbox = new();
     private readonly List<IDisposable> _subscriptions = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
 
@@ -49,6 +56,11 @@ public class VerdictCoordinator : IDisposable
     /// <summary>The ISP/operator being blamed by a Link* verdict (from the
     /// blamed trunk target's Operator tag), else null.</summary>
     public string? CurrentOperator => Current.Operator;
+    /// <summary>Transitions this coordinator raises as its own state changes. A
+    /// queued transition may be delivered on another thread after the
+    /// triggering call has already returned. If a subscriber throws, any
+    /// transitions still queued behind it are delivered with the coordinator's
+    /// next transition.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
@@ -134,7 +146,7 @@ public class VerdictCoordinator : IDisposable
             {
                 Kind = TransitionSubjectKind.Verdict,
                 TargetId = SubjectId,
-                TargetName = "Internet",
+                TargetName = SubjectName,
                 From = Map(previous.State),
                 To = Map(verdict),
                 Timestamp = _time.GetUtcNow(),
@@ -145,8 +157,37 @@ public class VerdictCoordinator : IDisposable
                     Detail = detail,
                 },
             };
-            _log.LogInformation("Verdict: {Transition}", transition);
-            _transitionSubject.OnNext(transition);
+            // Queued under the lock (queue order is state order), published after it.
+            _outbox.Enqueue(transition);
+        }
+        DrainOutbox();
+    }
+
+    /// <summary>
+    /// Publishes queued transitions in state order, never under _lock.
+    /// TryEnter, not Enter: a thread that finds another one draining leaves
+    /// its item to that thread, which re-checks the queue after releasing the
+    /// lock — nothing is stranded, and no thread waits on this coordinator
+    /// while it may itself be inside a monitor's publish.
+    /// </summary>
+    private void DrainOutbox()
+    {
+        while (!_outbox.IsEmpty)
+        {
+            if (!_publishLock.TryEnter())
+                return;
+            try
+            {
+                while (_outbox.TryDequeue(out var transition))
+                {
+                    _log.LogInformation("Verdict: {Transition}", transition);
+                    _transitionSubject.OnNext(transition);
+                }
+            }
+            finally
+            {
+                _publishLock.Exit();
+            }
         }
     }
 

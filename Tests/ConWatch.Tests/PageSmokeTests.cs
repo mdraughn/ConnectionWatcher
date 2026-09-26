@@ -1,3 +1,7 @@
+using System.Net.Http.Json;
+using System.Text.RegularExpressions;
+using ConPersistence.Config;
+
 namespace ConWatch.Tests;
 
 public class PageSmokeTests : IDisposable
@@ -51,6 +55,29 @@ public class PageSmokeTests : IDisposable
         var html = await _factory.CreateClient().GetStringAsync("/Config/Targets");
         Assert.Contains("cw-health", html);
         Assert.Contains("anchors-below-recommended", html);
+    }
+
+    [Fact]
+    public async Task Targets_pipeline_draws_one_chain_per_anchor_parent()
+    {
+        var client = _factory.CreateClient();
+        foreach (var target in new TargetDto[]
+        {
+            new() { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+            new() { Name = "WanA", Address = "192.168.100.1", Parent = "Router", Profile = "Internal" },
+            new() { Name = "WanB", Address = "192.168.200.1", Parent = "Router", Profile = "Internal" },
+            new() { Name = "AnchorA", Address = "8.8.8.8", Parent = "WanA" },
+            new() { Name = "AnchorB", Address = "1.1.1.1", Parent = "WanB" },
+        })
+            (await client.PostAsJsonAsync("/api/v1/targets", target)).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/v1/pools",
+            new PoolDto { Name = "Internet", Members = ["AnchorA", "AnchorB"] })).EnsureSuccessStatusCode();
+
+        var html = await client.GetStringAsync("/Config/Targets");
+
+        Assert.Equal(2, Regex.Matches(html, "class=\"cw-pipeline\"").Count);
+        Assert.Contains("<b>WanA</b>", html);
+        Assert.Contains("<b>WanB</b>", html);
     }
 
     [Fact]

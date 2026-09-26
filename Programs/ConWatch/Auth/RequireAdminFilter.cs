@@ -1,3 +1,5 @@
+using ConWatch.Api;
+
 namespace ConWatch.Auth;
 
 /// <summary>401s any request to a protected endpoint when the gate is on
@@ -8,7 +10,7 @@ public class RequireAdminFilter(AdminGate gate) : IEndpointFilter
         EndpointFilterDelegate next)
     {
         if (gate.IsLocked(context.HttpContext.User))
-            return Results.Json(new { errors = new[] { "Admin password required." } }, statusCode: 401);
+            return ApiResults.Error(StatusCodes.Status401Unauthorized, null, "Admin password required.");
         return await next(context);
     }
 }
