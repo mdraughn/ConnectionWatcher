@@ -196,7 +196,7 @@ public class NotifierIntegrationTests
         Skip.If(containerId.Length == 0, "Mosquitto container failed to start");
         try
         {
-            await WaitForPortAsync(brokerPort);
+            await WaitForBrokerAsync(brokerPort);
 
             // Independent subscriber collecting everything the app publishes.
             var messages = new Dictionary<string, string>();
@@ -259,7 +259,7 @@ public class NotifierIntegrationTests
         Skip.If(containerId.Length == 0, "Mosquitto container failed to start");
         try
         {
-            await WaitForPortAsync(brokerPort);
+            await WaitForBrokerAsync(brokerPort);
 
             var messages = new Dictionary<string, string>();
             using var subscriber = new MqttClientFactory().CreateMqttClient();
@@ -332,21 +332,28 @@ public class NotifierIntegrationTests
         return proc.ExitCode == 0 ? output : "";
     }
 
-    private static async Task WaitForPortAsync(int port)
+    // A plain TCP connect proves nothing here: Docker's port proxy accepts on the
+    // host port before Mosquitto listens inside the container, then drops the
+    // connection ("Error while authenticating. Connection closed." in CI). Only
+    // a real CONNACK means the broker is up.
+    private static async Task WaitForBrokerAsync(int port)
     {
-        for (int i = 0; i < 100; i++)
+        var options = new MqttClientOptionsBuilder().WithTcpServer("127.0.0.1", port).Build();
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (true)
         {
+            using var probe = new MqttClientFactory().CreateMqttClient();
             try
             {
-                using var probe = new TcpClient();
-                await probe.ConnectAsync(IPAddress.Loopback, port);
+                using var attempt = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await probe.ConnectAsync(options, attempt.Token);
+                await probe.DisconnectAsync();
                 return;
             }
-            catch (SocketException)
+            catch (Exception) when (DateTime.UtcNow < deadline)
             {
                 await Task.Delay(200);
             }
         }
-        throw new TimeoutException($"Mosquitto never listened on {port}");
     }
 }
