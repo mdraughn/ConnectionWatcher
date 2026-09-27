@@ -17,9 +17,16 @@
         ["lock"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><rect x=\"4.6\" y=\"8.6\" width=\"10.8\" height=\"7.8\" rx=\"2\"></rect><path d=\"M7.2 8.6V6.4a2.8 2.8 0 0 1 5.6 0v2.2\"></path></svg>",
         ["logout"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M12.4 3.4H5.6a1.6 1.6 0 0 0-1.6 1.6v10a1.6 1.6 0 0 0 1.6 1.6h6.8\"></path><path d=\"M9.4 10h7.2\"></path><path d=\"M13.8 7.2 16.6 10l-2.8 2.8\"></path></svg>",
         ["moon"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><path d=\"M15.6 11.9A6.4 6.4 0 0 1 8.1 4.4a6.4 6.4 0 1 0 7.5 7.5z\"></path></svg>",
+        ["sun"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><circle cx=\"10\" cy=\"10\" r=\"3.2\"></circle><path d=\"M10 2.6v1.8M10 15.6v1.8M2.6 10h1.8M15.6 10h1.8M4.8 4.8l1.3 1.3M13.9 13.9l1.3 1.3M4.8 15.2l1.3-1.3M13.9 6.1l1.3-1.3\"></path></svg>",
+        ["monitor"] = $"<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" {s}><rect x=\"3\" y=\"3.8\" width=\"14\" height=\"9.8\" rx=\"1.6\"></rect><path d=\"M7.4 16.6h5.2M10 13.6v3\"></path></svg>",
         ["menu"] = $"<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" {s}><path d=\"M3.4 6h13.2M3.4 10h13.2M3.4 14h13.2\"></path></svg>",
         ["close"] = $"<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" {s}><path d=\"M5.2 5.2l9.6 9.6M14.8 5.2l-9.6 9.6\"></path></svg>",
     };
+    // All three theme icons ship in the button; site.css shows the one matching
+    // <html data-theme>, so the right icon is there on first paint.
+    var themeIcons = $"<span class=\"cw-theme-ic sys\">{icons["monitor"]}</span>" +
+                     $"<span class=\"cw-theme-ic dark\">{icons["moon"]}</span>" +
+                     $"<span class=\"cw-theme-ic light\">{icons["sun"]}</span>";
     var brand = "<svg width=\"22\" height=\"22\" viewBox=\"0 0 22 22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"2\" fill=\"currentColor\" stroke=\"none\"></circle><path d=\"M15.1 6.9a5.8 5.8 0 0 1 0 8.2\"></path><path d=\"M6.9 15.1a5.8 5.8 0 0 1 0-8.2\"></path><path d=\"M17.9 4.1a9.7 9.7 0 0 1 0 13.8\" opacity=\"0.4\"></path><path d=\"M4.1 17.9a9.7 9.7 0 0 1 0-13.8\" opacity=\"0.4\"></path></svg>";
     var watchNav = new (string Key, string Href, string Label, string ActivePrefix)[]
     {
@@ -89,7 +96,7 @@
                 <span class="dot"></span><span class="label"></span>
             </a>
             <button class="cw-iconbtn" id="cw-theme-btn" type="button"
-                    title="Theme: follows your system — click to change">@Html.Raw(icons["moon"])</button>
+                    title="Theme: follows your system — click to change">@Html.Raw(themeIcons)</button>
             @if (locked && Gate.IsEnabled)
             {
                 <a class="cw-iconbtn" href="/?admin=1" title="Enter admin mode">@Html.Raw(icons["lock"])</a>
@@ -124,7 +131,7 @@
             }
             <div class="foot">
                 <span class="cw-chip" title="build @ConWatch.BuildInfo.Version — @(ConWatch.BuildInfo.BuiltUtc?.ToString("u") ?? "build time unknown")">v@(ConWatch.BuildInfo.ShortVersion)</span>
-                <button class="cw-iconbtn" id="cw-theme-btn-drawer" type="button" title="Change theme">@Html.Raw(icons["moon"])</button>
+                <button class="cw-iconbtn" id="cw-theme-btn-drawer" type="button" title="Change theme">@Html.Raw(themeIcons)</button>
             </div>
         </div>
     </div>

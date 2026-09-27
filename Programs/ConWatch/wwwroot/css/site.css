@@ -94,6 +94,11 @@ body { background: var(--bg); }
     border-radius: 5px; cursor: pointer; padding: 0; margin: 0; }
 .cw-iconbtn:hover { color: var(--text); border-color: var(--border-strong); }
 .cw-burger { display: none; }
+/* Theme button: monitor = follows the OS, moon = dark, sun = light. */
+.cw-theme-ic { display: none; }
+:root:not([data-theme]) .cw-theme-ic.sys,
+[data-theme="dark"] .cw-theme-ic.dark,
+[data-theme="light"] .cw-theme-ic.light { display: flex; }
 
 /* ------------------------------------------------------------ page band */
 .cw-pageband { padding: 20px 0 4px; display: flex; align-items: flex-end; gap: 24px; }

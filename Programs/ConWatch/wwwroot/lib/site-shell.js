@@ -18,7 +18,7 @@
             else localStorage.setItem("cw-theme", choice);
         } catch { }
         for (const btn of document.querySelectorAll("#cw-theme-btn, #cw-theme-btn-drawer"))
-            btn.title = `Theme: ${choice} — click to change`;
+            btn.title = `Theme: ${choice === "system" ? "follows your system" : choice} — click to change`;
     }
     function cycle() {
         const next = { system: "dark", dark: "light", light: "system" }[currentChoice()] ?? "system";
