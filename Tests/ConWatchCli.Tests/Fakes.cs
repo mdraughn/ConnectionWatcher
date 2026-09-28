@@ -32,6 +32,16 @@ public sealed class FakeHealthProbe : IHealthProbe
     public Task<HealthResult> ProbeAsync(string serverUrl, CancellationToken ct) { ProbedUrl = serverUrl; return Task.FromResult(Result); }
 }
 
+public sealed class FakeFolderLockdown : IFolderLockdown
+{
+    public List<(string Directory, bool UsersMayRead)> Locked { get; } = [];
+    public void Lock(string directory, bool usersMayRead)
+    {
+        Directory.CreateDirectory(directory);
+        Locked.Add((directory, usersMayRead));
+    }
+}
+
 public sealed class FakePortProbe : IPortProbe
 {
     public HashSet<int> Busy { get; } = [];

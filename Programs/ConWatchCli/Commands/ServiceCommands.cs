@@ -46,6 +46,9 @@ public static class ServiceCommands
 
             var next = (machine ?? new ConWatchConfig()) with { ListenUrl = listen, DataDir = dataDir, ServerUrl = serverUrl };
             ConfigFile.WriteAtomic(s.Paths.MachineFile, next);
+            // Before the service first starts, so the db and keys are born private.
+            s.Lockdown.Lock(Path.GetDirectoryName(s.Paths.MachineFile)!, usersMayRead: true);
+            LockDataDir(s, dataDir);
 
             await s.Services.InstallAsync(new ServiceSpec(s.CliExePath, listen, dataDir, serverUrl, Start: !pr.GetValue(noStart)), ct);
             s.Out.WriteLine($"ConnectionWatcher service installed{(pr.GetValue(noStart) ? "" : " and started")}.");
@@ -56,6 +59,29 @@ public static class ServiceCommands
             return ExitCodes.Ok;
         }, ct));
         return cmd;
+    }
+
+    /// <summary>
+    /// The data folder holds conwatch.db (notification secrets, admin hash) and the
+    /// data-protection keys, so only SYSTEM and Administrators may read it. A custom
+    /// folder that already holds other files is left alone: rewriting its permissions
+    /// could lock its owner out of their own files.
+    /// </summary>
+    private static void LockDataDir(CliServices s, string dataDir)
+    {
+        static bool IsOurs(string entry)
+        {
+            var name = Path.GetFileName(entry);
+            return name == "keys" || name.StartsWith("conwatch.db", StringComparison.OrdinalIgnoreCase);
+        }
+        var isDefault = string.Equals(Path.GetFullPath(dataDir), Path.GetFullPath(s.Paths.DefaultDataDir), StringComparison.OrdinalIgnoreCase);
+        if (!isDefault && Directory.Exists(dataDir) && !Directory.EnumerateFileSystemEntries(dataDir).All(IsOurs))
+        {
+            s.Err.WriteLine($"warning: left the permissions of {dataDir} unchanged because it holds other files; " +
+                "make sure only administrators can read it (conwatch.db holds your notification secrets).");
+            return;
+        }
+        s.Lockdown.Lock(dataDir, usersMayRead: false);
     }
 
     /// <summary>--url, then --port, then env, then machine file, then the old service's --urls, then a probed free port from 8080.</summary>

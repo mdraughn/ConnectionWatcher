@@ -29,6 +29,7 @@ public sealed record CliServices(
     IPortProbe Ports,
     ITrayLauncher TrayLauncher,
     ITrayAutostart TrayAutostart,
+    IFolderLockdown Lockdown,
     Func<string[], CancellationToken, Task<int>> Serve,
     Func<string, string?> Env,
     string AppDir,

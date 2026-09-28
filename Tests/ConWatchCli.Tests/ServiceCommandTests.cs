@@ -198,4 +198,41 @@ public sealed class ServiceCommandTests
         Assert.Equal(ExitCodes.NotInstalled, code);
         Assert.Contains("not installed", output2);
     }
+
+    // ProgramData's inherited permissions let every local user read conwatch.db
+    // (MQTT password, webhook URLs, admin hash) and the data-protection keys.
+
+    [Fact]
+    public async Task Install_locks_the_config_folder_read_only_for_users_and_the_data_folder_to_admins()
+    {
+        using var h = new CliHarness();
+        var (code, _, _) = await h.RunAsync("service", "install", "--no-start");
+        Assert.Equal(0, code);
+        Assert.Equal(
+            [(Path.GetDirectoryName(h.Paths.MachineFile)!, true), (h.Paths.DefaultDataDir, false)],
+            h.Lockdown.Locked);
+    }
+
+    [Fact]
+    public async Task Install_locks_a_new_custom_data_folder()
+    {
+        using var h = new CliHarness();
+        var data = Path.Combine(h.Root, "custom-data");
+        await h.RunAsync("service", "install", "--no-start", "--data", data);
+        Assert.Contains((data, false), h.Lockdown.Locked);
+    }
+
+    [Fact]
+    public async Task Install_leaves_an_existing_custom_folder_with_other_files_alone_and_says_so()
+    {
+        // Rewriting a shared folder's permissions could lock its owner out of their own files.
+        using var h = new CliHarness();
+        var data = Path.Combine(h.Root, "shared");
+        Directory.CreateDirectory(data);
+        File.WriteAllText(Path.Combine(data, "someone-elses.txt"), "x");
+        var (code, _, error) = await h.RunAsync("service", "install", "--no-start", "--data", data);
+        Assert.Equal(0, code);
+        Assert.DoesNotContain(h.Lockdown.Locked, l => l.Directory == data);
+        Assert.Contains($"left the permissions of {data} unchanged", error);
+    }
 }

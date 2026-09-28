@@ -28,7 +28,10 @@ model is deliberately simple:
   snapshots exclude them, and logs elide secret URL paths. The one channel
   that transfers them, clone/take-over, requires the admin password and
   refuses to send them over plain HTTP to a non-local address unless you
-  explicitly override.
+  explicitly override. On disk, the Windows installer (`conwatch service
+  install`) restricts the data folder — database, admin password, session
+  keys — to SYSTEM and Administrators; other local users can read only the
+  config file.
 - **No telemetry.** See the Privacy section of the README for the complete
   list of network traffic the app can generate.
 

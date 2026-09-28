@@ -14,6 +14,7 @@ public sealed class CliHarness : IDisposable
     public FakePortProbe Ports { get; } = new();
     public FakeTrayLauncher TrayLauncher { get; set; } = new();
     public FakeTrayAutostart TrayAutostart { get; } = new();
+    public FakeFolderLockdown Lockdown { get; } = new();
     public Dictionary<string, string?> Env { get; } = new();
     public string[]? ServeArgs { get; private set; }
     /// <summary>What `serve` does after recording its arguments; default returns 0 at once.</summary>
@@ -36,7 +37,7 @@ public sealed class CliHarness : IDisposable
         var output = new StringWriter();
         var error = new StringWriter();
         var services = new CliServices(
-            Paths, Services, Elevation, Health, Ports, TrayLauncher, TrayAutostart,
+            Paths, Services, Elevation, Health, Ports, TrayLauncher, TrayAutostart, Lockdown,
             Serve: (a, serveCt) => { ServeArgs = a; return ServeBody(serveCt); },
             Env: name => Env.GetValueOrDefault(name),
             AppDir: AppDir,

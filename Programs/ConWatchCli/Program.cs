@@ -29,6 +29,7 @@ try
         Ports: new TcpPortProbe(),
         TrayLauncher: new ProcessTrayLauncher(),
         TrayAutostart: trayAutostart,
+        Lockdown: OperatingSystem.IsWindows() ? new ConWatchCli.Windows.WindowsFolderLockdown() : new NoFolderLockdown(),
         Serve: (hostArgs, ct) => ConWatch.ConWatchApp.RunAsync(hostArgs, pinContentRoot: true, ct),
         Env: Environment.GetEnvironmentVariable,
         AppDir: appDir,
@@ -65,6 +66,11 @@ file sealed class NotElevatable : IElevation
 {
     public bool IsElevated => true;
     public Task<int> RelaunchElevatedAsync(string[] args, CancellationToken ct) => Task.FromResult(ExitCodes.Ok);
+}
+/// <summary>Non-Windows: the service is Windows-only, so there is nothing to lock down.</summary>
+file sealed class NoFolderLockdown : IFolderLockdown
+{
+    public void Lock(string directory, bool usersMayRead) => Directory.CreateDirectory(directory);
 }
 file sealed class UnsupportedTrayAutostart : ITrayAutostart
 {

@@ -60,6 +60,17 @@ public interface ITrayLauncher
     string? RunningInstance();
 }
 
+/// <summary>
+/// Replaces a folder's inherited permissions (ProgramData lets every local user
+/// read, and create files in, anything below it) with SYSTEM and Administrators
+/// only, plus read-only for Users when <c>usersMayRead</c>. Creates the folder
+/// if missing; files already inside take on the new permissions.
+/// </summary>
+public interface IFolderLockdown
+{
+    void Lock(string directory, bool usersMayRead);
+}
+
 public interface ITrayAutostart
 {
     bool IsInstalled { get; }
