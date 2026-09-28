@@ -48,6 +48,34 @@ public class PageSmokeTests : IDisposable
     }
 
     [Fact]
+    public async Task Targets_pipeline_lists_parentless_anchors_and_parents_written_in_another_case()
+    {
+        var client = _factory.CreateClient();
+        var profile = new ProfileDto
+        {
+            Name = "Fast", NormalIntervalSeconds = 1, BurstIntervalSeconds = 0.5,
+            BurstMaxDurationSeconds = 5, HistorySize = 20, MinUsableSample = 5,
+        };
+        (await client.PostAsJsonAsync("/api/v1/profiles", profile)).EnsureSuccessStatusCode();
+        foreach (var target in new TargetDto[]
+        {
+            new() { Name = "Router", Address = "192.168.1.1", Profile = "Fast" },
+            new() { Name = "Google", Address = "8.8.8.8", Parent = "router", Profile = "Fast" },
+            new() { Name = "Quad9", Address = "9.9.9.9", Profile = "Fast" },
+        })
+            (await client.PostAsJsonAsync("/api/v1/targets", target)).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/v1/pools", new PoolDto { Name = "Internet", Members = ["Google", "Quad9"] }))
+            .EnsureSuccessStatusCode();
+
+        var html = await client.GetStringAsync("/Config/Targets");
+        var start = html.IndexOf("Path to the internet", StringComparison.Ordinal);
+        Assert.True(start >= 0, "no pipeline section");
+        var pipeline = html[start..html.IndexOf("<table", start, StringComparison.Ordinal)];
+        Assert.Contains("Google", pipeline); // parent "router" still finds Router's chain
+        Assert.Contains("Quad9", pipeline);  // no parent: reached directly
+    }
+
+    [Fact]
     public async Task Config_page_shows_health_banner_for_thin_anchor_pool()
     {
         // SeedHome makes a 2-member pool with threshold 2 -> below-recommended fires.

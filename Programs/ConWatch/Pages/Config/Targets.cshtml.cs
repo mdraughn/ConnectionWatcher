@@ -15,7 +15,13 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     /// <summary>One root→leaf chain per distinct anchor parent (empty = no pipeline view).</summary>
     public List<List<TargetDto>> TrunkChains { get; private set; } = [];
     public List<TargetDto> Anchors { get; private set; } = [];
+    /// <summary>Anchors with no (known) parent: reached directly, so they sit on no chain.</summary>
+    public List<TargetDto> DirectAnchors { get; private set; } = [];
     public Dictionary<string, List<TargetDto>> BranchesByTrunkName { get; private set; } = new();
+
+    /// <summary>Anchors whose parent is <paramref name="name"/>; names match ignoring case, as everywhere else.</summary>
+    public IEnumerable<TargetDto> AnchorsUnder(string name) =>
+        Anchors.Where(a => string.Equals(a.Parent, name, StringComparison.OrdinalIgnoreCase));
 
     // Prefill support for the traceroute assist's "add as target".
     public string? PrefillAddress => Request.Query["address"];
@@ -31,13 +37,15 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
         var byName = Config.Targets.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
         Anchors = names.AnchorNames.Select(n => byName[n]).ToList();
         TrunkChains = names.TrunkChains.Select(chain => chain.Select(n => byName[n]).ToList()).ToList();
+        DirectAnchors = names.DirectAnchorNames.Select(n => byName[n]).ToList();
 
         var trunkNames = names.TrunkNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var anchorNames = names.AnchorNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names.TrunkNames)
         {
             var branches = Config.Targets
-                .Where(t => t.Parent == name && !trunkNames.Contains(t.Name) && !anchorNames.Contains(t.Name))
+                .Where(t => string.Equals(t.Parent, name, StringComparison.OrdinalIgnoreCase)
+                            && !trunkNames.Contains(t.Name) && !anchorNames.Contains(t.Name))
                 .ToList();
             if (branches.Count > 0)
                 BranchesByTrunkName[name] = branches;

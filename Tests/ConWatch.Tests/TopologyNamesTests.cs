@@ -53,6 +53,27 @@ public class TopologyNamesTests
     }
 
     [Fact]
+    public void A_parentless_anchor_is_a_direct_anchor_outside_every_chain()
+    {
+        var doc = new ConfigDocument
+        {
+            Targets =
+            [
+                new() { Name = "Router", Address = "192.168.1.1" },
+                new() { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new() { Name = "Quad9", Address = "9.9.9.9" },
+                new() { Name = "Orphan", Address = "1.1.1.1", Parent = "Deleted" },
+            ],
+            Pools = [new() { Name = "Internet", Members = ["Google", "Quad9", "Orphan"] }],
+        };
+
+        var names = TopologyNames.Compute(doc, "Internet", weatherThreshold: 2);
+
+        Assert.Equal(new[] { "Router" }, Assert.Single(names.TrunkChains));
+        Assert.Equal(new[] { "Quad9", "Orphan" }, names.DirectAnchorNames);
+    }
+
+    [Fact]
     public void An_unknown_anchor_pool_gives_no_roles()
     {
         var names = TopologyNames.Compute(TwoWans(), "Nope", weatherThreshold: 2);
@@ -61,5 +82,6 @@ public class TopologyNamesTests
         Assert.Empty(names.TrunkNames);
         Assert.Empty(names.AnchorNames);
         Assert.Empty(names.TrunkChains);
+        Assert.Empty(names.DirectAnchorNames);
     }
 }

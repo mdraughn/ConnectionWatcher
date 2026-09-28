@@ -19,7 +19,7 @@
     <a href="/Setup">Run quick setup</a> to add the standard router + anchors.
 </p>
 
-@if (Model.TrunkChains.Count > 0)
+@if (Model.TrunkChains.Count > 0 || Model.DirectAnchors.Count > 0)
 {
     <h3>Path to the internet</h3>
     @foreach (var chain in Model.TrunkChains)
@@ -37,7 +37,7 @@
                 </div>
                 var below = i + 1 < chain.Count
                     ? new[] { chain[i + 1].Id!.Value }
-                    : Model.Anchors.Where(a => a.Parent == stage.Name).Select(a => a.Id!.Value).ToArray();
+                    : Model.AnchorsUnder(stage.Name).Select(a => a.Id!.Value).ToArray();
                 @if (below.Length > 0)
                 {
                     <div class="cw-insert">
@@ -48,7 +48,16 @@
             }
             <div class="cw-stage cw-anchors">
                 <b>Internet anchors</b>
-                <small>@string.Join(", ", Model.Anchors.Where(a => a.Parent == chain[^1].Name).Select(a => a.Name))</small>
+                <small>@string.Join(", ", Model.AnchorsUnder(chain[^1].Name).Select(a => a.Name))</small>
+            </div>
+        </div>
+    }
+    @if (Model.DirectAnchors.Count > 0)
+    {
+        <div class="cw-pipeline">
+            <div class="cw-stage cw-anchors">
+                <b>Internet anchors</b>
+                <small>reached directly (no parent) · @string.Join(", ", Model.DirectAnchors.Select(a => a.Name))</small>
             </div>
         </div>
     }

@@ -16,10 +16,11 @@ public static class TopologyNames
     /// <param name="TrunkNames">Every ancestor of every anchor, first-seen order walking each anchor upward.</param>
     /// <param name="AnchorNames">The anchor pool's members that exist, in pool order.</param>
     /// <param name="TrunkChains">One root-first chain per distinct anchor parent, in first-seen order; their union is <paramref name="TrunkNames"/>.</param>
+    /// <param name="DirectAnchorNames">Anchors with no parent (or one naming no target): reached directly, so on no chain.</param>
     /// <param name="HasAnchorPool">The AnchorPool setting names an existing pool (the engine then runs a verdict).</param>
     /// <param name="WeatherThreshold">The Verdict.WeatherThreshold setting.</param>
     public sealed record Names(List<string> TrunkNames, List<string> AnchorNames,
-        List<List<string>> TrunkChains, bool HasAnchorPool, int WeatherThreshold, ConfigDocument Config);
+        List<List<string>> TrunkChains, List<string> DirectAnchorNames, bool HasAnchorPool, int WeatherThreshold, ConfigDocument Config);
 
     public static async Task<Names> FromConfigAsync(ConfigStore configStore, SettingsStore settingsStore) =>
         Compute(await configStore.ExportAsync(),
@@ -33,7 +34,7 @@ public static class TopologyNames
                 p.Name.Equals(anchorPoolName, StringComparison.OrdinalIgnoreCase))
             : null;
         if (pool is null)
-            return new Names([], [], [], HasAnchorPool: false, weatherThreshold, config);
+            return new Names([], [], [], [], HasAnchorPool: false, weatherThreshold, config);
 
         var byName = config.Targets
             .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
@@ -48,7 +49,8 @@ public static class TopologyNames
             .DistinctBy(leaf => leaf.Name, StringComparer.OrdinalIgnoreCase)
             .Select(leaf => TreeWalk.ChainToRoot(leaf, ParentOf).Select(t => t.Name).Reverse().ToList())
             .ToList();
-        return new Names(trunk, members.Select(m => m.Name).ToList(), chains,
+        var direct = members.Where(m => ParentOf(m) is null).Select(m => m.Name).ToList();
+        return new Names(trunk, members.Select(m => m.Name).ToList(), chains, direct,
             HasAnchorPool: true, weatherThreshold, config);
     }
 }
