@@ -17,7 +17,7 @@ public static class ServeCommand
         {
             var hostArgs = HostArguments(s, pr.GetValue(url), pr.GetValue(data));
             return s.Serve(hostArgs, ct);
-        }));
+        }, ct));
         return cmd;
     }
 

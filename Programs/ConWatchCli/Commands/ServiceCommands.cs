@@ -91,7 +91,7 @@ public static class ServiceCommands
                 s.Out.WriteLine($"ConnectionWatcher service: {name} done.");
                 return ExitCodes.Ok;
             }, ct);
-        }));
+        }, ct));
         return cmd;
     }
 
@@ -121,7 +121,7 @@ public static class ServiceCommands
                 ? $"Health:   {health.Status}  ({server.Value}/api/v1/health, {health.ElapsedMs} ms)"
                 : $"Health:   unreachable — {health.Failure}  ({server.Value}/api/v1/health)");
             return ExitCodes.Ok;
-        }));
+        }, ct));
         return cmd;
     }
 }

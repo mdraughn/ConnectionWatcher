@@ -155,7 +155,7 @@ conwatch tray uninstall                   remove autostart for this user
 
 `--url` and `--port` on `service install` are mutually exclusive; `--port <n>` means `http://0.0.0.0:<n>`. With neither, the port is probed from 8080 upward for a free TCP listener, as `install-service.ps1` does today, and the result is pinned in the machine file.
 
-Exit codes: 0 success, 1 usage error (System.CommandLine's parse failure), 2 config invalid, 3 service or tray exe not installed, 4 service control failed, 5 elevation declined.
+Exit codes: 0 success, 1 usage error (System.CommandLine's parse failure), 2 config invalid, 3 service or tray exe not installed, 4 service control failed, 5 elevation declined, 130 cancelled with Ctrl+C.
 
 Help text is System.CommandLine's default with a one-paragraph description on the root command naming the config file locations.
 

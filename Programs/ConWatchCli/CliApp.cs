@@ -32,12 +32,18 @@ public static class CliApp
         return await parse.InvokeAsync(config, ct);
     }
 
-    /// <summary>Maps the typed exceptions to the exit-code table.</summary>
-    public static async Task<int> Guarded(CliServices s, Func<Task<int>> body)
+    /// <summary>Maps the typed exceptions to the exit-code table. A cancellation
+    /// caused by <paramref name="ct"/> (Ctrl+C) is the user stopping us, not a failure.</summary>
+    public static async Task<int> Guarded(CliServices s, Func<Task<int>> body, CancellationToken ct = default)
     {
         try
         {
             return await body();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            s.Err.WriteLine("Cancelled.");
+            return ExitCodes.Cancelled;
         }
         catch (ConfigException ex)
         {
@@ -63,5 +69,5 @@ public static class CliApp
 
     /// <summary>Runs <paramref name="body"/> inline when elevated, else relaunches with the original arguments.</summary>
     public static Task<int> Elevated(CliServices s, string[] rawArgs, Func<Task<int>> body, CancellationToken ct) =>
-        s.Elevation.IsElevated ? Guarded(s, body) : Guarded(s, () => s.Elevation.RelaunchElevatedAsync(rawArgs, ct));
+        s.Elevation.IsElevated ? Guarded(s, body, ct) : Guarded(s, () => s.Elevation.RelaunchElevatedAsync(rawArgs, ct), ct);
 }

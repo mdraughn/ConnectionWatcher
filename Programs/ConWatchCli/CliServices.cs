@@ -11,6 +11,8 @@ public static class ExitCodes
     public const int NotInstalled = 3;
     public const int ServiceControlFailed = 4;
     public const int ElevationDeclined = 5;
+    /// <summary>Ctrl+C: the conventional 128 + SIGINT, as System.CommandLine uses.</summary>
+    public const int Cancelled = 130;
 }
 
 /// <summary>

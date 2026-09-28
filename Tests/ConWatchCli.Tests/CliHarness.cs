@@ -16,6 +16,8 @@ public sealed class CliHarness : IDisposable
     public FakeTrayAutostart TrayAutostart { get; } = new();
     public Dictionary<string, string?> Env { get; } = new();
     public string[]? ServeArgs { get; private set; }
+    /// <summary>What `serve` does after recording its arguments; default returns 0 at once.</summary>
+    public Func<CancellationToken, Task<int>> ServeBody { get; set; } = _ => Task.FromResult(0);
     public string AppDir => Path.Combine(Root, "app");
     public string TrayExePath() => Path.Combine(AppDir, OperatingSystem.IsWindows() ? "conwatch-tray.exe" : "conwatch-tray");
 
@@ -26,18 +28,21 @@ public sealed class CliHarness : IDisposable
         Directory.CreateDirectory(AppDir);
     }
 
-    public async Task<(int Code, string Out, string Err)> RunAsync(params string[] args)
+    public Task<(int Code, string Out, string Err)> RunAsync(params string[] args) =>
+        RunAsync(CancellationToken.None, args);
+
+    public async Task<(int Code, string Out, string Err)> RunAsync(CancellationToken ct, params string[] args)
     {
         var output = new StringWriter();
         var error = new StringWriter();
         var services = new CliServices(
             Paths, Services, Elevation, Health, Ports, TrayLauncher, TrayAutostart,
-            Serve: (a, _) => { ServeArgs = a; return Task.FromResult(0); },
+            Serve: (a, serveCt) => { ServeArgs = a; return ServeBody(serveCt); },
             Env: name => Env.GetValueOrDefault(name),
             AppDir: AppDir,
             CliExePath: Path.Combine(AppDir, "conwatch.exe"),
             Out: output, Err: error, Version: "9.9.9-test+abc");
-        var code = await CliApp.RunAsync(args, services, CancellationToken.None);
+        var code = await CliApp.RunAsync(args, services, ct);
         return (code, output.ToString(), error.ToString());
     }
 
