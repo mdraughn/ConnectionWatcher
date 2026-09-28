@@ -29,7 +29,9 @@ internal sealed class TrayContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _timer;
     private readonly System.Windows.Forms.Timer _clickTimer;
     private long _lastDoubleClick = long.MinValue / 2;
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(3) };
+    // Races ::1 and 127.0.0.1: the default service listens on IPv4 only, and trying
+    // ::1 first cost ~2 s per new connection (and made a dead server read as a timeout).
+    private readonly HttpClient _http = new(ConConfig.LocalServerHttp.CreateHandler()) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly TraySettings _settings = new();
     private readonly Dictionary<TrayState, Icon> _icons = new();
     private TrayState _state = TrayState.Unreachable;
