@@ -22,11 +22,11 @@ jobs:
     # credential trusts (subject repo:<owner>/<repo>:environment:release).
     environment: release
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
         run: .\Build-Installer.ps1 -Version ${{ steps.ver.outputs.version }} -Sign
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer
           path: |
@@ -71,7 +71,7 @@ jobs:
     needs: installer
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: installer
           path: dist
@@ -79,7 +79,7 @@ jobs:
       - id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/ConnectionWatcher-Setup-*.exe
