@@ -44,8 +44,8 @@ Ten full `ConWatch.Tests` runs (five on the branch head, five on an earlier bran
 ## Open after plan B
 
 - The weather-threshold fallback exists in two places: `TopologyNames`/`SettingsDefaults.WeatherThreshold` and the engine's `VerdictOptions`.
-- `/export/snapshot` reads config under a snapshot, but its measurement tables are read separately (not part of that same snapshot).
-- A root-level (parentless) anchor never appears in a Targets pipeline chain.
+- ~~`/export/snapshot` reads config under a snapshot, but its measurement tables are read separately (not part of that same snapshot).~~ Done 2026-09-28: `SnapshotExporter` reads settings, config and measurements inside one read snapshot.
+- ~~A root-level (parentless) anchor never appears in a Targets pipeline chain.~~ Done 2026-09-28: shown as "reached directly"; parent names also match ignoring case there.
 - `WarmStartSeeder.FromEngine` and the empty-DB path have no direct test, and the max-gap `>` boundary is unpinned.
 - `WarmStartSeederTests` re-implements `FileDbFactory` inline instead of sharing one.
 
