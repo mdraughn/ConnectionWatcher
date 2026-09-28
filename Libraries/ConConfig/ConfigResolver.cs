@@ -52,7 +52,10 @@ public static class ConfigResolver
     {
         var port = PortOf(listenUrl);
         if (PortOf(serverUrl) == port) return serverUrl;
-        return new UriBuilder(serverUrl) { Port = port }.Uri.ToString().TrimEnd('/');
+        // StrongPort writes :80/:443 out too, so the stored URL still shows the port the user picked.
+        return new UriBuilder(serverUrl) { Port = port }.Uri
+            .GetComponents(UriComponents.SchemeAndServer | UriComponents.StrongPort | UriComponents.PathAndQuery, UriFormat.UriEscaped)
+            .TrimEnd('/');
     }
 
     public static bool ValidateUrl(string url, out string? error)

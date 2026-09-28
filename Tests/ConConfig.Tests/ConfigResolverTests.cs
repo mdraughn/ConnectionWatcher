@@ -77,6 +77,13 @@ public sealed class ConfigResolverTests
     }
 
     [Theory]
+    [InlineData("http://nas:8080", "http://0.0.0.0:80", "http://nas:80")]
+    [InlineData("https://nas:8443", "https://+:443", "https://nas:443")]
+    [InlineData("http://[::1]:8080", "http://0.0.0.0:80", "http://[::1]:80")]
+    public void With_port_of_keeps_a_default_port_written_out(string server, string listen, string expected) =>
+        Assert.Equal(expected, ConfigResolver.WithPortOf(server, listen));
+
+    [Theory]
     [InlineData("http://nas:8080", true)]
     [InlineData("https://nas:8443/", true)]
     [InlineData("nas:8080", false)]
