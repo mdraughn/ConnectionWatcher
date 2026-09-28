@@ -78,10 +78,13 @@ jobs:
 
       # Prune build history: every push leaves a sha-<commit> version plus its
       # per-arch and attestation manifests. Keep the version tags, latest and
-      # edge, the newest 5 sha-* builds, and drop the rest (orphaned untagged
+      # edge, the newest 3 sha-* builds, and drop the rest (orphaned untagged
       # manifests included; the action understands multi-arch manifest lists,
       # so children of kept tags are never removed). First run (2026-09-25) was a
       # dry run: 40 of 75 versions, all old sha-* builds and orphaned manifests.
+      # Deleting versions needs this repo to hold the Admin role in the package's
+      # "Manage Actions access"; with only Write, GHCR answers 404 and the action
+      # logs "treating as already deleted" while the step stays green.
       - name: Prune old image versions
         if: github.ref == 'refs/heads/master'
         uses: dataaxiom/ghcr-cleanup-action@v1
@@ -89,7 +92,7 @@ jobs:
           package: conwatch
           dry-run: false
           delete-tags: sha-*
-          keep-n-tagged: 5
+          keep-n-tagged: 3
           exclude-tags: latest,edge,[0-9]*
           delete-untagged: true
           delete-ghost-images: true
