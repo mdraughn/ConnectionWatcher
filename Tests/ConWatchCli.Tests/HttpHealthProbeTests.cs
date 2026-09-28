@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using ConWatchCli.Services;
 
 namespace ConWatchCli.Tests;
@@ -47,6 +48,55 @@ public sealed class HttpHealthProbeTests
         var r = await new HttpHealthProbe(handler).ProbeAsync("http://localhost:1", CancellationToken.None);
         Assert.Null(r.Status);
         Assert.Equal("refused", r.Failure);
+    }
+
+    // Real sockets from here: `localhost` resolves to ::1 and 127.0.0.1, and on
+    // Windows each refused address costs ~2 s of SYN retries. Tried in turn that
+    // is ~4 s, over the 3 s budget, so a dead service read as "timed out" and a
+    // healthy IPv4-only one (the 0.0.0.0 default) answered only after ~2 s.
+
+    private static int FreePort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    [Fact]
+    public async Task A_dead_localhost_port_reports_refused_not_timed_out()
+    {
+        var r = await new HttpHealthProbe().ProbeAsync($"http://localhost:{FreePort()}", CancellationToken.None);
+        Assert.Equal("refused", r.Failure);
+    }
+
+    [Fact]
+    public async Task An_ipv4_only_server_answers_through_localhost_without_waiting_on_ipv6()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var serve = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            await stream.ReadAsync(new byte[4096]);
+            const string body = """{ "status": "Healthy" }""";
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(
+                $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}"));
+        });
+        try
+        {
+            var r = await new HttpHealthProbe().ProbeAsync($"http://localhost:{port}", CancellationToken.None);
+            Assert.Equal("Healthy", r.Status);
+            Assert.True(r.ElapsedMs < 1000, $"took {r.ElapsedMs} ms");
+        }
+        finally
+        {
+            listener.Stop();
+            await serve.WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { });
+        }
     }
 
     [Fact]
