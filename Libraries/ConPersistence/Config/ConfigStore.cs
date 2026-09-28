@@ -182,7 +182,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
     /// snapshot until it ends, so several queries see one state of the
     /// database even while an import commits between them.
     /// </summary>
-    private static async Task<SqliteTransaction> BeginReadSnapshotAsync(ConWatchDbContext db)
+    internal static async Task<SqliteTransaction> BeginReadSnapshotAsync(ConWatchDbContext db)
     {
         await db.Database.OpenConnectionAsync();
         var transaction = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: true);

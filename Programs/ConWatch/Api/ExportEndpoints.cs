@@ -3,7 +3,7 @@ using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Entities;
 using ConPersistence.Export;
-using ConPersistence.Settings;
+using ConPersistence.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConWatch.Api;
@@ -63,9 +63,8 @@ public static class ExportEndpoints
         // document, retrievable without admin. Secrets (SettingKeys.SecretKeys)
         // are omitted and named in redactedSettings.
         api.MapGet("/export/snapshot", async (IDbContextFactory<ConWatchDbContext> dbFactory,
-            ConfigStore configStore, SettingsStore settingsStore, TimeProvider time) =>
-                Results.Ok(await BuildSnapshotAsync(dbFactory, configStore, settingsStore, time,
-                    includeSecrets: false)));
+            ConfigStore configStore, TimeProvider time) =>
+                Results.Ok(await SnapshotExporter.ExportAsync(dbFactory, configStore, time, includeSecrets: false)));
 
         // Take-over channel: the SAME document with secrets included, guarded
         // by the source's admin password verified inline (single shot, no
@@ -75,12 +74,11 @@ public static class ExportEndpoints
         // it: docs/superpowers/specs/2026-09-12-clone-takeover-design.md.
         api.MapPost("/export/snapshot/full", async (FullSnapshotRequest request,
             ConWatch.Auth.AdminGate gate, IDbContextFactory<ConWatchDbContext> dbFactory,
-            ConfigStore configStore, SettingsStore settingsStore, TimeProvider time) =>
+            ConfigStore configStore, TimeProvider time) =>
         {
             if (!await gate.VerifyOrDelayAsync(request.Password))
                 return Results.Unauthorized();
-            return Results.Ok(await BuildSnapshotAsync(dbFactory, configStore, settingsStore, time,
-                includeSecrets: true));
+            return Results.Ok(await SnapshotExporter.ExportAsync(dbFactory, configStore, time, includeSecrets: true));
         });
 
         api.MapGet("/export/glitches", async (HttpContext http,
@@ -107,30 +105,6 @@ public static class ExportEndpoints
     }
 
     public record FullSnapshotRequest(string? Password);
-
-    private static async Task<ConPersistence.Snapshots.Snapshot> BuildSnapshotAsync(
-        IDbContextFactory<ConWatchDbContext> dbFactory, ConfigStore configStore,
-        SettingsStore settingsStore, TimeProvider time, bool includeSecrets)
-    {
-        var allSettings = await settingsStore.GetAllAsync();
-        foreach (var key in SettingKeys.PerNodeKeys)
-            allSettings.Remove(key); // node identity never travels
-        var redacted = includeSecrets
-            ? new List<string>()
-            : SettingKeys.SecretKeys.Where(key => allSettings.Remove(key)).ToList();
-
-        await using var db = await dbFactory.CreateDbContextAsync();
-        return new ConPersistence.Snapshots.Snapshot
-        {
-            ExportedUtc = time.GetUtcNow(),
-            Config = await configStore.ExportAsync(),
-            Settings = allSettings,
-            RedactedSettings = redacted,
-            Transitions = await db.Transitions.AsNoTracking().OrderBy(t => t.Id).ToListAsync(),
-            Rollups = await db.Rollups.AsNoTracking().OrderBy(r => r.Id).ToListAsync(),
-            Glitches = await db.Glitches.AsNoTracking().OrderBy(g => g.Id).ToListAsync(),
-        };
-    }
 
     private static bool IsValidFormat(string format) =>
         format.Equals("csv", StringComparison.OrdinalIgnoreCase) ||
