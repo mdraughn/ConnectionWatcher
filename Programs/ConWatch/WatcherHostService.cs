@@ -57,6 +57,13 @@ public class WatcherHostService(
     // the shared write event, by both sides, can.
     private long _currentGeneration;
     private long _servicedGeneration;
+    // A rebuild that threw leaves the node engine-less; nothing else would
+    // bring it back before the next config write. Retry on these delays
+    // (the last repeats) until one succeeds. Both guarded by _rebuildLock.
+    private static readonly TimeSpan[] RetryDelays =
+        [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60)];
+    private bool _lastRebuildThrew;
+    private int _retryAttempt;
 
     /// <summary>Rebuilds that actually ran (not the ones refused after stop). Test-visible.</summary>
     public int RebuildCount => Volatile.Read(ref _rebuildCount);
@@ -250,11 +257,16 @@ public class WatcherHostService(
             // Always inside _rebuildLock: a plain read/write is enough.
             if (targetGeneration > _servicedGeneration)
                 _servicedGeneration = targetGeneration;
+            _lastRebuildThrew = false;
+            _retryAttempt = 0;
             return started;
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Engine rebuild failed");
+            var delay = RetryDelays[Math.Min(_retryAttempt++, RetryDelays.Length - 1)];
+            _lastRebuildThrew = true;
+            _log.LogError(ex, "Engine rebuild failed; retrying in {Delay}", delay);
+            ScheduleRetry(delay);
             return false;
         }
         finally
@@ -270,6 +282,30 @@ public class WatcherHostService(
             _rebuildLock.Release();
         }
     }
+
+    /// <summary>
+    /// Runs one unconditional rebuild after <paramref name="delay"/> unless a
+    /// rebuild has succeeded meanwhile (a config write can beat the timer) or
+    /// the host is stopping. A retry that throws schedules the next one.
+    /// </summary>
+    private void ScheduleRetry(TimeSpan delay) =>
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay, timeProvider, _appStopping);
+                await _rebuildLock.WaitAsync(_appStopping);
+                bool stillFailed;
+                try { stillFailed = _lastRebuildThrew && !_stopped; }
+                finally { _rebuildLock.Release(); }
+                if (stillFailed)
+                    await RebuildAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutting down.
+            }
+        }, CancellationToken.None);
 
     private void OnSettingsChanged(IReadOnlyDictionary<string, string?> written)
     {
