@@ -77,8 +77,12 @@ public class NotifierIntegrationTests
                 {
                     // The app's webhook client (10s timeout, fire-and-forget) can
                     // abort a connection mid-read under load; drop that request
-                    // and keep serving.
-                    ctx.Response.Abort();
+                    // and keep serving. If Dispose stopped us mid-request, the
+                    // listener is gone and Abort itself throws: just end.
+                    if (!_listener.IsListening)
+                        return;
+                    try { ctx.Response.Abort(); }
+                    catch (ObjectDisposedException) { return; }
                 }
             }
         }
@@ -94,6 +98,22 @@ public class NotifierIntegrationTests
             _pump.Wait(TimeSpan.FromSeconds(5));
             _listener.Close();
         }
+    }
+
+    [Fact]
+    public async Task Hook_disposes_cleanly_while_a_request_is_mid_body()
+    {
+        // The app's fire-and-forget webhooks can still be arriving when a test
+        // ends; stopping the listener then must not fault the pump (it used to,
+        // via Response.Abort() on the disposed listener, failing a passed test).
+        var hook = new Hook();
+        using var socket = new TcpClient();
+        await socket.ConnectAsync(IPAddress.Loopback, hook.Port);
+        var head = $"POST {new Uri(hook.Url("/hook")).AbsolutePath} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\npartial";
+        await socket.GetStream().WriteAsync(Encoding.ASCII.GetBytes(head));
+        await Task.Delay(300); // let the pump start reading the body it will never finish
+
+        hook.Dispose();
     }
 
     [Fact]
