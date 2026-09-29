@@ -47,9 +47,11 @@ public class PingPumpResilienceTests
             await Eventually(() => Volatile.Read(ref delivered) >= afterFirstThrow + 5);
             Assert.NotNull(engine.LastResultUtc);
             Assert.True(engine.LastResultUtc >= engine.StartedUtc);
+            // Still pumping: a newer result arrives. Waited for, not slept for —
+            // a fixed 200 ms window can pass with nothing processed on a busy
+            // 2-core CI runner.
             var stampAfterThrow = engine.LastResultUtc;
-            await Task.Delay(200);
-            Assert.True(engine.LastResultUtc > stampAfterThrow);
+            await Eventually(() => engine.LastResultUtc > stampAfterThrow);
         }
         finally
         {
@@ -87,9 +89,11 @@ public class PingPumpResilienceTests
             await Eventually(() => Volatile.Read(ref delivered) >= afterFirstThrow + 5);
             Assert.NotNull(engine.LastResultUtc);
             Assert.True(engine.LastResultUtc >= engine.StartedUtc);
+            // Still pumping: a newer result arrives. Waited for, not slept for —
+            // a fixed 200 ms window can pass with nothing processed on a busy
+            // 2-core CI runner.
             var stampAfterThrow = engine.LastResultUtc;
-            await Task.Delay(200);
-            Assert.True(engine.LastResultUtc > stampAfterThrow);
+            await Eventually(() => engine.LastResultUtc > stampAfterThrow);
         }
         finally
         {
