@@ -101,14 +101,14 @@ public class WatcherHostService(
 
         await StartEngineAsync();
         configService.ConfigChanged += OnConfigChanged;
-        settingsStore.SettingsChanged += OnConfigChanged;
+        settingsStore.SettingsChanged += OnSettingsChanged;
         _log.LogInformation("WatcherHostService started");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         configService.ConfigChanged -= OnConfigChanged;
-        settingsStore.SettingsChanged -= OnConfigChanged;
+        settingsStore.SettingsChanged -= OnSettingsChanged;
         lock (_debounceLock) { _debounceCts?.Cancel(); _debounceCts?.Dispose(); _debounceCts = null; }
         // Serialize with any in-flight rebuild: two concurrent engine.StopAsync
         // calls race inside the coordinators' Dispose.
@@ -271,6 +271,20 @@ public class WatcherHostService(
         }
     }
 
+    private void OnSettingsChanged(IReadOnlyDictionary<string, string?> written)
+    {
+        // Settings can flip the master switch; the endpoints must not report
+        // the old value while the rebuild debounce runs. The write carries the
+        // new value, so set it here — on the writer's own call stack, before the
+        // PUT responds — without reading it back. (It used to be read back with
+        // a blocking GetResult() on the request thread, on every config write
+        // too; under load that starved the thread pool.) Null removes the row,
+        // which reads as enabled — the same rule as EngineEnabledAsync.
+        if (written.TryGetValue(SettingKeys.EngineEnabled, out var enabled))
+            EngineEnabled = enabled != "false";
+        OnConfigChanged();
+    }
+
     private void OnConfigChanged()
     {
         CancellationToken token;
@@ -286,26 +300,6 @@ public class WatcherHostService(
             // reading .Token off a disposed CancellationTokenSource throws
             // ObjectDisposedException.
             token = cts.Token;
-        }
-        // Settings can flip the master switch; the endpoints must not report
-        // the old value while the rebuild debounce runs. Read it synchronously
-        // here rather than inside the Task.Run below: SetManyAsync awaits its
-        // write before raising this event, so this line runs on the caller's
-        // own async call stack (before the PUT/config-commit responds) — a
-        // fire-and-forget Task.Run would race that response under load
-        // instead of reliably beating it.
-        // Guarded: this runs on the settings writer's stack after the write
-        // already committed, so a transient read failure must not turn a
-        // committed PUT into a 500 — nor skip the rebuild scheduled below,
-        // which reads the switch again anyway.
-        try
-        {
-            EngineEnabled = EngineEnabledAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex,
-                "Could not refresh the master switch after a settings change; the rebuild will read it");
         }
         var delay = TimeSpan.FromSeconds(persistenceOptions.Value.RebuildDebounceSeconds);
         _ = Task.Run(async () =>

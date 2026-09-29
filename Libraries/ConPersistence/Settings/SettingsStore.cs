@@ -61,7 +61,9 @@ public static class SettingKeys
 /// </summary>
 public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
 {
-    public event Action? SettingsChanged;
+    /// <summary>Carries the values just written (null = removed), so a listener
+    /// need not read them back — the host's master switch is refreshed from it.</summary>
+    public event Action<IReadOnlyDictionary<string, string?>>? SettingsChanged;
 
     /// <summary>Raised on Mqtt.*/Webhook.* writes; notifiers reconfigure live.</summary>
     public event Action? NotifierSettingsChanged;
@@ -118,7 +120,7 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
         if (values.Keys.Any(k =>
                 k.StartsWith("Verdict.", StringComparison.OrdinalIgnoreCase) ||
                 k.StartsWith("Engine.", StringComparison.OrdinalIgnoreCase)))
-            SettingsChanged?.Invoke();
+            SettingsChanged?.Invoke(values);
         if (values.Keys.Any(k =>
                 k.StartsWith("Mqtt.", StringComparison.OrdinalIgnoreCase) ||
                 k.StartsWith("Webhook.", StringComparison.OrdinalIgnoreCase) ||

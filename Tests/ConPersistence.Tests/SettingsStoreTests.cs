@@ -11,7 +11,7 @@ public class SettingsStoreTests : IDisposable
     public SettingsStoreTests()
     {
         _store = new SettingsStore(_factory);
-        _store.SettingsChanged += () => _changeSignals++;
+        _store.SettingsChanged += _ => _changeSignals++;
     }
 
     public void Dispose() => _factory.Dispose();
