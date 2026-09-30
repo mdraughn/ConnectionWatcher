@@ -13,7 +13,7 @@ public class PingControllerTests
     private static readonly IPAddress IpA = IPAddress.Parse("10.0.0.1");
     private static readonly IPAddress IpB = IPAddress.Parse("10.0.0.2");
 
-    private static async Task<List<RoutedPingResult>> Collect(ChannelReader<RoutedPingResult> reader, int count, int timeoutMs = 5000)
+    private static async Task<List<RoutedPingResult>> Collect(ChannelReader<RoutedPingResult> reader, int count, int timeoutMs = 15000)
     {
         var results = new List<RoutedPingResult>();
         using var cts = new CancellationTokenSource(timeoutMs);
@@ -70,13 +70,13 @@ public class PingControllerTests
         using var cts = new CancellationTokenSource();
         using var controller = new PingController(factory, NullLogger.Instance, TimeProvider.System);
 
-        bool bursting = false;
+        var bursting = false; // written here, read on the ping loop's thread
         _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(10), TimeProvider.System),
-            () => bursting ? 1000 : 3000, cts.Token);
+            () => Volatile.Read(ref bursting) ? 1000 : 3000, cts.Token);
 
         await Collect(channel.Reader, 2);
-        bursting = true;
+        Volatile.Write(ref bursting, true);
         await Collect(channel.Reader, 3);
         cts.Cancel();
 

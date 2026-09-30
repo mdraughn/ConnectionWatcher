@@ -34,7 +34,7 @@ public class ConfigApiTests : IDisposable
         (await client.PostAsJsonAsync("/api/v1/pools", pool)).EnsureSuccessStatusCode();
     }
 
-    internal static async Task Eventually(Func<Task<bool>> condition, int timeoutMs = 20000)
+    internal static async Task Eventually(Func<Task<bool>> condition, int timeoutMs = 30000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)

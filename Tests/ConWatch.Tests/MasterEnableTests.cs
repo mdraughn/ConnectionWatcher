@@ -124,6 +124,29 @@ public class MasterEnableTests : IDisposable
             (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
     }
 
+    /// <summary>
+    /// Seeding debounces several rebuilds; a baseline taken while one is still
+    /// landing is off by one. Wait until the count has held still for 500 ms
+    /// (a fixed sleep was only a guess at that on a busy runner).
+    /// </summary>
+    private static async Task<int> SettledRebuildCountAsync(WatcherHostService host)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var count = host.RebuildCount;
+        var stableSince = DateTime.UtcNow;
+        while (DateTime.UtcNow - stableSince < TimeSpan.FromMilliseconds(500))
+        {
+            Assert.True(DateTime.UtcNow < deadline, "rebuilds never settled");
+            await Task.Delay(50);
+            if (host.RebuildCount != count)
+            {
+                count = host.RebuildCount;
+                stableSince = DateTime.UtcNow;
+            }
+        }
+        return count;
+    }
+
     [Fact]
     public async Task M2M_engine_toggle_rebuilds_exactly_once()
     {
@@ -131,8 +154,7 @@ public class MasterEnableTests : IDisposable
         var host = _factory.Services.GetRequiredService<WatcherHostService>();
         await ConfigApiTests.Eventually(async () =>
             (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
-        await Task.Delay(500); // let the seeding rebuilds settle
-        var before = host.RebuildCount;
+        var before = await SettledRebuildCountAsync(host);
 
         var off = await _client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false });
         Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
@@ -148,8 +170,7 @@ public class MasterEnableTests : IDisposable
         var host = _factory.Services.GetRequiredService<WatcherHostService>();
         await ConfigApiTests.Eventually(async () =>
             (await GetJson("/api/v1/health")).GetProperty("status").GetString() == "Healthy");
-        await Task.Delay(500); // let the seeding rebuilds settle
-        var before = host.RebuildCount;
+        var before = await SettledRebuildCountAsync(host);
 
         Assert.True(await host.RebuildIfStaleAsync()); // nothing changed since the last rebuild: no-op
         Assert.Equal(before, host.RebuildCount);

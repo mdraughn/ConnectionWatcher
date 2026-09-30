@@ -18,8 +18,8 @@ public class HostLifecycleTests
             new SetupApplyRequest(new SetupTarget("Router", "192.168.1.1"), null, ["8.8.8.8", "1.1.1.1"]));
         apply.EnsureSuccessStatusCode();
         var host = factory.Services.GetRequiredService<WatcherHostService>();
-        await Task.Delay(300); // debounce is 0 s in tests; let the first rebuild land
-        Assert.NotNull(host.Engine);
+        // Debounce is 0 s in tests, but the first rebuild still needs real time to land.
+        await ConfigApiTests.Eventually(() => Task.FromResult(host.Engine is not null));
 
         // A rebuild that was queued behind StopAsync on the rebuild lock runs
         // after it releases; it must find the host stopped and do nothing.

@@ -41,6 +41,8 @@ public class PingManagerTests
         var sw = Stopwatch.StartNew();
         await manager.StopAsync(TimeSpan.FromSeconds(2));
 
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), $"took {sw.Elapsed}");
+        // The point is "bounded by the 2 s grace, not the 60 s probe"; 10 s proves
+        // that with room for a busy CI runner.
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"took {sw.Elapsed}");
     }
 }

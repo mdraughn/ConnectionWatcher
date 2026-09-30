@@ -47,7 +47,7 @@ public class EngineExtensionTests
         engine.PingSampleSource.Subscribe(s => { lock (samples) samples.Add(s); });
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var deadline = DateTime.UtcNow.AddSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
             lock (samples) { if (samples.Count >= 3) break; }

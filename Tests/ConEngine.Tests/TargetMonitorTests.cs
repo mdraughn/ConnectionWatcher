@@ -157,7 +157,7 @@ public class TargetMonitorTests
             // Another thread must be able to read state while a subscriber
             // runs; the coordinators do exactly this from inside callbacks.
             var read = Task.Run(() => m.CurrentState);
-            lockWasFreeDuringPublish = read.Wait(TimeSpan.FromSeconds(2));
+            lockWasFreeDuringPublish = read.Wait(TimeSpan.FromSeconds(10)); // a held lock would block forever
         });
         m.StartTracking(Ip);
         Feed(m, time, 5, success: true); // Starting -> Responding

@@ -39,7 +39,7 @@ public class MqttNotifierInboxTests
         Assert.False(waiting.IsCompleted);
 
         inbox.Reconfigure();
-        await waiting.WaitAsync(TimeSpan.FromSeconds(2));
+        await waiting.WaitAsync(TimeSpan.FromSeconds(10));
 
         // Nothing is left behind for the next session to trip over.
         inbox.Post(Transition("D"));

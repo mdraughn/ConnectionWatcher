@@ -15,11 +15,45 @@ public class PingDisciplineTests
         BurstMaxDuration = TimeSpan.FromSeconds(60),
     };
 
+    // Fake time drives the discipline, but its continuations still need real
+    // time to run: a completion gets a generous real window (only spent when
+    // something is broken), a "stays pending" check a short fixed one.
     private static async Task<bool> Completes(Task task, FakeTimeProvider time, TimeSpan advance)
     {
         time.Advance(advance);
-        var winner = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(2)));
+        var winner = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(10)));
         return winner == task;
+    }
+
+    private static async Task<bool> StaysPending(Task task, FakeTimeProvider time, TimeSpan advance)
+    {
+        time.Advance(advance);
+        var winner = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(2)));
+        return winner != task;
+    }
+
+    /// <summary>Counts timers, so a test can wait until a woken loop has armed its
+    /// next fake-time timer instead of sleeping and hoping: advancing before the
+    /// timer exists would skip right past it.</summary>
+    private sealed class TimerCountingTime : FakeTimeProvider
+    {
+        private int _created;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            Interlocked.Increment(ref _created);
+            return base.CreateTimer(callback, state, dueTime, period);
+        }
+
+        public async Task NewTimerArmedSince(int before)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (Volatile.Read(ref _created) <= before && DateTime.UtcNow < deadline)
+                await Task.Delay(10);
+            Assert.True(Volatile.Read(ref _created) > before, "the woken loop never armed a new timer");
+        }
+
+        public int TimersCreated => Volatile.Read(ref _created);
     }
 
     [Fact]
@@ -30,7 +64,7 @@ public class PingDisciplineTests
         d.OnStateChanged(HostState.Responding);
 
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(9)));
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(9)));
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
     }
 
@@ -60,24 +94,25 @@ public class PingDisciplineTests
         // Push past the cap: back to normal cadence.
         time.Advance(TimeSpan.FromSeconds(70));
         wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(1)));
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(1)));
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(9)));
     }
 
     [Fact]
     public async Task Unreachable_parks_until_state_change()
     {
-        var time = new FakeTimeProvider();
+        var time = new TimerCountingTime();
         var d = new PingDiscipline(Profile, time);
         d.OnStateChanged(HostState.Unreachable);
         Assert.True(d.IsParked);
 
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.FromMinutes(30)));
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromMinutes(30)));
 
+        var timers = time.TimersCreated;
         d.OnStateChanged(HostState.Starting);
         Assert.False(d.IsParked);
-        await Task.Delay(100); // let the unparked waiter reach its next fake-time timer
+        await time.NewTimerArmedSince(timers); // the unparked waiter reached its next fake-time timer
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(10)));
     }
 
@@ -92,7 +127,7 @@ public class PingDisciplineTests
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(3)));
 
         wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(3)));
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(3)));
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(7)));
     }
 
@@ -117,7 +152,7 @@ public class PingDisciplineTests
         // otherwise one sweep collapses the whole pool into lockstep.
         time.Advance(TimeSpan.FromSeconds(62));                              // t=65.5, calm again
         wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(6.5))); // t=72, not yet
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(6.5))); // t=72, not yet
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(0.5)));  // t=72.5, on slot
     }
 
@@ -139,14 +174,14 @@ public class PingDisciplineTests
 
         // And the one after glides back onto the grid: due t=30, 5s away.
         wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.FromSeconds(4))); // t=29
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(4))); // t=29
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));  // t=30
     }
 
     [Fact]
     public async Task TriggerBurst_wakes_a_pending_normal_wait()
     {
-        var time = new FakeTimeProvider();
+        var time = new TimerCountingTime();
         var d = new PingDiscipline(Profile, time);
         d.OnStateChanged(HostState.Responding);
         var first = d.WaitForNextPingAsync(CancellationToken.None);
@@ -154,9 +189,10 @@ public class PingDisciplineTests
 
         // A corroboration sweep lands while the controller sleeps toward t=20.
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.Zero));
+        Assert.True(await StaysPending(wait, time, TimeSpan.Zero));
+        var timers = time.TimersCreated;
         d.TriggerBurst();
-        await Task.Delay(50); // real time: let the woken loop arm its burst timer
+        await time.NewTimerArmedSince(timers); // the woken loop armed its burst timer
         // One burst interval later the ping must fire — not at t=20.
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));  // t=11
     }
@@ -164,7 +200,7 @@ public class PingDisciplineTests
     [Fact]
     public async Task Lost_ping_wakes_a_pending_normal_wait()
     {
-        var time = new FakeTimeProvider();
+        var time = new TimerCountingTime();
         var d = new PingDiscipline(Profile, time);
         d.OnStateChanged(HostState.Responding);
         var first = d.WaitForNextPingAsync(CancellationToken.None);
@@ -174,9 +210,10 @@ public class PingDisciplineTests
         // thread delivered the loss (the usual ordering): the suspicion burst
         // must still start now, not after the 10 s sleep.
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.False(await Completes(wait, time, TimeSpan.Zero));
+        Assert.True(await StaysPending(wait, time, TimeSpan.Zero));
+        var timers = time.TimersCreated;
         d.OnPingResult(success: false);
-        await Task.Delay(50); // real time: let the woken loop arm its burst timer
+        await time.NewTimerArmedSince(timers); // the woken loop armed its burst timer
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
     }
 

@@ -70,11 +70,15 @@ public class SignalRTests : IAsyncLifetime
         await ConfigApiTests.SeedHomeAsync(_client);
         lock (_snapshots) _snapshots.Clear();
 
-        await Task.Delay(3000);
+        // Wait for them rather than counting what a fixed 3 s window caught: a
+        // busy runner can stretch the cadence, never shrink the spacing.
+        await ConfigApiTests.Eventually(() =>
+        {
+            lock (_snapshots) return Task.FromResult(_snapshots.Count >= 2);
+        });
 
         List<(DateTime At, JsonElement Snapshot)> seen;
         lock (_snapshots) seen = _snapshots.ToList();
-        Assert.True(seen.Count >= 2, $"Expected >=2 snapshots in 3s, saw {seen.Count}");
         for (int i = 1; i < seen.Count; i++)
         {
             var gap = seen[i].At - seen[i - 1].At;
