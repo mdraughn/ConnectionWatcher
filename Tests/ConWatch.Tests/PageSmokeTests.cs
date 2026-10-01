@@ -147,4 +147,21 @@ public class PageSmokeTests : IDisposable
             return html.Contains("initial-data") && html.Contains("Router");
         });
     }
+
+    [Fact]
+    public async Task Targets_page_prefills_profile_and_operator_from_the_query()
+    {
+        var html = await _factory.CreateClient().GetStringAsync(
+            "/Config/Targets?address=96.120.0.1&name=hop-3&profile=Path&operator=COMCAST-7922");
+        Assert.Contains("value=\"COMCAST-7922\"", html);
+        Assert.Matches("<option selected=\"selected\"[^>]*>Path</option>", html);
+        Assert.DoesNotMatch("<option selected=\"selected\"[^>]*>Public</option>", html);
+    }
+
+    [Fact]
+    public async Task Unknown_prefilled_profile_falls_back_to_Public()
+    {
+        var html = await _factory.CreateClient().GetStringAsync("/Config/Targets?address=1.2.3.4&profile=Nope");
+        Assert.Matches("<option selected=\"selected\"[^>]*>Public</option>", html);
+    }
 }

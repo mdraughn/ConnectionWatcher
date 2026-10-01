@@ -114,7 +114,7 @@
                     <select name="profile">
                         @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
                         {
-                            <option selected="@(p.Name == "Public")" title="@p.Description">@p.Name</option>
+                            <option selected="@p.Name.Equals(Model.DefaultProfile, StringComparison.OrdinalIgnoreCase)" title="@p.Description">@p.Name</option>
                         }
                     </select>
                 </label>
@@ -132,7 +132,7 @@
                 </label>
             </div>
             <label>ISP / operator <small>(optional — lets reports say "Comcast is down")</small>
-                <input name="operator" placeholder="e.g. Comcast" />
+                <input name="operator" placeholder="e.g. Comcast" value="@Model.PrefillOperator" />
             </label>
             <footer>
                 <button type="button" class="secondary outline" data-cancel>Cancel</button>

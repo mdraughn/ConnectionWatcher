@@ -27,6 +27,13 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public string? PrefillAddress => Request.Query["address"];
     public string? PrefillName => Request.Query["name"];
     public string? PrefillParent => Request.Query["parent"];
+    public string? PrefillProfile => Request.Query["profile"];
+    public string? PrefillOperator => Request.Query["operator"];
+
+    /// <summary>The profile the dialog selects: the prefilled one when it exists, else Public.</summary>
+    public string DefaultProfile =>
+        Config.Profiles.Any(p => p.Name.Equals(PrefillProfile, StringComparison.OrdinalIgnoreCase))
+            ? PrefillProfile! : "Public";
 
     public async Task OnGetAsync()
     {
