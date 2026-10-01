@@ -61,7 +61,7 @@ public class AdminLockTests : IDisposable
         await LogoutAsync();
         var noRedirect = _factory.CreateClient(
             new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        foreach (var url in new[] { "/Admin", "/Data", "/Config/Targets", "/Config/Profiles", "/Config/Pools", "/Traceroute", "/Setup" })
+        foreach (var url in new[] { "/Settings", "/Data", "/Config/Targets", "/Config/Profiles", "/Config/Pools", "/Traceroute", "/Setup" })
         {
             var response = await noRedirect.GetAsync(url);
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -88,7 +88,7 @@ public class AdminLockTests : IDisposable
         Assert.Contains("/Config/Targets", html);
         Assert.Contains("href=\"/Data\"", html);
         Assert.Contains("/Traceroute", html);
-        Assert.Contains("/Admin", html);
+        Assert.Contains("/Settings", html);
         Assert.DoesNotContain("Log out", html);
     }
 
@@ -110,12 +110,12 @@ public class AdminLockTests : IDisposable
     [Fact]
     public async Task Admin_page_shows_set_card_when_off_and_change_cards_when_admin()
     {
-        var html = await _client.GetStringAsync("/Admin");
+        var html = await _client.GetStringAsync("/Settings");
         Assert.Contains("Set admin password", html);
         Assert.Contains("not internet-grade security", html);
 
         await EnableGateAsync(); // admin mode
-        html = await _client.GetStringAsync("/Admin");
+        html = await _client.GetStringAsync("/Settings");
         Assert.Contains("Change password", html);
         Assert.Contains("Remove password", html);
     }

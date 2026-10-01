@@ -79,6 +79,8 @@ public static class ConWatchApp
         }
 
         app.MapRazorPages();
+        // The Admin page became Settings (2026-10); keep old bookmarks working.
+        app.MapGet("/Admin", () => Results.Redirect("/Settings", permanent: true));
         app.MapHub<StatusHub>("/hubs/status");
         app.MapMcp("/mcp"); // open, read-only (see the MCP design spec)
         MetricsEndpoint.MapMetrics(app); // open, like the watching surface

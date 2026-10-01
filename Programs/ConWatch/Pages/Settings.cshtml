@@ -1,16 +1,17 @@
 @page
 @using ConPersistence
 @using ConPersistence.Settings
-@model ConWatch.Pages.AdminModel
+@model ConWatch.Pages.SettingsModel
 @{
-    ViewData["Title"] = "Administration — ConnectionWatcher";
+    ViewData["Title"] = "Settings — ConnectionWatcher";
 }
 
 <div class="cw-pageband">
     <div class="titles">
-        <h2>Administration</h2>
-        <p>Node controls: monitoring, verdict settings, notifications, and the danger
-           zone. Statistics, exports, and retention live on the <a href="/Data">Data</a> page.</p>
+        <h2>Settings</h2>
+        <p>Node controls: monitoring, notifications, and the danger zone.
+           Statistics, exports, and retention live on the <a href="/Data">Data</a> page;
+           the verdict anchor is chosen on the <a href="/Config/Pools">Pools</a> page.</p>
     </div>
 </div>
 
@@ -217,5 +218,5 @@ else
 
 @section Scripts {
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
-    <script src="~/lib/site-admin.js" asp-append-version="true"></script>
+    <script src="~/lib/site-settings.js" asp-append-version="true"></script>
 }

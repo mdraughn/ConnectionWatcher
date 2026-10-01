@@ -1,4 +1,4 @@
-// Administration page logic (plain JS, no build step).
+// Settings page logic (plain JS, no build step).
 // Database stats, exports, and retention moved to the Data page (site-data.js).
 "use strict";
 

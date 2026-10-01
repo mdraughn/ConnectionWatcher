@@ -140,7 +140,7 @@ public static class ConWatchServices
             // Admin pages: one filter by convention instead of a check in every model.
             var adminLock = new TypeFilterAttribute(typeof(AdminLockPageFilter));
             o.Conventions.AddFolderApplicationModelConvention("/Config", m => m.Filters.Add(adminLock));
-            foreach (var page in new[] { "/Admin", "/Data", "/Setup", "/Traceroute" })
+            foreach (var page in new[] { "/Settings", "/Data", "/Setup", "/Traceroute" })
                 o.Conventions.AddPageApplicationModelConvention(page, m => m.Filters.Add(adminLock));
         });
         services.AddSignalR();

@@ -19,10 +19,11 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Config/Targets", "option selected=\"selected\" title=\"Public internet sites")] // the Public default's title
     [InlineData("/Config/Pools", "Pools")]
     [InlineData("/Traceroute", "Traceroute")]
-    [InlineData("/Admin", "Danger zone")]
-    [InlineData("/Admin", "MQTT / Home Assistant")]
-    [InlineData("/Admin", "Webhook URLs")]
-    [InlineData("/Admin", "Heartbeat (watch the watchman)")]
+    [InlineData("/Settings", "Danger zone")]
+    [InlineData("/Settings", "MQTT / Home Assistant")]
+    [InlineData("/Settings", "Webhook URLs")]
+    [InlineData("/Settings", "Heartbeat (watch the watchman)")]
+    [InlineData("/Settings", "<h2>Settings</h2>")]
     [InlineData("/Data", "db-stats")]
     [InlineData("/Data", "Retention")]
     [InlineData("/Data", "Snapshot JSON")]
@@ -37,6 +38,16 @@ public class PageSmokeTests : IDisposable
         response.EnsureSuccessStatusCode();
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains(marker, html);
+    }
+
+    [Fact]
+    public async Task Old_admin_url_redirects_permanently_to_settings()
+    {
+        var client = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+            { AllowAutoRedirect = false });
+        var response = await client.GetAsync("/Admin");
+        Assert.Equal(System.Net.HttpStatusCode.MovedPermanently, response.StatusCode);
+        Assert.Equal("/Settings", response.Headers.Location?.ToString());
     }
 
     [Fact]

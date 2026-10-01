@@ -44,9 +44,9 @@ internal sealed class TrayContext : ApplicationContext
         open.Font = new Font(open.Font, FontStyle.Bold);
         menu.Items.Add("History", null, (_, _) => Open("/History"));
         menu.Items.Add("ISP report", null, (_, _) => Open("/Report"));
-        menu.Items.Add("Admin", null, (_, _) => Open("/Admin"));
+        menu.Items.Add("Server settings", null, (_, _) => Open("/Settings"));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
+        menu.Items.Add("Tray settings…", null, (_, _) => ShowSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 

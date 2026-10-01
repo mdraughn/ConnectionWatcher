@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-/// <summary>Admin-locked by convention (AdminLockPageFilter in Program.cs).</summary>
-public class AdminModel(ConfigStore store, SettingsStore settingsStore, AdminGate gate) : PageModel
+/// <summary>Admin-locked by convention (AdminLockPageFilter in ConWatchServices).</summary>
+public class SettingsModel(ConfigStore store, SettingsStore settingsStore, AdminGate gate) : PageModel
 {
     public Dictionary<string, string> Settings { get; private set; } = new();
     public List<PoolDto> Pools { get; private set; } = new();

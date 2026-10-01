@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-/// <summary>Admin-locked by convention (AdminLockPageFilter in Program.cs).</summary>
+/// <summary>Admin-locked by convention (AdminLockPageFilter in ConWatchServices).</summary>
 public class DataModel(SettingsStore settingsStore) : PageModel
 {
     public Dictionary<string, string> Settings { get; private set; } = new();
