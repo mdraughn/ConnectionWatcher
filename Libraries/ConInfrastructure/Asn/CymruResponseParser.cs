@@ -7,7 +7,8 @@ namespace ConInfrastructure.Asn;
 /// Pure parsing for Team Cymru's IP-to-ASN DNS service
 /// (https://www.team-cymru.com/ip-asn-mapping). Two TXT lookups:
 ///   4.3.2.1.origin.asn.cymru.com → "7922 | 73.0.0.0/8 | US | arin | 2005-01-27"
-///   AS7922.asn.cymru.com         → "7922 | US | arin | 2005-01-27 | COMCAST-7922, US"
+///   AS7922.asn.cymru.com         → "7922 | US | arin | 2005-01-27 | COMCAST-7922 - Comcast Cable Communications, LLC, US"
+/// The name is reduced to the registry handle (text before the first " - ").
 /// </summary>
 public static partial class CymruResponseParser
 {
@@ -31,16 +32,20 @@ public static partial class CymruResponseParser
         return int.TryParse(token, out var asn) && asn > 0 ? asn : null;
     }
 
-    /// <summary>The AS name with its trailing ", CC" country removed, plus that country.</summary>
+    /// <summary>The AS handle (trailing ", CC" country and " - description" removed), plus that country.</summary>
     public static (string Name, string? CountryCode)? ParseAsName(string? text)
     {
         var fields = Fields(text);
         if (fields.Count < 5 || fields[4].Length == 0)
             return null;
         var match = CountrySuffix().Match(fields[4]);
-        return match.Success
-            ? (fields[4][..match.Index].TrimEnd(), match.Groups[1].Value)
-            : (fields[4], null);
+        var name = match.Success ? fields[4][..match.Index].TrimEnd() : fields[4];
+        var dash = name.IndexOf(" - ", StringComparison.Ordinal);
+        if (dash >= 0)
+            name = name[..dash].Trim();
+        if (name.Length == 0)
+            return null;
+        return (name, match.Success ? match.Groups[1].Value : null);
     }
 
     private static List<string> Fields(string? text) =>

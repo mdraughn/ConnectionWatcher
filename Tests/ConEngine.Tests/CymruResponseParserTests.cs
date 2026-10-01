@@ -53,6 +53,13 @@ public class CymruResponseParserTests
     }
 
     [Fact]
+    public void As_answer_with_description_keeps_only_the_handle()
+    {
+        var parsed = CymruResponseParser.ParseAsName("7922 | US | arin | 2005-01-27 | COMCAST-7922 - Comcast Cable Communications, LLC, US");
+        Assert.Equal(("COMCAST-7922", "US"), parsed);
+    }
+
+    [Fact]
     public void As_answer_without_country_keeps_the_whole_name()
     {
         var parsed = CymruResponseParser.ParseAsName("64496 | | | | EXAMPLE-NET");
