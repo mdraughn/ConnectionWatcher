@@ -66,6 +66,6 @@ public class ConfigSnapshotReadTests
         var doc = await reader.ExportAsync();
 
         Assert.Equal("192.168.1.1", Assert.Single(doc.Targets).Address);
-        Assert.Equal(doc.Targets[0].Profile, Assert.Single(doc.Profiles).Name);
+        Assert.Contains(doc.Profiles, p => p.Name == doc.Targets[0].Profile); // imports now also restore the built-ins
     }
 }

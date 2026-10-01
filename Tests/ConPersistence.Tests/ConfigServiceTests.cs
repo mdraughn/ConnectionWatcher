@@ -252,6 +252,28 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Import_of_an_old_export_naming_External_restores_the_builtins()
+    {
+        var doc = new ConfigDocument
+        {
+            Profiles =
+            [
+                new ProfileDto { Name = "Internal" },
+                new ProfileDto { Name = "External", NormalIntervalSeconds = 10 },
+            ],
+            Targets = [new TargetDto { Name = "Google", Address = "8.8.8.8", Profile = "External" }],
+        };
+
+        var result = await _service.ImportAsync(doc);
+        Assert.True(result.Success);
+
+        var export = await _store.ExportAsync();
+        Assert.Equal(["External", "Internal", "Path", "Public"], export.Profiles.Select(p => p.Name).Order().ToArray());
+        Assert.Equal("External", export.Targets.Single().Profile);
+        Assert.All(export.Profiles.Where(p => p.Name is "Path" or "Public"), p => Assert.NotNull(p.Description));
+    }
+
+    [Fact]
     public async Task Import_invalid_document_changes_nothing()
     {
         var doc = await _store.ExportAsync();

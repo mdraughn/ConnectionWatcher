@@ -75,6 +75,12 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
     public async Task EnsureBuiltInsAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
+        await EnsureBuiltInsAsync(db, _log);
+    }
+
+    /// <summary>The same rules over a caller-supplied context, so a document write can end with it.</summary>
+    internal static async Task EnsureBuiltInsAsync(ConWatchDbContext db, ILogger log)
+    {
         var rows = await db.Profiles.ToListAsync();
         foreach (var builtIn in BuiltInProfiles.All)
         {
@@ -83,7 +89,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             if (row is null)
             {
                 db.Profiles.Add(builtIn.ToDto().ToRow(Guid.NewGuid()));
-                _log.LogInformation("Added missing built-in profile '{Profile}'", builtIn.Profile.Name);
+                log.LogInformation("Added missing built-in profile '{Profile}'", builtIn.Profile.Name);
             }
             else if (row.Description is null)
             {
@@ -144,6 +150,10 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             });
         }
         await db.SaveChangesAsync();
+
+        // An export from before a built-in was added or renamed still imports;
+        // restore whatever it lacks so every built-in exists straight away.
+        await EnsureBuiltInsAsync(db, NullLogger.Instance);
     }
 
     /// <summary>Maps config rows to engine options (stable ids, name references), from one snapshot.</summary>

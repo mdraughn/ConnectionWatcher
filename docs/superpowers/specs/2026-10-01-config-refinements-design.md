@@ -211,10 +211,7 @@ cadence". Any other UI copy naming External follows.
 
 ### 4.6 Config import of older exports
 
-An export taken before this change names `External`. Import validates
-profile names against the stored profiles and will reject it. No shim; the
-user re-exports after upgrading. The README's backup paragraph gets one
-sentence saying exports are tied to the version that produced them.
+An export taken before this change names `External`. It imports unchanged: the document's profiles replace the table, and the write then restores any missing built-in, so Path and Public exist immediately and the imported targets keep their External profile. The README's backup sentence still holds, since exports remain tied to the version that wrote them.
 
 ## 5. Traceroute classification and ASN lookup
 
