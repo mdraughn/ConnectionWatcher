@@ -80,55 +80,67 @@
     </tbody>
 </table>
 
-<h3 id="form-title">Add target</h3>
+<p class="cw-actions">
+    <button data-add>Add target</button>
+</p>
 <ul class="form-errors" id="errors"></ul>
-<form id="target-form">
-    <div class="grid">
-        <label>Name <input name="name" required value="@Model.PrefillName" /></label>
-        <label>Address
-            <fieldset role="group" style="margin:0">
-                <input name="address" required placeholder="IP or hostname" value="@Model.PrefillAddress" />
-                <button type="button" class="outline" id="probe-test-btn">Test</button>
-            </fieldset>
-            <small id="probe-test-out"></small>
-        </label>
-    </div>
-    <div class="grid">
-        <label>Parent
-            <select name="parent">
-                <option value="">(none — root)</option>
-                @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
-                {
-                    <option selected="@(t.Name == Model.PrefillParent)">@t.Name</option>
-                }
-            </select>
-        </label>
-        <label>Profile
-            <select name="profile">
-                @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
-                {
-                    <option selected="@(p.Name == "External")">@p.Name</option>
-                }
-            </select>
-        </label>
-        <label>Enabled <input type="checkbox" name="enabled" checked /></label>
-    </div>
-    <div class="grid">
-        <label>Probe
-            <select name="probeKind" id="probe-kind">
-                <option value="">Ping (ICMP)</option>
-                <option value="tcp">TCP connect</option>
-            </select>
-        </label>
-        <label id="probe-port-label" hidden>Port
-            <input name="probePort" type="number" min="1" max="65535" value="80" />
-        </label>
-    </div>
-    <label>ISP / operator <small>(optional — lets reports say "Comcast is down")</small>
-        <input name="operator" placeholder="e.g. Comcast" />
-    </label>
-    <button type="submit">Add target</button>
-</form>
+
+<dialog id="target-dialog">
+    <article>
+        <header><h4 data-dialog-title>Add target</h4></header>
+        <ul class="form-errors" id="dialog-errors"></ul>
+        <form id="target-form">
+            <div class="grid">
+                <label>Name <input name="name" required value="@Model.PrefillName" /></label>
+                <label>Address
+                    <fieldset role="group" style="margin:0">
+                        <input name="address" required placeholder="IP or hostname" value="@Model.PrefillAddress" />
+                        <button type="button" class="outline" id="probe-test-btn">Test</button>
+                    </fieldset>
+                    <small id="probe-test-out"></small>
+                </label>
+            </div>
+            <div class="grid">
+                <label>Parent
+                    <select name="parent">
+                        <option value="">(none — root)</option>
+                        @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                        {
+                            <option selected="@(t.Name == Model.PrefillParent)">@t.Name</option>
+                        }
+                    </select>
+                </label>
+                <label>Profile
+                    <select name="profile">
+                        @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
+                        {
+                            <option selected="@(p.Name == "External")">@p.Name</option>
+                        }
+                    </select>
+                </label>
+                <label>Enabled <input type="checkbox" name="enabled" checked /></label>
+            </div>
+            <div class="grid">
+                <label>Probe
+                    <select name="probeKind" id="probe-kind">
+                        <option value="">Ping (ICMP)</option>
+                        <option value="tcp">TCP connect</option>
+                    </select>
+                </label>
+                <label id="probe-port-label" hidden>Port
+                    <input name="probePort" type="number" min="1" max="65535" value="80" />
+                </label>
+            </div>
+            <label>ISP / operator <small>(optional — lets reports say "Comcast is down")</small>
+                <input name="operator" placeholder="e.g. Comcast" />
+            </label>
+            <footer>
+                <button type="button" class="secondary outline" data-cancel>Cancel</button>
+                <button type="submit">Add target</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
 
 <dialog id="addr-dialog">
     <article>
@@ -159,6 +171,7 @@
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
     <script>
         const form = document.getElementById("target-form");
+        const dialog = document.getElementById("target-dialog");
 
         const probeKind = document.getElementById("probe-kind");
         const portLabel = document.getElementById("probe-port-label");
@@ -216,15 +229,18 @@
             });
         }
 
-        wireConfigPage({
+        const { open } = wireConfigPage({
             form,
-            errorList: document.getElementById("errors"),
+            dialog,
+            errorList: document.getElementById("dialog-errors"),
+            pageErrorList: document.getElementById("errors"),
+            noun: "target",
             endpoint: "/api/v1/targets",
             beforeSave: async ({ isEdit, dto }) => {
                 // Insert mode: create the target AND re-parent the chosen
                 // children in one atomic operation, then stop the normal flow.
                 if (!isEdit && form.dataset.insertChildIds) {
-                    const errors = document.getElementById("errors");
+                    const errors = document.getElementById("dialog-errors");
                     clearErrors(errors);
                     const result = await apiFetch("POST", "/api/v1/targets/insert-parent", {
                         newTarget: dto,
@@ -260,23 +276,31 @@
                 form.elements.enabled.checked = dto.enabled;
                 form.elements.operator.value = dto.operator ?? "";
                 setProbe(dto.probe ?? null);
-                document.getElementById("form-title").textContent = `Edit ${dto.name}`;
+            },
+            resetForm: () => {
+                setProbe(null);
+                document.getElementById("probe-test-out").textContent = "";
             },
         });
         document.querySelectorAll("[data-insert-children]").forEach((btn) =>
             btn.addEventListener("click", () => {
-                delete form.dataset.editingId;
                 form.dataset.insertChildIds = btn.dataset.insertChildren;
-                document.getElementById("form-title").textContent =
-                    `Insert new target ${btn.dataset.insertLabel}`;
-                form.querySelector("[type=submit]").textContent = "Insert into path";
-                form.elements.name.focus();
-                form.scrollIntoView({ behavior: "smooth" });
+                open({ title: `Insert new target ${btn.dataset.insertLabel}`,
+                       submitLabel: "Insert into path" });
             }));
+        // The traceroute page links here with the address pre-filled: open
+        // the form right away rather than making the user find "Add target".
+        if (new URLSearchParams(location.search).has("address"))
+            open({ title: "Add target", submitLabel: "Add target" });
 
         document.getElementById("import-file").addEventListener("change", async (e) => {
             const file = e.target.files[0];
-            if (!file || !confirm("Replace the ENTIRE configuration with this file?")) return;
+            if (!file) return;
+            if (!await confirmDialog("Replace the ENTIRE configuration with this file?",
+                                     { confirmLabel: "Replace configuration" })) {
+                e.target.value = "";
+                return;
+            }
             const doc = JSON.parse(await file.text());
             const result = await apiFetch("POST", "/api/v1/config/import", doc);
             if (result.ok) location.reload();

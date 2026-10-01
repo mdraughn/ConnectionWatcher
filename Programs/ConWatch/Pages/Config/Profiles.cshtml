@@ -37,39 +37,55 @@
     </tbody>
 </table>
 
-<h3 id="form-title">Add profile</h3>
+<p class="cw-actions">
+    <button data-add>Add profile</button>
+</p>
 <ul class="form-errors" id="errors"></ul>
-<form id="profile-form">
-    <label>Name <input name="name" required /></label>
-    <div class="grid">
-        <label>Normal interval (s) <input name="normalIntervalSeconds" type="number" step="any" value="10" /></label>
-        <label>Burst interval (s) <input name="burstIntervalSeconds" type="number" step="any" value="1" /></label>
-        <label>Burst max duration (s) <input name="burstMaxDurationSeconds" type="number" step="any" value="60" /></label>
-        <label>Ping timeout (s) <input name="pingTimeoutSeconds" type="number" step="any" value="3" /></label>
-    </div>
-    <div class="grid">
-        <label>History size <input name="historySize" type="number" value="100" /></label>
-        <label>Min usable sample <input name="minUsableSample" type="number" value="10" /></label>
-    </div>
-    <div class="grid">
-        <label>Responding ≥ <input name="respondingThreshold" type="number" step="any" value="0.95" /></label>
-        <label>Faltering &lt; <input name="falteringThreshold" type="number" step="any" value="0.75" /></label>
-        <label>Down &lt; <input name="downThreshold" type="number" step="any" value="0.10" /></label>
-        <label>Recovering ≥ <input name="recoveringThreshold" type="number" step="any" value="0.25" /></label>
-    </div>
-    <button type="submit">Add profile</button>
-</form>
+
+<dialog id="profile-dialog">
+    <article>
+        <header><h4 data-dialog-title>Add profile</h4></header>
+        <ul class="form-errors" id="dialog-errors"></ul>
+        <form id="profile-form">
+            <label>Name <input name="name" required /></label>
+            <div class="grid">
+                <label>Normal interval (s) <input name="normalIntervalSeconds" type="number" step="any" value="10" /></label>
+                <label>Burst interval (s) <input name="burstIntervalSeconds" type="number" step="any" value="1" /></label>
+                <label>Burst max duration (s) <input name="burstMaxDurationSeconds" type="number" step="any" value="60" /></label>
+                <label>Ping timeout (s) <input name="pingTimeoutSeconds" type="number" step="any" value="3" /></label>
+            </div>
+            <div class="grid">
+                <label>History size <input name="historySize" type="number" value="100" /></label>
+                <label>Min usable sample <input name="minUsableSample" type="number" value="10" /></label>
+            </div>
+            <div class="grid">
+                <label>Responding ≥ <input name="respondingThreshold" type="number" step="any" value="0.95" /></label>
+                <label>Faltering &lt; <input name="falteringThreshold" type="number" step="any" value="0.75" /></label>
+                <label>Down &lt; <input name="downThreshold" type="number" step="any" value="0.10" /></label>
+                <label>Recovering ≥ <input name="recoveringThreshold" type="number" step="any" value="0.25" /></label>
+            </div>
+            <footer>
+                <button type="button" class="secondary outline" data-cancel>Cancel</button>
+                <button type="submit">Add profile</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
 
 @section Scripts {
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
     <script>
         const form = document.getElementById("profile-form");
+        const dialog = document.getElementById("profile-dialog");
         const numberFields = ["normalIntervalSeconds", "burstIntervalSeconds", "burstMaxDurationSeconds",
             "pingTimeoutSeconds", "historySize", "minUsableSample", "respondingThreshold",
             "falteringThreshold", "downThreshold", "recoveringThreshold"];
         wireConfigPage({
             form,
-            errorList: document.getElementById("errors"),
+            dialog,
+            errorList: document.getElementById("dialog-errors"),
+            pageErrorList: document.getElementById("errors"),
+            noun: "profile",
             endpoint: "/api/v1/profiles",
             buildDto: () => {
                 const dto = { name: form.elements.name.value };
@@ -79,7 +95,6 @@
             fillForm: (dto) => {
                 form.elements.name.value = dto.name;
                 for (const f of numberFields) form.elements[f].value = dto[f];
-                document.getElementById("form-title").textContent = `Edit ${dto.name}`;
             },
         });
     </script>

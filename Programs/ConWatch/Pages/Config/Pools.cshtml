@@ -34,42 +34,55 @@
     </tbody>
 </table>
 
-<h3 id="form-title">Add pool</h3>
+<p class="cw-actions">
+    <button data-add>Add pool</button>
+</p>
 <ul class="form-errors" id="errors"></ul>
-<form id="pool-form">
-    <div class="grid">
-        <label>Name <input name="name" required /></label>
-        <label>Parent
-            <select name="parent">
-                <option value="">(none)</option>
-                @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
-                {
-                    <option>@t.Name</option>
-                }
-            </select>
-        </label>
-    </div>
-    <fieldset>
-        <legend>Members (click to add, in stagger order)</legend>
-        <div class="grid">
-            <div>
-                @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
-                {
-                    <button type="button" class="outline" data-add-member="@t.Name">@t.Name</button>
-                }
+
+<dialog id="pool-dialog">
+    <article>
+        <header><h4 data-dialog-title>Add pool</h4></header>
+        <ul class="form-errors" id="dialog-errors"></ul>
+        <form id="pool-form">
+            <div class="grid">
+                <label>Name <input name="name" required /></label>
+                <label>Parent
+                    <select name="parent">
+                        <option value="">(none)</option>
+                        @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                        {
+                            <option>@t.Name</option>
+                        }
+                    </select>
+                </label>
             </div>
-            <div>
-                <ol id="member-list"></ol>
-            </div>
-        </div>
-    </fieldset>
-    <button type="submit">Add pool</button>
-</form>
+            <fieldset>
+                <legend>Members (click to add, in stagger order)</legend>
+                <div class="grid">
+                    <div>
+                        @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                        {
+                            <button type="button" class="outline" data-add-member="@t.Name">@t.Name</button>
+                        }
+                    </div>
+                    <div>
+                        <ol id="member-list"></ol>
+                    </div>
+                </div>
+            </fieldset>
+            <footer>
+                <button type="button" class="secondary outline" data-cancel>Cancel</button>
+                <button type="submit">Add pool</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
 
 @section Scripts {
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
     <script>
         const form = document.getElementById("pool-form");
+        const dialog = document.getElementById("pool-dialog");
         const memberList = document.getElementById("member-list");
         let members = [];
 
@@ -97,7 +110,10 @@
 
         wireConfigPage({
             form,
-            errorList: document.getElementById("errors"),
+            dialog,
+            errorList: document.getElementById("dialog-errors"),
+            pageErrorList: document.getElementById("errors"),
+            noun: "pool",
             endpoint: "/api/v1/pools",
             buildDto: () => ({
                 name: form.elements.name.value,
@@ -109,8 +125,8 @@
                 form.elements.parent.value = dto.parent ?? "";
                 members = [...dto.members];
                 renderMembers();
-                document.getElementById("form-title").textContent = `Edit ${dto.name}`;
             },
+            resetForm: () => { members = []; renderMembers(); },
         });
     </script>
 }
