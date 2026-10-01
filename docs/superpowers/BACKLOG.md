@@ -167,3 +167,11 @@ Explicit non-goal (Mark): latency/RTT-based glitches.
 - **Show a hostname's answer set in the Targets form** — informational: when
   a name resolves to several addresses, list them so the user sees what is
   being pinned (one address per target at a time; the engine follows changes).
+
+## Pools (noted 2026-10-01)
+
+- **One stagger slot for a target in two pools** — `WatcherEngine.cs` builds
+  `poolPosition[targetId]` by overwriting, so a target that belongs to two pools
+  takes its offset from whichever pool is enumerated last. Either warn in
+  `ConfigHealth` or give the target a slot per pool. Found while reading
+  `PoolCoordinator` for the config-refinements spec.
