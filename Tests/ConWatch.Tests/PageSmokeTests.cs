@@ -18,6 +18,8 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Config/Profiles", "Be polite")]           // built-in description in the table
     [InlineData("/Config/Targets", "option selected=\"selected\" title=\"Public internet sites")] // the Public default's title
     [InlineData("/Config/Pools", "Pools")]
+    [InlineData("/Config/Pools", "Anchor pool")]
+    [InlineData("/Config/Pools", "Anchors needed for Healthy")]
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Settings", "Danger zone")]
     [InlineData("/Settings", "MQTT / Home Assistant")]
@@ -38,6 +40,19 @@ public class PageSmokeTests : IDisposable
         response.EnsureSuccessStatusCode();
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains(marker, html);
+    }
+
+    [Fact]
+    public async Task Pools_page_badges_the_anchor_pool()
+    {
+        var client = _factory.CreateClient();
+        await ConfigApiTests.SeedHomeAsync(client);          // creates pool "Internet"; AnchorPool is "Internet" from appsettings
+        var html = await client.GetStringAsync("/Config/Pools");
+        Assert.Contains("cw-chip\">anchor</span>", html);
+        await client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Verdict.AnchorPool"] = null });
+        html = await client.GetStringAsync("/Config/Pools");
+        Assert.DoesNotContain("cw-chip\">anchor</span>", html);
     }
 
     [Fact]

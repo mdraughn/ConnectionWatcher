@@ -59,27 +59,6 @@ else
     </article>
 }
 
-<h3>Settings</h3>
-<ul class="form-errors" id="settings-errors"></ul>
-<form id="settings-form">
-    <div class="grid">
-        <label>Verdict anchor pool
-            <select name="@SettingKeys.AnchorPool">
-                <option value="">(none — verdict off)</option>
-                @foreach (var pool in Model.Pools)
-                {
-                    <option selected="@(pool.Name == Model.Setting(SettingKeys.AnchorPool))">@pool.Name</option>
-                }
-            </select>
-        </label>
-        <label>Weather threshold
-            <input name="@SettingKeys.WeatherThreshold" type="number" min="1"
-                   value="@Model.Setting(SettingKeys.WeatherThreshold, "2")" />
-        </label>
-    </div>
-    <button type="submit">Save settings</button>
-</form>
-
 <h3>Notifications</h3>
 <ul class="form-errors" id="notify-errors"></ul>
 <form id="notify-form">

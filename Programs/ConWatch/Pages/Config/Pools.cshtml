@@ -1,5 +1,6 @@
 @page
 @using System.Text.Json
+@using ConPersistence.Settings
 @model ConWatch.Pages.Config.PoolsModel
 @{
     ViewData["Title"] = "Pools — ConnectionWatcher";
@@ -16,8 +17,31 @@
 <partial name="_HealthBanner" model="Model.Warnings" />
 <p>Rotation pools: members share the pinging load by phase-stagger; pool state is derived (any member responding → responding). Member order sets the stagger offsets.</p>
 
+<h3>Verdict</h3>
+<p>The verdict reads the members of one pool, the internet anchors. Other pools only
+   share pinging load and report a combined state.</p>
+<ul class="form-errors" id="verdict-errors"></ul>
+<form id="verdict-form">
+    <div class="grid">
+        <label>Anchor pool
+            <select name="@SettingKeys.AnchorPool">
+                <option value="">(none — verdict off)</option>
+                @foreach (var pool in Model.Config.Pools.OrderBy(p => p.Name))
+                {
+                    <option selected="@Model.IsAnchor(pool)">@pool.Name</option>
+                }
+            </select>
+        </label>
+        <label>Anchors needed for Healthy
+            <input name="@SettingKeys.WeatherThreshold" type="number" min="1" value="@Model.WeatherThreshold" />
+        </label>
+        <div style="align-self: end"><button type="submit">Save verdict settings</button></div>
+    </div>
+</form>
+
+<h3>Pools</h3>
 <table>
-    <thead><tr><th>Name</th><th>Members (in order)</th><th>Parent</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Members (in order)</th><th>Parent</th><th></th><th></th></tr></thead>
     <tbody>
     @foreach (var p in Model.Config.Pools.OrderBy(p => p.Name))
     {
@@ -25,6 +49,7 @@
             <td>@p.Name</td>
             <td>@string.Join(" → ", p.Members)</td>
             <td>@(p.Parent ?? "—")</td>
+            <td>@if (Model.IsAnchor(p)) { <span class="cw-chip">anchor</span> }</td>
             <td>
                 <button class="outline" data-edit="@p.Id" data-json="@json(p)">Edit</button>
                 <button class="outline" data-delete="@p.Id" data-name="@p.Name">Delete</button>
@@ -128,5 +153,6 @@
             },
             resetForm: () => { members = []; renderMembers(); },
         });
+        wireSettingsForm("verdict-form", "verdict-errors");
     </script>
 }

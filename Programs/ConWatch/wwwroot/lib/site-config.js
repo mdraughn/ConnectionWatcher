@@ -34,6 +34,20 @@ function clearErrors(listEl) {
  * would do the same job, but it is queued as a separate task and at least
  * one embedded Chromium build never delivers it, so nothing here waits on it.
  */
+// Posts every [name] field of a form to the settings API; empty means "clear".
+function wireSettingsForm(formId, errorsId) {
+    document.getElementById(formId).addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const errors = document.getElementById(errorsId);
+        clearErrors(errors);
+        const values = {};
+        for (const field of e.target.querySelectorAll("[name]"))
+            values[field.name] = field.value === "" ? null : field.value;
+        const result = await apiFetch("PUT", "/api/v1/settings", values);
+        if (result.ok) location.reload();
+        else showErrors(errors, result);
+    });
+}
 function wireDialog(dialog, onClose) {
     const close = (returnValue = "") => {
         if (!dialog.open) return;
