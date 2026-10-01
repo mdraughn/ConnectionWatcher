@@ -29,6 +29,10 @@ internal static class ConfigMapping
     public static string? NormalizeOperator(string? op) =>
         op?.Trim() is { Length: > 0 } trimmed ? trimmed : null;
 
+    /// <summary>Blank descriptions are stored as null; otherwise trimmed.</summary>
+    public static string? NormalizeDescription(string? description) =>
+        description?.Trim() is { Length: > 0 } trimmed ? trimmed : null;
+
     /// <summary>Addresses are stored trimmed; the validator must see the stored form.</summary>
     public static string NormalizeAddress(string? address) => (address ?? "").Trim();
 
@@ -36,7 +40,7 @@ internal static class ConfigMapping
 
     public static ProfileDto ToDto(this ProfileRow p) => new()
     {
-        Id = p.Id, Name = p.Name,
+        Id = p.Id, Name = p.Name, Description = p.Description,
         NormalIntervalSeconds = p.NormalIntervalSeconds,
         PingTimeoutSeconds = p.PingTimeoutSeconds,
         BurstIntervalSeconds = p.BurstIntervalSeconds,
@@ -84,6 +88,7 @@ internal static class ConfigMapping
     public static ProfileRow CopyFrom(this ProfileRow row, ProfileDto dto)
     {
         row.Name = dto.Name;
+        row.Description = NormalizeDescription(dto.Description);
         row.NormalIntervalSeconds = dto.NormalIntervalSeconds;
         row.PingTimeoutSeconds = dto.PingTimeoutSeconds;
         row.BurstIntervalSeconds = dto.BurstIntervalSeconds;

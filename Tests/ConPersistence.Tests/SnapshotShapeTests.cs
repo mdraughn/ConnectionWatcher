@@ -45,7 +45,7 @@ public class SnapshotShapeTests
             "transitions", "rollups", "glitches");
         AssertKeys(json.GetProperty("config"), "profiles", "targets", "pools");
         AssertKeys(json.GetProperty("config").GetProperty("profiles")[0],
-            "id", "name", "normalIntervalSeconds", "pingTimeoutSeconds", "burstIntervalSeconds",
+            "id", "name", "description", "normalIntervalSeconds", "pingTimeoutSeconds", "burstIntervalSeconds",
             "burstMaxDurationSeconds", "historySize", "minUsableSample", "respondingThreshold",
             "falteringThreshold", "downThreshold", "recoveringThreshold");
         AssertKeys(json.GetProperty("config").GetProperty("targets")[0],

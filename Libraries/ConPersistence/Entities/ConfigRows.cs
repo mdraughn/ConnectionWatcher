@@ -10,6 +10,8 @@ public class ProfileRow
 
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
+    /// <summary>What this profile is for, shown beside its name. Null when the user left it blank.</summary>
+    public string? Description { get; set; }
     public double NormalIntervalSeconds { get; set; } = Defaults.NormalIntervalSeconds;
     public double PingTimeoutSeconds { get; set; } = Defaults.PingTimeoutSeconds;
     public double BurstIntervalSeconds { get; set; } = Defaults.BurstIntervalSeconds;

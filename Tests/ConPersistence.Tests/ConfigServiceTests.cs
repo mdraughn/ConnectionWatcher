@@ -334,4 +334,49 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.Equal(1, _changeSignals);
         Assert.Contains((await _store.LoadWatcherOptionsAsync()).Targets, t => t.Name == "NewGuy" && t.Parent == "Router");
     }
+
+    [Fact]
+    public async Task Profile_description_is_trimmed_and_round_trips()
+    {
+        var result = await _service.UpsertProfileAsync(new ConPersistence.Config.ProfileDto
+        {
+            Name = "Described", Description = "  Things I own.  ",
+        });
+        Assert.True(result.Success);
+        var doc = await _store.ExportAsync();
+        Assert.Equal("Things I own.", doc.Profiles.Single(p => p.Name == "Described").Description);
+    }
+
+    [Fact]
+    public async Task Blank_profile_description_is_stored_as_null()
+    {
+        var result = await _service.UpsertProfileAsync(new ConPersistence.Config.ProfileDto
+        {
+            Name = "Blank", Description = "   ",
+        });
+        Assert.True(result.Success);
+        Assert.Null((await _store.ExportAsync()).Profiles.Single(p => p.Name == "Blank").Description);
+    }
+
+    [Fact]
+    public async Task Overlong_profile_description_is_rejected()
+    {
+        var result = await _service.UpsertProfileAsync(new ConPersistence.Config.ProfileDto
+        {
+            Name = "Long", Description = new string('x', 501),
+        });
+        Assert.False(result.Success);
+        Assert.Equal(ConPersistence.Config.ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("500"));
+    }
+
+    [Fact]
+    public async Task Import_rejects_an_overlong_description()
+    {
+        var doc = await _store.ExportAsync();
+        doc.Profiles.Add(new ConPersistence.Config.ProfileDto { Name = "Long", Description = new string('x', 501) });
+        var result = await _service.ImportAsync(doc);
+        Assert.False(result.Success);
+        Assert.Contains(result.Errors!, e => e.Contains("Long") && e.Contains("500"));
+    }
 }

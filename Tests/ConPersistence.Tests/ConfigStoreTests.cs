@@ -118,4 +118,41 @@ public class ConfigStoreTests : IDisposable
         Assert.Empty(options.Targets);
         Assert.Equal(3, options.Profiles.Count);
     }
+
+    [Fact]
+    public async Task Seed_gives_every_builtin_a_description()
+    {
+        await _store.SeedAsync(null);
+        var doc = await _store.ExportAsync();
+        Assert.Equal(3, doc.Profiles.Count);
+        Assert.All(doc.Profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
+        Assert.Contains("LAN", doc.Profiles.Single(p => p.Name == "Internal").Description);
+    }
+
+    [Fact]
+    public async Task EnsureBuiltIns_adds_missing_presets_and_fills_null_descriptions_only()
+    {
+        // A database from before Path existed: Internal with no description, a custom profile.
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.Profiles.Add(new ConPersistence.Entities.ProfileRow
+                { Id = Guid.NewGuid(), Name = "Internal", NormalIntervalSeconds = 2, Description = null });
+            db.Profiles.Add(new ConPersistence.Entities.ProfileRow
+                { Id = Guid.NewGuid(), Name = "Public", Description = "mine" });
+            db.Profiles.Add(new ConPersistence.Entities.ProfileRow
+                { Id = Guid.NewGuid(), Name = "Slow", NormalIntervalSeconds = 30 });
+            await db.SaveChangesAsync();
+        }
+
+        await _store.EnsureBuiltInsAsync();
+
+        var doc = await _store.ExportAsync();
+        Assert.Equal(["Internal", "Path", "Public", "Slow"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
+        var internalProfile = doc.Profiles.Single(p => p.Name == "Internal");
+        Assert.Equal(2, internalProfile.NormalIntervalSeconds); // numbers never overwritten
+        Assert.Contains("LAN", internalProfile.Description);     // null description filled
+        Assert.Equal("mine", doc.Profiles.Single(p => p.Name == "Public").Description); // kept
+        Assert.Equal(5, doc.Profiles.Single(p => p.Name == "Path").NormalIntervalSeconds);
+        Assert.Null(doc.Profiles.Single(p => p.Name == "Slow").Description);
+    }
 }

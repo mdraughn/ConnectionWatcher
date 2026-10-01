@@ -11,6 +11,8 @@ public record ProfileDto
 
     public Guid? Id { get; init; }
     public required string Name { get; init; }
+    /// <summary>What this profile is for; trimmed, at most 500 characters, blank stored as null.</summary>
+    public string? Description { get; init; }
     public double NormalIntervalSeconds { get; init; } = Defaults.NormalIntervalSeconds;
     public double PingTimeoutSeconds { get; init; } = Defaults.PingTimeoutSeconds;
     public double BurstIntervalSeconds { get; init; } = Defaults.BurstIntervalSeconds;

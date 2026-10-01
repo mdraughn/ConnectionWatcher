@@ -37,11 +37,20 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             ["renumber"] = "AddressChanged",
         };
 
+    public const int MaxDescriptionLength = 500;
+
+    private static string? DescriptionError(ProfileDto dto) =>
+        ConfigMapping.NormalizeDescription(dto.Description) is { Length: > MaxDescriptionLength }
+            ? $"Profile '{dto.Name}': description is longer than {MaxDescriptionLength} characters."
+            : null;
+
     /// <summary>Raised after any committed config change; the host debounces rebuilds.</summary>
     public event Action? ConfigChanged;
 
     public Task<ConfigResult> UpsertProfileAsync(ProfileDto dto) => MutateAsync(async db =>
     {
+        if (DescriptionError(dto) is { } descriptionError)
+            return ConfigResult.Fail(ConfigErrorKind.Validation, descriptionError);
         ProfileRow row;
         if (dto.Id is { } id)
         {
@@ -236,6 +245,9 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
     public async Task<ConfigResult> ImportAsync(ConfigDocument doc)
     {
         // Validate the incoming document before touching the database.
+        var descriptionErrors = doc.Profiles.Select(DescriptionError).Where(e => e is not null).ToArray();
+        if (descriptionErrors.Length > 0)
+            return ConfigResult.Fail(ConfigErrorKind.Validation, descriptionErrors!);
         var validation = new WatcherOptionsValidator().Validate(null, doc.ToOptions());
         if (validation.Failed)
             return ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray());

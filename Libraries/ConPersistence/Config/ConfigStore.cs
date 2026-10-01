@@ -34,7 +34,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
     {
         var doc = new ConfigDocument
         {
-            Profiles = PingProfile.BuiltIns.Select(p => p.ToDto()).ToList(),
+            Profiles = BuiltInProfiles.All.Select(e => e.ToDto()).ToList(),
         };
 
         if (fromAppSettings is not null)
@@ -63,6 +63,34 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
         if (doc.Targets.Count > 0 || doc.Pools.Count > 0)
             _log.LogInformation("Seeded configuration: {Targets} targets, {Pools} pools",
                 doc.Targets.Count, doc.Pools.Count);
+    }
+
+    /// <summary>
+    /// Makes sure every built-in preset exists and carries a description.
+    /// Runs on every start, after migrations: an older database gains the
+    /// presets added since it was created (Path, as of 2026-10), and a
+    /// deleted preset comes back. Numbers and non-null descriptions are
+    /// never overwritten — the user's edits win.
+    /// </summary>
+    public async Task EnsureBuiltInsAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var rows = await db.Profiles.ToListAsync();
+        foreach (var builtIn in BuiltInProfiles.All)
+        {
+            var row = rows.FirstOrDefault(r =>
+                r.Name.Equals(builtIn.Profile.Name, StringComparison.OrdinalIgnoreCase));
+            if (row is null)
+            {
+                db.Profiles.Add(builtIn.ToDto().ToRow(Guid.NewGuid()));
+                _log.LogInformation("Added missing built-in profile '{Profile}'", builtIn.Profile.Name);
+            }
+            else if (row.Description is null)
+            {
+                row.Description = builtIn.Description;
+            }
+        }
+        await db.SaveChangesAsync();
     }
 
     /// <summary>
