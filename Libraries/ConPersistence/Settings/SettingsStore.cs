@@ -29,6 +29,10 @@ public static class SettingKeys
     public const string HeartbeatUrl = "Heartbeat.Url";
     public const string HeartbeatIntervalMinutes = "Heartbeat.IntervalMinutes";
 
+    /// <summary>"true" lets the traceroute page send each public hop's address
+    /// to Team Cymru's IP-to-ASN DNS service to name its operator. Off by default.</summary>
+    public const string TracerouteAsnLookup = "Traceroute.AsnLookup";
+
     /// <summary>Warm restart: seed presumed states from the DB when the gap
     /// since the watcher was last alive is at most this many minutes; 0 or
     /// less disables all seeding (process start AND config rebuilds).</summary>

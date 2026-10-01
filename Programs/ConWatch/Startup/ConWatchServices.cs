@@ -50,6 +50,7 @@ public static class ConWatchServices
         services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
         services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
+        services.AddSingleton<ConInfrastructure.Asn.IAsnLookup, ConInfrastructure.Asn.CymruAsnLookup>();
         services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
         services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery>(
             _ => new ConInfrastructure.Discovery.GatewayDiscovery());

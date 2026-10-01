@@ -22,6 +22,7 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Config/Pools", "Anchors needed for Healthy")]
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Settings", "Danger zone")]
+    [InlineData("/Settings", "Look up the operator of each hop")]
     [InlineData("/Settings", "MQTT / Home Assistant")]
     [InlineData("/Settings", "Webhook URLs")]
     [InlineData("/Settings", "Heartbeat (watch the watchman)")]

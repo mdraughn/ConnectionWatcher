@@ -3,6 +3,7 @@
 "use strict";
 
 wireSettingsForm("notify-form", "notify-errors");
+wireSettingsForm("traceroute-form", "traceroute-errors");
 
 document.getElementById("mqtt-test-btn").addEventListener("click", async () => {
     const form = document.getElementById("notify-form");

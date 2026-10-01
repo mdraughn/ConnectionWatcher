@@ -1,4 +1,5 @@
 using System.Net;
+using ConInfrastructure.Asn;
 using Microsoft.Extensions.Logging;
 
 namespace ConInfrastructure.Traceroute;
@@ -17,13 +18,19 @@ public record TracerouteHop(int Ttl, string? Address, string? Hostname, long? Rt
 /// address), reverse-DNS with a 1-second cap, stops at the destination or
 /// TTL 30. One-shot discovery tool, not continuous monitoring.
 /// </summary>
-public class TracerouteRunner(ITtlProbe probe, ILogger<TracerouteRunner> log)
+public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<TracerouteRunner> log)
 {
     private const int MaxTtl = 30;
     private const int ProbesPerHop = 3;
     private const int ProbeTimeoutMs = 2000;
+    private const int LookupParallelism = 8;
 
-    public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct)
+    public Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct) =>
+        RunAsync(host, lookupOperators: false, ct);
+
+    /// <param name="lookupOperators">When true, every Path/Destination hop with a
+    /// public address is sent to <see cref="IAsnLookup"/> after the walk.</param>
+    public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, bool lookupOperators, CancellationToken ct)
     {
         IPAddress destination;
         if (!IPAddress.TryParse(host, out destination!))
@@ -58,7 +65,31 @@ public class TracerouteRunner(ITtlProbe probe, ILogger<TracerouteRunner> log)
             if (reached)
                 break;
         }
-        return HopClassifier.Classify(hops);
+
+        var classified = HopClassifier.Classify(hops);
+        return lookupOperators ? await WithOperatorsAsync(classified, ct).ConfigureAwait(false) : classified;
+    }
+
+    /// <summary>Fills Asn/AsName on Path and Destination hops with public addresses, a few at a time.</summary>
+    private async Task<IReadOnlyList<TracerouteHop>> WithOperatorsAsync(IReadOnlyList<TracerouteHop> hops, CancellationToken ct)
+    {
+        var result = hops.ToArray();
+        using var gate = new SemaphoreSlim(LookupParallelism);
+        var tasks = result.Select(async (hop, i) =>
+        {
+            if (hop.Kind is not (HopKind.Path or HopKind.Destination) ||
+                !IPAddress.TryParse(hop.Address, out var ip) || ConCore.ProbePolicy.IsPrivateOrCarrier(ip))
+                return;
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (await asnLookup.LookupAsync(ip, ct).ConfigureAwait(false) is { } info)
+                    result[i] = hop with { Asn = info.Asn, AsName = info.Name };
+            }
+            finally { gate.Release(); }
+        });
+        await Task.WhenAll(tasks).ConfigureAwait(false);
+        return result;
     }
 
     private static async Task<string?> ReverseDnsAsync(IPAddress address, CancellationToken ct)

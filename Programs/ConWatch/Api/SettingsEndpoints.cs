@@ -71,6 +71,7 @@ public static class SettingsEndpoints
                     case SettingKeys.WebhookEnabled:
                     case SettingKeys.WebhookVerdictOnly:
                     case SettingKeys.EngineEnabled:
+                    case SettingKeys.TracerouteAsnLookup:
                         if (value is not (null or "true" or "false"))
                             errors.Add($"{key} must be 'true' or 'false'.");
                         break;

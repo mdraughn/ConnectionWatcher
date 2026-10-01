@@ -160,4 +160,17 @@ public class SettingsApiTests : IDisposable
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
         }
     }
+
+    [Fact]
+    public async Task Asn_lookup_setting_accepts_only_booleans()
+    {
+        var bad = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Traceroute.AsnLookup"] = "yes" });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+
+        var good = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Traceroute.AsnLookup"] = "true" });
+        Assert.Equal(HttpStatusCode.NoContent, good.StatusCode);
+        Assert.Equal("true", (await GetSettings())["Traceroute.AsnLookup"]);
+    }
 }

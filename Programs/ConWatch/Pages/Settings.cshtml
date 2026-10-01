@@ -59,6 +59,21 @@ else
     </article>
 }
 
+<h3>Traceroute</h3>
+<ul class="form-errors" id="traceroute-errors"></ul>
+<form id="traceroute-form">
+    <label>Look up the operator of each hop
+        <select name="@SettingKeys.TracerouteAsnLookup">
+            <option value="false" selected="@(Model.Setting(SettingKeys.TracerouteAsnLookup, "false") != "true")">off</option>
+            <option value="true" selected="@(Model.Setting(SettingKeys.TracerouteAsnLookup) == "true")">on</option>
+        </select>
+    </label>
+    <p><small>When on, the Traceroute page sends the address of every public hop to
+    Team Cymru's IP-to-ASN service through your DNS resolver, and names the operator
+    ("COMCAST-7922") in the table and in "Add as target". Private addresses are never sent.</small></p>
+    <button type="submit">Save traceroute settings</button>
+</form>
+
 <h3>Notifications</h3>
 <ul class="form-errors" id="notify-errors"></ul>
 <form id="notify-form">
