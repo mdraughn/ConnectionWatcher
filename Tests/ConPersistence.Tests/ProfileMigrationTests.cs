@@ -38,6 +38,8 @@ public class ProfileMigrationTests : IDisposable
         $"DownThreshold, RecoveringThreshold) VALUES ('{Guid.NewGuid().ToString().ToUpperInvariant()}', " +
         $"'{name}', {interval}, 3, 1, 60, 100, 10, 0.95, 0.75, 0.10, 0.25);";
 
+    // SQL is built from test-generated GUIDs and literals, not user input.
+#pragma warning disable EF1003
     private async Task SeedOldInstallAsync(params (string Name, double Interval)[] profiles)
     {
         await using var db = new ConWatchDbContext(_options);
@@ -49,6 +51,8 @@ public class ProfileMigrationTests : IDisposable
             "SELECT '" + Guid.NewGuid().ToString().ToUpperInvariant() + "', 'Google', '8.8.8.8', Id, 1 " +
             "FROM Profiles WHERE Name = 'External';");
     }
+
+#pragma warning restore EF1003
 
     [Fact]
     public async Task External_becomes_Public_and_Path_is_added()
