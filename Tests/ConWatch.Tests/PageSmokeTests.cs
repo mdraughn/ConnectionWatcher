@@ -67,6 +67,19 @@ public class PageSmokeTests : IDisposable
     }
 
     [Fact]
+    public async Task Profiles_page_offers_delete_only_on_custom_profiles()
+    {
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/Config/Profiles");
+        Assert.DoesNotContain("data-delete=", html); // only the three built-ins exist
+
+        (await client.PostAsJsonAsync("/api/v1/profiles", new ProfileDto { Name = "Custom" })).EnsureSuccessStatusCode();
+        html = await client.GetStringAsync("/Config/Profiles");
+        Assert.Single(Regex.Matches(html, "data-delete="));
+        Assert.Contains("data-name=\"Custom\"", html);
+    }
+
+    [Fact]
     public async Task Targets_page_renders_pipeline_for_anchor_pool()
     {
         await ConfigApiTests.SeedHomeAsync(_factory.CreateClient());

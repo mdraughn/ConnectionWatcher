@@ -1,5 +1,6 @@
 @page
 @using System.Text.Json
+@using ConCore.Targets
 @model ConWatch.Pages.Config.ProfilesModel
 @{
     ViewData["Title"] = "Profiles — ConnectionWatcher";
@@ -31,7 +32,11 @@
             <td>@p.MinUsableSample/@p.HistorySize</td>
             <td>
                 <button class="outline" data-edit="@p.Id" data-json="@json(p)">Edit</button>
-                <button class="outline" data-delete="@p.Id" data-name="@p.Name">Delete</button>
+                @* Built-ins come back at the next start (EnsureBuiltInsAsync), so deleting one is a no-op with extra steps. *@
+                @if (!PingProfile.IsBuiltIn(p.Name))
+                {
+                    <button class="outline" data-delete="@p.Id" data-name="@p.Name">Delete</button>
+                }
             </td>
         </tr>
     }
