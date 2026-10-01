@@ -61,4 +61,26 @@ public class ProbeSpecTests
     [Fact]
     public void Icmp_is_always_allowed() =>
         Assert.True(ProbePolicy.IsAllowed("8.8.8.8", ProbeSpec.Icmp, out _));
+
+    [Theory]
+    [InlineData("10.0.0.1", true)]
+    [InlineData("172.16.0.1", true)]
+    [InlineData("192.168.1.1", true)]
+    [InlineData("169.254.1.1", true)]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("100.64.0.1", true)]     // CGNAT: carrier space, not the user's LAN but not public either
+    [InlineData("100.127.255.254", true)]
+    [InlineData("100.128.0.1", false)]
+    [InlineData("8.8.8.8", false)]
+    [InlineData("example.com", false)]
+    public void IsPrivateOrCarrier_covers_rfc1918_linklocal_loopback_and_cgnat(string address, bool expected)
+    {
+        Assert.Equal(expected, ConCore.ProbePolicy.IsPrivateOrCarrier(address));
+    }
+
+    [Fact]
+    public void IsPrivate_still_excludes_cgnat_so_the_tcp_port_policy_is_unchanged()
+    {
+        Assert.False(ConCore.ProbePolicy.IsPrivate("100.64.0.1"));
+    }
 }

@@ -71,4 +71,23 @@ public static class ProbePolicy
             || (b[0] == 192 && b[1] == 168)
             || (b[0] == 169 && b[1] == 254);
     }
+
+    /// <summary>
+    /// <see cref="IsPrivate"/> plus carrier-grade NAT space (100.64.0.0/10):
+    /// an address that is not routable on the public internet. Used to
+    /// classify traceroute hops and to keep such addresses out of external
+    /// lookups. Not used by the TCP port policy, which treats CGNAT as public.
+    /// </summary>
+    public static bool IsPrivateOrCarrier(string address) =>
+        IPAddress.TryParse(address, out var ip) && IsPrivateOrCarrier(ip);
+
+    public static bool IsPrivateOrCarrier(IPAddress ip)
+    {
+        if (ip.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+        if (IsPrivate(ip.ToString()))
+            return true;
+        var b = ip.GetAddressBytes();
+        return b[0] == 100 && b[1] is >= 64 and <= 127;
+    }
 }

@@ -3,8 +3,14 @@ using Microsoft.Extensions.Logging;
 
 namespace ConInfrastructure.Traceroute;
 
-/// <summary>One hop in a traceroute result.</summary>
-public record TracerouteHop(int Ttl, string? Address, string? Hostname, long? RttMs, bool ReachedDestination);
+/// <summary>Where a hop sits: on the user's LAN, on the route beyond it, or the destination itself.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<HopKind>))]
+public enum HopKind { Internal, Path, Destination }
+
+/// <summary>One hop in a traceroute result. Kind is null for a hop that did not answer;
+/// Asn/AsName are filled only when the operator lookup is on and succeeded.</summary>
+public record TracerouteHop(int Ttl, string? Address, string? Hostname, long? RttMs, bool ReachedDestination,
+    HopKind? Kind, int? Asn, string? AsName);
 
 /// <summary>
 /// TTL-stepped traceroute: 3 probes per hop (best RTT, first answering
@@ -48,11 +54,11 @@ public class TracerouteRunner(ITtlProbe probe, ILogger<TracerouteRunner> log)
 
             hops.Add(new TracerouteHop(ttl, hopAddress?.ToString(),
                 hopAddress is null ? null : await ReverseDnsAsync(hopAddress, ct).ConfigureAwait(false),
-                bestRtt, reached));
+                bestRtt, reached, null, null, null));
             if (reached)
                 break;
         }
-        return hops;
+        return HopClassifier.Classify(hops);
     }
 
     private static async Task<string?> ReverseDnsAsync(IPAddress address, CancellationToken ct)
