@@ -21,7 +21,7 @@ public record PingProfile
     public static PingProfile Internal { get; } = new() { Name = "Internal", NormalInterval = TimeSpan.FromSeconds(1) };
 
     /// <summary>Preset for hops on the route to the internet that the user does not
-    /// own but may probe steadily — the ISP gateway, the modem.</summary>
+    /// own but may probe steadily â€” the ISP gateway, the modem.</summary>
     public static PingProfile Path { get; } = new() { Name = "Path", NormalInterval = TimeSpan.FromSeconds(5) };
 
     /// <summary>Preset for public internet sites: polite steady cadence.</summary>

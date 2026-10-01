@@ -114,7 +114,7 @@
                     <select name="profile">
                         @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
                         {
-                            <option selected="@(p.Name == "External")">@p.Name</option>
+                            <option selected="@(p.Name == "Public")">@p.Name</option>
                         }
                     </select>
                 </label>
