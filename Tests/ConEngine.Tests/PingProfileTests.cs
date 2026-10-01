@@ -12,11 +12,24 @@ public class PingProfileTests
     }
 
     [Fact]
-    public void External_preset_pings_politely()
+    public void Path_preset_is_steady_but_not_lan_fast()
     {
-        Assert.Equal("External", PingProfile.External.Name);
-        Assert.Equal(TimeSpan.FromSeconds(10), PingProfile.External.NormalInterval);
-        Assert.Equal(TimeSpan.FromSeconds(1), PingProfile.External.BurstInterval);
-        Assert.Equal(TimeSpan.FromSeconds(60), PingProfile.External.BurstMaxDuration);
+        Assert.Equal("Path", PingProfile.Path.Name);
+        Assert.Equal(TimeSpan.FromSeconds(5), PingProfile.Path.NormalInterval);
+    }
+
+    [Fact]
+    public void Public_preset_pings_politely()
+    {
+        Assert.Equal("Public", PingProfile.Public.Name);
+        Assert.Equal(TimeSpan.FromSeconds(10), PingProfile.Public.NormalInterval);
+        Assert.Equal(TimeSpan.FromSeconds(1), PingProfile.Public.BurstInterval);
+        Assert.Equal(TimeSpan.FromSeconds(60), PingProfile.Public.BurstMaxDuration);
+    }
+
+    [Fact]
+    public void BuiltIns_lists_the_three_presets_in_order()
+    {
+        Assert.Equal(["Internal", "Path", "Public"], PingProfile.BuiltIns.Select(p => p.Name));
     }
 }

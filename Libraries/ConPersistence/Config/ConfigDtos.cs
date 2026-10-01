@@ -30,7 +30,7 @@ public record TargetDto
     public required string Name { get; init; }
     public required string Address { get; init; }
     public string? Parent { get; init; }
-    public string Profile { get; init; } = "External";
+    public string Profile { get; init; } = "Public";
     public bool Enabled { get; init; } = true;
     /// <summary>Optional operator/ISP name ("Comcast") for attribution wording.</summary>
     public string? Operator { get; init; }

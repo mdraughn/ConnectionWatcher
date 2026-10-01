@@ -120,7 +120,6 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
     }
 
     private static bool IsKnownProfile(WatcherOptions options, string profileName) =>
-        profileName.Equals("Internal", StringComparison.OrdinalIgnoreCase) ||
-        profileName.Equals("External", StringComparison.OrdinalIgnoreCase) ||
+        ConCore.Targets.PingProfile.IsBuiltIn(profileName) ||
         options.Profiles.ContainsKey(profileName);
 }

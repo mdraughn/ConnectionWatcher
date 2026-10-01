@@ -27,7 +27,7 @@ public class SnapshotTests : IDisposable
         await ConfigApiTests.SeedHomeAsync(_client);
         await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Modem", address = "10.1.10.1", profile = "External", probe = "tcp:80",
+            name = "Modem", address = "10.1.10.1", profile = "Public", probe = "tcp:80",
         });
         await _client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
         {

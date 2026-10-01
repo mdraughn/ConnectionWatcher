@@ -27,7 +27,7 @@ public class ProbeFieldTests : IDisposable
     {
         var create = await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Modem", address = "10.1.10.1", profile = "External", probe = "tcp:80",
+            name = "Modem", address = "10.1.10.1", profile = "Public", probe = "tcp:80",
         });
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
 
@@ -50,7 +50,7 @@ public class ProbeFieldTests : IDisposable
     {
         await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Modem", address = "10.1.10.1", profile = "External", probe = "tcp:80",
+            name = "Modem", address = "10.1.10.1", profile = "Public", probe = "tcp:80",
         });
 
         var doc = await ExportAsync();
@@ -70,7 +70,7 @@ public class ProbeFieldTests : IDisposable
     {
         var create = await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Modem", address = "10.1.10.1", profile = "External", probe = "TCP:80",
+            name = "Modem", address = "10.1.10.1", profile = "Public", probe = "TCP:80",
         });
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
 
@@ -83,7 +83,7 @@ public class ProbeFieldTests : IDisposable
     {
         var create = await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "PublicHost", address = "8.8.8.8", profile = "External", probe = "tcp:8080",
+            name = "PublicHost", address = "8.8.8.8", profile = "Public", probe = "tcp:8080",
         });
         Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
         var body = await create.Content.ReadAsStringAsync();

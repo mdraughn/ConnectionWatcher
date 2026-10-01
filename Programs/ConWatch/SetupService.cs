@@ -78,7 +78,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 anchorNames.Add(ByAddress(address) ?? Add(new TargetDto
                 {
                     Name = Unique(catalogEntry?.Name ?? address, NameTaken),
-                    Address = address, Parent = pathLeaf, Profile = "External",
+                    Address = address, Parent = pathLeaf, Profile = "Public",
                     Operator = catalogEntry?.Operator,
                 }));
             }

@@ -50,7 +50,7 @@ public class AdminApiTests : IDisposable
         Assert.True(stats.GetProperty("fileSizeBytes").GetInt64() > 0);
         Assert.Equal(3, stats.GetProperty("tables").GetProperty("targets").GetInt32());
         Assert.Equal(1, stats.GetProperty("tables").GetProperty("pools").GetInt32());
-        Assert.Equal(3, stats.GetProperty("tables").GetProperty("profiles").GetInt32()); // 2 builtins + Fast
+        Assert.Equal(4, stats.GetProperty("tables").GetProperty("profiles").GetInt32()); // 3 builtins + Fast
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public class AdminApiTests : IDisposable
         var targets = await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets");
         Assert.Empty(targets!);
         var profiles = await _client.GetFromJsonAsync<List<ConPersistence.Config.ProfileDto>>("/api/v1/profiles");
-        Assert.Equal(2, profiles!.Count); // builtins only
+        Assert.Equal(3, profiles!.Count); // builtins only
         var settings = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
         Assert.Equal("2", settings!["Verdict.WeatherThreshold"]); // defaults re-seeded
     }

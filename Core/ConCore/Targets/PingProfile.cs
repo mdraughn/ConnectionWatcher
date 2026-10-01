@@ -20,6 +20,17 @@ public record PingProfile
     /// <summary>Preset for LAN targets: fast steady pinging is fine.</summary>
     public static PingProfile Internal { get; } = new() { Name = "Internal", NormalInterval = TimeSpan.FromSeconds(1) };
 
-    /// <summary>Preset for external targets: polite steady cadence.</summary>
-    public static PingProfile External { get; } = new() { Name = "External", NormalInterval = TimeSpan.FromSeconds(10) };
+    /// <summary>Preset for hops on the route to the internet that the user does not
+    /// own but may probe steadily — the ISP gateway, the modem.</summary>
+    public static PingProfile Path { get; } = new() { Name = "Path", NormalInterval = TimeSpan.FromSeconds(5) };
+
+    /// <summary>Preset for public internet sites: polite steady cadence.</summary>
+    public static PingProfile Public { get; } = new() { Name = "Public", NormalInterval = TimeSpan.FromSeconds(10) };
+
+    /// <summary>The presets every configuration has, in display order.</summary>
+    public static IReadOnlyList<PingProfile> BuiltIns { get; } = [Internal, Path, Public];
+
+    /// <summary>True for a built-in preset name, ignoring case.</summary>
+    public static bool IsBuiltIn(string name) =>
+        BuiltIns.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 }

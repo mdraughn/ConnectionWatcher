@@ -39,9 +39,10 @@ public class ConfigStoreTests : IDisposable
         var options = await _store.LoadWatcherOptionsAsync();
         Assert.Empty(options.Targets);
         Assert.Empty(options.Pools);
-        Assert.Equal(2, options.Profiles.Count);
+        Assert.Equal(3, options.Profiles.Count);
         Assert.Equal(1.0, options.Profiles["Internal"].NormalIntervalSeconds);
-        Assert.Equal(10.0, options.Profiles["External"].NormalIntervalSeconds);
+        Assert.Equal(10.0, options.Profiles["Public"].NormalIntervalSeconds);
+        Assert.Equal(5.0, options.Profiles["Path"].NormalIntervalSeconds);
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public class ConfigStoreTests : IDisposable
         var google = doc.Targets.Single(t => t.Name == "Google");
         Assert.NotNull(google.Id);
         Assert.Equal("Modem", google.Parent);
-        Assert.Equal("External", google.Profile);
+        Assert.Equal("Public", google.Profile);
         var pool = Assert.Single(doc.Pools);
         Assert.Equal(["Google", "Cloudflare"], pool.Members);
     }
@@ -115,6 +116,6 @@ public class ConfigStoreTests : IDisposable
         await _store.SeedAsync(bad);
         var options = await _store.LoadWatcherOptionsAsync();
         Assert.Empty(options.Targets);
-        Assert.Equal(2, options.Profiles.Count);
+        Assert.Equal(3, options.Profiles.Count);
     }
 }

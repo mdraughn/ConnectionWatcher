@@ -34,7 +34,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
     {
         var doc = new ConfigDocument
         {
-            Profiles = [PingProfile.Internal.ToDto(), PingProfile.External.ToDto()],
+            Profiles = PingProfile.BuiltIns.Select(p => p.ToDto()).ToList(),
         };
 
         if (fromAppSettings is not null)
@@ -49,8 +49,7 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
             {
                 foreach (var (name, config) in fromAppSettings.Profiles)
                 {
-                    if (name.Equals("Internal", StringComparison.OrdinalIgnoreCase) ||
-                        name.Equals("External", StringComparison.OrdinalIgnoreCase))
+                    if (PingProfile.IsBuiltIn(name))
                         continue; // builtins already present; file overrides not applied at seed
                     doc.Profiles.Add(config.ToProfile(name).ToDto());
                 }

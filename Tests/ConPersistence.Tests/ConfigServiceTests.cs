@@ -186,7 +186,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
 
         var result = await _service.InsertParentAsync(new ConPersistence.Config.TargetDto
         {
-            Name = "IspHop", Address = "198.51.100.11", Profile = "External",
+            Name = "IspHop", Address = "198.51.100.11", Profile = "Public",
         }, [google, cloudflare]);
         Assert.True(result.Success);
         Assert.Equal(1, _changeSignals);

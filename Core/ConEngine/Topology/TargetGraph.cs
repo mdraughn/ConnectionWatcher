@@ -35,11 +35,7 @@ public class TargetGraph
     /// <summary>Builds the graph. Options must already have passed WatcherOptionsValidator.</summary>
     public static TargetGraph FromOptions(WatcherOptions options)
     {
-        var profiles = new Dictionary<string, PingProfile>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Internal"] = PingProfile.Internal,
-            ["External"] = PingProfile.External,
-        };
+        var profiles = PingProfile.BuiltIns.ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
         foreach (var (profileName, config) in options.Profiles)
             profiles[profileName] = config.ToProfile(profileName);
 

@@ -29,7 +29,7 @@ public class OperatorFieldTests : IDisposable
         {
             name = "Comcast Edge",
             address = "198.51.100.201",
-            profile = "External",
+            profile = "Public",
             @operator = "Comcast",
         });
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
@@ -85,7 +85,7 @@ public class OperatorFieldTests : IDisposable
     {
         await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Edge", address = "198.51.100.201", profile = "External", @operator = "Comcast",
+            name = "Edge", address = "198.51.100.201", profile = "Public", @operator = "Comcast",
         });
 
         var doc = await ExportAsync();

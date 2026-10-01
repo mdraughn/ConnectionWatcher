@@ -22,7 +22,7 @@ public class RuntimeHealthTests : IDisposable
     {
         await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Modem", address = "192.168.1.254", profile = "External", probe = "tcp:80",
+            name = "Modem", address = "192.168.1.254", profile = "Public", probe = "tcp:80",
         });
 
         var host = _factory.Services.GetRequiredService<WatcherHostService>();
@@ -63,7 +63,7 @@ public class RuntimeHealthTests : IDisposable
     {
         await _client.PostAsJsonAsync("/api/v1/targets", new
         {
-            name = "Modem", address = "192.168.1.254", profile = "External", probe = "tcp:80",
+            name = "Modem", address = "192.168.1.254", profile = "Public", probe = "tcp:80",
         });
 
         var host = _factory.Services.GetRequiredService<WatcherHostService>();

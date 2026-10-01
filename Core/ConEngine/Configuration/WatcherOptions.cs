@@ -7,7 +7,7 @@ public class WatcherOptions
 {
     public const string SectionName = "Watcher";
 
-    /// <summary>Named custom profiles; built-ins "Internal" and "External" always exist.</summary>
+    /// <summary>Named custom profiles; built-ins "Internal", "Path" and "Public" always exist.</summary>
     public Dictionary<string, PingProfileConfig> Profiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<TargetConfig> Targets { get; set; } = new();
     public List<PoolConfig> Pools { get; set; } = new();
@@ -23,7 +23,7 @@ public class TargetConfig
     public string Address { get; set; } = "";
     /// <summary>Name of the parent target in the reachability tree.</summary>
     public string? Parent { get; set; }
-    public string Profile { get; set; } = "External";
+    public string Profile { get; set; } = "Public";
     public bool Enabled { get; set; } = true;
     /// <summary>Optional operator/ISP name for attribution wording.</summary>
     public string? Operator { get; set; }
