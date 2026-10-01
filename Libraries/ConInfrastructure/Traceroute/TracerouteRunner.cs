@@ -83,8 +83,15 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                if (await asnLookup.LookupAsync(ip, ct).ConfigureAwait(false) is { } info)
-                    result[i] = hop with { Asn = info.Asn, AsName = info.Name };
+                try
+                {
+                    if (await asnLookup.LookupAsync(ip, ct).ConfigureAwait(false) is { } info)
+                        result[i] = hop with { Asn = info.Asn, AsName = info.Name };
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    log.LogDebug(ex, "Operator lookup for {Address} failed", hop.Address);
+                }
             }
             finally { gate.Release(); }
         });

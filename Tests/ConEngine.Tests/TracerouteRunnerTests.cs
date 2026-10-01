@@ -108,6 +108,23 @@ public class TracerouteRunnerTests
         Assert.Empty(asn.Asked); // Review Focus 1: a private destination is never sent out
     }
 
+    private sealed class ThrowingAsn : IAsnLookup
+    {
+        public Task<AsnInfo?> LookupAsync(IPAddress address, CancellationToken ct) =>
+            throw new InvalidOperationException("boom");
+    }
+
+    [Fact]
+    public async Task A_throwing_lookup_leaves_the_hops_unchanged()
+    {
+        var runner = new TracerouteRunner(new FakeProbe("10.0.0.1", "198.51.100.11", "8.8.8.8"), new ThrowingAsn(),
+            NullLogger<TracerouteRunner>.Instance);
+        var hops = await runner.RunAsync("8.8.8.8", lookupOperators: true, CancellationToken.None);
+
+        Assert.Equal(3, hops.Count);
+        Assert.All(hops, h => Assert.Null(h.Asn));
+    }
+
     [Fact]
     public async Task Lookup_off_asks_nothing()
     {

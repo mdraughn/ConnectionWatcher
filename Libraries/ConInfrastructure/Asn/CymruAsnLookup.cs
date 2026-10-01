@@ -19,12 +19,35 @@ public sealed class CymruAsnLookup(ILogger<CymruAsnLookup> log, TimeProvider? ti
 
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly ConcurrentDictionary<IPAddress, (AsnInfo? Info, DateTimeOffset Expires)> _cache = new();
-    private readonly LookupClient _dns = new(new LookupClientOptions
+    private readonly object _clientLock = new();
+    private LookupClient? _dns;
+    private bool _clientResolved;
+
+    /// <summary>
+    /// The DNS client, built on first use from the system's resolvers only (no
+    /// public fallback, so hop addresses never go to a host the user did not
+    /// configure). Null when the system has no resolver.
+    /// </summary>
+    private LookupClient? Client()
     {
-        Timeout = TimeSpan.FromSeconds(2),
-        Retries = 0,
-        UseCache = true,
-    });
+        lock (_clientLock)
+        {
+            if (_clientResolved)
+                return _dns;
+            var servers = NameServer.ResolveNameServers(skipIPv6SiteLocal: true, fallbackToGooglePublicDns: false);
+            if (servers.Count == 0)
+                log.LogWarning("ASN lookup disabled: no system DNS resolver found");
+            else
+                _dns = new LookupClient(new LookupClientOptions(servers.ToArray())
+                {
+                    Timeout = TimeSpan.FromSeconds(2),
+                    Retries = 0,
+                    UseCache = true,
+                });
+            _clientResolved = true;
+            return _dns;
+        }
+    }
 
     public async Task<AsnInfo?> LookupAsync(IPAddress address, CancellationToken ct)
     {
@@ -35,15 +58,19 @@ public sealed class CymruAsnLookup(ILogger<CymruAsnLookup> log, TimeProvider? ti
         if (_cache.TryGetValue(address, out var cached) && cached.Expires > _time.GetUtcNow())
             return cached.Info;
 
+        var dns = Client();
+        if (dns is null)
+            return null;
+
         AsnInfo? info = null;
         try
         {
             var asn = CymruResponseParser.ParseOrigin(
-                await TxtAsync(CymruResponseParser.OriginQueryName(address), ct).ConfigureAwait(false));
+                await TxtAsync(dns, CymruResponseParser.OriginQueryName(address), ct).ConfigureAwait(false));
             if (asn is { } number)
             {
                 var named = CymruResponseParser.ParseAsName(
-                    await TxtAsync(CymruResponseParser.AsQueryName(number), ct).ConfigureAwait(false));
+                    await TxtAsync(dns, CymruResponseParser.AsQueryName(number), ct).ConfigureAwait(false));
                 info = new AsnInfo(number, named?.Name ?? $"AS{number}", named?.CountryCode);
             }
         }
@@ -56,9 +83,9 @@ public sealed class CymruAsnLookup(ILogger<CymruAsnLookup> log, TimeProvider? ti
         return info;
     }
 
-    private async Task<string?> TxtAsync(string name, CancellationToken ct)
+    private static async Task<string?> TxtAsync(LookupClient dns, string name, CancellationToken ct)
     {
-        var result = await _dns.QueryAsync(name, QueryType.TXT, cancellationToken: ct).ConfigureAwait(false);
+        var result = await dns.QueryAsync(name, QueryType.TXT, cancellationToken: ct).ConfigureAwait(false);
         var record = result.Answers.TxtRecords().FirstOrDefault();
         return record is null ? null : string.Concat(record.Text);
     }
