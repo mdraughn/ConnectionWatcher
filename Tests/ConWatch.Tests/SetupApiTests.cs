@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConInfrastructure.Discovery;
@@ -196,5 +196,18 @@ public class SetupApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public async Task Apply_assigns_Internal_Path_and_Public_by_role()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, new SetupTarget("WAN", "203.0.113.23"), ["8.8.8.8"]));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
+        Assert.Equal("Internal", targets!.Single(t => t.Name == "Router").Profile);
+        Assert.Equal("Path", targets.Single(t => t.Address == "203.0.113.23").Profile);
+        Assert.Equal("Public", targets.Single(t => t.Address == "8.8.8.8").Profile);
     }
 }

@@ -15,6 +15,8 @@ public class PageSmokeTests : IDisposable
     [InlineData("/History", "history-root")]
     [InlineData("/Config/Targets", "Targets")]
     [InlineData("/Config/Profiles", "Profiles")]
+    [InlineData("/Config/Profiles", "Be polite")]           // built-in description in the table
+    [InlineData("/Config/Targets", "option selected=\"selected\" title=\"Public internet sites")] // the Public default's title
     [InlineData("/Config/Pools", "Pools")]
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Admin", "Danger zone")]

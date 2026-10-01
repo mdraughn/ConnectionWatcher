@@ -65,7 +65,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                     Name = Unique(outer.Name, NameTaken),
                     Address = outer.Address,
                     Parent = routerName,
-                    Profile = "Internal",
+                    Profile = "Path",
                     // The WAN hop is where the ISP's service begins.
                     Operator = request.IspName,
                 });

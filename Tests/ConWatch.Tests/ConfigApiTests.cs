@@ -172,4 +172,35 @@ public class ConfigApiTests : IDisposable
     internal sealed record TargetStatusDto(Guid Id, string Name, string? Address, string State,
         double SuccessRate, double AvgRtt, int SampleSize);
     internal sealed record PoolStatusDto(Guid Id, string Name, string State);
+
+    [Fact]
+    public async Task Profile_description_round_trips_through_the_api_and_export()
+    {
+        var create = await _client.PostAsJsonAsync("/api/v1/profiles",
+            new ProfileDto { Name = "Described", Description = " Mine. " });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        var profiles = await _client.GetFromJsonAsync<List<ProfileDto>>("/api/v1/profiles");
+        var described = profiles!.Single(p => p.Name == "Described");
+        Assert.Equal("Mine.", described.Description);
+
+        var update = await _client.PutAsJsonAsync($"/api/v1/profiles/{described.Id}",
+            described with { Description = "Changed." });
+        Assert.Equal(HttpStatusCode.NoContent, update.StatusCode);
+
+        var exported = await _client.GetFromJsonAsync<ConfigDocument>("/api/v1/config/export");
+        Assert.Equal("Changed.", exported!.Profiles.Single(p => p.Name == "Described").Description);
+
+        var tooLong = await _client.PostAsJsonAsync("/api/v1/profiles",
+            new ProfileDto { Name = "Long", Description = new string('x', 501) });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+    }
+
+    [Fact]
+    public async Task Fresh_install_has_three_described_builtins()
+    {
+        var profiles = await _client.GetFromJsonAsync<List<ProfileDto>>("/api/v1/profiles");
+        Assert.Equal(["Internal", "Path", "Public"], profiles!.Select(p => p.Name).OrderBy(n => n));
+        Assert.All(profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
+    }
 }

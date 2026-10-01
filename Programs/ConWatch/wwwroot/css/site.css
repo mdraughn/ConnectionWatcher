@@ -250,6 +250,7 @@ dialog form > footer button, dialog form > footer [type=submit] {
 dialog form > footer button + button { margin-left: calc(var(--pico-spacing) * 0.5); }
 dialog#cw-confirm > article { max-width: 440px; }
 .cw-actions { margin: 0.4rem 0 1rem; }
+.cw-muted { color: var(--muted); font-size: 0.85rem; }
 
 /* Segmented control (History range, Targets sub-nav). */
 .cw-segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px;

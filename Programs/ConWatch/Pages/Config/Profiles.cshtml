@@ -17,12 +17,13 @@
 <p>Ping discipline bundles. Intervals and durations are in seconds; thresholds are 0–1 success rates.</p>
 
 <table>
-    <thead><tr><th>Name</th><th>Normal</th><th>Burst</th><th>Burst cap</th><th>Timeout</th><th>Window</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Description</th><th>Normal</th><th>Burst</th><th>Burst cap</th><th>Timeout</th><th>Window</th><th></th></tr></thead>
     <tbody>
     @foreach (var p in Model.Config.Profiles.OrderBy(p => p.Name))
     {
         <tr>
             <td>@p.Name</td>
+            <td class="cw-muted">@p.Description</td>
             <td>@(p.NormalIntervalSeconds)s</td>
             <td>@(p.BurstIntervalSeconds)s</td>
             <td>@(p.BurstMaxDurationSeconds)s</td>
@@ -48,6 +49,9 @@
         <ul class="form-errors" id="dialog-errors"></ul>
         <form id="profile-form">
             <label>Name <input name="name" required /></label>
+            <label>Description <small>(optional — what this profile is for)</small>
+                <textarea name="description" rows="2" maxlength="500"></textarea>
+            </label>
             <div class="grid">
                 <label>Normal interval (s) <input name="normalIntervalSeconds" type="number" step="any" value="10" /></label>
                 <label>Burst interval (s) <input name="burstIntervalSeconds" type="number" step="any" value="1" /></label>
@@ -88,12 +92,13 @@
             noun: "profile",
             endpoint: "/api/v1/profiles",
             buildDto: () => {
-                const dto = { name: form.elements.name.value };
+                const dto = { name: form.elements.name.value, description: form.elements.description.value || null };
                 for (const f of numberFields) dto[f] = Number(form.elements[f].value);
                 return dto;
             },
             fillForm: (dto) => {
                 form.elements.name.value = dto.name;
+                form.elements.description.value = dto.description ?? "";
                 for (const f of numberFields) form.elements[f].value = dto[f];
             },
         });
