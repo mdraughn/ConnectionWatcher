@@ -8,7 +8,9 @@ namespace ConInfrastructure.Asn;
 /// (https://www.team-cymru.com/ip-asn-mapping). Two TXT lookups:
 ///   4.3.2.1.origin.asn.cymru.com → "7922 | 73.0.0.0/8 | US | arin | 2005-01-27"
 ///   AS7922.asn.cymru.com         → "7922 | US | arin | 2005-01-27 | COMCAST-7922 - Comcast Cable Communications, LLC, US"
-/// The name is reduced to the registry handle (text before the first " - ").
+/// The name keeps the organization text (after the first " - "), since it feeds
+/// report prose ("Comcast Cable Communications, LLC is down"); a name with no
+/// " - " is used whole.
 /// </summary>
 public static partial class CymruResponseParser
 {
@@ -32,7 +34,7 @@ public static partial class CymruResponseParser
         return int.TryParse(token, out var asn) && asn > 0 ? asn : null;
     }
 
-    /// <summary>The AS handle (trailing ", CC" country and " - description" removed), plus that country.</summary>
+    /// <summary>The organization name (text after the first " - ", trailing ", CC" country removed), plus that country.</summary>
     public static (string Name, string? CountryCode)? ParseAsName(string? text)
     {
         var fields = Fields(text);
@@ -42,7 +44,7 @@ public static partial class CymruResponseParser
         var name = match.Success ? fields[4][..match.Index].TrimEnd() : fields[4];
         var dash = name.IndexOf(" - ", StringComparison.Ordinal);
         if (dash >= 0)
-            name = name[..dash].Trim();
+            name = name[(dash + 3)..].Trim();
         if (name.Length == 0)
             return null;
         return (name, match.Success ? match.Groups[1].Value : null);

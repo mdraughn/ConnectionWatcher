@@ -270,8 +270,10 @@ public interface IAsnLookup
    `"7922 | 73.0.0.0/8 | US | arin | 2005-01-27"`. Take the first ASN when
    several are listed (`"7922 33667 | …"`).
 2. TXT query for `AS7922.asn.cymru.com`, answer like
-   `"7922 | US | arin | 2005-01-27 | COMCAST-7922, US"`. The AS name is the
-   last field with the trailing `, CC` removed.
+   `"7922 | US | arin | 2005-01-27 | COMCAST-7922 - Comcast Cable Communications, LLC, US"`.
+   The AS name is the last field with the trailing `, CC` removed and the
+   registry handle before the first ` - ` dropped, so the organization text
+   feeds the operator field and report prose (decided 2026-10-01).
 3. `CymruResponseParser` holds the two parse functions as pure statics so
    they can be unit-tested without DNS.
 4. Timeout 2 s per query; the two queries run in sequence. Results are
@@ -304,7 +306,7 @@ CLI unchanged.
 
 - The table gains **Kind** (Internal / Path / Destination, as a muted
   label) and, when the setting is on, **Operator** (the AS name, e.g.
-  `COMCAST-7922`; blank when unknown). The response carries
+  `Comcast Cable Communications, LLC`; blank when unknown). The response carries
   `asnLookupEnabled: bool` so the page can decide whether to render the
   column.
 - "Add as target" passes `profile=<Internal|Path|Public>` and, when
