@@ -111,6 +111,9 @@ namespace ConPersistence.Migrations
                     b.Property<double>("BurstMaxDurationSeconds")
                         .HasColumnType("REAL");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
                     b.Property<double>("DownThreshold")
                         .HasColumnType("REAL");
 

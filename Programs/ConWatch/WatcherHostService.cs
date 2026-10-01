@@ -91,7 +91,8 @@ public class WatcherHostService(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         // Schema migration happened in DatabaseStartup.PrepareAsync before any
-        // hosted service started; this only seeds an empty config.
+        // hosted service started; this only seeds an empty config, then makes
+        // sure every built-in preset exists (an older database gains Path).
         if (await store.IsEmptyAsync())
         {
             var seed = configuration.GetSection(WatcherOptions.SectionName).Exists()
@@ -99,6 +100,7 @@ public class WatcherHostService(
                 : null;
             await store.SeedAsync(seed);
         }
+        await store.EnsureBuiltInsAsync();
 
         // Appsettings values fill any settings keys not yet in the DB (upgrade
         // path); the table is authoritative from then on. Factory reset seeds
