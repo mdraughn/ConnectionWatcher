@@ -13,6 +13,8 @@ public static partial class CymruResponseParser
 {
     public static string OriginQueryName(IPAddress address)
     {
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            throw new ArgumentException("Only IPv4 addresses can be looked up.", nameof(address));
         var b = address.GetAddressBytes();
         return $"{b[3]}.{b[2]}.{b[1]}.{b[0]}.origin.asn.cymru.com";
     }

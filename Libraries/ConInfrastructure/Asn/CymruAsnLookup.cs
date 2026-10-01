@@ -28,6 +28,8 @@ public sealed class CymruAsnLookup(ILogger<CymruAsnLookup> log, TimeProvider? ti
 
     public async Task<AsnInfo?> LookupAsync(IPAddress address, CancellationToken ct)
     {
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            return null;
         if (ProbePolicy.IsPrivateOrCarrier(address))
             return null;
         if (_cache.TryGetValue(address, out var cached) && cached.Expires > _time.GetUtcNow())
@@ -45,7 +47,7 @@ public sealed class CymruAsnLookup(ILogger<CymruAsnLookup> log, TimeProvider? ti
                 info = new AsnInfo(number, named?.Name ?? $"AS{number}", named?.CountryCode);
             }
         }
-        catch (Exception ex) when (ex is DnsResponseException or OperationCanceledException or TimeoutException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             log.LogDebug(ex, "ASN lookup for {Address} failed", address);
         }

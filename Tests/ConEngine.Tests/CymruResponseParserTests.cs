@@ -12,6 +12,12 @@ public class CymruResponseParserTests
     }
 
     [Fact]
+    public void Origin_query_name_rejects_ipv6()
+    {
+        Assert.Throws<ArgumentException>(() => CymruResponseParser.OriginQueryName(IPAddress.Parse("2001:db8::1")));
+    }
+
+    [Fact]
     public void As_query_name()
     {
         Assert.Equal("AS7922.asn.cymru.com", CymruResponseParser.AsQueryName(7922));
