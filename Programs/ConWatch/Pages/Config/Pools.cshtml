@@ -81,19 +81,29 @@
                     </select>
                 </label>
             </div>
-            <fieldset>
-                <legend>Members (click to add, in stagger order)</legend>
-                <div class="grid">
-                    <div>
-                        @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
-                        {
-                            <button type="button" class="outline" data-add-member="@t.Name">@t.Name</button>
-                        }
+            <fieldset class="cw-duallist">
+                <legend>Members <small>(in stagger order)</small></legend>
+                <div class="cw-duallist-grid">
+                    <label>Available
+                        <select id="available-list" multiple size="7" aria-label="Available targets">
+                            @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                            {
+                                <option>@t.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <div class="cw-duallist-buttons">
+                        <button type="button" class="outline" id="member-add" title="Add selected">Add →</button>
+                        <button type="button" class="outline" id="member-remove" title="Remove selected">← Remove</button>
+                        <button type="button" class="outline" id="member-up" title="Move up">↑</button>
+                        <button type="button" class="outline" id="member-down" title="Move down">↓</button>
                     </div>
-                    <div>
-                        <ol id="member-list"></ol>
-                    </div>
+                    <label>Members
+                        <select id="member-list" multiple size="7" aria-label="Pool members in stagger order"></select>
+                    </label>
                 </div>
+                <small>Member order sets the ping stagger: member <i>k</i> of <i>n</i> pings
+                    <i>k/n</i> of the interval after member 1.</small>
             </fieldset>
             <footer>
                 <button type="button" class="secondary outline" data-cancel>Cancel</button>
@@ -108,30 +118,60 @@
     <script>
         const form = document.getElementById("pool-form");
         const dialog = document.getElementById("pool-dialog");
+        const allTargets = @Html.Raw(json(Model.Config.Targets.OrderBy(t => t.Name).Select(t => t.Name)));
+        const availableList = document.getElementById("available-list");
         const memberList = document.getElementById("member-list");
         let members = [];
 
+        // `members` is the source of truth; both lists are rebuilt from it.
         function renderMembers() {
+            const selectedMembers = new Set([...memberList.selectedOptions].map((o) => o.value));
+            const selectedAvailable = new Set([...availableList.selectedOptions].map((o) => o.value));
             memberList.innerHTML = "";
-            members.forEach((name, i) => {
-                const li = document.createElement("li");
-                li.textContent = name + " ";
-                const up = document.createElement("button");
-                up.type = "button"; up.className = "outline"; up.textContent = "↑";
-                up.onclick = () => { if (i > 0) { [members[i-1], members[i]] = [members[i], members[i-1]]; renderMembers(); } };
-                const remove = document.createElement("button");
-                remove.type = "button"; remove.className = "outline"; remove.textContent = "✕";
-                remove.onclick = () => { members.splice(i, 1); renderMembers(); };
-                li.append(up, remove);
-                memberList.appendChild(li);
-            });
+            for (const name of members) {
+                const o = new Option(name, name);
+                o.selected = selectedMembers.has(name);
+                memberList.add(o);
+            }
+            availableList.innerHTML = "";
+            for (const name of allTargets.filter((n) => !members.includes(n))) {
+                const o = new Option(name, name);
+                o.selected = selectedAvailable.has(name);
+                availableList.add(o);
+            }
+            const idx = memberList.selectedIndex;
+            const one = memberList.selectedOptions.length === 1;
+            document.getElementById("member-up").disabled = !one || idx === 0;
+            document.getElementById("member-down").disabled = !one || idx === members.length - 1;
+            document.getElementById("member-add").disabled = availableList.selectedOptions.length === 0;
+            document.getElementById("member-remove").disabled = memberList.selectedOptions.length === 0;
         }
 
-        document.querySelectorAll("[data-add-member]").forEach((btn) =>
-            btn.addEventListener("click", () => {
-                const name = btn.dataset.addMember;
-                if (!members.includes(name)) { members.push(name); renderMembers(); }
-            }));
+        function addSelected() {
+            for (const o of [...availableList.selectedOptions]) members.push(o.value);
+            renderMembers();
+        }
+        function removeSelected() {
+            const drop = new Set([...memberList.selectedOptions].map((o) => o.value));
+            members = members.filter((n) => !drop.has(n));
+            renderMembers();
+        }
+        function moveSelected(delta) {
+            const i = memberList.selectedIndex;
+            const j = i + delta;
+            if (i < 0 || j < 0 || j >= members.length) return;
+            [members[i], members[j]] = [members[j], members[i]];
+            renderMembers();
+        }
+        document.getElementById("member-add").addEventListener("click", addSelected);
+        document.getElementById("member-remove").addEventListener("click", removeSelected);
+        document.getElementById("member-up").addEventListener("click", () => moveSelected(-1));
+        document.getElementById("member-down").addEventListener("click", () => moveSelected(1));
+        availableList.addEventListener("dblclick", addSelected);
+        memberList.addEventListener("dblclick", removeSelected);
+        availableList.addEventListener("change", renderMembers);
+        memberList.addEventListener("change", renderMembers);
+        renderMembers();
 
         wireConfigPage({
             form,

@@ -249,6 +249,17 @@ dialog form > footer button, dialog form > footer [type=submit] {
     display: inline-block; width: auto; margin-bottom: 0; }
 dialog form > footer button + button { margin-left: calc(var(--pico-spacing) * 0.5); }
 dialog#cw-confirm > article { max-width: 440px; }
+/* Pool member editor: available | buttons | members. Stacks on phones with
+   the buttons as a row between the lists. */
+.cw-duallist-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: start; }
+.cw-duallist-grid label { margin-bottom: 0; }
+.cw-duallist-buttons { display: flex; flex-direction: column; gap: 6px; padding-top: 1.9rem; }
+.cw-duallist-buttons button { margin: 0; white-space: nowrap; }
+.cw-duallist select[multiple] { font-family: var(--mono); font-size: 0.85rem; }
+@media (max-width: 767px) {
+    .cw-duallist-grid { grid-template-columns: 1fr; }
+    .cw-duallist-buttons { flex-direction: row; flex-wrap: wrap; padding-top: 0; }
+}
 .cw-actions { margin: 0.4rem 0 1rem; }
 .cw-muted { color: var(--muted); font-size: 0.85rem; }
 
