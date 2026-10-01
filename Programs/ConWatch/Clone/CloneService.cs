@@ -127,7 +127,7 @@ public class CloneService(IHttpClientFactory httpFactory,
             return fetchError with
             {
                 Error = fetchError.Error +
-                    " The source has been disabled; re-enable it from its Admin page if you are not migrating.",
+                    " The source has been disabled; re-enable it from its Settings page if you are not migrating.",
             };
         var snapshot = fetched.Snapshot!;
 

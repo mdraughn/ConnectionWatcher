@@ -207,7 +207,7 @@ public class SetupApiTests : IDisposable
 
         var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
         Assert.Equal("Internal", targets!.Single(t => t.Name == "Router").Profile);
-        Assert.Equal("Path", targets.Single(t => t.Address == "203.0.113.23").Profile);
-        Assert.Equal("Public", targets.Single(t => t.Address == "8.8.8.8").Profile);
+        Assert.Equal("Path", targets!.Single(t => t.Address == "203.0.113.23").Profile);
+        Assert.Equal("Public", targets!.Single(t => t.Address == "8.8.8.8").Profile);
     }
 }

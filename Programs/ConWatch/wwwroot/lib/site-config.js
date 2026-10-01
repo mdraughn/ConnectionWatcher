@@ -27,13 +27,6 @@ function clearErrors(listEl) {
     listEl.innerHTML = "";
 }
 
-/**
- * Wires a <dialog> so every way out — a [data-cancel] button, Escape, a
- * click on the dimmed backdrop, or the returned close(returnValue) — closes
- * it AND runs onClose(returnValue) once. The dialog's own `close` event
- * would do the same job, but it is queued as a separate task and at least
- * one embedded Chromium build never delivers it, so nothing here waits on it.
- */
 // Posts every [name] field of a form to the settings API; empty means "clear".
 function wireSettingsForm(formId, errorsId) {
     document.getElementById(formId).addEventListener("submit", async (e) => {
@@ -48,6 +41,14 @@ function wireSettingsForm(formId, errorsId) {
         else showErrors(errors, result);
     });
 }
+
+/**
+ * Wires a <dialog> so every way out — a [data-cancel] button, Escape, a
+ * click on the dimmed backdrop, or the returned close(returnValue) — closes
+ * it AND runs onClose(returnValue) once. The dialog's own `close` event
+ * would do the same job, but it is queued as a separate task and at least
+ * one embedded Chromium build never delivers it, so nothing here waits on it.
+ */
 function wireDialog(dialog, onClose) {
     const close = (returnValue = "") => {
         if (!dialog.open) return;
@@ -99,6 +100,7 @@ function confirmDialog(message, { confirmLabel = "OK" } = {}) {
     dialog.querySelector("p").textContent = message;
     dialog.querySelector("[data-ok]").textContent = confirmLabel;
     return new Promise((resolve) => {
+        if (dialog.open) { resolve(false); return; }
         confirmState.settle = resolve;
         dialog.showModal();
         dialog.querySelector("[data-ok]").focus();

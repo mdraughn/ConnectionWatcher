@@ -64,9 +64,11 @@ async function runTraceroute() {
                 hop.kind ?? "",
             ];
             if (body.asnLookupEnabled) cells.push(hop.asName ?? "");
-            for (const text of cells) {
+            const kindIndex = 4;
+            for (const [i, text] of cells.entries()) {
                 const td = document.createElement("td");
                 td.textContent = String(text);
+                if (i === kindIndex) td.className = "cw-muted";
                 row.appendChild(td);
             }
             row.appendChild(addCell);

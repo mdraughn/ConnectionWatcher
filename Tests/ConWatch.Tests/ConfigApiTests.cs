@@ -201,6 +201,6 @@ public class ConfigApiTests : IDisposable
     {
         var profiles = await _client.GetFromJsonAsync<List<ProfileDto>>("/api/v1/profiles");
         Assert.Equal(["Internal", "Path", "Public"], profiles!.Select(p => p.Name).OrderBy(n => n));
-        Assert.All(profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
+        Assert.All(profiles!,p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
     }
 }
