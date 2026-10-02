@@ -46,6 +46,7 @@ public static class TrayStatus
                 targets.GetArrayLength() == 0)
                 return new TrayInfo(TrayState.Measuring, null);
             var states = targets.EnumerateArray()
+                .Where(t => !(t.TryGetProperty("scope", out var scope) && scope.GetString() == "Local"))
                 .Select(t => (Name: t.GetProperty("name").GetString() ?? "",
                               State: t.GetProperty("state").GetString() ?? ""))
                 .ToList();

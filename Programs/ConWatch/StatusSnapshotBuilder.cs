@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConEngine;
 
 namespace ConWatch;
@@ -20,7 +21,8 @@ public sealed record StatusVerdict(string State, string? Detail, string? Operato
 
 /// <param name="Operator">The target's operator/ISP tag, or null.</param>
 public sealed record StatusTarget(Guid Id, string Name, string Address, string? Probe, string State,
-    bool Assumed, double SuccessRate, double AvgRtt, int SampleSize, long PingCount, string? Operator);
+    bool Assumed, double SuccessRate, double AvgRtt, int SampleSize, long PingCount, string? Operator,
+    TargetScope Scope);
 
 public sealed record StatusPool(Guid Id, string Name, string State);
 
@@ -45,7 +47,8 @@ public static class StatusSnapshotBuilder
                 (double)(m.LastStatus?.Host.AverageRoundtripTime ?? 0f),
                 m.LastStatus?.Host.SampleSize ?? 0,
                 m.PingCount,
-                m.Target.Operator))
+                m.Target.Operator,
+                m.Target.Scope))
             .OrderBy(t => t.Name).ToList();
         var pools = engine.PoolCoordinators
             .Select(p => new StatusPool(p.Pool.Id, p.Pool.Name, p.CurrentState.ToString()))

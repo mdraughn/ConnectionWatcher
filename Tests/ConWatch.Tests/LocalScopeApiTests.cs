@@ -38,4 +38,30 @@ public class LocalScopeApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Status_reports_each_targets_scope()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        (await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NAS", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+
+        JsonElement status = default;
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var response = await _client.GetAsync("/api/v1/status");
+            if (!response.IsSuccessStatusCode)
+                return false; // 503 until the engine has started
+            status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+            return status.GetProperty("targets").EnumerateArray()
+                .Any(t => t.GetProperty("name").GetString() == "NAS");
+        });
+
+        var scopes = status.GetProperty("targets").EnumerateArray()
+            .ToDictionary(t => t.GetProperty("name").GetString()!, t => t.GetProperty("scope").GetString());
+        Assert.Equal("Local", scopes["NAS"]);
+        Assert.Equal("Verdict", scopes["Router"]);
+    }
 }

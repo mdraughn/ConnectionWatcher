@@ -34,7 +34,7 @@ public class StatusShapeTests : IDisposable
         Assert.Equal(new[] { "enabled", "pools", "targets", "verdict" }, Keys(status));
         Assert.Equal(new[] { "detail", "operator", "state" }, Keys(status.GetProperty("verdict")));
         Assert.Equal(new[] { "address", "assumed", "avgRtt", "id", "name", "operator", "pingCount",
-                "probe", "sampleSize", "state", "successRate" },
+                "probe", "sampleSize", "scope", "state", "successRate" },
             Keys(status.GetProperty("targets")[0]));
         Assert.Equal(new[] { "id", "name", "state" }, Keys(status.GetProperty("pools")[0]));
     }
