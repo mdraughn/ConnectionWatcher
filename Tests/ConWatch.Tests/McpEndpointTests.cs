@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -166,5 +167,53 @@ public class McpEndpointTests : IDisposable
         foreach (var key in new[] { "id", "timestamp", "subjectId", "subjectName", "subjectKind", "from", "to", "trigger" })
             Assert.True(first.TryGetProperty(key, out _), $"missing '{key}'");
         Assert.Matches(@"\+00:00$", first.GetProperty("timestamp").GetString());
+    }
+
+    [Fact]
+    public async Task Transitions_tool_filters_by_scope_and_tags_each_row()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        (await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NAS", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var body = await _client.GetStringAsync("/api/v1/transitions?limit=200");
+            return body.Contains("\"NAS\"") && body.Contains("\"Router\"");
+        });
+        await InitializeAsync();
+
+        var local = JsonSerializer.Deserialize<JsonElement>(ToolText(await RpcAsync("tools/call", new
+        {
+            name = "get_transitions",
+            arguments = new { scope = "local", limit = 100 },
+        })));
+        Assert.NotEmpty(local.EnumerateArray());
+        Assert.All(local.EnumerateArray(), i =>
+        {
+            Assert.Equal("NAS", i.GetProperty("subjectName").GetString());
+            Assert.Equal("Local", i.GetProperty("scope").GetString());
+        });
+
+        var glitches = JsonSerializer.Deserialize<JsonElement>(ToolText(await RpcAsync("tools/call", new
+        {
+            name = "get_glitches",
+            arguments = new { scope = "local" },
+        })));
+        Assert.Equal(JsonValueKind.Array, glitches.ValueKind);
+    }
+
+    [Fact]
+    public async Task A_bad_scope_is_a_tool_error_not_a_server_failure()
+    {
+        await InitializeAsync();
+        foreach (var tool in new[] { "get_transitions", "get_glitches" })
+        {
+            var result = await RpcAsync("tools/call", new { name = tool, arguments = new { scope = "bogus" } });
+            Assert.True(result.GetProperty("isError").GetBoolean());
+            // The SDK hides the exception message: "An error occurred invoking '<tool>'."
+            Assert.Contains(tool, ToolText(result));
+        }
     }
 }

@@ -11,15 +11,19 @@ public static class HistoryEndpoints
     public static void MapHistory(this RouteGroupBuilder api)
     {
         api.MapGet("/transitions", async (IDbContextFactory<ConWatchDbContext> dbFactory,
-            Guid? subjectId, string? subjectName, string? from, string? to,
+            Guid? subjectId, string? subjectName, string? from, string? to, string? scope,
             int limit = 100, long? before = null) =>
         {
+            if (!ScopeFilters.TryParse(scope, out var scopeFilter))
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null,
+                    "'scope' must be all, internet or local.");
             if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
                 return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.TransitionsAsync(db, subjectId,
-                fromUtc, toUtc, limit, before, subjectName);
-            var items = rows.Select(r => TransitionDto.From(r)).ToList();
+                fromUtc, toUtc, limit, before, subjectName, scopeFilter);
+            var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
+            var items = rows.Select(r => TransitionDto.From(r, localIds)).ToList();
             long? nextBefore = rows.Count == Math.Clamp(limit, 1, 1000) ? rows.Last().Id : null;
             return Results.Ok(new { Items = items, NextBefore = nextBefore });
         });

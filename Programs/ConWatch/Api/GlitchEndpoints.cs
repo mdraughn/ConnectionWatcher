@@ -10,12 +10,16 @@ public static class GlitchEndpoints
     public static void MapGlitches(this RouteGroupBuilder api)
     {
         api.MapGet("/glitches", async (IDbContextFactory<ConWatchDbContext> dbFactory,
-            Guid? targetId, string? from, string? to, int limit = 100) =>
+            Guid? targetId, string? from, string? to, string? scope, int limit = 100) =>
         {
+            if (!ScopeFilters.TryParse(scope, out var scopeFilter))
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null,
+                    "'scope' must be all, internet or local.");
             if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
                 return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
-            var rows = await HistoryQueries.GlitchesAsync(db, targetId, fromUtc, toUtc, limit);
+            var rows = await HistoryQueries.GlitchesAsync(db, targetId, fromUtc, toUtc, limit, scopeFilter);
+            var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
 
             return Results.Ok(new
             {
@@ -26,6 +30,7 @@ public static class GlitchEndpoints
                     StartUtc = new DateTimeOffset(g.StartUtc),
                     EndUtc = new DateTimeOffset(g.EndUtc),
                     g.LostCount, g.SampleCount, g.Detail,
+                    Scope = localIds.Contains(g.TargetId) ? "Local" : "Verdict",
                 }).ToList(),
             });
         });

@@ -67,36 +67,48 @@ public class ConWatchMcpTools(WatcherHostService host,
     [Description("The raw state-transition log (newest first): every recorded state " +
         "change for targets, pools, and the internet verdict, with trigger and evidence. " +
         "Use for detailed digging after get_connection_report. " +
-        "Rows have the REST /api/v1/transitions shape; times are ISO-8601 UTC (+00:00).")]
+        "Rows have the REST /api/v1/transitions shape; times are ISO-8601 UTC (+00:00). " +
+        "Each row has a scope: 'Local' rows are LAN devices (cameras, NAS, IoT) tracked on " +
+        "the side — they are NOT evidence about the internet connection and never affect " +
+        "the verdict; 'Verdict' rows are the path to the internet, its anchors and the verdict.")]
     public async Task<string> GetTransitions(
         [Description("Only transitions at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only transitions at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,
         [Description("Filter to one subject by exact name, e.g. 'Router' or 'Internet' (optional)")] string? subjectName = null,
-        [Description("Max rows, 1-500 (default 100)")] int limit = 100)
+        [Description("Max rows, 1-500 (default 100)")] int limit = 100,
+        [Description("'all' (default), 'internet' (path, anchors, pools, verdict) or 'local' (LAN devices)")] string? scope = null)
     {
+        if (!ScopeFilters.TryParse(scope, out var scopeFilter))
+            throw new ArgumentException("scope must be 'all', 'internet' or 'local'.", nameof(scope));
         await using var db = await dbFactory.CreateDbContextAsync();
         var rows = await HistoryQueries.TransitionsAsync(db, subjectId: null,
             fromUtc is { } f ? TimeRange.AsUtc(f) : null,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
-            Math.Clamp(limit, 1, 500), before: null, subjectName);
-        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r)), Json);
+            Math.Clamp(limit, 1, 500), before: null, subjectName, scopeFilter);
+        var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
+        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, localIds)), Json);
     }
 
     [McpServerTool(Name = "get_glitches", ReadOnly = true)]
     [Description("Sub-outage loss episodes (newest first): brief ping-loss blips too " +
         "small to change any state — 'the page stalled for a second' events. " +
         "class Internet means the blip was corroborated across multiple destinations. " +
-        "Times are ISO-8601 UTC.")]
+        "Times are ISO-8601 UTC. " +
+        "Each row has a scope ('Local' = a LAN device, not internet evidence).")]
     public async Task<string> GetGlitches(
         [Description("Only glitches starting at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only glitches starting at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,
-        [Description("Max rows, 1-500 (default 100)")] int limit = 100)
+        [Description("Max rows, 1-500 (default 100)")] int limit = 100,
+        [Description("'all' (default), 'internet' or 'local' (LAN devices)")] string? scope = null)
     {
+        if (!ScopeFilters.TryParse(scope, out var scopeFilter))
+            throw new ArgumentException("scope must be 'all', 'internet' or 'local'.", nameof(scope));
         await using var db = await dbFactory.CreateDbContextAsync();
         var rows = await HistoryQueries.GlitchesAsync(db, targetId: null,
             fromUtc is { } f ? TimeRange.AsUtc(f) : null,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
-            Math.Clamp(limit, 1, 500));
+            Math.Clamp(limit, 1, 500), scopeFilter);
+        var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
         return JsonSerializer.Serialize(rows.Select(g => new
         {
             StartUtc = g.StartUtc,
@@ -104,6 +116,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             g.TargetName,
             @class = g.Class == 1 ? "Internet" : "Target",
             g.LostCount, g.SampleCount, g.Detail,
+            Scope = localIds.Contains(g.TargetId) ? "Local" : "Verdict",
         }), Json);
     }
 }

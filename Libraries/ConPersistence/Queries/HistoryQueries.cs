@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,7 @@ public static class HistoryQueries
     /// </summary>
     public static async Task<List<TransitionRow>> TransitionsAsync(ConWatchDbContext db,
         Guid? subjectId, DateTime? fromUtc, DateTime? toUtc, int limit, long? before,
-        string? subjectName = null)
+        string? subjectName = null, ScopeFilter scope = ScopeFilter.All)
     {
         limit = Math.Clamp(limit, 1, 1000);
         IQueryable<TransitionRow> query = db.Transitions.AsNoTracking();
@@ -26,6 +27,13 @@ public static class HistoryQueries
             query = query.Where(t => t.TimestampUtc <= to);
         if (before is { } cursor)
             query = query.Where(t => t.Id < cursor);
+        if (scope != ScopeFilter.All)
+        {
+            var localIds = db.Targets.Where(t => t.Scope == TargetScope.Local).Select(t => t.Id);
+            query = scope == ScopeFilter.Local
+                ? query.Where(t => localIds.Contains(t.SubjectId))
+                : query.Where(t => !localIds.Contains(t.SubjectId));
+        }
         return await query.OrderByDescending(t => t.Id).Take(limit).ToListAsync();
     }
 
@@ -62,9 +70,15 @@ public static class HistoryQueries
             .OrderBy(r => r.PeriodStartUtc)
             .ToListAsync();
 
+    /// <summary>The ids of the current Local-scope targets, for tagging history rows with a scope.</summary>
+    public static async Task<HashSet<Guid>> LocalTargetIdsAsync(ConWatchDbContext db) =>
+        (await db.Targets.AsNoTracking().Where(t => t.Scope == TargetScope.Local)
+            .Select(t => t.Id).ToListAsync()).ToHashSet();
+
     /// <summary>Glitches newest-first (by start, then id), optionally for one target and window.</summary>
     public static Task<List<GlitchRow>> GlitchesAsync(ConWatchDbContext db,
-        Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit)
+        Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit,
+        ScopeFilter scope = ScopeFilter.All)
     {
         limit = Math.Clamp(limit, 1, 1000);
         IQueryable<GlitchRow> query = db.Glitches.AsNoTracking();
@@ -74,6 +88,13 @@ public static class HistoryQueries
             query = query.Where(g => g.StartUtc >= from);
         if (toUtc is { } to)
             query = query.Where(g => g.StartUtc <= to);
+        if (scope != ScopeFilter.All)
+        {
+            var localIds = db.Targets.Where(t => t.Scope == TargetScope.Local).Select(t => t.Id);
+            query = scope == ScopeFilter.Local
+                ? query.Where(g => localIds.Contains(g.TargetId))
+                : query.Where(g => !localIds.Contains(g.TargetId));
+        }
         return query.OrderByDescending(g => g.StartUtc).ThenByDescending(g => g.Id)
             .Take(limit).ToListAsync();
     }

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ConCore.Targets;
 using ConEngine.Events;
 using ConPersistence.Entities;
 
@@ -33,6 +34,10 @@ public sealed record TransitionDto
     public string? Detail { get; init; }
     public string? Verdict { get; init; }
     public float AvgRtt { get; init; }
+    /// <summary>"Verdict" or "Local" on history rows (REST /transitions, MCP get_transitions);
+    /// omitted on live messages, whose subscribers know their targets.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TargetScope? Scope { get; init; }
 
     public static TransitionDto From(TargetTransition t) => new()
     {
@@ -71,5 +76,12 @@ public sealed record TransitionDto
         Detail = r.Detail,
         Verdict = r.Verdict,
         AvgRtt = r.AvgRtt,
+    };
+
+    /// <summary>A history row tagged with its subject's current scope; pools, the verdict
+    /// and since-deleted targets read as <see cref="TargetScope.Verdict"/>.</summary>
+    public static TransitionDto From(TransitionRow r, ISet<Guid> localIds) => From(r) with
+    {
+        Scope = localIds.Contains(r.SubjectId) ? TargetScope.Local : TargetScope.Verdict,
     };
 }
