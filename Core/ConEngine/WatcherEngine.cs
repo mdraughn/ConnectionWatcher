@@ -96,6 +96,15 @@ public class WatcherEngine
     public IReadOnlyList<PoolCoordinator> PoolCoordinators => _poolCoordinators;
     public TargetGraph Graph => _graph ?? throw new InvalidOperationException("Engine not started");
 
+    /// <summary>
+    /// True when <paramref name="subjectId"/> is a Local-scope target. Transitions
+    /// carry only an id, so the notifiers use this to leave Local targets out.
+    /// False for pools, the verdict subject, unknown ids and before the engine starts.
+    /// </summary>
+    public bool IsLocalSubject(Guid subjectId) =>
+        _graph is { } graph && graph.Targets.TryGetValue(subjectId, out var target)
+        && target.Scope == TargetScope.Local;
+
     private bool _warmStart;
 
     /// <summary>
@@ -224,7 +233,10 @@ public class WatcherEngine
                         _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed",
                             monitor.Target.Name);
                     }
-                    Suspicion?.OnPingSample(monitor.Target.Id, result);
+                    // Local targets are tracked on the side: no suspicion bursts,
+                    // corroboration sweeps or glitch episodes (spec §3 exclusions).
+                    if (monitor.Target.Scope != TargetScope.Local)
+                        Suspicion?.OnPingSample(monitor.Target.Id, result);
                 }
             },
             ex => _log.LogError(ex, "Error in ping result stream"),
