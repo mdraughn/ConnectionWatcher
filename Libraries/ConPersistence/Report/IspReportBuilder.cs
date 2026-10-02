@@ -56,8 +56,13 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
     private static async Task<GlitchSummary> BuildGlitchSummaryAsync(
         ConWatchDbContext db, DateTime fromUtc, DateTime toUtc)
     {
+        // Local targets (including ones switched from Verdict, whose old glitches remain)
+        // are not ISP evidence. Internet-class glitches carry the verdict subject id,
+        // which is not in Targets, so they are kept.
+        var localIds = await db.Targets.AsNoTracking()
+            .Where(t => t.Scope == TargetScope.Local).Select(t => t.Id).ToListAsync();
         var glitches = await db.Glitches.AsNoTracking()
-            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc)
+            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc && !localIds.Contains(g.TargetId))
             .ToListAsync();
 
         var topHours = glitches
@@ -158,7 +163,9 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
     private static async Task<(List<TargetReportRow> Rows, double? AnchorUptime)> BuildTargetRowsAsync(
         ConWatchDbContext db, DateTime fromUtc, DateTime toUtc, List<string> anchorNames)
     {
-        var targets = await db.Targets.AsNoTracking().OrderBy(t => t.Name).ToListAsync();
+        var targets = await db.Targets.AsNoTracking()
+            .Where(t => t.Scope == TargetScope.Verdict)
+            .OrderBy(t => t.Name).ToListAsync();
         var targetIds = targets.Select(t => t.Id).ToList();
 
         var transitionsBySubject = (await db.Transitions.AsNoTracking()

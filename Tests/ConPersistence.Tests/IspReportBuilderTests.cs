@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConEngine.Topology;
 using ConPersistence.Config;
 using ConPersistence.Entities;
@@ -224,5 +225,34 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(3, report.Glitches.TopHours[0].HourUtc);   // 03:00 UTC dominates
         Assert.Equal(4, report.Glitches.TopHours[0].Count);     // 3 target + 1 internet
         Assert.Equal(["Google"], report.Glitches.ChronicTargets); // 03:xx + 20:00 + 22:00 of the last day
+    }
+
+    [Fact]
+    public async Task Local_targets_and_their_history_stay_out_of_the_report()
+    {
+        var service = new ConfigService(_factory, _store);
+        Assert.True((await service.UpsertTargetAsync(new TargetDto
+        {
+            Name = "NAS", Address = "203.0.113.9", Profile = "Local", Scope = TargetScope.Local,
+        })).Success);
+        var nasId = (await _store.LoadWatcherOptionsAsync()).Targets.Single(t => t.Name == "NAS").Id!.Value;
+
+        await AddTransition(nasId, "NAS", From.AddHours(2), "Down");
+        await AddRollup(nasId, From.AddHours(1), 100, 50);
+        await using (var db = _factory.CreateDbContext())
+        {
+            // Three class-0 glitches in distinct hours late in the period would make NAS "chronic".
+            for (int i = 0; i < 3; i++)
+                db.Glitches.Add(new GlitchRow { TargetId = nasId, TargetName = "NAS", Class = 0,
+                    StartUtc = To.AddHours(-1 - i), EndUtc = To.AddHours(-1 - i), LostCount = 2, SampleCount = 8 });
+            await db.SaveChangesAsync();
+        }
+
+        var report = await _builder.BuildAsync(From, To);
+
+        Assert.DoesNotContain(report.Targets, r => r.Name == "NAS");
+        Assert.Equal(0, report.Glitches.TotalCount);
+        Assert.DoesNotContain("NAS", report.Glitches.ChronicTargets);
+        Assert.Contains(report.Targets, r => r.Name == "Google"); // verdict targets still reported
     }
 }
