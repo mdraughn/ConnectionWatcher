@@ -140,6 +140,36 @@ public class NotifierIntegrationTests
     }
 
     [Fact]
+    public async Task Local_target_transitions_are_not_delivered_to_a_webhook()
+    {
+        using var hook = new Hook();
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+        await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+        {
+            ["Webhook.Enabled"] = "true",
+            ["Webhook.Urls"] = hook.Url("/hook"),
+        });
+
+        await ConfigApiTests.SeedHomeAsync(client);
+        (await client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "LocalNas", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+        // A verdict-scope target added AFTER the Local one is a marker: webhooks are
+        // delivered FIFO, so once it arrives any Local delivery would already have.
+        (await client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "MarkerHost", address = "203.0.113.20", parent = "Router", profile = "Fast",
+        })).EnsureSuccessStatusCode();
+
+        await ConfigApiTests.Eventually(() =>
+            Task.FromResult(hook.Received.Any(r => r.Body.Contains("MarkerHost"))));
+
+        Assert.DoesNotContain(hook.Received, r => r.Body.Contains("LocalNas"));
+    }
+
+    [Fact]
     public async Task VerdictOnly_suppresses_target_transitions()
     {
         using var hook = new Hook();

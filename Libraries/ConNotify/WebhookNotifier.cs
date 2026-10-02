@@ -26,7 +26,12 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
     {
         _subscription?.Dispose();
         _subscription = engine.TransitionSource.Subscribe(
-            t => _queue.Writer.TryWrite(t),
+            t =>
+            {
+                // Local (LAN-device) targets never notify; verdict/pool subjects pass.
+                if (!engine.IsLocalSubject(t.TargetId))
+                    _queue.Writer.TryWrite(t);
+            },
             ex => log.LogError(ex, "Transition stream error in webhook notifier"));
     }
 

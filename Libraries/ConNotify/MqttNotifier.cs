@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using ConCore.Targets;
 using ConEngine;
 using ConEngine.Events;
 using ConPersistence;
@@ -64,7 +65,11 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             _subscription?.Dispose();
             _engine = engine;
             _subscription = engine.TransitionSource.Subscribe(
-                _inbox.Post,
+                t =>
+                {
+                    if (!engine.IsLocalSubject(t.TargetId))
+                        _inbox.Post(t);
+                },
                 ex => log.LogError(ex, "Transition stream error in MQTT notifier"));
         }
         _inbox.Refresh();
@@ -189,7 +194,9 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         // Deterministic slugs: iterate by name.
         var slugger = new Slugger();
         var slugs = new Dictionary<Guid, string>();
-        var monitors = engine.Monitors.Values.OrderBy(m => m.Target.Name).ToList();
+        var monitors = engine.Monitors.Values
+            .Where(m => m.Target.Scope != TargetScope.Local)
+            .OrderBy(m => m.Target.Name).ToList();
         foreach (var monitor in monitors)
             slugs[monitor.Target.Id] = slugger.Slug(monitor.Target.Name);
 
