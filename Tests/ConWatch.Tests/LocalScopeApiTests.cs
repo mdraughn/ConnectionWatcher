@@ -40,6 +40,19 @@ public class LocalScopeApiTests : IDisposable
     }
 
     [Fact]
+    public async Task An_undefined_numeric_scope_is_400_and_not_created()
+    {
+        var response = await _client.PostAsync("/api/v1/targets", new StringContent(
+            "{\"name\":\"NAS\",\"address\":\"203.0.113.9\",\"profile\":\"Internal\",\"scope\":7}",
+            Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var list = await _client.GetStringAsync("/api/v1/targets");
+        Assert.DoesNotContain(JsonSerializer.Deserialize<JsonElement>(list).EnumerateArray(),
+            t => t.GetProperty("name").GetString() == "NAS");
+    }
+
+    [Fact]
     public async Task Status_reports_each_targets_scope()
     {
         await ConfigApiTests.SeedHomeAsync(_client);

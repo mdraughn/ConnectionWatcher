@@ -37,6 +37,9 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
             else if (probeValid && !addressProbes.Add($"{t.Address}|{probe}"))
                 failures.Add($"Duplicate target address '{t.Address}' with probe '{probe}'.");
 
+            if (!Enum.IsDefined(t.Scope))
+                failures.Add($"Target '{t.Name}' has unknown scope '{t.Scope}'.");
+
             if (t.Scope == TargetScope.Local)
             {
                 if (!string.IsNullOrWhiteSpace(t.Name))

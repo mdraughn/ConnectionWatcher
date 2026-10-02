@@ -20,6 +20,17 @@ public class LocalScopeValidationTests
     }
 
     [Fact]
+    public void An_undefined_scope_value_is_rejected()
+    {
+        var odd = Router;
+        odd.Scope = (TargetScope)7;
+        var result = Validate(new WatcherOptions { Targets = [odd] });
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, f => f.Contains("has unknown scope"));
+    }
+
+    [Fact]
     public void A_Local_target_cannot_have_a_parent()
     {
         var nas = Nas;
