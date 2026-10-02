@@ -437,12 +437,11 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var googleId = await IdOf("Google"); // member of Internet
         var result = await _service.UpsertTargetAsync(new TargetDto
         {
-            Id = googleId, Name = "Google", Address = "8.8.8.8", Parent = "Modem", Profile = "Public",
+            Id = googleId, Name = "Google", Address = "8.8.8.8", Profile = "Public",
             Scope = ConCore.Targets.TargetScope.Local,
         });
         Assert.False(result.Success);
-        Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot be pool members")
-            || e.Contains("cannot have a parent"));
+        Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot be pool members"));
     }
 
     [Fact]
