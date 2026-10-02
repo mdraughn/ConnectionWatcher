@@ -63,6 +63,14 @@ Rules:
   suggested profile); the user chooses `Scope` (`Verdict` or `Local`) and
   saves. Creating the target and marking the discovery `Adopted` happen in one
   transaction (target-create takes an optional `discoveryId`).
+- **Managing dismissals.** The dismissal record *is* the `Dismissed` row: it
+  persists indefinitely (rows are tiny; no pruning) so a rediscovered address
+  stays dismissed. The Discoveries page has a status filter (New — the
+  default, Dismissed, Adopted, All); the Dismissed view is the dismissal list.
+  Each dismissed row has **Restore** (status back to `New`), and the page has
+  **Restore all dismissed**. There is deliberately no separate "forget"
+  action: deleting a row would only make it reappear as New on the next scan,
+  which is what Restore does directly.
 - If an adopted target is later deleted, the discovery stays `Adopted` with a
   dangling id shown as "(target removed)"; the user may dismiss or re-adopt.
   (Decision: no auto-reset, to avoid surprising resurfacing.)
@@ -133,10 +141,12 @@ clutter ISP evidence; one click shows them.
 
 **Endpoints** (all admin-gated; none open):
 
-- `GET /api/v1/discoveries`
+- `GET /api/v1/discoveries?status=New|Dismissed|Adopted|All` (default `New`)
 - `POST /api/v1/discoveries` — batch upsert (tray)
 - `POST /api/v1/discoveries/search/router`, `/search/lan` — server-side search
 - `POST /api/v1/discoveries/{id}/dismiss`
+- `POST /api/v1/discoveries/{id}/restore`
+- `POST /api/v1/discoveries/restore-dismissed`
 - Target creation accepts optional `discoveryId` (adopt).
 
 **Clone.** Local targets ride in the snapshot like any other target: clone is a
@@ -153,7 +163,8 @@ homelab; documented in SECURITY.md and the README.
 
 **MCP.** Stays read-only. Adopted Local targets appear through the existing
 status/history tools with a `scope` field; a new `list_discoveries` tool returns
-the inbox (kind, method, origin, status). Searching, adopting and dismissing
+the inbox (kind, method, origin, status), New by default with an optional
+`status` filter. Searching, adopting and dismissing
 are not exposed on MCP (they mutate state or generate network traffic and
 remain admin-authenticated REST).
 
@@ -173,8 +184,8 @@ times out.
 
 - Scanner with fake ARP/pinger/traceroute/DNS: router, edge and LAN methods;
   private-range and /24 cap enforcement.
-- Discovery store: upsert/dedupe, dismissed-stays-dismissed, adopt
-  transaction, dangling adopted target.
+- Discovery store: upsert/dedupe, dismissed-stays-dismissed, restore and
+  restore-all, status filtering, adopt transaction, dangling adopted target.
 - Scope: a Local target going down does not change the verdict, produce a
   notification, or appear in the ISP report; validation rules; migration;
   import of an older snapshot defaults to `Verdict`; built-in Local profile
