@@ -401,4 +401,62 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.False(result.Success);
         Assert.Contains(result.Errors!, e => e.Contains("Long") && e.Contains("500"));
     }
+
+    [Fact]
+    public async Task Creating_a_Local_root_target_succeeds()
+    {
+        var result = await _service.UpsertTargetAsync(new TargetDto
+        {
+            Name = "NAS", Address = "203.0.113.9", Profile = "Local", Scope = ConCore.Targets.TargetScope.Local,
+        });
+        Assert.True(result.Success);
+        var options = await _store.LoadWatcherOptionsAsync();
+        Assert.Equal(ConCore.Targets.TargetScope.Local, options.Targets.Single(t => t.Name == "NAS").Scope);
+    }
+
+    [Fact]
+    public async Task Switching_a_target_that_has_children_to_Local_is_rejected_and_rolled_back()
+    {
+        var routerId = await IdOf("Router"); // parent of Modem
+        var result = await _service.UpsertTargetAsync(new TargetDto
+        {
+            Id = routerId, Name = "Router", Address = "192.168.1.1", Profile = "Internal",
+            Scope = ConCore.Targets.TargetScope.Local,
+        });
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot have children"));
+        Assert.Equal(0, _changeSignals);
+        var options = await _store.LoadWatcherOptionsAsync();
+        Assert.Equal(ConCore.Targets.TargetScope.Verdict, options.Targets.Single(t => t.Name == "Router").Scope);
+    }
+
+    [Fact]
+    public async Task Switching_a_pool_member_to_Local_is_rejected()
+    {
+        var googleId = await IdOf("Google"); // member of Internet
+        var result = await _service.UpsertTargetAsync(new TargetDto
+        {
+            Id = googleId, Name = "Google", Address = "8.8.8.8", Parent = "Modem", Profile = "Public",
+            Scope = ConCore.Targets.TargetScope.Local,
+        });
+        Assert.False(result.Success);
+        Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot be pool members")
+            || e.Contains("cannot have a parent"));
+    }
+
+    [Fact]
+    public async Task A_target_cannot_be_parented_to_a_Local_target()
+    {
+        Assert.True((await _service.UpsertTargetAsync(new TargetDto
+        {
+            Name = "NAS", Address = "203.0.113.9", Profile = "Local", Scope = ConCore.Targets.TargetScope.Local,
+        })).Success);
+        var result = await _service.UpsertTargetAsync(new TargetDto
+        {
+            Name = "Backup", Address = "203.0.113.10", Parent = "NAS", Profile = "Internal",
+        });
+        Assert.False(result.Success);
+        Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot have children"));
+    }
 }

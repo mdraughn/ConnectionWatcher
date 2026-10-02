@@ -1,4 +1,5 @@
 using ConCore;
+using ConCore.Targets;
 using Microsoft.Extensions.Options;
 
 namespace ConEngine.Configuration;
@@ -13,6 +14,7 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
         // Targets may share an address (each gets its own controller); the
         // same address probed the same way twice is a typo, not a choice.
         var addressProbes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var localNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var t in options.Targets)
         {
@@ -34,6 +36,14 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
                 failures.Add($"Target '{t.Name}' has an empty Address.");
             else if (probeValid && !addressProbes.Add($"{t.Address}|{probe}"))
                 failures.Add($"Duplicate target address '{t.Address}' with probe '{probe}'.");
+
+            if (t.Scope == TargetScope.Local)
+            {
+                if (!string.IsNullOrWhiteSpace(t.Name))
+                    localNames.Add(t.Name);
+                if (t.Parent is { Length: > 0 })
+                    failures.Add($"Target '{t.Name}' is Local and cannot have a parent.");
+            }
         }
 
         var poolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -54,10 +64,14 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
                     failures.Add(options.Pools.Any(x => x.Name.Equals(m, StringComparison.OrdinalIgnoreCase))
                         ? $"Pool '{p.Name}' member '{m}' is a pool; pools cannot contain pools."
                         : $"Pool '{p.Name}' references unknown member '{m}'.");
+                else if (localNames.Contains(m))
+                    failures.Add($"Pool '{p.Name}' member '{m}' is a Local target; Local targets cannot be pool members.");
             }
 
             if (p.Parent is { Length: > 0 } && !targetNames.Contains(p.Parent))
                 failures.Add($"Pool '{p.Name}' references unknown parent target '{p.Parent}'.");
+            else if (p.Parent is { Length: > 0 } && localNames.Contains(p.Parent))
+                failures.Add($"Pool '{p.Name}' has Local target '{p.Parent}' as parent; Local targets cannot have children.");
         }
 
         foreach (var t in options.Targets)
@@ -68,6 +82,8 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
                 failures.Add($"Target '{t.Name}' has pool '{t.Parent}' as parent; pools cannot be parents.");
             else if (!targetNames.Contains(t.Parent))
                 failures.Add($"Target '{t.Name}' references unknown parent '{t.Parent}'.");
+            else if (localNames.Contains(t.Parent))
+                failures.Add($"Target '{t.Name}' has Local target '{t.Parent}' as parent; Local targets cannot have children.");
         }
 
         // Cycle detection: walk up from every target.
