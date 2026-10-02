@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -30,6 +31,8 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
             e.Property(t => t.Name).UseCollation("NOCASE");
             e.HasOne<TargetRow>().WithMany().HasForeignKey(t => t.ParentId);
             e.HasOne<ProfileRow>().WithMany().HasForeignKey(t => t.ProfileId);
+            e.Property(t => t.Scope).HasConversion<string>().HasMaxLength(16)
+                .HasDefaultValue(TargetScope.Verdict);
         });
 
         modelBuilder.Entity<PoolRow>(e =>

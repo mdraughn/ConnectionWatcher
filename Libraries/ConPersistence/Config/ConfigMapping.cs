@@ -110,7 +110,7 @@ internal static class ConfigMapping
     {
         Id = t.Id, Name = t.Name, Address = t.Address,
         Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
-        Operator = t.Operator, Probe = t.Probe,
+        Operator = t.Operator, Probe = t.Probe, Scope = t.Scope,
     };
 
     /// <summary>Engine-options shape normalized exactly as it will be stored (the validator sees what will be stored).</summary>
@@ -118,14 +118,14 @@ internal static class ConfigMapping
     {
         Id = t.Id, Name = t.Name, Address = NormalizeAddress(t.Address),
         Parent = t.Parent, Profile = t.Profile, Enabled = t.Enabled,
-        Operator = t.Operator, Probe = NormalizeProbe(t.Probe),
+        Operator = t.Operator, Probe = NormalizeProbe(t.Probe), Scope = t.Scope,
     };
 
     public static TargetConfig ToConfig(this TargetRow t, string? parentName, string profileName) => new()
     {
         Id = t.Id, Name = t.Name, Address = t.Address,
         Parent = parentName, Profile = profileName, Enabled = t.Enabled,
-        Operator = t.Operator, Probe = t.Probe,
+        Operator = t.Operator, Probe = t.Probe, Scope = t.Scope,
     };
 
     /// <summary>
@@ -142,6 +142,7 @@ internal static class ConfigMapping
         row.Enabled = dto.Enabled;
         row.Operator = NormalizeOperator(dto.Operator);
         row.Probe = NormalizeProbe(dto.Probe);
+        row.Scope = dto.Scope;
         return row;
     }
 

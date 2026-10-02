@@ -234,6 +234,13 @@ namespace ConPersistence.Migrations
                     b.Property<Guid>("ProfileId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Verdict");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")

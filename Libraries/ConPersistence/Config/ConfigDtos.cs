@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConEngine.Configuration;
 
 namespace ConPersistence.Config;
@@ -38,6 +39,8 @@ public record TargetDto
     public string? Operator { get; init; }
     /// <summary>Optional probe override ("tcp:&lt;port&gt;"); null means ICMP echo.</summary>
     public string? Probe { get; init; }
+    /// <summary>Verdict (default) or Local; a missing value (older clients/snapshots) means Verdict.</summary>
+    public TargetScope Scope { get; init; } = TargetScope.Verdict;
 }
 
 /// <summary>Pool for API/CRUD and export. Members/Parent referenced by name.</summary>

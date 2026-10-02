@@ -18,4 +18,6 @@ public record Target
     public string? Operator { get; init; }
     /// <summary>Optional probe override ("tcp:&lt;port&gt;"); null means ICMP echo.</summary>
     public string? Probe { get; init; } = null;
+    /// <summary>Whether this target feeds the verdict (default) or is a LAN device tracked on the side.</summary>
+    public TargetScope Scope { get; init; } = TargetScope.Verdict;
 }

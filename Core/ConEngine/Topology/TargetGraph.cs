@@ -53,6 +53,7 @@ public class TargetGraph
                 Enabled = t.Enabled,
                 Operator = t.Operator,
                 Probe = t.Probe,
+                Scope = t.Scope,
             });
 
         var poolDefs = options.Pools

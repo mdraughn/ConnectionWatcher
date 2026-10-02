@@ -49,7 +49,7 @@ public class SnapshotShapeTests
             "burstMaxDurationSeconds", "historySize", "minUsableSample", "respondingThreshold",
             "falteringThreshold", "downThreshold", "recoveringThreshold");
         AssertKeys(json.GetProperty("config").GetProperty("targets")[0],
-            "id", "name", "address", "parent", "profile", "enabled", "operator", "probe");
+            "id", "name", "address", "parent", "profile", "enabled", "operator", "probe", "scope");
         AssertKeys(json.GetProperty("config").GetProperty("pools")[0], "id", "name", "members", "parent");
         AssertKeys(json.GetProperty("transitions")[0],
             "id", "timestampUtc", "subjectId", "subjectName", "subjectKind", "fromState", "toState",

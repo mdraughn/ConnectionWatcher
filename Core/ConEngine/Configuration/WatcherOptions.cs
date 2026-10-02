@@ -29,6 +29,8 @@ public class TargetConfig
     public string? Operator { get; set; }
     /// <summary>Optional probe override ("tcp:&lt;port&gt;"); null means ICMP echo.</summary>
     public string? Probe { get; set; }
+    /// <summary>Verdict (default) or Local; Local targets never affect the verdict.</summary>
+    public TargetScope Scope { get; set; } = TargetScope.Verdict;
 }
 
 /// <summary>A rotation pool, as authored in configuration.</summary>
