@@ -3,6 +3,7 @@ using System.Text;
 using ConEngine;
 using ConEngine.Topology;
 using ConEngine.Tracking;
+using ConCore.Targets;
 using ConWatch.Metrics;
 
 namespace ConWatch.Api;
@@ -23,6 +24,10 @@ public static class MetricsEndpoint
     internal static string Render(WatcherEngine? engine, MetricsCounters counters, bool enabled, DateTimeOffset now)
     {
         var sb = new StringBuilder();
+        var localNames = engine is null
+            ? new HashSet<string>()
+            : engine.Monitors.Values.Where(m => m.Target.Scope == TargetScope.Local)
+                .Select(m => m.Target.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         Family(sb, "conwatch_build_info", "gauge", "Build version as a label; the value is always 1.");
         sb.Append("conwatch_build_info{version=\"").Append(Escape(BuildInfo.Version)).Append("\"} 1\n");
@@ -51,19 +56,19 @@ public static class MetricsEndpoint
 
             Family(sb, "conwatch_target_up", "gauge", "1 while the target is responding.");
             foreach (var m in targets)
-                Series(sb, "conwatch_target_up", m.Target.Name, m.CurrentState == HostState.Responding ? 1 : 0);
+                Series(sb, "conwatch_target_up", m.Target.Name, m.CurrentState == HostState.Responding ? 1 : 0, localNames.Contains(m.Target.Name));
 
             Family(sb, "conwatch_target_loss_ratio", "gauge", "Packet loss over the sliding sample window (0..1).");
             foreach (var m in targets)
-                Series(sb, "conwatch_target_loss_ratio", m.Target.Name, m.LastStatus?.Host.FailureRate ?? 0f);
+                Series(sb, "conwatch_target_loss_ratio", m.Target.Name, m.LastStatus?.Host.FailureRate ?? 0f, localNames.Contains(m.Target.Name));
 
             Family(sb, "conwatch_target_rtt_seconds", "gauge", "Average round-trip time over the sliding sample window.");
             foreach (var m in targets)
-                Series(sb, "conwatch_target_rtt_seconds", m.Target.Name, (m.LastStatus?.Host.AverageRoundtripTime ?? 0f) / 1000.0);
+                Series(sb, "conwatch_target_rtt_seconds", m.Target.Name, (m.LastStatus?.Host.AverageRoundtripTime ?? 0f) / 1000.0, localNames.Contains(m.Target.Name));
 
             Family(sb, "conwatch_target_sample_size", "gauge", "Pings in the sliding sample window.");
             foreach (var m in targets)
-                Series(sb, "conwatch_target_sample_size", m.Target.Name, m.LastStatus?.Host.SampleSize ?? 0);
+                Series(sb, "conwatch_target_sample_size", m.Target.Name, m.LastStatus?.Host.SampleSize ?? 0, localNames.Contains(m.Target.Name));
 
             Family(sb, "conwatch_pool_up", "gauge", "1 while the pool is responding.");
             foreach (var p in engine.PoolCoordinators.OrderBy(p => p.Pool.Name))
@@ -86,7 +91,7 @@ public static class MetricsEndpoint
                 totals.TryAdd(VerdictCoordinator.SubjectName, 0);
         }
         foreach (var (name, count) in totals.OrderBy(kv => kv.Key))
-            Series(sb, "conwatch_transitions_total", name, count);
+            Series(sb, "conwatch_transitions_total", name, count, localNames.Contains(name));
 
         Family(sb, "conwatch_glitches_total", "counter", "Glitches (blips too short to be transitions) since process start.");
         sb.Append("conwatch_glitches_total ").Append(counters.Glitches).Append('\n');
@@ -98,8 +103,10 @@ public static class MetricsEndpoint
         sb.Append("# HELP ").Append(name).Append(' ').Append(help).Append('\n')
           .Append("# TYPE ").Append(name).Append(' ').Append(type).Append('\n');
 
-    private static void Series(StringBuilder sb, string family, string name, double value) =>
-        sb.Append(family).Append("{name=\"").Append(Escape(name)).Append("\"} ")
+    private static void Series(StringBuilder sb, string family, string name, double value, bool local = false) =>
+        sb.Append(family).Append("{name=\"").Append(Escape(name)).Append('"')
+          .Append(local ? ",scope=\"local\"" : "")
+          .Append("} ")
           .Append(value.ToString("0.######", CultureInfo.InvariantCulture)).Append('\n');
 
     private static string Escape(string value) =>

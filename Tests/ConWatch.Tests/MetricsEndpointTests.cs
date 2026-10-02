@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 
 namespace ConWatch.Tests;
 
@@ -131,5 +132,27 @@ public class MetricsEndpointTests : IDisposable
             "transition counter should grow when a target goes down");
         Assert.Contains("# TYPE conwatch_transitions_total counter", body);
         Assert.Contains("# TYPE conwatch_glitches_total counter", body);
+    }
+
+    [Fact]
+    public async Task Local_targets_carry_a_scope_label_and_verdict_targets_do_not()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        (await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NAS", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+
+        var body = "";
+        await ConfigApiTests.Eventually(async () =>
+        {
+            body = await ScrapeAsync();
+            return body.Contains("conwatch_target_up{name=\"NAS\",scope=\"local\"}")
+                && body.Contains("conwatch_target_up{name=\"Router\"}");
+        });
+
+        Assert.Contains("conwatch_target_sample_size{name=\"NAS\",scope=\"local\"}", body);
+        Assert.Contains("conwatch_transitions_total{name=\"NAS\",scope=\"local\"}", body);
+        Assert.DoesNotContain("name=\"Router\",scope=", body);
     }
 }
