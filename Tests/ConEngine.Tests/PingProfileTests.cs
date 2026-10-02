@@ -28,8 +28,8 @@ public class PingProfileTests
     }
 
     [Fact]
-    public void BuiltIns_lists_the_three_presets_in_order()
+    public void BuiltIns_lists_the_four_presets_in_order()
     {
-        Assert.Equal(["Internal", "Path", "Public"], PingProfile.BuiltIns.Select(p => p.Name));
+        Assert.Equal(["Internal", "Path", "Public", "Local"], PingProfile.BuiltIns.Select(p => p.Name));
     }
 }

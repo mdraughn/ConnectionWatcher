@@ -197,10 +197,10 @@ public class ConfigApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Fresh_install_has_three_described_builtins()
+    public async Task Fresh_install_has_four_described_builtins()
     {
         var profiles = await _client.GetFromJsonAsync<List<ProfileDto>>("/api/v1/profiles");
-        Assert.Equal(["Internal", "Path", "Public"], profiles!.Select(p => p.Name).OrderBy(n => n));
+        Assert.Equal(["Internal", "Local", "Path", "Public"], profiles!.Select(p => p.Name).OrderBy(n => n));
         Assert.All(profiles!,p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
     }
 }

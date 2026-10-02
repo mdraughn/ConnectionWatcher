@@ -27,8 +27,21 @@ public record PingProfile
     /// <summary>Preset for public internet sites: polite steady cadence.</summary>
     public static PingProfile Public { get; } = new() { Name = "Public", NormalInterval = TimeSpan.FromSeconds(10) };
 
+    /// <summary>Preset for LAN devices tracked beside the verdict (cameras, IoT, NAS):
+    /// a smaller, more forgiving window so a sleepy device is not "down" for one missed ping.
+    /// Same interval as <see cref="Public"/> so the engine's stall window is unchanged.</summary>
+    public static PingProfile Local { get; } = new()
+    {
+        Name = "Local",
+        NormalInterval = TimeSpan.FromSeconds(10),
+        HistorySize = 30,
+        MinUsableSample = 6,
+        RespondingThreshold = 0.80,
+        FalteringThreshold = 0.50,
+    };
+
     /// <summary>The presets every configuration has, in display order.</summary>
-    public static IReadOnlyList<PingProfile> BuiltIns { get; } = [Internal, Path, Public];
+    public static IReadOnlyList<PingProfile> BuiltIns { get; } = [Internal, Path, Public, Local];
 
     /// <summary>True for a built-in preset name, ignoring case.</summary>
     public static bool IsBuiltIn(string name) =>

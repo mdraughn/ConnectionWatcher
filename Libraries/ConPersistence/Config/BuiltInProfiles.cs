@@ -20,5 +20,7 @@ public static class BuiltInProfiles
         new(PingProfile.Path, "Hops on your route to the internet that you don't own but may " +
                               "probe steadily, such as the ISP gateway."),
         new(PingProfile.Public, "Public internet sites. Be polite."),
+        new(PingProfile.Local, "LAN devices tracked on the side — cameras, IoT, NAS. Gentle and " +
+                               "forgiving; never affects your internet verdict."),
     ];
 }

@@ -268,7 +268,7 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.True(result.Success);
 
         var export = await _store.ExportAsync();
-        Assert.Equal(["External", "Internal", "Path", "Public"], export.Profiles.Select(p => p.Name).Order().ToArray());
+        Assert.Equal(["External", "Internal", "Local", "Path", "Public"], export.Profiles.Select(p => p.Name).Order().ToArray());
         Assert.Equal("External", export.Targets.Single().Profile);
         Assert.All(export.Profiles.Where(p => p.Name is "Path" or "Public"), p => Assert.NotNull(p.Description));
     }

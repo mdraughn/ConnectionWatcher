@@ -65,7 +65,7 @@ public class ProfileMigrationTests : IDisposable
         await store.EnsureBuiltInsAsync();
 
         var doc = await store.ExportAsync();
-        Assert.Equal(["Internal", "Path", "Public"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
+        Assert.Equal(["Internal", "Local", "Path", "Public"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
         Assert.Equal("Public", doc.Targets.Single(t => t.Name == "Google").Profile);
         Assert.Equal(10, doc.Profiles.Single(p => p.Name == "Public").NormalIntervalSeconds);
         Assert.All(doc.Profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
@@ -82,7 +82,7 @@ public class ProfileMigrationTests : IDisposable
         await store.EnsureBuiltInsAsync();
 
         var doc = await store.ExportAsync();
-        Assert.Equal(["External", "Internal", "Path", "Public"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
+        Assert.Equal(["External", "Internal", "Local", "Path", "Public"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
         Assert.Equal("External", doc.Targets.Single(t => t.Name == "Google").Profile);
         Assert.Equal(20, doc.Profiles.Single(p => p.Name == "Public").NormalIntervalSeconds);
     }

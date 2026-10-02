@@ -59,4 +59,19 @@ public class TargetScopeTests : IDisposable
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<TargetDto>(
             "{\"name\":\"T\",\"address\":\"203.0.113.5\",\"scope\":\"Bogus\"}", Web));
     }
+
+    [Fact]
+    public async Task The_Local_builtin_profile_is_seeded_and_valid()
+    {
+        await _store.SeedAsync(null);
+        var options = await _store.LoadWatcherOptionsAsync();
+
+        Assert.True(PingProfile.IsBuiltIn("Local"));
+        Assert.True(options.Profiles.ContainsKey("Local"));
+        var local = options.Profiles["Local"];
+        Assert.Equal(10, local.NormalIntervalSeconds);
+        Assert.True(local.FalteringThreshold < local.RespondingThreshold);
+        Assert.True(local.MinUsableSample <= local.HistorySize);
+        Assert.True(new WatcherOptionsValidator().Validate(null, options).Succeeded);
+    }
 }

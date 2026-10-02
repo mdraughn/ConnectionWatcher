@@ -30,7 +30,7 @@ public class HostSmokeTests : IDisposable
         using var scope = _factory.Services.CreateScope();
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
         await using var db = await dbFactory.CreateDbContextAsync();
-        Assert.Equal(3, await db.Profiles.CountAsync());
+        Assert.Equal(4, await db.Profiles.CountAsync());
     }
 
     [Fact]

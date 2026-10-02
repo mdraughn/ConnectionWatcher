@@ -39,7 +39,7 @@ public class ConfigStoreTests : IDisposable
         var options = await _store.LoadWatcherOptionsAsync();
         Assert.Empty(options.Targets);
         Assert.Empty(options.Pools);
-        Assert.Equal(3, options.Profiles.Count);
+        Assert.Equal(4, options.Profiles.Count);
         Assert.Equal(1.0, options.Profiles["Internal"].NormalIntervalSeconds);
         Assert.Equal(10.0, options.Profiles["Public"].NormalIntervalSeconds);
         Assert.Equal(5.0, options.Profiles["Path"].NormalIntervalSeconds);
@@ -116,7 +116,7 @@ public class ConfigStoreTests : IDisposable
         await _store.SeedAsync(bad);
         var options = await _store.LoadWatcherOptionsAsync();
         Assert.Empty(options.Targets);
-        Assert.Equal(3, options.Profiles.Count);
+        Assert.Equal(4, options.Profiles.Count);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class ConfigStoreTests : IDisposable
     {
         await _store.SeedAsync(null);
         var doc = await _store.ExportAsync();
-        Assert.Equal(3, doc.Profiles.Count);
+        Assert.Equal(4, doc.Profiles.Count);
         Assert.All(doc.Profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
         Assert.Contains("LAN", doc.Profiles.Single(p => p.Name == "Internal").Description);
     }
@@ -147,7 +147,7 @@ public class ConfigStoreTests : IDisposable
         await _store.EnsureBuiltInsAsync();
 
         var doc = await _store.ExportAsync();
-        Assert.Equal(["Internal", "Path", "Public", "Slow"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
+        Assert.Equal(["Internal", "Local", "Path", "Public", "Slow"], doc.Profiles.Select(p => p.Name).OrderBy(n => n));
         var internalProfile = doc.Profiles.Single(p => p.Name == "Internal");
         Assert.Equal(2, internalProfile.NormalIntervalSeconds); // numbers never overwritten
         Assert.Contains("LAN", internalProfile.Description);     // null description filled
