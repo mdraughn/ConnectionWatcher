@@ -29,11 +29,14 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public string? PrefillParent => Request.Query["parent"];
     public string? PrefillProfile => Request.Query["profile"];
     public string? PrefillOperator => Request.Query["operator"];
+    public string? PrefillScope => Request.Query["scope"];
 
-    /// <summary>The profile the dialog selects: the prefilled one when it exists, else Public.</summary>
+    /// <summary>The profile the dialog selects: the prefilled one when it exists, else Local for a
+    /// Local-scope prefill, else Public.</summary>
     public string DefaultProfile =>
         Config.Profiles.Any(p => p.Name.Equals(PrefillProfile, StringComparison.OrdinalIgnoreCase))
-            ? PrefillProfile! : "Public";
+            ? PrefillProfile!
+            : string.Equals(PrefillScope, "Local", StringComparison.OrdinalIgnoreCase) ? "Local" : "Public";
 
     public async Task OnGetAsync()
     {

@@ -177,4 +177,41 @@ public class PageSmokeTests : IDisposable
         var html = await _factory.CreateClient().GetStringAsync("/Config/Targets?address=1.2.3.4&profile=Nope");
         Assert.Matches("<option selected=\"selected\"[^>]*>Public</option>", html);
     }
+
+    [Fact]
+    public async Task Targets_dialog_has_a_scope_select_and_the_table_a_scope_column()
+    {
+        var html = await _factory.CreateClient().GetStringAsync("/Config/Targets");
+        Assert.Contains("name=\"scope\"", html);
+        Assert.Contains("<th>Scope</th>", html);
+        Assert.Contains("<option value=\"Verdict\"", html);
+        Assert.Contains("<option value=\"Local\"", html);
+    }
+
+    [Fact]
+    public async Task Scope_prefill_selects_Local_and_defaults_the_profile_to_Local()
+    {
+        var html = await _factory.CreateClient()
+            .GetStringAsync("/Config/Targets?address=203.0.113.9&name=Cam&scope=Local");
+        Assert.Contains("<option value=\"Local\" selected=\"selected\"", html);
+        Assert.Contains("<option selected=\"selected\" title=\"LAN devices tracked on the side", html);
+    }
+
+    [Fact]
+    public async Task The_parent_dropdown_never_offers_a_Local_target()
+    {
+        var client = _factory.CreateClient();
+        await ConfigApiTests.SeedHomeAsync(client);
+        (await client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NasBox", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+
+        var html = await client.GetStringAsync("/Config/Targets");
+        var parent = System.Text.RegularExpressions.Regex.Match(html,
+            "<select name=\"parent\">(.*?)</select>", System.Text.RegularExpressions.RegexOptions.Singleline);
+        Assert.True(parent.Success);
+        Assert.Contains("Router", parent.Groups[1].Value);
+        Assert.DoesNotContain("NasBox", parent.Groups[1].Value);
+    }
 }

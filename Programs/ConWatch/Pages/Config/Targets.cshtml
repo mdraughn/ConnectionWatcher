@@ -1,5 +1,6 @@
 @page
 @using System.Text.Json
+@using ConCore.Targets
 @model ConWatch.Pages.Config.TargetsModel
 @{
     ViewData["Title"] = "Targets — ConnectionWatcher";
@@ -64,12 +65,12 @@
 }
 
 <table>
-    <thead><tr><th>Name</th><th>Address</th><th>Parent</th><th>Profile</th><th>Enabled</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Address</th><th>Parent</th><th>Profile</th><th>Scope</th><th>Enabled</th><th></th></tr></thead>
     <tbody>
     @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
     {
         <tr>
-            <td>@t.Name</td><td>@t.Address@(t.Probe is { Length: > 0 } pr ? $" · {pr.Replace(":", "/")}" : "")</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td>
+            <td>@t.Name</td><td>@t.Address@(t.Probe is { Length: > 0 } pr ? $" · {pr.Replace(":", "/")}" : "")</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td><td>@(t.Scope == TargetScope.Local ? "Local" : "Verdict")</td>
             <td>@(t.Enabled ? "yes" : "no")</td>
             <td>
                 <button class="outline" data-edit="@t.Id" data-json="@json(t)">Edit</button>
@@ -104,7 +105,7 @@
                 <label>Parent
                     <select name="parent">
                         <option value="">(none — root)</option>
-                        @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+                        @foreach (var t in Model.Config.Targets.Where(t => t.Scope != TargetScope.Local).OrderBy(t => t.Name))
                         {
                             <option selected="@(t.Name == Model.PrefillParent)">@t.Name</option>
                         }
@@ -120,6 +121,12 @@
                 </label>
                 <label>Enabled <input type="checkbox" name="enabled" checked /></label>
             </div>
+            <label>Scope
+                <select name="scope" id="scope-select">
+                    <option value="Verdict" selected="@(!string.Equals(Model.PrefillScope, "Local", StringComparison.OrdinalIgnoreCase))">Internet path — counts toward the verdict</option>
+                    <option value="Local" selected="@string.Equals(Model.PrefillScope, "Local", StringComparison.OrdinalIgnoreCase)">LAN device — tracked on the side, never affects the verdict</option>
+                </select>
+            </label>
             <div class="grid">
                 <label>Probe
                     <select name="probeKind" id="probe-kind">
@@ -172,6 +179,26 @@
     <script>
         const form = document.getElementById("target-form");
         const dialog = document.getElementById("target-dialog");
+
+        const scopeSelect = document.getElementById("scope-select");
+        const parentSelect = form.elements.parent;
+        const pageDefaultProfile = @Html.Raw(json(Model.DefaultProfile));
+        function applyScope() {
+            const local = scopeSelect.value === "Local";
+            parentSelect.disabled = local;   // a LAN device is always a root
+            if (local) parentSelect.value = "";
+        }
+        scopeSelect.addEventListener("change", () => {
+            applyScope();
+            const profile = form.elements.profile;
+            const hasLocalProfile = [...profile.options].some((o) => o.value === "Local");
+            // Follow the scope with the profile unless the user already picked another one.
+            if (scopeSelect.value === "Local" && hasLocalProfile && profile.value === pageDefaultProfile)
+                profile.value = "Local";
+            else if (scopeSelect.value === "Verdict" && profile.value === "Local")
+                profile.value = pageDefaultProfile === "Local" ? "Public" : pageDefaultProfile;
+        });
+        applyScope();
 
         const probeKind = document.getElementById("probe-kind");
         const portLabel = document.getElementById("probe-port-label");
@@ -261,7 +288,8 @@
             buildDto: () => ({
                 name: form.elements.name.value,
                 address: form.elements.address.value,
-                parent: form.elements.parent.value || null,
+                scope: scopeSelect.value,
+                parent: scopeSelect.value === "Local" ? null : (form.elements.parent.value || null),
                 profile: form.elements.profile.value,
                 enabled: form.elements.enabled.checked,
                 operator: form.elements.operator.value || null,
@@ -275,9 +303,11 @@
                 form.elements.profile.value = dto.profile;
                 form.elements.enabled.checked = dto.enabled;
                 form.elements.operator.value = dto.operator ?? "";
+                scopeSelect.value = dto.scope ?? "Verdict"; applyScope();
                 setProbe(dto.probe ?? null);
             },
             resetForm: () => {
+                applyScope();
                 setProbe(null);
                 document.getElementById("probe-test-out").textContent = "";
             },
