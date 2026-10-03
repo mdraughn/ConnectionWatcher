@@ -44,12 +44,28 @@
             RenderNode(root);
         }
     </ul>
+    @if (Model.LocalMonitors.Count > 0)
+    {
+        <h4>How's my LAN <small>(@Model.LocalMonitors.Count(m => m.CurrentState == HostState.Responding) of @Model.LocalMonitors.Count up)</small></h4>
+        <ul class="cw-tree">
+            @foreach (var monitor in Model.LocalMonitors)
+            {
+                <li>
+                    <div class="cw-row">
+                        <span class="dot @monitor.CurrentState.ToString().ToLowerInvariant()"></span>
+                        <span>@monitor.Target.Name</span>
+                        <span class="stats">@monitor.CurrentState</span>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
     @if (Model.EngineDisabled)
     {
         <p>⏸ Monitoring is disabled (archive mode) — history and reports stay
            available; re-enable on the <a href="/Settings">Settings</a> page.</p>
     }
-    else if (Model.Roots.Count == 0)
+    else if (Model.Roots.Count == 0 && Model.LocalMonitors.Count == 0)
     {
         <p>No targets configured yet — add some on the <a href="/Config/Targets">Targets</a> page.</p>
     }

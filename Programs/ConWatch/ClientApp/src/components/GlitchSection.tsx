@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { chronicTargets, type GlitchItem } from "../lib/glitchData";
 
 async function fetchGlitches(from: Date, to: Date): Promise<GlitchItem[]> {
-  const url = `/api/v1/glitches?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000`;
+  const url = `/api/v1/glitches?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000&scope=internet`;
   const response = await fetch(url);
   if (!response.ok) return [];
   return (await response.json()).items as GlitchItem[];

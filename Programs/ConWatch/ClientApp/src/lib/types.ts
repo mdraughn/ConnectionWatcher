@@ -12,6 +12,8 @@ export interface TargetStatus {
   sampleSize: number;
   /** Monotonic count of results ever recorded; the activity LED flickers when it grows. */
   pingCount?: number;
+  /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
+  scope?: "Verdict" | "Local";
 }
 
 export interface PoolStatus {
@@ -48,6 +50,8 @@ export interface TransitionEvent {
   successRate: number | null;
   sampleSize: number | null;
   burstLossRate: number | null;
+  /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
+  scope?: "Verdict" | "Local";
 }
 
 export interface RollupPoint {

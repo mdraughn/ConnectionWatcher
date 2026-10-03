@@ -3,11 +3,13 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { EventStrip } from "./components/EventStrip";
 import { GlitchSection } from "./components/GlitchSection";
+import { LanSection } from "./components/LanSection";
 import { Ledger } from "./components/Ledger";
 import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
 import { startHub } from "./lib/hub";
+import { isLocal } from "./lib/lan";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
 import { fetchStory, type Story } from "./lib/story";
@@ -112,8 +114,9 @@ function App({ store, topology, initial }: {
     <div>
       <VerdictBanner verdict={state.verdict} connected={state.connected} clock={clock} />
       <EventStrip topology={initial} />
-      <Tree topology={topology} targets={state.targets} pools={state.pools}
+      <Tree topology={topology} targets={state.targets.filter((t) => !isLocal(t))} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
+      <LanSection targets={state.targets} changes={state.localChanges} />
       <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}
@@ -132,10 +135,16 @@ if (el && dataEl) {
   const store = createStatusStore();
   if (initial.snapshot) store.applySnapshot(initial.snapshot);
 
-  fetch("/api/v1/transitions?limit=50")
+  fetch("/api/v1/transitions?limit=50&scope=internet")
     .then((r) => (r.ok ? r.json() : null))
     .then((body) => {
       if (body?.items) store.seedRecent(body.items as TransitionEvent[]);
+    })
+    .catch(() => undefined);
+  fetch("/api/v1/transitions?limit=200&scope=local")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((body) => {
+      if (body?.items) store.seedLocalChanges(body.items as TransitionEvent[]);
     })
     .catch(() => undefined);
 

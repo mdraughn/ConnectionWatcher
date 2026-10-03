@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConCore.Targets;
 using ConEngine.Tracking;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -22,6 +23,9 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
     /// <summary>Root monitors for the server-rendered fallback tree.</summary>
     public List<TargetMonitor> Roots { get; } = new();
     public Dictionary<Guid, List<TargetMonitor>> Children { get; } = new();
+
+    /// <summary>LAN devices for the fallback's "How's my LAN" list (never in the tree).</summary>
+    public List<TargetMonitor> LocalMonitors { get; } = new();
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -51,6 +55,11 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
 
             foreach (var monitor in engine.Monitors.Values.OrderBy(m => m.Target.Name))
             {
+                if (monitor.Target.Scope == TargetScope.Local)
+                {
+                    LocalMonitors.Add(monitor);
+                    continue;
+                }
                 if (monitor.Target.ParentId is { } parentId && engine.Monitors.ContainsKey(parentId))
                 {
                     if (!Children.TryGetValue(parentId, out var list))

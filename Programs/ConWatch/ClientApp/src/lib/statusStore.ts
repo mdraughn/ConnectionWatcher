@@ -11,13 +11,20 @@ export interface StoreState {
   latestTransition: TransitionEvent | null;
   connected: boolean;
   disabled: boolean;
+  /** Last-change ISO time per Local target id. */
+  localChanges: Record<string, string>;
+}
+
+function laterOf(map: Record<string, string>, id: string, timestamp: string): Record<string, string> {
+  const existing = map[id];
+  return existing && Date.parse(existing) >= Date.parse(timestamp) ? map : { ...map, [id]: timestamp };
 }
 
 export function createStatusStore() {
   let state: StoreState = {
     verdict: null, targets: [], pools: [],
     recentTransitions: [], latestTransition: null, connected: false,
-    disabled: false,
+    disabled: false, localChanges: {},
   };
   const listeners = new Set<() => void>();
 
@@ -42,8 +49,22 @@ export function createStatusStore() {
       notify();
     },
     applyTransition(t: TransitionEvent): void {
+      // A LAN device's blip is not internet news: it never becomes the status
+      // line's latest event or lands in the recent-events panel.
+      if (state.targets.some((x) => x.id === t.subjectId && x.scope === "Local")) {
+        state.localChanges = laterOf(state.localChanges, t.subjectId, t.timestamp);
+        notify();
+        return;
+      }
       state.latestTransition = t;
       state.recentTransitions = [t, ...state.recentTransitions].slice(0, MAX_RECENT);
+      notify();
+    },
+    /** History for Local targets (newest first): the last-change time per device. */
+    seedLocalChanges(transitions: TransitionEvent[]): void {
+      let next = state.localChanges;
+      for (const t of transitions) next = laterOf(next, t.subjectId, t.timestamp);
+      state.localChanges = next;
       notify();
     },
     seedRecent(transitions: TransitionEvent[]): void {

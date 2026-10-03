@@ -36,8 +36,8 @@ async function fetchAndDerive(topology: StoryTopology, from: Date): Promise<Deri
   const threshold = topology.weatherThreshold ?? 2;
 
   const [transitionsRes, glitchesRes] = await Promise.all([
-    fetch(`/api/v1/transitions?from=${from.toISOString()}&limit=1000`),
-    fetch(`/api/v1/glitches?from=${from.toISOString()}&limit=1000`),
+    fetch(`/api/v1/transitions?from=${from.toISOString()}&limit=1000&scope=internet`),
+    fetch(`/api/v1/glitches?from=${from.toISOString()}&limit=1000&scope=internet`),
   ]);
   const transitions = (transitionsRes.ok
     ? ((await transitionsRes.json()).items as TransitionEvent[]) : []).reverse(); // chronological
