@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ConWatch.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Core\ConEngine\ConEngine.csproj" />
     <ProjectReference Include="..\..\Libraries\ConInfrastructure\ConInfrastructure.csproj" />
     <ProjectReference Include="..\..\Libraries\ConPersistence\ConPersistence.csproj" />
