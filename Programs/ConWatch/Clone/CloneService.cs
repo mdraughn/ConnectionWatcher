@@ -35,7 +35,7 @@ public class CloneService(IHttpClientFactory httpFactory,
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<CloneOutcome> CloneAsync(string? sourceUrl, string? sourcePassword,
-        bool includeSecrets, bool allowInsecure, CancellationToken ct, bool includeLocalDevices = true)
+        bool includeSecrets, bool allowInsecure, bool includeLocalDevices, CancellationToken ct)
     {
         if (!TryParseSource(sourceUrl, out var source, out var parseError))
             return parseError!;
@@ -67,6 +67,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         {
             [SettingKeys.EngineEnabled] = "false",
             [SettingKeys.CloneSourceUrl] = source.ToString(),
+            [SettingKeys.CloneIncludeLocalDevices] = includeLocalDevices ? "true" : "false",
         });
 
         try
@@ -138,6 +139,15 @@ public class CloneService(IHttpClientFactory httpFactory,
             };
         var snapshot = fetched.Snapshot!;
 
+        // The clone's choice sticks: a clone without Local devices must not
+        // get them back (now pinging foreign private addresses) at take-over.
+        var localSkipped = 0;
+        if (await settings.GetAsync(SettingKeys.CloneIncludeLocalDevices) == "false")
+        {
+            localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
+            snapshot = WithoutLocalDevices(snapshot);
+        }
+
         // 3. Import-replace inside one transaction: a failure leaves the
         //    pre-take-over clone intact (and this node still disabled).
         try
@@ -161,7 +171,7 @@ public class CloneService(IHttpClientFactory httpFactory,
                 "Data was final-synced but the engine could not start; see this node's log. The source is disabled.");
         log.LogInformation("Took over from {Source}: {Transitions} transitions final-synced",
             source, snapshot.Transitions.Count);
-        return CloneOutcome.Ok(Summary(snapshot, includeSecrets: true));
+        return CloneOutcome.Ok(Summary(snapshot, includeSecrets: true, localSkipped));
     }
 
     private async Task<(Snapshot? Snapshot, CloneOutcome? Outcome)> FetchSnapshotAsync(

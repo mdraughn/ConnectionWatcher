@@ -76,7 +76,8 @@ public static class SettingsEndpoints
                             errors.Add($"{key} must be 'true' or 'false'.");
                         break;
                     case SettingKeys.CloneSourceUrl:
-                        errors.Add("Clone.SourceUrl is set by the clone wizard, not edited.");
+                    case SettingKeys.CloneIncludeLocalDevices:
+                        errors.Add("Clone.SourceUrl and Clone.IncludeLocalDevices are set by the clone wizard, not edited.");
                         break;
                     case SettingKeys.MqttHost:
                     case SettingKeys.MqttUsername:

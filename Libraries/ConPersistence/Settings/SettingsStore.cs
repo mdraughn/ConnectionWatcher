@@ -47,6 +47,10 @@ public static class SettingKeys
     /// Drives the take-over card and the both-active health warning.</summary>
     public const string CloneSourceUrl = "Clone.SourceUrl";
 
+    /// <summary>Set by the clone wizard: "false" when the clone left out Local devices, so a
+    /// later take-over leaves them out too. Absent or anything else means keep them.</summary>
+    public const string CloneIncludeLocalDevices = "Clone.IncludeLocalDevices";
+
     /// <summary>Never leaves the machine via the snapshot export: credentials
     /// and capability URLs (a webhook or heartbeat URL grants whoever holds it
     /// the power to impersonate or silence this instance).</summary>
@@ -55,7 +59,7 @@ public static class SettingKeys
     /// <summary>Node identity, not configuration: excluded from snapshot
     /// export AND preserved locally across snapshot import — a take-over's
     /// final sync from a just-disabled source must not import Enabled=false.</summary>
-    public static readonly string[] PerNodeKeys = [EngineEnabled, CloneSourceUrl];
+    public static readonly string[] PerNodeKeys = [EngineEnabled, CloneSourceUrl, CloneIncludeLocalDevices];
 }
 
 /// <summary>

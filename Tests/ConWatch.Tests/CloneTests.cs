@@ -228,6 +228,50 @@ public class CloneTests : IDisposable
     }
 
     [Fact]
+    public async Task Takeover_after_a_clone_without_Local_devices_does_not_bring_them_back()
+    {
+        await SeedSourceWithLocalNasAsync();
+        var target = MakeTarget();
+        var client = target.CreateClient();
+        (await client.PostAsJsonAsync("/api/v1/setup/clone", new
+        {
+            sourceUrl = "http://source.test/", includeSecrets = true, allowInsecure = true,
+            includeLocalDevices = false,
+        })).EnsureSuccessStatusCode();
+
+        var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { allowInsecure = true });
+        Assert.Equal(HttpStatusCode.OK, takeover.StatusCode);
+        var summary = JsonSerializer.Deserialize<JsonElement>(await takeover.Content.ReadAsStringAsync());
+        Assert.Equal(1, summary.GetProperty("localDevicesSkipped").GetInt32());
+
+        var names = (await GetJson(client, "/api/v1/targets")).EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString()).ToList();
+        Assert.DoesNotContain("NasBox", names);
+        Assert.Contains("Router", names);
+        var all = (await GetJson(client, "/api/v1/transitions?limit=1000")).GetProperty("items").EnumerateArray();
+        Assert.DoesNotContain(all, i => i.GetProperty("subjectName").GetString() == "NasBox");
+    }
+
+    [Fact]
+    public async Task Takeover_after_a_default_clone_keeps_Local_devices()
+    {
+        await SeedSourceWithLocalNasAsync();
+        var target = MakeTarget();
+        var client = target.CreateClient();
+        (await client.PostAsJsonAsync("/api/v1/setup/clone", new
+        {
+            sourceUrl = "http://source.test/", includeSecrets = true, allowInsecure = true,
+        })).EnsureSuccessStatusCode();
+
+        var takeover = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { allowInsecure = true });
+        Assert.Equal(HttpStatusCode.OK, takeover.StatusCode);
+
+        var nas = (await GetJson(client, "/api/v1/targets")).EnumerateArray()
+            .Single(t => t.GetProperty("name").GetString() == "NasBox");
+        Assert.Equal("Local", nas.GetProperty("scope").GetString());
+    }
+
+    [Fact]
     public async Task Takeover_with_wrong_source_password_changes_nothing()
     {
         await SeedSourceAsync();

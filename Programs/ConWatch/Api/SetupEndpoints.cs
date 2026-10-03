@@ -30,8 +30,8 @@ public static class SetupEndpoints
 
         api.MapPost("/setup/clone", async (CloneRequest request, CloneService clone,
             CancellationToken ct) => (await clone.CloneAsync(request.SourceUrl,
-                request.SourcePassword, request.IncludeSecrets, request.AllowInsecure, ct,
-                request.IncludeLocalDevices)).ToHttp());
+                request.SourcePassword, request.IncludeSecrets, request.AllowInsecure,
+                request.IncludeLocalDevices, ct)).ToHttp());
 
         api.MapPost("/setup/takeover", async (TakeoverRequest request, CloneService clone,
             CancellationToken ct) => (await clone.TakeOverAsync(request.SourcePassword,
