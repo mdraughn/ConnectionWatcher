@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipAtReset, incidents, ribbonSegments, uptimePercent } from "./historyData";
+import { clipAtReset, incidents, ribbonSegments, subjectsForScope, uptimePercent } from "./historyData";
 import type { RollupPoint, TransitionEvent } from "./types";
 
 function point(success: number, count: number): RollupPoint {
@@ -142,5 +142,22 @@ describe("ribbonSegments", () => {
     const segments = ribbonSegments([], "2026-08-20T00:00:00Z", "2026-08-20T12:00:00Z");
     expect(segments.length).toBe(1);
     expect(segments[0].state).toBe("Unknown");
+  });
+});
+
+describe("subjectsForScope", () => {
+  const subjects = [
+    { id: "r", name: "Router", scope: "Verdict" },
+    { id: "n", name: "NAS", scope: "Local" },
+    { id: "p", name: "Internet" }, // no scope: an older page payload means Verdict
+  ];
+  it("internet keeps everything that is not Local", () => {
+    expect(subjectsForScope(subjects, "internet").map((s) => s.id)).toEqual(["r", "p"]);
+  });
+  it("local keeps only Local targets", () => {
+    expect(subjectsForScope(subjects, "local").map((s) => s.id)).toEqual(["n"]);
+  });
+  it("is empty rather than throwing when nothing matches", () => {
+    expect(subjectsForScope([], "local")).toEqual([]);
   });
 });

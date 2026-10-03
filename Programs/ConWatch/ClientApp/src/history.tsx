@@ -8,7 +8,7 @@ import { TimeChart } from "./components/TimeChart";
 import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
 import { fetchStory, type Story, type StoryTopology } from "./lib/story";
-import { clipAtReset, incidents, ribbonSegments, uptimePercent } from "./lib/historyData";
+import { clipAtReset, incidents, ribbonSegments, subjectsForScope, uptimePercent, type HistoryScope } from "./lib/historyData";
 import type { RollupPoint, TransitionEvent } from "./lib/types";
 
 interface Subject {
@@ -17,6 +17,7 @@ interface Subject {
   kind: "target" | "pool" | "verdict";
   parent: string | null;
   role: "trunk" | "anchor" | "other";
+  scope?: "Verdict" | "Local";
 }
 
 const RANGES: Record<string, number> = {
@@ -88,13 +89,16 @@ function LedgerSection() {
 }
 
 function App({ subjects }: { subjects: Subject[] }) {
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
+  const hasLan = subjects.some((s) => s.scope === "Local");
+  const [scope, setScope] = useState<HistoryScope>("internet");
+  const visible = subjectsForScope(subjects, scope);
+  const [subjectId, setSubjectId] = useState(visible[0]?.id ?? "");
   const [rangeKey, setRangeKey] = useState("24h");
   const [rollups, setRollups] = useState<RollupPoint[]>([]);
   const [transitions, setTransitions] = useState<TransitionEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const subject = subjects.find((s) => s.id === subjectId);
+  const subject = visible.find((s) => s.id === subjectId);
   const to = useMemo(() => new Date(), [subjectId, rangeKey]);
   const from = useMemo(() => new Date(to.getTime() - (RANGES[rangeKey] ?? RANGES["24h"])), [to, rangeKey]);
 
@@ -114,7 +118,24 @@ function App({ subjects }: { subjects: Subject[] }) {
     return () => { live = false; };
   }, [subject, from, to]);
 
-  if (!subject) return <p>No subjects yet — add targets on the Targets page.</p>;
+  const scopeToggle = hasLan && (
+    <div className="cw-segmented" style={{ alignSelf: "center" }}>
+      {([["internet", "Internet"], ["local", "LAN"]] as const).map(([key, label]) => (
+        <button key={key} type="button" className={scope === key ? "active" : ""}
+          onClick={() => {
+            setScope(key);
+            setSubjectId(subjectsForScope(subjects, key)[0]?.id ?? "");
+          }}>{label}</button>
+      ))}
+    </div>
+  );
+
+  if (!subject) return (
+    <div>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>{scopeToggle}</div>
+      <p>{hasLan ? "No subjects in this view." : "No subjects yet — add targets on the Targets page."}</p>
+    </div>
+  );
 
   // Attribution stops at the latest HistoryReset (address correction/repoint):
   // stats and charts use only the current data history; the ribbon still shows
@@ -140,8 +161,9 @@ function App({ subjects }: { subjects: Subject[] }) {
   return (
     <div>
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+        {scopeToggle}
         <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} style={{ maxWidth: "18rem" }}>
-          {subjects.map((s) => (
+          {visible.map((s) => (
             <option key={s.id} value={s.id}>
               {s.kind === "verdict" ? "🌐 " : s.kind === "pool" ? "▣ " : ""}{s.name}
             </option>
@@ -184,17 +206,21 @@ function App({ subjects }: { subjects: Subject[] }) {
         <p style={{ opacity: 0.7 }}>Pools and the verdict have no ping rollups; their story is the timeline above.</p>
       )}
 
-      <RecurrenceSection to={to} />
+      {scope === "internet" && (
+        <>
+          <RecurrenceSection to={to} />
 
-      <h4>All targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
-      <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * 24 * 3_600_000)} rangeEnd={to}
-        subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target")
-          .map((s): BoardSubject => ({
-            id: s.id, name: s.name, kind: s.kind,
-            parent: s.parent ?? null, role: s.role ?? "other",
-          }))} />
+          <h4>All targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
+          <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * 24 * 3_600_000)} rangeEnd={to}
+            subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target" && s.scope !== "Local")
+              .map((s): BoardSubject => ({
+                id: s.id, name: s.name, kind: s.kind,
+                parent: s.parent ?? null, role: s.role ?? "other",
+              }))} />
 
-      <LedgerSection />
+          <LedgerSection />
+        </>
+      )}
     </div>
   );
 }

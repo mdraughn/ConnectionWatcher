@@ -133,3 +133,10 @@ export function ribbonSegments(transitions: TransitionEvent[],
   segments.push({ state, from: cursor, to: rangeEndIso, evidence });
   return segments;
 }
+
+export type HistoryScope = "internet" | "local";
+
+/** The History subjects for one scope: LAN devices, or everything else (targets, pools, the verdict). */
+export function subjectsForScope<T extends { scope?: string }>(subjects: T[], scope: HistoryScope): T[] {
+  return subjects.filter((s) => (s.scope === "Local") === (scope === "local"));
+}

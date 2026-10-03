@@ -34,6 +34,7 @@ public class HistoryModel(SettingsStore settingsStore, ConfigStore configStore) 
                 Parent = t.Parent,
                 Role = trunk.Contains(t.Name) ? "trunk"
                     : anchors.Contains(t.Name) ? "anchor" : "other",
+                Scope = t.Scope.ToString(),
             }));
         subjects.AddRange(names.Config.Pools
             .Where(p => p.Id is not null)
@@ -41,13 +42,13 @@ public class HistoryModel(SettingsStore settingsStore, ConfigStore configStore) 
             .Select(p => new
             {
                 Id = p.Id!.Value, Name = p.Name, Kind = "pool",
-                Parent = (string?)null, Role = "other",
+                Parent = (string?)null, Role = "other", Scope = "Verdict",
             }));
         if (names.HasAnchorPool)
             subjects.Add(new
             {
                 Id = VerdictCoordinator.SubjectId, Name = $"{VerdictCoordinator.SubjectName} (verdict)",
-                Kind = "verdict", Parent = (string?)null, Role = "other",
+                Kind = "verdict", Parent = (string?)null, Role = "other", Scope = "Verdict",
             });
 
         SubjectsJson = JsonSerializer.Serialize(subjects, JsonOptions);

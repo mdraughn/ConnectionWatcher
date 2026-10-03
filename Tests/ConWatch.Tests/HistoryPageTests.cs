@@ -39,4 +39,22 @@ public class HistoryPageTests : IDisposable
         Assert.Contains("\"name\":\"Internet (verdict)\"", Island(live, "history-data"));
         Assert.Contains("\"trunkNames\":[\"Router\"]", Island(live, "history-topology"));
     }
+
+    [Fact]
+    public async Task Subjects_carry_their_scope_so_the_page_can_split_Internet_from_LAN()
+    {
+        var client = _factory.CreateClient();
+        await ConfigApiTests.SeedHomeAsync(client);
+        (await client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NasBox", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+
+        var data = Island(await client.GetStringAsync("/History"), "history-data");
+
+        Assert.Contains("\"name\":\"NasBox\"", data);
+        Assert.Matches("\"name\":\"NasBox\"[^}]*\"scope\":\"Local\"", data);
+        Assert.Matches("\"name\":\"Router\"[^}]*\"scope\":\"Verdict\"", data);
+        Assert.Matches("\"name\":\"Internet \\(verdict\\)\"[^}]*\"scope\":\"Verdict\"", data);
+    }
 }
