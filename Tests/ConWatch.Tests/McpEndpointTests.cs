@@ -212,8 +212,7 @@ public class McpEndpointTests : IDisposable
         {
             var result = await RpcAsync("tools/call", new { name = tool, arguments = new { scope = "bogus" } });
             Assert.True(result.GetProperty("isError").GetBoolean());
-            // The SDK hides the exception message: "An error occurred invoking '<tool>'."
-            Assert.Contains(tool, ToolText(result));
+            Assert.Contains("scope must be", ToolText(result));
         }
     }
 }

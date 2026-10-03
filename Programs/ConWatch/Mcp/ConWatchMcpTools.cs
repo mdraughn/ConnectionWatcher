@@ -5,6 +5,7 @@ using ConPersistence.Queries;
 using ConPersistence.Report;
 using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace ConWatch.Mcp;
@@ -79,7 +80,7 @@ public class ConWatchMcpTools(WatcherHostService host,
         [Description("'all' (default), 'internet' (path, anchors, pools, verdict) or 'local' (LAN devices)")] string? scope = null)
     {
         if (!ScopeFilters.TryParse(scope, out var scopeFilter))
-            throw new ArgumentException("scope must be 'all', 'internet' or 'local'.", nameof(scope));
+            throw new McpException("scope must be 'all', 'internet' or 'local'.");
         await using var db = await dbFactory.CreateDbContextAsync();
         var rows = await HistoryQueries.TransitionsAsync(db, subjectId: null,
             fromUtc is { } f ? TimeRange.AsUtc(f) : null,
@@ -102,7 +103,7 @@ public class ConWatchMcpTools(WatcherHostService host,
         [Description("'all' (default), 'internet' or 'local' (LAN devices)")] string? scope = null)
     {
         if (!ScopeFilters.TryParse(scope, out var scopeFilter))
-            throw new ArgumentException("scope must be 'all', 'internet' or 'local'.", nameof(scope));
+            throw new McpException("scope must be 'all', 'internet' or 'local'.");
         await using var db = await dbFactory.CreateDbContextAsync();
         var rows = await HistoryQueries.GlitchesAsync(db, targetId: null,
             fromUtc is { } f ? TimeRange.AsUtc(f) : null,
