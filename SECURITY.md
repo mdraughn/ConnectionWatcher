@@ -17,9 +17,11 @@ model is deliberately simple:
   exports (sanitized), `/metrics`, and `/mcp` serve without authentication —
   they expose what your dashboard shows. Anyone who can reach the port can
   see your connection history and target names. That includes any LAN
-  devices you track as Local targets (names, addresses and up/down
-  history appear in `/api/v1/status`, the sanitized snapshot export and
-  the MCP tools) — treat that list like a network inventory when deciding
+  devices you track as Local targets: their names, addresses and up/down
+  history appear across the open surface — for example `/api/v1/status`,
+  the transition and glitch history endpoints, the sanitized snapshot
+  export, `/metrics`, the dashboard and History pages, and the MCP
+  tools — so treat that list like a network inventory when deciding
   who can reach the port.
 - **The admin surface has a single-password gate.** Setting an admin
   password locks configuration, admin actions, traceroute, and setup behind

@@ -60,7 +60,7 @@ function RecurrenceSection({ to }: { to: Date }) {
   if (!story) return null;
   return (
     <div id="recurrence-section">
-      <h4>Recurrence punchcard <small>(all targets; hours &times; days, last {OVERVIEW_DAYS} days)</small></h4>
+      <h4>Recurrence punchcard <small>(Internet targets; hours &times; days, last {OVERVIEW_DAYS} days)</small></h4>
       <Punchcard cells={story.cells} days={story.days} now={story.now} />
     </div>
   );
@@ -123,6 +123,7 @@ function App({ subjects }: { subjects: Subject[] }) {
       {([["internet", "Internet"], ["local", "LAN"]] as const).map(([key, label]) => (
         <button key={key} type="button" className={scope === key ? "active" : ""}
           onClick={() => {
+            if (key === scope) return;
             setScope(key);
             setSubjectId(subjectsForScope(subjects, key)[0]?.id ?? "");
           }}>{label}</button>
@@ -210,7 +211,7 @@ function App({ subjects }: { subjects: Subject[] }) {
         <>
           <RecurrenceSection to={to} />
 
-          <h4>All targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
+          <h4>Internet targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
           <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * 24 * 3_600_000)} rangeEnd={to}
             subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target" && s.scope !== "Local")
               .map((s): BoardSubject => ({

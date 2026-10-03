@@ -57,6 +57,23 @@ public class PageSmokeTests : IDisposable
     }
 
     [Fact]
+    public async Task Pools_page_does_not_offer_Local_targets_as_parent_or_member()
+    {
+        var client = _factory.CreateClient();
+        await ConfigApiTests.SeedHomeAsync(client);
+        (await client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NasBox", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+        var html = await client.GetStringAsync("/Config/Pools");
+        // Only the select regions: the name may legitimately appear elsewhere.
+        var selects = string.Concat(Regex.Matches(html, @"<select\b.*?</select>", RegexOptions.Singleline)
+            .Select(m => m.Value));
+        Assert.Contains("<option>Router</option>", selects);
+        Assert.DoesNotContain("NasBox", selects);
+    }
+
+    [Fact]
     public async Task Old_admin_url_redirects_permanently_to_settings()
     {
         var client = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions

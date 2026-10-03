@@ -104,7 +104,7 @@ function App({ store, topology, initial }: {
         <RecentEvents initial={initial} />
         <div style={{ marginTop: "1.5rem" }}>
           <GlitchSection from={glitchRange.from} to={glitchRange.to}
-            subtitle="all targets, last 24 h" />
+            subtitle="Internet targets, last 24 h" />
         </div>
       </div>
     );
@@ -120,7 +120,7 @@ function App({ store, topology, initial }: {
       <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}
-          subtitle="all targets, last 24 h" />
+          subtitle="Internet targets, last 24 h" />
       </div>
       <StatusBar latest={state.latestTransition} recent={state.recentTransitions}
         connected={state.connected} />

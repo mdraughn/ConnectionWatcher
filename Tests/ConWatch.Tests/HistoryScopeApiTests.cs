@@ -65,7 +65,7 @@ public class HistoryScopeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Glitch_items_carry_a_scope_field()
+    public async Task Glitches_accept_every_legal_scope()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
         var body = await GetJson("/api/v1/glitches?scope=internet");

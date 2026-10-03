@@ -33,7 +33,9 @@ public class ConWatchMcpTools(WatcherHostService host,
         "having trouble; InternetWeather = widespread trouble out on the internet, not " +
         "the user's line); LinkDegraded means their connection is losing traffic; " +
         "LinkDown means it is down. " +
-        "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering.")]
+        "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering. " +
+        "Targets with scope 'Local' are LAN devices (cameras, NAS, IoT) tracked on the side; they say " +
+        "nothing about the internet connection and never affect the verdict.")]
     public Task<string> GetCurrentStatus()
     {
         var snapshot = StatusSnapshotBuilder.Build(host.Engine);
