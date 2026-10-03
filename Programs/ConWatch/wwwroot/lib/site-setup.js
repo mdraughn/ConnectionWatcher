@@ -129,6 +129,7 @@ async function runClone(includeSecrets, allowInsecure) {
         sourcePassword: document.getElementById("clone-password").value || null,
         includeSecrets,
         allowInsecure,
+        includeLocalDevices: document.getElementById("clone-local").checked,
     });
     progress.textContent = "";
     if (result.ok) {

@@ -59,6 +59,68 @@ public class CloneTests : IDisposable
                 .GetProperty("status").GetString() == "Healthy");
     }
 
+    private async Task SeedSourceWithLocalNasAsync()
+    {
+        await SeedSourceAsync();
+        (await _sourceClient.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "NasBox", address = "203.0.113.9", profile = "Fast", scope = "Local",
+        })).EnsureSuccessStatusCode();
+        // The Local target must have recorded history to be carried (or skipped).
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson(_sourceClient, "/api/v1/transitions?scope=local&limit=10"))
+                .GetProperty("items").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public async Task Clone_copies_Local_devices_and_their_history_by_default()
+    {
+        await SeedSourceWithLocalNasAsync();
+        var target = MakeTarget();
+        var client = target.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/setup/clone", new
+        {
+            sourceUrl = "http://source.test/", includeSecrets = true, allowInsecure = true,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var targets = await GetJson(client, "/api/v1/targets");
+        var nas = targets.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "NasBox");
+        Assert.Equal("Local", nas.GetProperty("scope").GetString());
+        Assert.True((await GetJson(client, "/api/v1/transitions?scope=local&limit=10"))
+            .GetProperty("items").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public async Task Clone_without_Local_devices_leaves_no_trace_of_them_and_keeps_everything_else()
+    {
+        await SeedSourceWithLocalNasAsync();
+        var target = MakeTarget();
+        var client = target.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/setup/clone", new
+        {
+            sourceUrl = "http://source.test/", includeSecrets = true, allowInsecure = true,
+            includeLocalDevices = false,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var summary = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, summary.GetProperty("localDevicesSkipped").GetInt32());
+
+        var names = (await GetJson(client, "/api/v1/targets")).EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString()).ToList();
+        Assert.DoesNotContain("NasBox", names);
+        Assert.Contains("Router", names);                       // verdict-scope targets still cloned
+        var pools = await GetJson(client, "/api/v1/pools");
+        Assert.Equal(1, pools.GetArrayLength());                 // pools untouched
+        // No orphan history for the skipped device: nothing in the log names it.
+        var all = (await GetJson(client, "/api/v1/transitions?limit=1000")).GetProperty("items").EnumerateArray();
+        Assert.DoesNotContain(all, i => i.GetProperty("subjectName").GetString() == "NasBox");
+        var glitches = (await GetJson(client, "/api/v1/glitches?limit=1000")).GetProperty("items").EnumerateArray();
+        Assert.DoesNotContain(glitches, g => g.GetProperty("targetName").GetString() == "NasBox");
+    }
+
     [Fact]
     public async Task Full_snapshot_carries_secrets_and_verifies_password_inline()
     {

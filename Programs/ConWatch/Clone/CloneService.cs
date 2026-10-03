@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConCore.Targets;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;
@@ -34,7 +35,7 @@ public class CloneService(IHttpClientFactory httpFactory,
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<CloneOutcome> CloneAsync(string? sourceUrl, string? sourcePassword,
-        bool includeSecrets, bool allowInsecure, CancellationToken ct)
+        bool includeSecrets, bool allowInsecure, CancellationToken ct, bool includeLocalDevices = true)
     {
         if (!TryParseSource(sourceUrl, out var source, out var parseError))
             return parseError!;
@@ -53,6 +54,12 @@ public class CloneService(IHttpClientFactory httpFactory,
         if (fetched.Outcome is { } fetchError)
             return fetchError;
         var snapshot = fetched.Snapshot!;
+        var localSkipped = 0;
+        if (!includeLocalDevices)
+        {
+            localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
+            snapshot = WithoutLocalDevices(snapshot);
+        }
 
         // Arrive as a disabled archive: the source keeps monitoring; nothing
         // double-pings and MQTT entities don't fight. Take-over flips this.
@@ -77,7 +84,7 @@ public class CloneService(IHttpClientFactory httpFactory,
                 "The clone was imported but the archive could not be prepared; see this node's log.");
         log.LogInformation("Cloned from {Source}: {Targets} targets, {Transitions} transitions",
             source, snapshot.Config.Targets.Count, snapshot.Transitions.Count);
-        return CloneOutcome.Ok(Summary(snapshot, includeSecrets));
+        return CloneOutcome.Ok(Summary(snapshot, includeSecrets, localSkipped));
     }
 
     public async Task<CloneOutcome> TakeOverAsync(string? sourcePassword, bool allowInsecure, CancellationToken ct)
@@ -214,7 +221,27 @@ public class CloneService(IHttpClientFactory httpFactory,
         return true;
     }
 
-    private static object Summary(Snapshot snapshot, bool includeSecrets) => new
+    /// <summary>The snapshot minus every Local-scope target and the transitions, rollups and
+    /// glitches recorded for them. Pools and the verdict cannot reference Local targets
+    /// (validator rule), so nothing else needs rewriting.</summary>
+    internal static Snapshot WithoutLocalDevices(Snapshot snapshot)
+    {
+        var localIds = snapshot.Config.Targets
+            .Where(t => t.Scope == TargetScope.Local && t.Id is not null)
+            .Select(t => t.Id!.Value).ToHashSet();
+        return snapshot with
+        {
+            Config = snapshot.Config with
+            {
+                Targets = snapshot.Config.Targets.Where(t => t.Scope != TargetScope.Local).ToList(),
+            },
+            Transitions = snapshot.Transitions.Where(t => !localIds.Contains(t.SubjectId)).ToList(),
+            Rollups = snapshot.Rollups.Where(r => !localIds.Contains(r.TargetId)).ToList(),
+            Glitches = snapshot.Glitches.Where(g => !localIds.Contains(g.TargetId)).ToList(),
+        };
+    }
+
+    private static object Summary(Snapshot snapshot, bool includeSecrets, int localDevicesSkipped = 0) => new
     {
         Targets = snapshot.Config.Targets.Count,
         Pools = snapshot.Config.Pools.Count,
@@ -223,6 +250,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         Rollups = snapshot.Rollups.Count,
         Glitches = snapshot.Glitches.Count,
         SecretsTransferred = includeSecrets,
+        LocalDevicesSkipped = localDevicesSkipped,
         RedactedSettings = snapshot.RedactedSettings,
     };
 }

@@ -7,7 +7,7 @@ namespace ConWatch.Api;
 public static class SetupEndpoints
 {
     public record CloneRequest(string? SourceUrl, string? SourcePassword,
-        bool IncludeSecrets = true, bool AllowInsecure = false);
+        bool IncludeSecrets = true, bool AllowInsecure = false, bool IncludeLocalDevices = true);
 
     public record TakeoverRequest(string? SourcePassword, bool AllowInsecure = false);
 
@@ -30,7 +30,8 @@ public static class SetupEndpoints
 
         api.MapPost("/setup/clone", async (CloneRequest request, CloneService clone,
             CancellationToken ct) => (await clone.CloneAsync(request.SourceUrl,
-                request.SourcePassword, request.IncludeSecrets, request.AllowInsecure, ct)).ToHttp());
+                request.SourcePassword, request.IncludeSecrets, request.AllowInsecure, ct,
+                request.IncludeLocalDevices)).ToHttp());
 
         api.MapPost("/setup/takeover", async (TakeoverRequest request, CloneService clone,
             CancellationToken ct) => (await clone.TakeOverAsync(request.SourcePassword,

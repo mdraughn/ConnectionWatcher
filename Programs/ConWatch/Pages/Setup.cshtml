@@ -14,7 +14,7 @@
 
 <details id="clone-section">
     <summary>Moving from another ConnectionWatcher? Copy everything from it</summary>
-    <p><small>Clones the source node's configuration, full history, and (with its
+    <p><small>Clones the source node's configuration (including any local LAN devices), full history, and (with its
     admin password) its notification secrets. This node arrives as a read-only
     copy while the source keeps monitoring; when it looks right, press
     <b>Take over</b> on the Settings page for a seconds-long hand-off.</small></p>
@@ -27,6 +27,8 @@
             <input id="clone-password" type="password" autocomplete="off" />
         </label>
     </div>
+    <p><label><input id="clone-local" type="checkbox" checked />
+        Also copy my local devices <small>(LAN devices tracked on the side — uncheck when this node is on a different network)</small></label></p>
     <p><button id="clone-btn" type="button">Clone from this node</button>
        <span id="clone-progress"></span></p>
     <div id="clone-insecure" hidden>
