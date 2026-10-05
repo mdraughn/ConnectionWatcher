@@ -14,8 +14,11 @@ namespace ConWatch.Mcp;
 /// <summary>
 /// Read-only MCP tools over the watching surface, so an MCP host (Claude
 /// Code, Claude desktop) can answer "how was my internet last night?" from
-/// the actual database. Everything here is data the OPEN APIs already serve;
-/// no tool touches settings, secrets, or the locked surface.
+/// the actual database. Read-only and open by design: the watching data the
+/// open APIs already serve, plus `list_discoveries`, which reads the node's
+/// Discoveries inbox even though its page and REST API are admin-locked
+/// (spec 2026-10-02 §4). No tool mutates state, touches settings or secrets,
+/// or starts network activity.
 /// Spec: docs/superpowers/specs/2026-09-13-mcp-server-design.md.
 /// </summary>
 [McpServerToolType]
