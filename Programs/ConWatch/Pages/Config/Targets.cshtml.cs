@@ -31,6 +31,10 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public string? PrefillOperator => Request.Query["operator"];
     public string? PrefillScope => Request.Query["scope"];
 
+    /// <summary>The discovery being adopted (from the Discoveries page); null when absent or malformed.</summary>
+    public string? PrefillDiscoveryId =>
+        Guid.TryParse(Request.Query["discoveryId"], out var id) ? id.ToString() : null;
+
     /// <summary>The profile the dialog selects: the prefilled one when it exists, else Local for a
     /// Local-scope prefill, else Public.</summary>
     public string DefaultProfile =>

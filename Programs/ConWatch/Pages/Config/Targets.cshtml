@@ -4,7 +4,7 @@
 @model ConWatch.Pages.Config.TargetsModel
 @{
     ViewData["Title"] = "Targets — ConnectionWatcher";
-    var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    var json = (object? o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
 <div class="cw-pageband">
@@ -183,6 +183,8 @@
         const scopeSelect = document.getElementById("scope-select");
         const parentSelect = form.elements.parent;
         const pageDefaultProfile = @Html.Raw(json(Model.DefaultProfile));
+        const adoptDiscoveryId = @Html.Raw(json(Model.PrefillDiscoveryId));
+        let adoptingId = adoptDiscoveryId;
         function applyScope() {
             const local = scopeSelect.value === "Local";
             parentSelect.disabled = local;   // a LAN device is always a root
@@ -277,6 +279,12 @@
                     else showErrors(errors, result);
                     return false;
                 }
+                if (!isEdit && adoptingId) {
+                    // Strip the prefill from the URL first so the reload after a successful
+                    // adoption does not re-open the dialog; a failed save keeps adoptingId for the retry.
+                    history.replaceState(null, "", location.pathname);
+                    return { query: `?discoveryId=${encodeURIComponent(adoptingId)}` };
+                }
                 const original = form.dataset.originalAddress;
                 if (!isEdit || !original ||
                     dto.address.trim().toLowerCase() === original.toLowerCase())
@@ -307,6 +315,7 @@
                 setProbe(dto.probe ?? null);
             },
             resetForm: () => {
+                adoptingId = null;
                 applyScope();
                 setProbe(null);
                 document.getElementById("probe-test-out").textContent = "";

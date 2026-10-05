@@ -1,0 +1,130 @@
+@page
+@using ConCore.Discovery
+@model ConWatch.Pages.Config.DiscoveriesModel
+@{
+    ViewData["Title"] = "Discoveries — ConnectionWatcher";
+}
+
+<div class="cw-pageband">
+    <div class="titles">
+        <h2>Discoveries</h2>
+        <p>Things found on the network that nobody is monitoring yet. Adopt one to turn it into a target, or dismiss it.</p>
+    </div>
+</div>
+<partial name="_ConfigTabs" model="@("discoveries")" />
+
+<p>
+    <button type="button" id="find-router">Find my router</button>
+    <button type="button" id="find-edge" class="outline">Find the network edge</button>
+    <span id="search-status" aria-live="polite"></span>
+</p>
+<ul class="form-errors" id="errors"></ul>
+
+<div class="cw-segmented" style="margin-bottom: 1rem">
+    @foreach (var (key, label) in new[] { ("new", "New"), ("dismissed", "Dismissed"), ("adopted", "Adopted"), ("all", "All") })
+    {
+        <a class="@(Model.StatusFilter == key ? "active" : "")" href="/Config/Discoveries?status=@key">@label</a>
+    }
+</div>
+
+@if (Model.StatusFilter == "dismissed" && Model.Items.Count > 0)
+{
+    <p><button type="button" class="outline" id="restore-all">Restore all dismissed</button></p>
+}
+
+@if (Model.Items.Count == 0)
+{
+    <p>Nothing here. Use the search buttons above.</p>
+}
+else
+{
+    <table>
+        <thead><tr><th>Address</th><th>What</th><th>How found</th><th>Evidence</th><th>First seen</th><th>Last seen</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var d in Model.Items)
+        {
+            <tr>
+                <td>@d.Address@if (!string.IsNullOrEmpty(d.Hostname)) { <br /><small>@d.Hostname</small> }</td>
+                <td>@ConWatch.Pages.Config.DiscoveriesModel.KindLabel(d.Kind)</td>
+                <td>@ConWatch.Pages.Config.DiscoveriesModel.MethodLabel(d.Method)<br /><small>@d.Origin</small></td>
+                <td><small>@d.Evidence</small></td>
+                <td><small data-utc="@d.FirstSeenUtc.ToString("o")">@d.FirstSeenUtc.ToString("u")</small></td>
+                <td><small data-utc="@d.LastSeenUtc.ToString("o")">@d.LastSeenUtc.ToString("u")</small></td>
+                <td>
+                    @if (d.Status == DiscoveryStatus.Adopted && d.AdoptedTargetName is { } adopted)
+                    {
+                        <span>→ <a href="/Config/Targets">@adopted</a></span>
+                    }
+                    else
+                    {
+                        @if (d.Status == DiscoveryStatus.Adopted)
+                        {
+                            <small>(target removed)</small>
+                        }
+                        <a role="button" class="outline" href="@Model.AdoptUrl(d)">Adopt</a>
+                        @if (d.Status == DiscoveryStatus.Dismissed)
+                        {
+                            <button type="button" class="outline" data-action="restore" data-id="@d.Id">Restore</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="outline" data-action="dismiss" data-id="@d.Id">Dismiss</button>
+                        }
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script>
+        const errors = document.getElementById("errors");
+        const statusLine = document.getElementById("search-status");
+
+        document.querySelectorAll("[data-utc]").forEach((el) => {
+            const when = new Date(el.dataset.utc);
+            if (!isNaN(when)) el.textContent = when.toLocaleString();
+        });
+
+        async function search(button, url, label) {
+            clearErrors(errors);
+            button.setAttribute("aria-busy", "true");
+            statusLine.textContent = `${label}…`;
+            const result = await apiFetch("POST", url, {});
+            button.removeAttribute("aria-busy");
+            if (!result.ok) {
+                statusLine.textContent = "";
+                showErrors(errors, result);
+                return;
+            }
+            const { found, created, warning } = result.body;
+            statusLine.textContent = found === 0
+                ? "Nothing found." + (warning ? " " + warning : "")
+                : `Found ${found} (${created} new).` + (warning ? " " + warning : "");
+            if (found > 0) setTimeout(() => location.reload(), warning ? 4000 : 800);
+        }
+
+        document.getElementById("find-router").addEventListener("click",
+            (e) => search(e.currentTarget, "/api/v1/discoveries/search/router", "Looking for your router"));
+        document.getElementById("find-edge").addEventListener("click",
+            (e) => search(e.currentTarget, "/api/v1/discoveries/search/edge", "Tracing the way out of your network"));
+
+        document.querySelectorAll("[data-action]").forEach((btn) =>
+            btn.addEventListener("click", async () => {
+                clearErrors(errors);
+                const result = await apiFetch("POST", `/api/v1/discoveries/${btn.dataset.id}/${btn.dataset.action}`);
+                if (result.ok) location.reload();
+                else showErrors(errors, result);
+            }));
+
+        document.getElementById("restore-all")?.addEventListener("click", async () => {
+            clearErrors(errors);
+            const result = await apiFetch("POST", "/api/v1/discoveries/restore-dismissed");
+            if (result.ok) location.href = "/Config/Discoveries";
+            else showErrors(errors, result);
+        });
+    </script>
+}
