@@ -1,3 +1,4 @@
+using ConCore.Discovery;
 using ConEngine.Configuration;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -81,8 +82,26 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         return ConfigResult.Ok(id);
     });
 
-    public Task<ConfigResult> UpsertTargetAsync(TargetDto dto, string? addressChange = null) => MutateAsync(async db =>
+    public Task<ConfigResult> UpsertTargetAsync(TargetDto dto, string? addressChange = null,
+        Guid? adoptDiscoveryId = null) => MutateAsync(async db =>
     {
+        // Adopting a discovery creates a NEW target and marks the discovery in the same
+        // transaction: if anything below (or the post-save validation) fails, neither happens.
+        DiscoveryRow? discovery = null;
+        if (adoptDiscoveryId is { } discoveryId)
+        {
+            if (dto.Id is not null)
+                return ConfigResult.Fail(ConfigErrorKind.Validation,
+                    "A discovery can only be adopted into a new target.");
+            discovery = await db.Discoveries.FindAsync(discoveryId);
+            if (discovery is null)
+                return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {discoveryId}.");
+            if (discovery.Status == DiscoveryStatus.Adopted && discovery.AdoptedTargetId is { } adopted &&
+                await db.Targets.AnyAsync(t => t.Id == adopted))
+                return ConfigResult.Fail(ConfigErrorKind.Conflict,
+                    "This discovery was already adopted into a target.");
+        }
+
         var profile = await db.Profiles.SingleOrDefaultAsync(p => p.Name == dto.Profile);
         if (profile is null)
             return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{dto.Profile}'.");
@@ -134,6 +153,11 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             db.Targets.Add(row);
         }
         row.CopyFrom(dto, profile.Id, parentId);
+        if (discovery is not null)
+        {
+            discovery.Status = DiscoveryStatus.Adopted;
+            discovery.AdoptedTargetId = row.Id;
+        }
         return ConfigResult.Ok(row.Id);
     });
 
