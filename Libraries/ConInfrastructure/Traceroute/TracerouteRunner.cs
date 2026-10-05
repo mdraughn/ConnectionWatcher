@@ -28,9 +28,15 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
     public Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct) =>
         RunAsync(host, lookupOperators: false, ct);
 
+    public Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, bool lookupOperators, CancellationToken ct) =>
+        RunAsync(host, lookupOperators, stopWhen: null, ct);
+
     /// <param name="lookupOperators">When true, every Path/Destination hop with a
     /// public address is sent to <see cref="IAsnLookup"/> after the walk.</param>
-    public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, bool lookupOperators, CancellationToken ct)
+    /// <param name="stopWhen">Called with each raw (not yet classified) hop; returning true
+    /// ends the walk after that hop. Null walks to the destination or TTL 30.</param>
+    public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, bool lookupOperators,
+        Func<TracerouteHop, bool>? stopWhen, CancellationToken ct)
     {
         IPAddress destination;
         if (!IPAddress.TryParse(host, out destination!))
@@ -59,10 +65,11 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
                 reached |= result.ReachedDestination;
             }
 
-            hops.Add(new TracerouteHop(ttl, hopAddress?.ToString(),
+            var hopRow = new TracerouteHop(ttl, hopAddress?.ToString(),
                 hopAddress is null ? null : await ReverseDnsAsync(hopAddress, ct).ConfigureAwait(false),
-                bestRtt, reached, null, null, null));
-            if (reached)
+                bestRtt, reached, null, null, null);
+            hops.Add(hopRow);
+            if (reached || (stopWhen?.Invoke(hopRow) ?? false))
                 break;
         }
 

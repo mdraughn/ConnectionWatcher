@@ -134,4 +134,17 @@ public class TracerouteRunnerTests
         await runner.RunAsync("8.8.8.8", lookupOperators: false, CancellationToken.None);
         Assert.Empty(asn.Asked);
     }
+
+    [Fact]
+    public async Task StopWhen_ends_the_walk_after_the_hop_that_satisfies_it()
+    {
+        var runner = new TracerouteRunner(new FakeProbe("10.0.0.1", "198.51.100.11", "198.51.100.12", "8.8.8.8"),
+            NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
+
+        var hops = await runner.RunAsync("8.8.8.8", lookupOperators: false, stopWhen: h => h.Ttl == 2, CancellationToken.None);
+
+        Assert.Equal([1, 2], hops.Select(h => h.Ttl));
+        Assert.False(hops.Last().ReachedDestination);
+        Assert.NotNull(hops.Last().Kind);   // the stopped walk is still classified
+    }
 }
