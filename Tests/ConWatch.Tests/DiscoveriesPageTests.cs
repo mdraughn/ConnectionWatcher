@@ -145,4 +145,29 @@ public class DiscoveriesPageTests : IDisposable
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/?admin=1", response.Headers.Location?.OriginalString);
     }
+
+    [Fact]
+    public async Task The_Targets_prefill_is_one_shot_the_url_is_cleaned_on_open_and_reset_on_close()
+    {
+        var html = await _client.GetStringAsync(
+            $"/Config/Targets?address=192.0.2.50&name=Cam&scope=Local&discoveryId={Guid.NewGuid()}");
+
+        Assert.Contains("const prefilled", html);
+        Assert.Contains("history.replaceState(null, \"\", location.pathname);", html);
+        Assert.Contains("if (prefilled) location.replace(location.pathname);", html);
+    }
+
+    [Fact]
+    public async Task Already_monitored_candidates_say_so_instead_of_offering_Adopt()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await PostAsync(Item("192.168.1.1", "Gateway"), Item("192.0.2.50", "LocalDevice"));
+
+        var html = await _client.GetStringAsync("/Config/Discoveries");
+
+        Assert.Contains("already monitored as", html);
+        Assert.Contains("Router", html);
+        Assert.Contains("address=192.0.2.50", html);
+        Assert.DoesNotContain("address=192.168.1.1", html);
+    }
 }

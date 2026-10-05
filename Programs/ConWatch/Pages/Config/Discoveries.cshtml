@@ -61,7 +61,14 @@ else
                         {
                             <small>(target removed)</small>
                         }
-                        <a role="button" class="outline" href="@Model.AdoptUrl(d)">Adopt</a>
+                        @if (Model.MonitoredAs(d) is { } monitoredAs)
+                        {
+                            <small>already monitored as '@monitoredAs'</small>
+                        }
+                        else
+                        {
+                            <a role="button" class="outline" href="@Model.AdoptUrl(d)">Adopt</a>
+                        }
                         @if (d.Status == DiscoveryStatus.Dismissed)
                         {
                             <button type="button" class="outline" data-action="restore" data-id="@d.Id">Restore</button>
@@ -89,28 +96,36 @@ else
             if (!isNaN(when)) el.textContent = when.toLocaleString();
         });
 
-        async function search(button, url, label) {
+        async function search(button, url, label, nothingFound = "Nothing found.") {
             clearErrors(errors);
             button.setAttribute("aria-busy", "true");
+            button.disabled = true;
             statusLine.textContent = `${label}…`;
-            const result = await apiFetch("POST", url, {});
-            button.removeAttribute("aria-busy");
-            if (!result.ok) {
-                statusLine.textContent = "";
-                showErrors(errors, result);
-                return;
+            try {
+                const result = await apiFetch("POST", url, {});
+                if (!result.ok) {
+                    statusLine.textContent = "";
+                    showErrors(errors, result);
+                    return;
+                }
+                const { found, created, warning } = result.body;
+                statusLine.textContent = found === 0
+                    ? nothingFound + (warning ? " " + warning : "")
+                    : `Found ${found} (${created} new).` + (warning ? " " + warning : "");
+                if (found > 0) setTimeout(() => location.reload(), warning ? 4000 : 800);
+            } catch (err) {
+                statusLine.textContent = `The search could not be started: ${err?.message ?? err}`;
+            } finally {
+                button.disabled = false;
+                button.removeAttribute("aria-busy");
             }
-            const { found, created, warning } = result.body;
-            statusLine.textContent = found === 0
-                ? "Nothing found." + (warning ? " " + warning : "")
-                : `Found ${found} (${created} new).` + (warning ? " " + warning : "");
-            if (found > 0) setTimeout(() => location.reload(), warning ? 4000 : 800);
         }
 
         document.getElementById("find-router").addEventListener("click",
             (e) => search(e.currentTarget, "/api/v1/discoveries/search/router", "Looking for your router"));
         document.getElementById("find-edge").addEventListener("click",
-            (e) => search(e.currentTarget, "/api/v1/discoveries/search/edge", "Tracing the way out of your network"));
+            (e) => search(e.currentTarget, "/api/v1/discoveries/search/edge", "Tracing the way out of your network",
+                "Nothing found: the hops past your router did not answer. Try again in a moment."));
 
         document.querySelectorAll("[data-action]").forEach((btn) =>
             btn.addEventListener("click", async () => {

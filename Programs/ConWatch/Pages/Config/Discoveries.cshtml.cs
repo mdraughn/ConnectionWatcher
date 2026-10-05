@@ -22,9 +22,18 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
         }
         StatusFilter = string.IsNullOrWhiteSpace(status) ? "new" : status.Trim().ToLowerInvariant();
         Items = await store.ListAsync(filter);
-        _targetNames = (await configStore.ExportAsync()).Targets
-            .Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targets = (await configStore.ExportAsync()).Targets;
+        _targetNames = targets.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _targetByAddress = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in targets)
+            _targetByAddress.TryAdd(t.Address.Trim(), t.Name);
     }
+
+    private Dictionary<string, string> _targetByAddress = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The name of the existing target monitoring this discovery's address, if any.</summary>
+    public string? MonitoredAs(DiscoveryDto d) =>
+        _targetByAddress.TryGetValue(d.Address.Trim(), out var name) ? name : null;
 
     public static string KindLabel(DiscoveryKind kind) => kind switch
     {

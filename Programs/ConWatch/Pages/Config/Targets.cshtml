@@ -185,6 +185,7 @@
         const pageDefaultProfile = @Html.Raw(json(Model.DefaultProfile));
         const adoptDiscoveryId = @Html.Raw(json(Model.PrefillDiscoveryId));
         let adoptingId = adoptDiscoveryId;
+        const prefilled = new URLSearchParams(location.search).has("address");
         function applyScope() {
             const local = scopeSelect.value === "Local";
             parentSelect.disabled = local;   // a LAN device is always a root
@@ -317,6 +318,8 @@
             resetForm: () => {
                 adoptingId = null;
                 applyScope();
+                // A prefilled page has the prefill baked into its defaults: re-render without it.
+                if (prefilled) location.replace(location.pathname);
                 setProbe(null);
                 document.getElementById("probe-test-out").textContent = "";
             },
@@ -329,8 +332,8 @@
             }));
         // The traceroute page links here with the address pre-filled: open
         // the form right away rather than making the user find "Add target".
-        if (new URLSearchParams(location.search).has("address"))
-            open({ title: "Add target", submitLabel: "Add target" });
+        // One-shot: clean the URL now so no later reload re-opens the dialog or re-arms the adoption.
+        if (prefilled) { open({ title: "Add target", submitLabel: "Add target" }); history.replaceState(null, "", location.pathname); }
 
         document.getElementById("import-file").addEventListener("change", async (e) => {
             const file = e.target.files[0];
