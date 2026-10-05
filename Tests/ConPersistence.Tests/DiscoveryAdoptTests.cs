@@ -66,6 +66,21 @@ public class DiscoveryAdoptTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_duplicate_target_name_is_rejected_and_the_discovery_stays_New()
+    {
+        var id = await NewDiscoveryAsync("192.0.2.60");
+
+        var result = await _service.UpsertTargetAsync(Nas("192.0.2.60") with { Name = "Router" }, adoptDiscoveryId: id);
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        var row = Assert.Single(await _discoveries.ListAsync(null));
+        Assert.Equal(DiscoveryStatus.New, row.Status);
+        Assert.Null(row.AdoptedTargetId);
+        Assert.Equal(["Router"], (await _configStore.LoadWatcherOptionsAsync()).Targets.Select(t => t.Name));
+    }
+
+    [Fact]
     public async Task A_live_adoption_cannot_be_adopted_again()
     {
         var id = await NewDiscoveryAsync("192.0.2.50");

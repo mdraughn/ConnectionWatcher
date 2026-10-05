@@ -30,7 +30,7 @@ public sealed class DiscoveryScanner(IGatewayDiscovery gateways, TracerouteRunne
             .Where(g => g.Source == "default-route" || g.Reachable)
             .Select(g => new DiscoveryCandidate(g.Address, null, DiscoveryKind.Gateway,
                 g.Source == "default-route" ? DiscoveryMethod.DefaultRoute : DiscoveryMethod.CommonAddress,
-                g.Reachable ? $"answers pings in {g.RttMs} ms" : "the default route, but it does not answer pings"))
+                g.Reachable ? (g.RttMs is { } rtt ? $"answers pings in {rtt} ms" : "answers pings") : "the default route, but it does not answer pings"))
             .ToList();
     }
 

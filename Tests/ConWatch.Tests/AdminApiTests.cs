@@ -130,10 +130,17 @@ public class AdminApiTests : IDisposable
     public async Task Factory_reset_wipes_everything_and_reseeds_builtins()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
+        (await _client.PostAsJsonAsync("/api/v1/discoveries", new
+        {
+            items = new[] { new { address = "192.0.2.50", hostname = (string?)null, kind = "LocalDevice",
+                method = "ArpTable", origin = "tray:PC", evidence = "e" } },
+        })).EnsureSuccessStatusCode();
 
         var ok = await _client.PostAsJsonAsync("/api/v1/admin/factory-reset", new { confirm = "RESET" });
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
 
+        var inbox = await _client.GetFromJsonAsync<JsonElement>("/api/v1/discoveries?status=all");
+        Assert.Equal(0, inbox.GetArrayLength());
         var targets = await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets");
         Assert.Empty(targets!);
         var profiles = await _client.GetFromJsonAsync<List<ConPersistence.Config.ProfileDto>>("/api/v1/profiles");

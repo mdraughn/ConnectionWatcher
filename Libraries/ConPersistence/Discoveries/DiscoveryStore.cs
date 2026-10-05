@@ -173,6 +173,7 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
     public async Task<ConfigResult> DismissAsync(Guid id)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
         var row = await db.Discoveries.FindAsync(id);
         if (row is null)
             return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {id}.");
@@ -182,12 +183,14 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
         row.Status = DiscoveryStatus.Dismissed;
         row.AdoptedTargetId = null;
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ConfigResult.Ok(id);
     }
 
     public async Task<ConfigResult> RestoreAsync(Guid id)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
         var row = await db.Discoveries.FindAsync(id);
         if (row is null)
             return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {id}.");
@@ -197,6 +200,7 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
         row.Status = DiscoveryStatus.New;
         row.AdoptedTargetId = null;
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ConfigResult.Ok(id);
     }
 

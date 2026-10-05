@@ -146,6 +146,7 @@ public static class AdminEndpoints
                 await db.Targets.ExecuteDeleteAsync();
                 await db.Profiles.ExecuteDeleteAsync();
                 await db.Settings.ExecuteDeleteAsync();
+                await db.Discoveries.ExecuteDeleteAsync();
                 await tx.CommitAsync();
             }
             await store.SeedAsync(null); // builtin profiles

@@ -55,6 +55,16 @@ public class DiscoveryScannerTests
     }
 
     [Fact]
+    public async Task A_reachable_router_without_a_measured_RTT_says_only_that_it_answers_pings()
+    {
+        var scanner = Scanner(new FakeGateways(new GatewayCandidate("192.0.2.254", "probe", true, null)));
+
+        var found = await scanner.FindRouterAsync(CancellationToken.None);
+
+        Assert.Equal("answers pings", Assert.Single(found).Evidence);
+    }
+
+    [Fact]
     public async Task Router_search_with_nothing_found_returns_an_empty_list()
     {
         var scanner = Scanner(new FakeGateways(new GatewayCandidate("198.51.100.1", "probe", false, null)));
