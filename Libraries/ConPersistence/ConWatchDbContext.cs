@@ -1,3 +1,4 @@
+using ConCore.Discovery;
 using ConCore.Targets;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,7 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
     public DbSet<RollupRow> Rollups => Set<RollupRow>();
     public DbSet<GlitchRow> Glitches => Set<GlitchRow>();
     public DbSet<SettingRow> Settings => Set<SettingRow>();
+    public DbSet<DiscoveryRow> Discoveries => Set<DiscoveryRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,6 +72,16 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
         modelBuilder.Entity<SettingRow>(e =>
         {
             e.HasKey(s => s.Key);
+        });
+
+        modelBuilder.Entity<DiscoveryRow>(e =>
+        {
+            e.HasIndex(d => new { d.Address, d.Kind }).IsUnique();
+            e.HasIndex(d => d.Status);
+            e.Property(d => d.Address).UseCollation("NOCASE");
+            e.Property(d => d.Kind).HasConversion<string>().HasMaxLength(24);
+            e.Property(d => d.Method).HasConversion<string>().HasMaxLength(24);
+            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(24);
         });
 
         // Every DateTime column is UTC by construction (the *Utc suffix is the
