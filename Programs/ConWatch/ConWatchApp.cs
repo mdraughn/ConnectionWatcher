@@ -100,6 +100,7 @@ public static class ConWatchApp
         locked.MapConfig();
         locked.MapProbeTest();
         locked.MapTraceroute();
+        locked.MapDiscoveries();
         locked.MapAdmin();
         locked.MapSetup();
         SettingsEndpoints.MapSettings(locked, open: api);

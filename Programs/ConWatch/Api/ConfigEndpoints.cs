@@ -15,8 +15,8 @@ public static class ConfigEndpoints
         targets.MapGet("/{id:guid}", async (Guid id, ConfigStore store) =>
             (await store.ExportAsync()).Targets.SingleOrDefault(t => t.Id == id) is { } dto
                 ? Results.Ok(dto) : Results.NotFound());
-        targets.MapPost("/", async (TargetDto dto, ConfigService service) =>
-            (await service.UpsertTargetAsync(dto with { Id = null }))
+        targets.MapPost("/", async (TargetDto dto, ConfigService service, Guid? discoveryId) =>
+            (await service.UpsertTargetAsync(dto with { Id = null }, adoptDiscoveryId: discoveryId))
                 .ToHttp(r => Results.Created($"/api/v1/targets/{r.Id}", new { id = r.Id })));
         targets.MapPut("/{id:guid}", async (Guid id, TargetDto dto, ConfigService service,
                 string? addressChange) =>

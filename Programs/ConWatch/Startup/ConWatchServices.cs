@@ -65,6 +65,9 @@ public static class ConWatchServices
     {
         services.AddSingleton<ConfigStore>();
         services.AddSingleton<ConfigService>();
+        services.AddSingleton<ConPersistence.Discoveries.DiscoveryStore>();
+        services.AddSingleton<ConInfrastructure.Discovery.IDiscoveryScanner, ConInfrastructure.Discovery.DiscoveryScanner>();
+        services.AddSingleton<Discoveries.DiscoverySearchService>();
         services.AddSingleton<SettingsStore>();
         services.AddSingleton<ConfigHealth>();
         services.AddSingleton<ConPersistence.Report.IspReportBuilder>();
