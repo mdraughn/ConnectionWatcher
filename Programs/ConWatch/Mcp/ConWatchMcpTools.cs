@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using ConPersistence;
+using ConPersistence.Discoveries;
 using ConPersistence.Queries;
 using ConPersistence.Report;
 using ConWatch.Api;
@@ -19,7 +20,8 @@ namespace ConWatch.Mcp;
 /// </summary>
 [McpServerToolType]
 public class ConWatchMcpTools(WatcherHostService host,
-    IDbContextFactory<ConWatchDbContext> dbFactory, IspReportBuilder reportBuilder)
+    IDbContextFactory<ConWatchDbContext> dbFactory, IspReportBuilder reportBuilder,
+    DiscoveryStore discoveries)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -121,5 +123,21 @@ public class ConWatchMcpTools(WatcherHostService host,
             g.LostCount, g.SampleCount, g.Detail,
             Scope = localIds.Contains(g.TargetId) ? "Local" : "Verdict",
         }), Json);
+    }
+
+    [McpServerTool(Name = "list_discoveries", ReadOnly = true)]
+    [Description("Candidates found by network searches that nobody is monitoring yet: the user's " +
+        "router, the first hop beyond their LAN (where the ISP's network begins), and local devices. " +
+        "Each has a kind (Gateway, NetworkEdge, LocalDevice), how it was found (method), who found it " +
+        "(origin: 'server' or 'tray:<machine>'), evidence, first/last seen (ISO-8601 UTC) and a status: " +
+        "New (not acted on), Dismissed (the user said no), Adopted (turned into a target; adoptedTargetName " +
+        "is null if that target was later deleted). Read-only: searching, adopting and dismissing are done " +
+        "in the web UI's Config > Discoveries page.")]
+    public async Task<string> ListDiscoveries(
+        [Description("'new' (default), 'dismissed', 'adopted' or 'all'")] string? status = null)
+    {
+        if (!DiscoveryStatuses.TryParseFilter(status, out var filter))
+            throw new McpException("status must be 'new', 'dismissed', 'adopted' or 'all'.");
+        return JsonSerializer.Serialize(await discoveries.ListAsync(filter), Json);
     }
 }

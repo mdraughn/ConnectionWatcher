@@ -62,14 +62,15 @@ public class McpEndpointTests : IDisposable
         callResult.GetProperty("content")[0].GetProperty("text").GetString()!;
 
     [Fact]
-    public async Task Lists_the_four_read_only_tools()
+    public async Task Lists_the_five_read_only_tools()
     {
         var init = await InitializeAsync();
         Assert.Equal("ConnectionWatcher", init.GetProperty("serverInfo").GetProperty("name").GetString());
 
         var tools = (await RpcAsync("tools/list")).GetProperty("tools").EnumerateArray()
             .Select(t => t.GetProperty("name").GetString()).ToList();
-        Assert.Equal(4, tools.Count);
+        Assert.Equal(5, tools.Count);
+        Assert.Contains("list_discoveries", tools);
         Assert.Contains("get_current_status", tools);
         Assert.Contains("get_connection_report", tools);
         Assert.Contains("get_transitions", tools);
@@ -214,5 +215,50 @@ public class McpEndpointTests : IDisposable
             Assert.True(result.GetProperty("isError").GetBoolean());
             Assert.Contains("scope must be", ToolText(result));
         }
+    }
+
+    private async Task<List<JsonElement>> ListDiscoveriesAsync(object arguments)
+    {
+        var text = ToolText(await RpcAsync("tools/call", new { name = "list_discoveries", arguments }));
+        return JsonSerializer.Deserialize<JsonElement>(text).EnumerateArray().ToList();
+    }
+
+    [Fact]
+    public async Task list_discoveries_returns_the_inbox_and_filters_by_status()
+    {
+        await InitializeAsync();
+        (await _client.PostAsJsonAsync("/api/v1/discoveries", new
+        {
+            items = new object[]
+            {
+                new { address = "192.0.2.1", kind = "Gateway", method = "DefaultRoute", origin = "server", evidence = "e1" },
+                new { address = "192.0.2.50", kind = "LocalDevice", method = "ArpTable", origin = "tray:PC" },
+            },
+        })).EnsureSuccessStatusCode();
+        var all = JsonSerializer.Deserialize<JsonElement>(await _client.GetStringAsync("/api/v1/discoveries"));
+        var dismissId = all.EnumerateArray().Single(d => d.GetProperty("address").GetString() == "192.0.2.50")
+            .GetProperty("id").GetString();
+        (await _client.PostAsync($"/api/v1/discoveries/{dismissId}/dismiss", null)).EnsureSuccessStatusCode();
+
+        var newOnes = await ListDiscoveriesAsync(new { });
+        var dismissed = await ListDiscoveriesAsync(new { status = "dismissed" });
+        var everything = await ListDiscoveriesAsync(new { status = "all" });
+
+        Assert.Equal(["192.0.2.1"], newOnes.Select(d => d.GetProperty("address").GetString()));
+        Assert.Equal("Gateway", newOnes[0].GetProperty("kind").GetString());
+        Assert.Equal("server", newOnes[0].GetProperty("origin").GetString());
+        Assert.Equal(["192.0.2.50"], dismissed.Select(d => d.GetProperty("address").GetString()));
+        Assert.Equal(2, everything.Count);
+    }
+
+    [Fact]
+    public async Task list_discoveries_with_a_bad_status_is_a_readable_tool_error()
+    {
+        await InitializeAsync();
+
+        var result = await RpcAsync("tools/call", new { name = "list_discoveries", arguments = new { status = "bogus" } });
+
+        Assert.True(result.GetProperty("isError").GetBoolean());
+        Assert.Contains("status must be", ToolText(result));
     }
 }
