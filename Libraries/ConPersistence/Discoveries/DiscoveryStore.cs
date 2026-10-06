@@ -45,7 +45,7 @@ public static class DiscoveryStatuses
 /// </summary>
 public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider? timeProvider = null)
 {
-    public const int MaxBatch = 512;
+    public const int MaxBatch = DiscoveryLimits.MaxBatch;
     private const int MaxHostname = 255;
     private const int MaxOrigin = 100;
     private const int MaxEvidence = 1000;

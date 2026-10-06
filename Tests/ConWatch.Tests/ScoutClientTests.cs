@@ -46,6 +46,38 @@ public class ScoutClientTests : IDisposable
     }
 
     [Fact]
+    public async Task More_items_than_one_batch_are_posted_in_pieces_and_the_totals_summed()
+    {
+        var client = Client();
+        var scout = new ScoutClient(client, Local);
+        var items = Enumerable.Range(0, 513).Select(i => new ScoutItem($"10.2.{i / 250}.{i % 250 + 1}", null,
+            DiscoveryKind.LocalDevice, DiscoveryMethod.PingSweep, "tray:TESTPC", null)).ToList();
+
+        var first = await scout.SendAsync(items, null, false, CancellationToken.None);
+        var second = await scout.SendAsync(items, null, false, CancellationToken.None);
+
+        Assert.True(first.Success, first.Message);
+        Assert.Equal((513, 0), (first.Created, first.Updated));
+        Assert.True(second.Success, second.Message);
+        Assert.Equal((0, 513), (second.Created, second.Updated));
+        Assert.Equal(513, (await ListAsync(client)).GetArrayLength());
+    }
+
+    [Fact]
+    public async Task A_locked_server_signs_in_once_for_a_multi_batch_send()
+    {
+        var admin = Client();
+        (await admin.PostAsJsonAsync("/api/v1/auth/set-password", new { password = "hunter2" })).EnsureSuccessStatusCode();
+        var items = Enumerable.Range(0, 513).Select(i => new ScoutItem($"10.2.{i / 250}.{i % 250 + 1}", null,
+            DiscoveryKind.LocalDevice, DiscoveryMethod.PingSweep, "tray:TESTPC", null)).ToList();
+
+        var result = await new ScoutClient(Client(), Local).SendAsync(items, "hunter2", false, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(513, result.Created);
+    }
+
+    [Fact]
     public async Task A_locked_server_without_a_password_says_a_password_is_required()
     {
         var admin = Client();

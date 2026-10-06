@@ -19,22 +19,23 @@ public sealed record SearchOutcome(bool Busy, bool TimedOut, int Found, int Crea
 /// keep a stuck traceroute from wedging the page.
 /// </summary>
 public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryStore store,
-    ILogger<DiscoverySearchService> log, TimeSpan? cap = null)
+    ILogger<DiscoverySearchService> log, TimeSpan? cap = null, Func<bool>? inContainer = null)
 {
     public const string ServerOrigin = "server";
     public static readonly TimeSpan DefaultCap = TimeSpan.FromSeconds(30);
 
     private readonly TimeSpan _cap = cap ?? DefaultCap;
+    private readonly Func<bool> _inContainer = inContainer ?? ContainerHint.IsLikelyContainer;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public Task<SearchOutcome> SearchRouterAsync(CancellationToken ct) =>
-        RunAsync(async t => (await scanner.FindRouterAsync(t), true), ct);
+        RunAsync(async t => (await scanner.FindRouterAsync(t), true), ct, lan: false);
 
     /// <param name="host">The public address to trace toward; null or blank uses <see cref="DiscoveryScanner.DefaultEdgeHost"/>.</param>
     public Task<SearchOutcome> SearchEdgeAsync(string? host, CancellationToken ct)
     {
         var target = string.IsNullOrWhiteSpace(host) ? DiscoveryScanner.DefaultEdgeHost : host.Trim();
-        return RunAsync(async t => (await scanner.FindNetworkEdgeAsync(target, t), true), ct);
+        return RunAsync(async t => (await scanner.FindNetworkEdgeAsync(target, t), true), ct, lan: false);
     }
 
     /// <summary>The LAN scan keeps its partial results when the cap cuts it short.</summary>
@@ -43,11 +44,11 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
         {
             var scan = await scanner.ScanLanAsync(t);
             return (scan.Found, scan.Complete);
-        }, ct);
+        }, ct, lan: true);
 
     private async Task<SearchOutcome> RunAsync(
         Func<CancellationToken, Task<(IReadOnlyList<DiscoveryCandidate> Found, bool Complete)>> search,
-        CancellationToken ct)
+        CancellationToken ct, bool lan)
     {
         if (!await _gate.WaitAsync(0, CancellationToken.None))
             return SearchOutcome.IsBusy;
@@ -64,7 +65,7 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 log.LogWarning("Discovery search exceeded its {Cap} cap", _cap);
-                return new SearchOutcome(false, true, 0, 0, 0, Warning(), []);
+                return new SearchOutcome(false, true, 0, 0, 0, Warning(lan), []);
             }
             catch (Exception ex) when (ex is ArgumentException or SocketException)
             {
@@ -74,13 +75,19 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
             ct.ThrowIfCancellationRequested();
 
             if (found.Count == 0)
-                return new SearchOutcome(false, !complete, 0, 0, 0, Warning(), [], Partial: false);
-            var stored = await store.UpsertAsync(found.Select(c => new DiscoveryInput(
-                c.Address, c.Hostname, c.Kind, c.Method, ServerOrigin, c.Evidence)).ToList());
-            return stored.Success
-                ? new SearchOutcome(false, false, found.Count, stored.Created, stored.Updated, Warning(), [],
-                    Partial: !complete)
-                : new SearchOutcome(false, false, 0, 0, 0, null, stored.Errors);
+                return new SearchOutcome(false, !complete, 0, 0, 0, Warning(lan), [], Partial: false);
+            // A LAN scan can find more than one store batch holds; file it in batch-sized pieces.
+            int created = 0, updated = 0;
+            foreach (var chunk in found.Chunk(DiscoveryStore.MaxBatch))
+            {
+                var stored = await store.UpsertAsync(chunk.Select(c => new DiscoveryInput(
+                    c.Address, c.Hostname, c.Kind, c.Method, ServerOrigin, c.Evidence)).ToList());
+                if (!stored.Success)
+                    return new SearchOutcome(false, false, 0, 0, 0, null, stored.Errors);
+                created += stored.Created;
+                updated += stored.Updated;
+            }
+            return new SearchOutcome(false, false, found.Count, created, updated, Warning(lan), [], Partial: !complete);
         }
         finally
         {
@@ -88,5 +95,5 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
         }
     }
 
-    private static string? Warning() => ContainerHint.IsLikelyContainer() ? ContainerHint.Warning : null;
+    private string? Warning(bool lan) => _inContainer() ? (lan ? ContainerHint.LanWarning : ContainerHint.Warning) : null;
 }

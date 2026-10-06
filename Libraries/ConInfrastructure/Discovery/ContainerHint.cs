@@ -8,6 +8,10 @@ public static class ContainerHint
         "This server appears to be running in a container, so the default gateway it sees may be the " +
         "container's bridge rather than your router. Check the address before adopting it.";
 
+    public const string LanWarning =
+        "This server is running in a container; a scan from here sees only the container's own network, " +
+        "not your LAN. Use host networking (see deploy/docker/README.md) or run Scan this network from the Windows tray.";
+
     public static bool IsLikelyContainer() => IsLikelyContainer(Environment.GetEnvironmentVariable, File.Exists);
 
     public static bool IsLikelyContainer(Func<string, string?> env, Func<string, bool> fileExists) =>

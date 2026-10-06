@@ -53,34 +53,49 @@ public sealed class ScoutClient(HttpClient http, Uri server)
 
     private Uri Url(string path) => new(server.AbsolutePath.EndsWith('/') ? server : new Uri(server + "/"), path);
 
+    /// <summary>
+    /// Posts the items in batches of at most <see cref="DiscoveryLimits.MaxBatch"/> (the server's per-request
+    /// cap), signing in at most once. The totals are summed; the first failing batch is returned as is.
+    /// </summary>
     public async Task<ScoutResult> SendAsync(IReadOnlyList<ScoutItem> items, string? adminPassword,
         bool allowInsecure, CancellationToken ct)
     {
         try
         {
-            var response = await PostItemsAsync(items, ct);
-            if (IsRedirect(response)) return Redirected();
-            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            var signedIn = false;
+            int created = 0, updated = 0;
+            var batches = items.Count == 0 ? [Array.Empty<ScoutItem>()] : items.Chunk(DiscoveryLimits.MaxBatch).ToList();
+            foreach (var batch in batches)
             {
-                if (adminPassword is null)
-                    return ScoutResult.Fail(ScoutFailure.PasswordRequired,
-                        "This server needs its admin password before it will accept discoveries.");
-                // The password is about to cross the wire: decide now, before it does.
-                if (TransportPolicy.Evaluate(server, sensitive: true, allowInsecure) == TransportPolicy.Verdict.RequiresOverride)
-                    return ScoutResult.Fail(ScoutFailure.InsecureTransport,
-                        $"Signing in would send your admin password to {server.Host} unencrypted over plain HTTP.");
-
-                var login = await http.PostAsJsonAsync(Url("api/v1/auth/login"), new { password = adminPassword }, Json, ct);
-                if (IsRedirect(login)) return Redirected();
-                if (login.StatusCode == HttpStatusCode.Unauthorized)
-                    return ScoutResult.Fail(ScoutFailure.WrongPassword, "The admin password was not accepted.");
-                if (!login.IsSuccessStatusCode)
-                    return ScoutResult.Fail(ScoutFailure.ServerError,
-                        $"The server refused the sign-in ({(int)login.StatusCode}).");
-                response = await PostItemsAsync(items, ct);
+                var response = await PostItemsAsync(batch, ct);
                 if (IsRedirect(response)) return Redirected();
+                if (response.StatusCode == HttpStatusCode.Unauthorized && !signedIn)
+                {
+                    if (adminPassword is null)
+                        return ScoutResult.Fail(ScoutFailure.PasswordRequired,
+                            "This server needs its admin password before it will accept discoveries.");
+                    // The password is about to cross the wire: decide now, before it does.
+                    if (TransportPolicy.Evaluate(server, sensitive: true, allowInsecure) == TransportPolicy.Verdict.RequiresOverride)
+                        return ScoutResult.Fail(ScoutFailure.InsecureTransport,
+                            $"Signing in would send your admin password to {server.Host} unencrypted over plain HTTP.");
+
+                    var login = await http.PostAsJsonAsync(Url("api/v1/auth/login"), new { password = adminPassword }, Json, ct);
+                    if (IsRedirect(login)) return Redirected();
+                    if (login.StatusCode == HttpStatusCode.Unauthorized)
+                        return ScoutResult.Fail(ScoutFailure.WrongPassword, "The admin password was not accepted.");
+                    if (!login.IsSuccessStatusCode)
+                        return ScoutResult.Fail(ScoutFailure.ServerError,
+                            $"The server refused the sign-in ({(int)login.StatusCode}).");
+                    signedIn = true;
+                    response = await PostItemsAsync(batch, ct);
+                    if (IsRedirect(response)) return Redirected();
+                }
+                var result = await InterpretAsync(response, ct);
+                if (!result.Success) return result;
+                created += result.Created;
+                updated += result.Updated;
             }
-            return await InterpretAsync(response, ct);
+            return new ScoutResult(true, ScoutFailure.None, "Sent.", created, updated);
         }
         catch (HttpRequestException ex)
         {
@@ -91,14 +106,13 @@ public sealed class ScoutClient(HttpClient http, Uri server)
             return Unreachable(ex);       // the HttpClient's own timeout
         }
     }
-
     private static bool IsRedirect(HttpResponseMessage r) => (int)r.StatusCode is >= 300 and <= 399;
 
     private static ScoutResult Redirected() =>
         ScoutResult.Fail(ScoutFailure.ServerError,
             "The server redirected the request; check the server address in tray settings (for example http vs https).");
 
-    private Task<HttpResponseMessage> PostItemsAsync(IReadOnlyList<ScoutItem> items, CancellationToken ct) =>
+    private Task<HttpResponseMessage> PostItemsAsync(IReadOnlyCollection<ScoutItem> items, CancellationToken ct) =>
         http.PostAsJsonAsync(Url("api/v1/discoveries"), new { items }, Json, ct);
 
     private ScoutResult Unreachable(Exception ex) =>
