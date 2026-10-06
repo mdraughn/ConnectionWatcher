@@ -30,6 +30,9 @@ public sealed record ScoutResult(bool Success, ScoutFailure Failure, string Mess
 /// the node answers 401, and never sending that password over plain HTTP to another machine without an
 /// explicit yes (<see cref="TransportPolicy"/>). The caller supplies an <see cref="HttpClient"/> with
 /// cookies enabled, so one sign-in covers later sends. Messages never contain the password.
+/// Any 3xx answer is treated as a failure and never followed by this class, but a redirect that the
+/// <see cref="HttpClient"/> itself follows would re-send the password to the target unchecked, so the
+/// caller MUST build its handler with <c>AllowAutoRedirect = false</c>.
 /// </summary>
 public sealed class ScoutClient(HttpClient http, Uri server)
 {
@@ -43,6 +46,7 @@ public sealed class ScoutClient(HttpClient http, Uri server)
         try
         {
             var response = await PostItemsAsync(items, ct);
+            if (IsRedirect(response)) return Redirected();
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 if (adminPassword is null)
@@ -54,12 +58,14 @@ public sealed class ScoutClient(HttpClient http, Uri server)
                         $"Signing in would send your admin password to {server.Host} unencrypted over plain HTTP.");
 
                 var login = await http.PostAsJsonAsync(Url("api/v1/auth/login"), new { password = adminPassword }, Json, ct);
+                if (IsRedirect(login)) return Redirected();
                 if (login.StatusCode == HttpStatusCode.Unauthorized)
                     return ScoutResult.Fail(ScoutFailure.WrongPassword, "The admin password was not accepted.");
                 if (!login.IsSuccessStatusCode)
                     return ScoutResult.Fail(ScoutFailure.ServerError,
                         $"The server refused the sign-in ({(int)login.StatusCode}).");
                 response = await PostItemsAsync(items, ct);
+                if (IsRedirect(response)) return Redirected();
             }
             return await InterpretAsync(response, ct);
         }
@@ -72,6 +78,12 @@ public sealed class ScoutClient(HttpClient http, Uri server)
             return Unreachable(ex);       // the HttpClient's own timeout
         }
     }
+
+    private static bool IsRedirect(HttpResponseMessage r) => (int)r.StatusCode is >= 300 and <= 399;
+
+    private static ScoutResult Redirected() =>
+        ScoutResult.Fail(ScoutFailure.ServerError,
+            "The server redirected the request; check the server address in tray settings (for example http vs https).");
 
     private Task<HttpResponseMessage> PostItemsAsync(IReadOnlyList<ScoutItem> items, CancellationToken ct) =>
         http.PostAsJsonAsync(Url("api/v1/discoveries"), new { items }, Json, ct);

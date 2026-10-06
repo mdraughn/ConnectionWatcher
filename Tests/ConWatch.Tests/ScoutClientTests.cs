@@ -145,4 +145,55 @@ public class ScoutClientTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new ScoutClient(Client(), Local).SendAsync(OneDevice, null, false, cts.Token));
     }
+
+    private sealed class RecordingStub(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        public List<Uri> Requests { get; } = [];
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Requests.Add(request.RequestUri!);
+            return Task.FromResult(respond(request));
+        }
+    }
+
+    [Fact]
+    public async Task A_redirect_on_the_login_post_fails_and_the_password_never_reaches_the_target()
+    {
+        var stub = new RecordingStub(r => r.RequestUri!.AbsolutePath.EndsWith("/discoveries")
+            ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            : new HttpResponseMessage(HttpStatusCode.TemporaryRedirect)
+              { Headers = { Location = new Uri("http://evil.example.com/api/v1/auth/login") } });
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("https://scout-test.example.com/"))
+            .SendAsync(OneDevice, "hunter2", false, CancellationToken.None);
+
+        Assert.Equal(ScoutFailure.ServerError, result.Failure);
+        Assert.DoesNotContain("hunter2", result.Message);
+        Assert.DoesNotContain(stub.Requests, u => u.Host == "evil.example.com");
+    }
+
+    [Fact]
+    public async Task A_redirect_on_the_items_post_fails()
+    {
+        var stub = new RecordingStub(_ => new HttpResponseMessage(HttpStatusCode.PermanentRedirect)
+            { Headers = { Location = new Uri("http://evil.example.com/") } });
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("http://scout-test.example.com/"))
+            .SendAsync(OneDevice, null, false, CancellationToken.None);
+
+        Assert.Equal(ScoutFailure.ServerError, result.Failure);
+        Assert.Single(stub.Requests);
+    }
+
+    [Fact]
+    public async Task A_blocked_insecure_sign_in_sends_no_login_request_at_all()
+    {
+        var stub = new RecordingStub(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("http://scout-test.example.com/"))
+            .SendAsync(OneDevice, "hunter2", false, CancellationToken.None);
+
+        Assert.Equal(ScoutFailure.InsecureTransport, result.Failure);
+        Assert.DoesNotContain(stub.Requests, u => u.AbsolutePath.Contains("/auth/login"));
+    }
 }
