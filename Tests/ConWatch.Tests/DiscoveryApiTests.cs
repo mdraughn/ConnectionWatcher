@@ -280,4 +280,23 @@ public class DiscoveryApiTests : IDisposable
             Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{method} {url} was {(int)response.StatusCode}");
         }
     }
+
+    [Fact]
+    public async Task Concurrent_identical_posts_end_as_one_row_with_no_failures()
+    {
+        var body = new
+        {
+            items = new[] { new { address = "192.0.2.50", kind = "LocalDevice", method = "ArpTable", origin = "tray:PC" } },
+        };
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 12)
+            .Select(_ => _client.PostAsJsonAsync("/api/v1/discoveries", body)));
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        var counts = await Task.WhenAll(responses.Select(async r =>
+            JsonSerializer.Deserialize<JsonElement>(await r.Content.ReadAsStringAsync())));
+        Assert.Equal(1, counts.Sum(c => c.GetProperty("created").GetInt32()));
+        Assert.Equal(11, counts.Sum(c => c.GetProperty("updated").GetInt32()));
+        Assert.Single(Items(await GetJson("/api/v1/discoveries?status=all")));
+    }
 }

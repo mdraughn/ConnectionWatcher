@@ -85,13 +85,34 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
     private static bool TryNormalizeAddress(string? text, out string normalized)
     {
         normalized = "";
-        if (string.IsNullOrWhiteSpace(text) || !IPAddress.TryParse(text.Trim(), out var ip))
+        if (string.IsNullOrWhiteSpace(text))
             return false;
+        var trimmed = text.Trim();
+        // IPAddress.TryParse accepts legacy short forms ("1" is 0.0.0.1, "1.2.3" is 1.2.0.3):
+        // demand a full dotted quad or an IPv6 literal.
+        if (!trimmed.Contains(':') && trimmed.Count(c => c == '.') != 3)
+            return false;
+        // A scope id ("fe80::1%eth0") names a local interface; it means nothing to another node.
+        // (ScopeId throws on an IPv4 address, so only ask IPv6.)
+        if (trimmed.Contains('%') || !IPAddress.TryParse(trimmed, out var ip) ||
+            (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && ip.ScopeId != 0))
+            return false;
+        if (ip.IsIPv4MappedToIPv6)
+            ip = ip.MapToIPv4();
+
         if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) ||
-            ip.Equals(IPAddress.Broadcast) || ip.Equals(IPAddress.None) ||
-            (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && ip.GetAddressBytes()[0] >= 224) ||
-            (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && ip.IsIPv6Multicast))
+            ip.Equals(IPAddress.Broadcast) || ip.Equals(IPAddress.None))
             return false;
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var first = ip.GetAddressBytes()[0];
+            if (first == 0 || first >= 224)           // 0.0.0.0/8 "this network"; multicast and reserved
+                return false;
+        }
+        else if (ip.IsIPv6Multicast)
+        {
+            return false;
+        }
         normalized = ip.ToString();
         return true;
     }

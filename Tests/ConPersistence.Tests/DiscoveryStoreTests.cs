@@ -246,4 +246,59 @@ public class DiscoveryStoreTests : IDisposable
         Assert.Equal(ok, DiscoveryStatuses.TryParseFilter(text, out var status));
         if (ok) Assert.Equal(expected, status);
     }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("1.2.3")]
+    [InlineData("0.1.2.3")]
+    [InlineData("0.0.0.255")]
+    [InlineData("fe80::1%eth0")]
+    [InlineData("::ffff:224.0.0.1")]
+    [InlineData("ff02::1")]
+    [InlineData("::1")]
+    [InlineData("::")]
+    public async Task More_unusable_addresses_are_rejected(string address)
+    {
+        var result = await _store.UpsertAsync([Router(address)]);
+        Assert.False(result.Success);
+        Assert.Empty(await _store.ListAsync(null));
+    }
+
+    [Fact]
+    public async Task IPv6_is_stored_canonically_and_an_IPv4_mapped_address_is_unmapped()
+    {
+        await _store.UpsertAsync([Router("2001:DB8::10"), Router("::ffff:192.0.2.9")]);
+
+        Assert.Equal(["192.0.2.9", "2001:db8::10"], (await _store.ListAsync(null)).Select(d => d.Address).Order());
+
+        var again = await _store.UpsertAsync([Router("  2001:0db8:0000:0000:0000:0000:0000:0010 ")]);
+        Assert.Equal((0, 1), (again.Created, again.Updated));        // same row, not a second one
+        Assert.Equal(2, (await _store.ListAsync(null)).Count);
+    }
+
+    [Fact]
+    public void A_null_item_is_a_validation_error_not_an_exception()
+    {
+        var errors = DiscoveryStore.Validate([null!]);
+        Assert.Single(errors);
+    }
+
+    [Fact]
+    public async Task Whitespace_around_an_address_still_hits_the_same_row()
+    {
+        await _store.UpsertAsync([Router("192.0.2.1")]);
+        var result = await _store.UpsertAsync([Router(" 192.0.2.1 ")]);
+        Assert.Equal((0, 1), (result.Created, result.Updated));
+    }
+
+    [Fact]
+    public async Task A_rescan_without_a_hostname_keeps_the_hostname_it_already_had()
+    {
+        await _store.UpsertAsync([new("192.0.2.50", "nas.example.com", DiscoveryKind.LocalDevice,
+            DiscoveryMethod.ArpTable, "server", null)]);
+        await _store.UpsertAsync([new("192.0.2.50", null, DiscoveryKind.LocalDevice,
+            DiscoveryMethod.PingSweep, "server", null)]);
+
+        Assert.Equal("nas.example.com", (await _store.ListAsync(null)).Single().Hostname);
+    }
 }
