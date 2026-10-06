@@ -27,7 +27,16 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
         _targetByAddress = new(StringComparer.OrdinalIgnoreCase);
         foreach (var t in targets)
             _targetByAddress.TryAdd(t.Address.Trim(), t.Name);
+
+        var all = await store.ListAsync(null);   // every status: the gateway may already be adopted or dismissed
+        var gateways = all.Where(d => d.Kind == DiscoveryKind.Gateway).OrderByDescending(d => d.LastSeenUtc).ToList();
+        _routerName =
+            gateways.Where(d => d.Status == DiscoveryStatus.Adopted && d.AdoptedTargetName is not null)
+                .Select(d => d.AdoptedTargetName).FirstOrDefault()
+            ?? gateways.Select(d => MonitoredAs(d)).FirstOrDefault(n => n is not null);
     }
+
+    private string? _routerName;
 
     private Dictionary<string, string> _targetByAddress = new(StringComparer.OrdinalIgnoreCase);
 
@@ -74,7 +83,10 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
         };
         var query = new QueryString()
             .Add("address", d.Address).Add("name", name).Add("profile", profile)
-            .Add("scope", scope).Add("discoveryId", d.Id.ToString());
+            .Add("scope", scope);
+        if (d.Kind == DiscoveryKind.NetworkEdge && _routerName is { Length: > 0 })
+            query = query.Add("parent", _routerName);
+        query = query.Add("discoveryId", d.Id.ToString());
         return "/Config/Targets" + query;
     }
 }

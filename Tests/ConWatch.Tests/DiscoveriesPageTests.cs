@@ -94,6 +94,40 @@ public class DiscoveriesPageTests : IDisposable
     }
 
     [Fact]
+    public async Task A_network_edge_adopt_link_names_the_router_target_as_its_parent()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);                       // Router at 192.168.1.1
+        await PostAsync(Item("192.168.1.1", "Gateway", "DefaultRoute"), Item("203.0.113.5", "NetworkEdge", "Traceroute"));
+
+        var html = System.Net.WebUtility.HtmlDecode(await _client.GetStringAsync("/Config/Discoveries"));
+
+        Assert.Contains("address=203.0.113.5&name=ISP%20edge&profile=Path&scope=Verdict&parent=Router&discoveryId=", html);
+    }
+
+    [Fact]
+    public async Task A_network_edge_adopt_link_follows_an_adopted_gateway_to_its_target_name()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await PostAsync(Item("192.0.2.1", "Gateway", "DefaultRoute"), Item("203.0.113.5", "NetworkEdge", "Traceroute"));
+        var gatewayId = await IdOfAsync("192.0.2.1");
+        (await _client.PostAsJsonAsync($"/api/v1/targets?discoveryId={gatewayId}",
+            new { name = "Home Gateway", address = "192.0.2.1", profile = "Fast" })).EnsureSuccessStatusCode();
+
+        var html = System.Net.WebUtility.HtmlDecode(await _client.GetStringAsync("/Config/Discoveries"));
+
+        Assert.Contains("parent=Home%20Gateway&discoveryId=", html);
+    }
+
+    [Fact]
+    public async Task Without_a_known_router_a_network_edge_adopt_link_has_no_parent()
+    {
+        await PostAsync(Item("203.0.113.5", "NetworkEdge", "Traceroute"));
+        var html = System.Net.WebUtility.HtmlDecode(await _client.GetStringAsync("/Config/Discoveries"));
+        Assert.Contains("address=203.0.113.5", html);
+        Assert.DoesNotContain("parent=", html);
+    }
+
+    [Fact]
     public async Task An_adopted_discovery_names_its_target_and_a_removed_target_reads_target_removed()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
