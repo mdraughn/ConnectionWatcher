@@ -196,4 +196,15 @@ public class ScoutClientTests : IDisposable
         Assert.Equal(ScoutFailure.InsecureTransport, result.Failure);
         Assert.DoesNotContain(stub.Requests, u => u.AbsolutePath.Contains("/auth/login"));
     }
+
+    [Fact]
+    public void CreateHandler_never_follows_redirects_and_keeps_its_own_cookies()
+    {
+        using var handler = Assert.IsType<SocketsHttpHandler>(ScoutClient.CreateHandler());
+
+        Assert.False(handler.AllowAutoRedirect);
+        Assert.True(handler.UseCookies);
+        Assert.NotNull(handler.CookieContainer);
+        Assert.NotEqual(Timeout.InfiniteTimeSpan, handler.PooledConnectionLifetime);
+    }
 }

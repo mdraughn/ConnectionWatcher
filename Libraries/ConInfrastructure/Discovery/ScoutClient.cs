@@ -38,6 +38,19 @@ public sealed class ScoutClient(HttpClient http, Uri server)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// The transport this class requires: redirects are never followed (a redirect must not re-send the
+    /// admin password anywhere) and cookies are kept in the handler's own container so one sign-in
+    /// covers later sends. Build the caller's <see cref="HttpClient"/> from this.
+    /// </summary>
+    public static HttpMessageHandler CreateHandler() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = true,
+        CookieContainer = new CookieContainer(),
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+    };
+
     private Uri Url(string path) => new(server.AbsolutePath.EndsWith('/') ? server : new Uri(server + "/"), path);
 
     public async Task<ScoutResult> SendAsync(IReadOnlyList<ScoutItem> items, string? adminPassword,
