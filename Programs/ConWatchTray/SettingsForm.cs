@@ -4,7 +4,7 @@ namespace ConWatchTray;
 /// The Settings dialog: server URL override with test-before-save, a way back
 /// to the installed default, and the notifications toggle.
 /// </summary>
-public sealed class SettingsForm : Form
+internal sealed class SettingsForm : Form
 {
     private readonly TraySettings _settings;
     private readonly HttpClient _http;
@@ -14,7 +14,7 @@ public sealed class SettingsForm : Form
     private readonly CheckBox _notifications;
     private readonly Button _useDefault;
 
-    public SettingsForm(TraySettings settings, HttpClient http)
+    public SettingsForm(TraySettings settings, HttpClient http, ScoutPasswordStore scoutPasswords)
     {
         _settings = settings;
         _http = http;
@@ -24,7 +24,7 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(430, 205);
+        ClientSize = new Size(430, 245);
 
         var urlLabel = new Label { Text = "Server URL:", Left = 12, Top = 15, Width = 80 };
         _urlBox = new TextBox { Left = 95, Top = 12, Width = 320, Text = _settings.EffectiveUrl };
@@ -54,14 +54,26 @@ public sealed class SettingsForm : Form
             Checked = _settings.NotificationsEnabled,
         };
 
-        var ok = new Button { Text = "OK", Left = 255, Top = 165, Width = 75, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Left = 340, Top = 165, Width = 75, DialogResult = DialogResult.Cancel };
+        var forget = new Button
+        {
+            Text = "Forget saved admin password",
+            Left = 95, Top = 160, Width = 200,
+            Enabled = scoutPasswords.HasSaved,
+        };
+        forget.Click += (_, _) =>
+        {
+            scoutPasswords.Forget();
+            forget.Enabled = false;
+        };
+
+        var ok = new Button { Text = "OK", Left = 255, Top = 205, Width = 75, DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "Cancel", Left = 340, Top = 205, Width = 75, DialogResult = DialogResult.Cancel };
         ok.Click += (_, _) => Apply();
         AcceptButton = ok;
         CancelButton = cancel;
 
         Controls.AddRange([urlLabel, _urlBox, _sourceLabel, testButton, _testResult,
-            _useDefault, _notifications, ok, cancel]);
+            _useDefault, _notifications, forget, ok, cancel]);
         UpdateSourceLabel(pendingDefault: false);
     }
 

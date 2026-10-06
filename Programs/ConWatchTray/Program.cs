@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ConInfrastructure.Discovery;
 
 namespace ConWatchTray;
 
@@ -36,6 +37,13 @@ internal sealed class TrayContext : ApplicationContext
     private readonly Dictionary<TrayState, Icon> _icons = new();
     private TrayState _state = TrayState.Unreachable;
     private bool _firstPoll = true;
+    private readonly ScoutRunner _scout = new();
+    private readonly ScoutPasswordStore _scoutPasswords = new();
+    // One cookie-enabled, no-redirect client for the scout (its own, longer timeout): a sign-in is reused by later sends.
+    private readonly HttpClient _scoutHttp = new(ScoutClient.CreateHandler()) { Timeout = TimeSpan.FromSeconds(20) };
+    private bool _scoutAllowInsecure;          // the user's explicit yes, for this tray session only
+    private bool _scouting;
+    private string? _balloonUrl;
 
     public TrayContext()
     {
@@ -45,6 +53,10 @@ internal sealed class TrayContext : ApplicationContext
         menu.Items.Add("History", null, (_, _) => Open("/History"));
         menu.Items.Add("ISP report", null, (_, _) => Open("/Report"));
         menu.Items.Add("Server settings", null, (_, _) => Open("/Settings"));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Find my router", null, async (_, _) => await ScoutAsync(ScoutKind.Router));
+        menu.Items.Add("Find the network edge", null, async (_, _) => await ScoutAsync(ScoutKind.NetworkEdge));
+        menu.Items.Add("Scan this network", null, async (_, _) => await ScoutAsync(ScoutKind.Lan));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Tray settings…", null, (_, _) => ShowSettings());
         menu.Items.Add(new ToolStripSeparator());
@@ -57,6 +69,7 @@ internal sealed class TrayContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = menu,
         };
+        _icon.BalloonTipClicked += (_, _) => { if (_balloonUrl is { } url) Open(url); };
         // Left button: a single click opens the menu, a double click opens the
         // dashboard. The menu grabs the mouse as soon as it shows, which would
         // swallow the second click, so the single-click action waits one
@@ -158,9 +171,97 @@ internal sealed class TrayContext : ApplicationContext
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?
             .Invoke(_icon, null);
 
+    private async Task ScoutAsync(ScoutKind kind)
+    {
+        if (_scouting)
+        {
+            Balloon("Scouting", "A search is already running — wait for it to finish.", ToolTipIcon.Info);
+            return;
+        }
+        _scouting = true;
+        try
+        {
+            var label = kind switch { ScoutKind.Router => "your router", ScoutKind.NetworkEdge => "the network edge", _ => "this network" };
+            Balloon("Scouting", $"Looking for {label}…", ToolTipIcon.Info);
+
+            var (items, partial) = await _scout.RunAsync(kind);
+            if (items.Count == 0)
+            {
+                Balloon("Nothing found", kind == ScoutKind.NetworkEdge
+                    ? "The hops past your router did not answer. Try again in a moment."
+                    : "Nothing was found from this PC.", ToolTipIcon.Info);
+                return;
+            }
+
+            var server = _settings.EffectiveUrl;
+            if (!Uri.TryCreate(server.TrimEnd('/') + "/", UriKind.Absolute, out var serverUri))
+            {
+                Balloon("Could not send", "The server address in the tray settings is not a valid URL.", ToolTipIcon.Warning);
+                return;
+            }
+            var client = new ScoutClient(_scoutHttp, serverUri);
+            var password = _scoutPasswords.Load(server);
+            string? toRemember = null;               // a typed password, saved only once the server accepts it
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var result = await client.SendAsync(items, password, _scoutAllowInsecure, CancellationToken.None);
+                switch (result.Failure)
+                {
+                    case ScoutFailure.None:
+                        if (toRemember is not null)
+                            _scoutPasswords.Save(server, toRemember);
+                        Balloon("Sent to ConnectionWatcher",
+                            $"{items.Count} found, {result.Created} new{(partial ? " (the scan was cut short)" : "")}. Click to review.",
+                            ToolTipIcon.Info, "/Config/Discoveries");
+                        return;
+                    case ScoutFailure.PasswordRequired:
+                    case ScoutFailure.WrongPassword:
+                        var reason = result.Failure == ScoutFailure.WrongPassword ? "That password was not accepted." : null;
+                        (password, var remember) = PromptForPassword(server, reason);
+                        if (password is null)
+                            return;                       // cancelled
+                        toRemember = remember ? password : null;
+                        break;
+                    case ScoutFailure.InsecureTransport:
+                        var yes = MessageBox.Show(
+                            $"{result.Message}\n\nSend it anyway? (Anyone on your network could read it. Prefer an https:// server address.)",
+                            "ConnectionWatcher — unencrypted password",
+                            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+                        if (!yes)
+                            return;
+                        _scoutAllowInsecure = true;
+                        break;
+                    default:
+                        Balloon("Could not send", result.Message, ToolTipIcon.Warning);
+                        return;
+                }
+            }
+            Balloon("Could not send", "The admin password was not accepted.", ToolTipIcon.Warning);
+        }
+        finally
+        {
+            _scouting = false;
+        }
+    }
+
+    /// <summary>Asks for the password; the caller saves it (DPAPI) only if Remember was ticked and the server accepts it.</summary>
+    private static (string? Password, bool Remember) PromptForPassword(string server, string? reason)
+    {
+        using var prompt = new PasswordPrompt(server, reason);
+        if (prompt.ShowDialog() != DialogResult.OK || prompt.Password.Length == 0)
+            return (null, false);
+        return (prompt.Password, prompt.Remember);
+    }
+
+    private void Balloon(string title, string text, ToolTipIcon icon, string? openPath = null)
+    {
+        _balloonUrl = openPath;
+        _icon.ShowBalloonTip(6000, title, Truncate(text, 250), icon);
+    }
+
     private void ShowSettings()
     {
-        using var dialog = new SettingsForm(_settings, _http);
+        using var dialog = new SettingsForm(_settings, _http, _scoutPasswords);
         if (dialog.ShowDialog() == DialogResult.OK)
             _ = RefreshAsync(); // apply immediately
     }
@@ -252,6 +353,7 @@ internal sealed class TrayContext : ApplicationContext
         _timer.Dispose();
         _clickTimer.Dispose();
         _http.Dispose();
+        _scoutHttp.Dispose();
         base.ExitThreadCore();
     }
 }
