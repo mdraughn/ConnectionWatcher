@@ -5,9 +5,10 @@ using ConPersistence.Discoveries;
 namespace ConWatch.Discoveries;
 
 /// <param name="Busy">Another search holds the gate.</param>
-/// <param name="TimedOut">The search ran past the cap; nothing was stored.</param>
+/// <param name="TimedOut">The search ran past the cap and had nothing to keep (router/edge searches).</param>
+/// <param name="Partial">The scan was cut short by the cap; what it found so far was kept (LAN scan).</param>
 public sealed record SearchOutcome(bool Busy, bool TimedOut, int Found, int Created, int Updated,
-    string? Warning, IReadOnlyList<string> Errors)
+    string? Warning, IReadOnlyList<string> Errors, bool Partial = false)
 {
     public static SearchOutcome IsBusy { get; } = new(true, false, 0, 0, 0, null, []);
 }
@@ -27,16 +28,25 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public Task<SearchOutcome> SearchRouterAsync(CancellationToken ct) =>
-        RunAsync(t => scanner.FindRouterAsync(t), ct);
+        RunAsync(async t => (await scanner.FindRouterAsync(t), true), ct);
 
     /// <param name="host">The public address to trace toward; null or blank uses <see cref="DiscoveryScanner.DefaultEdgeHost"/>.</param>
     public Task<SearchOutcome> SearchEdgeAsync(string? host, CancellationToken ct)
     {
         var target = string.IsNullOrWhiteSpace(host) ? DiscoveryScanner.DefaultEdgeHost : host.Trim();
-        return RunAsync(t => scanner.FindNetworkEdgeAsync(target, t), ct);
+        return RunAsync(async t => (await scanner.FindNetworkEdgeAsync(target, t), true), ct);
     }
 
-    private async Task<SearchOutcome> RunAsync(Func<CancellationToken, Task<IReadOnlyList<DiscoveryCandidate>>> search,
+    /// <summary>The LAN scan keeps its partial results when the cap cuts it short.</summary>
+    public Task<SearchOutcome> SearchLanAsync(CancellationToken ct) =>
+        RunAsync(async t =>
+        {
+            var scan = await scanner.ScanLanAsync(t);
+            return (scan.Found, scan.Complete);
+        }, ct);
+
+    private async Task<SearchOutcome> RunAsync(
+        Func<CancellationToken, Task<(IReadOnlyList<DiscoveryCandidate> Found, bool Complete)>> search,
         CancellationToken ct)
     {
         if (!await _gate.WaitAsync(0, CancellationToken.None))
@@ -46,9 +56,10 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(_cap);
             IReadOnlyList<DiscoveryCandidate> found;
+            bool complete;
             try
             {
-                found = await search(cts.Token);
+                (found, complete) = await search(cts.Token);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -59,13 +70,16 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
             {
                 return new SearchOutcome(false, false, 0, 0, 0, null, [$"Cannot search: {ex.Message}"]);
             }
+            // The client left: a scan that swallowed the cancellation and returned a partial list is not "done".
+            ct.ThrowIfCancellationRequested();
 
             if (found.Count == 0)
-                return new SearchOutcome(false, false, 0, 0, 0, Warning(), []);
+                return new SearchOutcome(false, !complete, 0, 0, 0, Warning(), [], Partial: false);
             var stored = await store.UpsertAsync(found.Select(c => new DiscoveryInput(
                 c.Address, c.Hostname, c.Kind, c.Method, ServerOrigin, c.Evidence)).ToList());
             return stored.Success
-                ? new SearchOutcome(false, false, found.Count, stored.Created, stored.Updated, Warning(), [])
+                ? new SearchOutcome(false, false, found.Count, stored.Created, stored.Updated, Warning(), [],
+                    Partial: !complete)
                 : new SearchOutcome(false, false, 0, 0, 0, null, stored.Errors);
         }
         finally

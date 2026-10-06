@@ -32,6 +32,9 @@ public static class DiscoveryEndpoints
         d.MapPost("/search/router", async (DiscoverySearchService search, CancellationToken ct) =>
             ToHttp(await search.SearchRouterAsync(ct)));
 
+        d.MapPost("/search/lan", async (DiscoverySearchService search, CancellationToken ct) =>
+            ToHttp(await search.SearchLanAsync(ct)));
+
         d.MapPost("/search/edge", async (EdgeSearchRequest? request, DiscoverySearchService search,
             CancellationToken ct) => ToHttp(await search.SearchEdgeAsync(request?.Host, ct)));
 
@@ -58,7 +61,7 @@ public static class DiscoveryEndpoints
         return Results.Ok(new
         {
             found = outcome.Found, created = outcome.Created, updated = outcome.Updated,
-            warning = outcome.Warning,
+            partial = outcome.Partial, warning = outcome.Warning,
         });
     }
 }

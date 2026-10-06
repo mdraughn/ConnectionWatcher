@@ -25,8 +25,13 @@ public class DiscoveryApiTests : IDisposable
         public Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<DiscoveryCandidate>>(Router);
 
-        public Task<LanScanResult> ScanLanAsync(CancellationToken ct) =>
-            Task.FromResult(new LanScanResult([], true));
+        public static LanScanResult Lan { get; set; } = DefaultLan();
+
+        public static LanScanResult DefaultLan() => new(
+            [new DiscoveryCandidate("192.168.1.20", "nas.example.com", DiscoveryKind.LocalDevice,
+                DiscoveryMethod.ArpTable, "MAC aa:bb:cc:00:11:33; answers pings in 3 ms")], Complete: true);
+
+        public Task<LanScanResult> ScanLanAsync(CancellationToken ct) => Task.FromResult(Lan);
 
         public async Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct)
         {
@@ -56,6 +61,7 @@ public class DiscoveryApiTests : IDisposable
     public DiscoveryApiTests()
     {
         FakeScanner.HoldEdge = null;
+        FakeScanner.Lan = FakeScanner.DefaultLan();
         FakeScanner.EdgeStarted = new();
         _client = _factory.CreateClient();
     }
@@ -272,6 +278,7 @@ public class DiscoveryApiTests : IDisposable
         {
             ("GET", "/api/v1/discoveries"), ("POST", "/api/v1/discoveries"),
             ("POST", "/api/v1/discoveries/search/router"), ("POST", "/api/v1/discoveries/search/edge"),
+            ("POST", "/api/v1/discoveries/search/lan"),
             ("POST", "/api/v1/discoveries/restore-dismissed"),
             ("POST", $"/api/v1/discoveries/{id}/dismiss"), ("POST", $"/api/v1/discoveries/{id}/restore"),
         })
@@ -301,5 +308,48 @@ public class DiscoveryApiTests : IDisposable
         Assert.Equal(1, counts.Sum(c => c.GetProperty("created").GetInt32()));
         Assert.Equal(11, counts.Sum(c => c.GetProperty("updated").GetInt32()));
         Assert.Single(Items(await GetJson("/api/v1/discoveries?status=all")));
+    }
+
+    [Fact]
+    public async Task Lan_search_stores_devices_as_LocalDevice_with_origin_server_and_a_rescan_updates()
+    {
+        var first = JsonSerializer.Deserialize<JsonElement>(
+            await (await _client.PostAsync("/api/v1/discoveries/search/lan", null)).Content.ReadAsStringAsync());
+        Assert.Equal(1, first.GetProperty("created").GetInt32());
+        Assert.False(first.GetProperty("partial").GetBoolean());
+
+        var row = Assert.Single(Items(await GetJson("/api/v1/discoveries")));
+        Assert.Equal("LocalDevice", row.GetProperty("kind").GetString());
+        Assert.Equal("ArpTable", row.GetProperty("method").GetString());
+        Assert.Equal("server", row.GetProperty("origin").GetString());
+        Assert.Equal("nas.example.com", row.GetProperty("hostname").GetString());
+        Assert.Contains("aa:bb:cc:00:11:33", row.GetProperty("evidence").GetString());
+
+        var second = JsonSerializer.Deserialize<JsonElement>(
+            await (await _client.PostAsync("/api/v1/discoveries/search/lan", null)).Content.ReadAsStringAsync());
+        Assert.Equal(0, second.GetProperty("created").GetInt32());
+        Assert.Equal(1, second.GetProperty("updated").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_partial_lan_scan_is_stored_and_flagged_partial()
+    {
+        FakeScanner.Lan = new LanScanResult(FakeScanner.Lan.Found, Complete: false);
+
+        var body = JsonSerializer.Deserialize<JsonElement>(
+            await (await _client.PostAsync("/api/v1/discoveries/search/lan", null)).Content.ReadAsStringAsync());
+
+        Assert.True(body.GetProperty("partial").GetBoolean());
+        Assert.Equal(1, body.GetProperty("created").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_lan_scan_that_finds_nothing_says_so_plainly()
+    {
+        FakeScanner.Lan = new LanScanResult([], Complete: true);
+        var body = JsonSerializer.Deserialize<JsonElement>(
+            await (await _client.PostAsync("/api/v1/discoveries/search/lan", null)).Content.ReadAsStringAsync());
+        Assert.Equal(0, body.GetProperty("found").GetInt32());
+        Assert.False(body.GetProperty("partial").GetBoolean());
     }
 }

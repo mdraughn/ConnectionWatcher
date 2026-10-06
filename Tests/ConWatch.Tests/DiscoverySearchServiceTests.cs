@@ -33,6 +33,21 @@ public class DiscoverySearchServiceTests : IDisposable
             throw new ArgumentException($"No IPv4 address for '{host}'.");
     }
 
+    private sealed class PartialScanner : IDiscoveryScanner
+    {
+        public Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct) => throw new NotSupportedException();
+
+        /// <summary>Finds one device, then waits for the cap and returns an incomplete result — like the real sweep.</summary>
+        public async Task<LanScanResult> ScanLanAsync(CancellationToken ct)
+        {
+            try { await Task.Delay(Timeout.Infinite, ct); }
+            catch (OperationCanceledException) { }
+            return new LanScanResult(
+                [new DiscoveryCandidate("192.168.1.20", null, DiscoveryKind.LocalDevice, DiscoveryMethod.PingSweep, "answers pings in 2 ms")],
+                Complete: false);
+        }
+    }
     /// <summary>In-memory SQLite with the real schema (ConWatch.Tests cannot see ConPersistence.Tests' factory).</summary>
     private sealed class MemoryDb : Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext>, IDisposable
     {
@@ -81,5 +96,33 @@ public class DiscoverySearchServiceTests : IDisposable
 
         Assert.Contains(outcome.Errors, e => e.Contains("nope.invalid"));
         Assert.False(outcome.Busy);
+    }
+
+    [Fact]
+    public async Task A_lan_scan_that_hits_the_cap_keeps_its_partial_results_and_says_so()
+    {
+        var store = new DiscoveryStore(_db);
+        var service = new DiscoverySearchService(new PartialScanner(), store,
+            NullLogger<DiscoverySearchService>.Instance, cap: TimeSpan.FromMilliseconds(100));
+
+        var outcome = await service.SearchLanAsync(CancellationToken.None);
+
+        Assert.True(outcome.Partial);
+        Assert.False(outcome.TimedOut);
+        Assert.Equal((1, 1, 0), (outcome.Found, outcome.Created, outcome.Updated));
+        Assert.Single(await store.ListAsync(null));
+        Assert.False((await service.SearchLanAsync(CancellationToken.None)).Busy);   // the gate was released
+    }
+
+    [Fact]
+    public async Task A_client_disconnect_during_a_lan_scan_is_cancellation_not_a_partial_result()
+    {
+        var service = new DiscoverySearchService(new PartialScanner(), new DiscoveryStore(_db),
+            NullLogger<DiscoverySearchService>.Instance);
+        using var cts = new CancellationTokenSource();
+        var search = service.SearchLanAsync(cts.Token);
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => search);
     }
 }

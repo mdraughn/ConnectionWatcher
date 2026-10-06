@@ -16,6 +16,7 @@
 <p>
     <button type="button" id="find-router">Find my router</button>
     <button type="button" id="find-edge" class="outline">Find the network edge</button>
+    <button type="button" id="find-lan" class="outline">Scan local network</button>
     <span id="search-status" aria-live="polite"></span>
 </p>
 <ul class="form-errors" id="errors"></ul>
@@ -108,10 +109,11 @@ else
                     showErrors(errors, result);
                     return;
                 }
-                const { found, created, warning } = result.body;
+                const { found, created, partial, warning } = result.body;
                 statusLine.textContent = found === 0
                     ? nothingFound + (warning ? " " + warning : "")
-                    : `Found ${found} (${created} new).` + (warning ? " " + warning : "");
+                    : `Found ${found} (${created} new).` +
+                      (partial ? " Stopped at the time limit; this is what it found so far." : "") + (warning ? " " + warning : "");
                 if (found > 0) setTimeout(() => location.reload(), warning ? 4000 : 800);
             } catch (err) {
                 statusLine.textContent = `The search could not be started: ${err?.message ?? err}`;
@@ -126,6 +128,10 @@ else
         document.getElementById("find-edge").addEventListener("click",
             (e) => search(e.currentTarget, "/api/v1/discoveries/search/edge", "Tracing the way out of your network",
                 "Nothing found: the hops past your router did not answer. Try again in a moment."));
+
+        document.getElementById("find-lan").addEventListener("click",
+            (e) => search(e.currentTarget, "/api/v1/discoveries/search/lan", "Scanning your local network",
+                "Nothing found: no device answered on this network."));
 
         document.querySelectorAll("[data-action]").forEach((btn) =>
             btn.addEventListener("click", async () => {

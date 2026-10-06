@@ -170,4 +170,12 @@ public class DiscoveriesPageTests : IDisposable
         Assert.Contains("address=192.0.2.50", html);
         Assert.DoesNotContain("address=192.168.1.1", html);
     }
+
+    [Fact]
+    public async Task The_page_offers_a_Scan_local_network_button()
+    {
+        var html = await _client.GetStringAsync("/Config/Discoveries");
+        Assert.Contains("id=\"find-lan\"", html);
+        Assert.Contains("Scan local network", html);
+    }
 }
