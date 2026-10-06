@@ -1,5 +1,5 @@
-using ConWatch.Clone;
-using static ConWatch.Clone.TransportPolicy;
+using ConInfrastructure.Net;
+using static ConInfrastructure.Net.TransportPolicy;
 
 namespace ConWatch.Tests;
 

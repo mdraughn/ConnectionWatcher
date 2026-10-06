@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConCore.Targets;
+using ConInfrastructure.Net;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;

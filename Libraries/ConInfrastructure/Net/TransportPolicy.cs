@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace ConWatch.Clone;
+namespace ConInfrastructure.Net;
 
 /// <summary>
 /// Transport policy for cross-node calls that carry sensitive material (the
