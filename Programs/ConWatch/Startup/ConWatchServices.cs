@@ -46,6 +46,7 @@ public static class ConWatchServices
 
     public static IServiceCollection AddConWatchEngine(this IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();

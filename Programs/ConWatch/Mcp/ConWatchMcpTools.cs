@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using System.Security.Claims;
 using System.Text.Json;
 using ConPersistence;
 using ConPersistence.Discoveries;
 using ConPersistence.Queries;
 using ConPersistence.Report;
+using ConWatch.Auth;
 using ConWatch.Api;
 using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol;
@@ -15,16 +17,16 @@ namespace ConWatch.Mcp;
 /// Read-only MCP tools over the watching surface, so an MCP host (Claude
 /// Code, Claude desktop) can answer "how was my internet last night?" from
 /// the actual database. Read-only and open by design: the watching data the
-/// open APIs already serve, plus `list_discoveries`, which reads the node's
-/// Discoveries inbox even though its page and REST API are admin-locked
-/// (spec 2026-10-02 §4). No tool mutates state, touches settings or secrets,
+/// open APIs already serve, plus `list_discoveries`, which reads the Discoveries inbox
+/// under the same access rule as its web page (open without an admin
+/// password, admin-only with one). No tool mutates state, touches settings or secrets,
 /// or starts network activity.
 /// Spec: docs/superpowers/specs/2026-09-13-mcp-server-design.md.
 /// </summary>
 [McpServerToolType]
 public class ConWatchMcpTools(WatcherHostService host,
     IDbContextFactory<ConWatchDbContext> dbFactory, IspReportBuilder reportBuilder,
-    DiscoveryStore discoveries)
+    DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -135,10 +137,16 @@ public class ConWatchMcpTools(WatcherHostService host,
         "(origin: 'server' or 'tray:<machine>'), evidence, first/last seen (ISO-8601 UTC) and a status: " +
         "New (not acted on), Dismissed (the user said no), Adopted (turned into a target; adoptedTargetName " +
         "is null if that target was later deleted). Read-only: searching, adopting and dismissing are done " +
-        "in the web UI's Config > Discoveries page.")]
+        "in the web UI's Config > Discoveries page. When the server has an admin password set this tool " +
+        "requires admin mode, like the Discoveries page; without a password it is open.")]
     public async Task<string> ListDiscoveries(
         [Description("'new' (default), 'dismissed', 'adopted' or 'all'")] string? status = null)
     {
+        // Parity with the web UI: whatever the Discoveries page needs admin mode for, this does too.
+        if (gate.IsLocked(http.HttpContext?.User ?? new ClaimsPrincipal()))
+            throw new McpException("list_discoveries needs admin mode: an admin password is set on this server " +
+                "and the Discoveries inbox is admin-only, like its web page. Sign in as admin in the web UI, " +
+                "or ask the owner to remove the password.");
         if (!DiscoveryStatuses.TryParseFilter(status, out var filter))
             throw new McpException("status must be 'new', 'dismissed', 'adopted' or 'all'.");
         return JsonSerializer.Serialize(await discoveries.ListAsync(filter), Json);

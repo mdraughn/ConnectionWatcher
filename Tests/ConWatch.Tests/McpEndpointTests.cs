@@ -20,7 +20,10 @@ public class McpEndpointTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private async Task<JsonElement> RpcAsync(string method, object? @params = null)
+    private Task<JsonElement> RpcAsync(string method, object? @params = null) =>
+        RpcWithAsync(_client, method, @params);
+
+    private async Task<JsonElement> RpcWithAsync(HttpClient client, string method, object? @params = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
@@ -34,7 +37,7 @@ public class McpEndpointTests : IDisposable
         };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-        var response = await _client.SendAsync(request);
+        var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadAsStringAsync();
@@ -261,4 +264,56 @@ public class McpEndpointTests : IDisposable
         Assert.True(result.GetProperty("isError").GetBoolean());
         Assert.Contains("status must be", ToolText(result));
     }
-}
+
+    private async Task SeedOneDiscoveryAsync() =>
+        (await _client.PostAsJsonAsync("/api/v1/discoveries", new
+        {
+            items = new[] { new { address = "192.0.2.50", kind = "LocalDevice", method = "ArpTable", origin = "tray:PC" } },
+        })).EnsureSuccessStatusCode();
+
+    [Fact]
+    public async Task list_discoveries_is_open_while_no_admin_password_is_set()
+    {
+        await SeedOneDiscoveryAsync();
+        await InitializeAsync();
+
+        var result = await RpcAsync("tools/call", new { name = "list_discoveries", arguments = new { } });
+
+        Assert.False(result.TryGetProperty("isError", out var e) && e.GetBoolean());
+        Assert.Contains("192.0.2.50", ToolText(result));
+    }
+
+    [Fact]
+    public async Task list_discoveries_needs_admin_mode_once_a_password_is_set_exactly_like_the_page()
+    {
+        await SeedOneDiscoveryAsync();
+        // set-password leaves _client signed in as admin; a second client has no cookie.
+        (await _client.PostAsJsonAsync("/api/v1/auth/set-password", new { password = "hunter2" })).EnsureSuccessStatusCode();
+        var anonymous = _factory.CreateClient();
+
+        var denied = await RpcWithAsync(anonymous, "tools/call", new { name = "list_discoveries", arguments = new { } });
+        var allowed = await RpcWithAsync(_client, "tools/call", new { name = "list_discoveries", arguments = new { } });
+
+        Assert.True(denied.GetProperty("isError").GetBoolean());
+        Assert.Contains("admin", ToolText(denied), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("192.0.2.50", ToolText(denied));        // nothing leaks through the error
+        Assert.Contains("192.0.2.50", ToolText(allowed));
+
+        // The watching tools stay open to the same anonymous client.
+        var status = await RpcWithAsync(anonymous, "tools/call", new { name = "get_current_status", arguments = new { } });
+        Assert.False(status.TryGetProperty("isError", out var e) && e.GetBoolean());
+    }
+
+    [Fact]
+    public async Task The_tool_is_still_listed_for_everyone()
+    {
+        (await _client.PostAsJsonAsync("/api/v1/auth/set-password", new { password = "hunter2" })).EnsureSuccessStatusCode();
+        var anonymous = _factory.CreateClient();
+        await RpcWithAsync(anonymous, "initialize", new
+        {
+            protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "t", version = "1" },
+        });
+        var tools = (await RpcWithAsync(anonymous, "tools/list")).GetProperty("tools").EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString()).ToList();
+        Assert.Contains("list_discoveries", tools);
+    }}

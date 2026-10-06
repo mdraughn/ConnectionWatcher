@@ -22,11 +22,11 @@ model is deliberately simple:
   the transition and glitch history endpoints, the sanitized snapshot
   export, `/metrics`, the dashboard and History pages, and the MCP
   tools — so treat that list like a network inventory when deciding
-  who can reach the port. The MCP `list_discoveries` tool also returns the
-  Discoveries inbox — every router, network-edge and local-device candidate
-  a search or a tray scout found, including dismissed ones, with hostnames
-  and the scout's machine name — even though the Discoveries page and its
-  REST API require the admin password.
+  who can reach the port. The Discoveries inbox (every router, network-edge
+  and local-device candidate a search or a tray scout found, with hostnames
+  and the scout's machine name) follows the admin gate: its page, its REST
+  API and the MCP `list_discoveries` tool are open only while no admin
+  password is set.
 - **The admin surface has a single-password gate.** Setting an admin
   password locks configuration, admin actions, traceroute, and setup behind
   a session cookie. It stops casual tinkering; it is not a hardened
