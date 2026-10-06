@@ -25,6 +25,9 @@ public class DiscoveryApiTests : IDisposable
         public Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<DiscoveryCandidate>>(Router);
 
+        public Task<LanScanResult> ScanLanAsync(CancellationToken ct) =>
+            Task.FromResult(new LanScanResult([], true));
+
         public async Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct)
         {
             EdgeStarted.TrySetResult(true);

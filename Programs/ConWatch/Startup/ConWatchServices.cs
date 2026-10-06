@@ -66,6 +66,12 @@ public static class ConWatchServices
         services.AddSingleton<ConfigStore>();
         services.AddSingleton<ConfigService>();
         services.AddSingleton<ConPersistence.Discoveries.DiscoveryStore>();
+        services.AddSingleton(new ConInfrastructure.Discovery.LanScanner(
+            new ConInfrastructure.Discovery.SystemLocalNetworks(),
+            new ConInfrastructure.Discovery.SystemNeighborTable(),
+            ConInfrastructure.Discovery.OuiTable.Default,
+            ConInfrastructure.Discovery.LanScanner.IcmpPing,
+            ConInfrastructure.Discovery.LanScanner.ReverseDns));
         services.AddSingleton<ConInfrastructure.Discovery.IDiscoveryScanner, ConInfrastructure.Discovery.DiscoveryScanner>();
         services.AddSingleton<Discoveries.DiscoverySearchService>();
         services.AddSingleton<SettingsStore>();

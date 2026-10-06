@@ -16,12 +16,18 @@ public interface IDiscoveryScanner
     /// <summary>The first hop beyond the LAN on the way to <paramref name="host"/>; empty when none was seen.
     /// Throws for an unresolvable host (the caller reports it).</summary>
     Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct);
+
+    /// <summary>Sweep the machine's own private subnet and read its neighbor table. A cancelled scan
+    /// returns what it found with <see cref="LanScanResult.Complete"/> false.</summary>
+    Task<LanScanResult> ScanLanAsync(CancellationToken ct);
 }
 
-public sealed class DiscoveryScanner(IGatewayDiscovery gateways, TracerouteRunner traceroute) : IDiscoveryScanner
+public sealed class DiscoveryScanner(IGatewayDiscovery gateways, TracerouteRunner traceroute, LanScanner lan) : IDiscoveryScanner
 {
     /// <summary>A public anycast address already used as a default anchor; the walk stops long before it.</summary>
     public const string DefaultEdgeHost = "1.1.1.1";
+
+    public Task<LanScanResult> ScanLanAsync(CancellationToken ct) => lan.ScanAsync(ct);
 
     public async Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct)
     {

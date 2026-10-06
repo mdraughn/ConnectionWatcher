@@ -12,6 +12,11 @@ public class DiscoverySearchServiceTests : IDisposable
     private sealed class HangingScanner : IDiscoveryScanner
     {
         public Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct) => Hang(ct);
+        public async Task<LanScanResult> ScanLanAsync(CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return new LanScanResult([], true);
+        }
         public Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct) => Hang(ct);
         private static async Task<IReadOnlyList<DiscoveryCandidate>> Hang(CancellationToken ct)
         {
@@ -23,6 +28,7 @@ public class DiscoverySearchServiceTests : IDisposable
     private sealed class ThrowingScanner : IDiscoveryScanner
     {
         public Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct) => throw new InvalidOperationException("boom");
+        public Task<LanScanResult> ScanLanAsync(CancellationToken ct) => throw new InvalidOperationException("boom");
         public Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct) =>
             throw new ArgumentException($"No IPv4 address for '{host}'.");
     }

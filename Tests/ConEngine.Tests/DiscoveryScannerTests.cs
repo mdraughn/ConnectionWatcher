@@ -32,9 +32,26 @@ public class DiscoveryScannerTests
         }
     }
 
+    private sealed class EmptyNetworks : ILocalNetworks
+    {
+        public IReadOnlyList<LocalNetwork> Read() => [];
+    }
+
+    private sealed class EmptyArp : INeighborTable
+    {
+        public IReadOnlyList<NeighborEntry> Read() => [];
+    }
+
+    private sealed class NoVendors : IVendorLookup
+    {
+        public string? Describe(string mac) => null;
+    }
+
     private static DiscoveryScanner Scanner(IGatewayDiscovery gateways, ScriptProbe? probe = null) =>
         new(gateways, new TracerouteRunner(probe ?? new ScriptProbe(), NullAsnLookup.Instance,
-            NullLogger<TracerouteRunner>.Instance));
+            NullLogger<TracerouteRunner>.Instance),
+            new LanScanner(new EmptyNetworks(), new EmptyArp(), new NoVendors(),
+                (_, _) => Task.FromResult<long?>(null), (_, _) => Task.FromResult<string?>(null)));
 
     [Fact]
     public async Task Router_search_keeps_the_default_route_even_without_a_ping_reply_and_reachable_probes()
