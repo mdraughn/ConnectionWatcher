@@ -9,6 +9,12 @@
 # NOTE (Synology): create the ./data folder yourself before first start —
 # Synology's Docker does not auto-create bind-mount folders ("Bind mount
 # failed"). The host-side port (left of the colon) is yours to choose.
+#
+# NETWORK MODE: the default (bridge) works for monitoring, but from inside a bridge network the
+# container cannot see your LAN: a traceroute's first hop is the Docker bridge, "Find my router"
+# returns the bridge, and "Scan local network" scans the bridge. On a Linux host (Synology, QNAP,
+# Unraid, a Linux server) host networking fixes all three — see the commented block below and
+# deploy/docker/README.md. Docker Desktop (Windows/macOS) does not support host networking.
 
 services:
   conwatch:
@@ -30,3 +36,18 @@ services:
       - ./data:/app/data
     cap_add:
       - NET_RAW
+    # --- Optional: host networking (Linux/NAS) -------------------------------------------------
+    # Uncomment the lines below AND remove the `ports:` block above (ports are ignored in host
+    # mode, and Compose rejects the combination on some versions). The app then listens on the
+    # NAS's own network stack, so pick a free port: DSM uses 5000/5001 and 8080 is common.
+    # The image's built-in healthcheck probes port 8080, so if you change the port, keep the
+    # healthcheck lines too (and use the same port in both places).
+    # network_mode: host
+    # environment:
+    #   ASPNETCORE_URLS: "http://0.0.0.0:18080"
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -fsS http://localhost:18080/api/v1/health || exit 1"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   start_period: 15s
+    #   retries: 3

@@ -1,0 +1,43 @@
+# Running ConnectionWatcher in a container
+
+```bash
+cd deploy/docker && docker compose up -d
+```
+
+The container needs `NET_RAW` (already in `compose.yaml`) so ping and traceroute work.
+
+## Bridge or host networking?
+
+| | Bridge (default) | Host (`network_mode: host`) |
+|---|---|---|
+| Monitoring your targets | works | works |
+| Traceroute's first hop | the Docker bridge, not your router | your real router |
+| **Find my router** | returns the bridge | the real default gateway |
+| **Scan local network** (Config → Discoveries) | scans the bridge subnet only | scans your real LAN |
+| Port mapping | `ports:` (left side is yours to choose) | none — the app binds the host's port directly |
+| Where it works | everywhere | **Linux hosts only** (Synology, QNAP, Unraid, Linux servers); Docker Desktop on Windows/macOS ignores it |
+
+If you stay on bridge networking you lose nothing for monitoring. To discover your router and LAN devices
+anyway, run the searches from a computer on your LAN instead: the Windows tray's **Find my router**,
+**Find the network edge** and **Scan this network** menu items scan from the PC and post the results to
+the container's Discoveries page (you will be asked for the admin password once if one is set).
+
+## Switching to host networking
+
+1. In `compose.yaml`, uncomment `network_mode: host`, the `environment:`/`ASPNETCORE_URLS` lines and the
+   `healthcheck:` block, and **remove** the `ports:` block. Pick a free port in `ASPNETCORE_URLS` (DSM itself
+   uses 5000/5001; many NAS apps use 8080) and use the same port in the healthcheck URL. The image's built-in
+   healthcheck probes port 8080, so without the override the container would report unhealthy on any other port.
+2. `docker compose up -d`. The web page is now at `http://<nas-address>:<that port>/`.
+3. Point the Windows tray (Tray settings) at the new URL.
+
+**Synology Container Manager:** in the project/container network settings choose *Use the same network as
+Docker host* instead of editing `ports:`.
+
+## Notes
+
+- With host networking the container sees every interface on the NAS. The LAN scan sweeps at most the /24
+  around each private address, never public ranges.
+- A container that still looks like a bridge (`DOTNET_RUNNING_IN_CONTAINER`) shows a warning on search results
+  that the gateway may be the bridge; that warning is the cue to use host networking or the tray.
+- Back up `./data` before pulling a new image: releases can include database migrations.
