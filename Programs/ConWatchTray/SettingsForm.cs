@@ -14,7 +14,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _notifications;
     private readonly Button _useDefault;
 
-    public SettingsForm(TraySettings settings, HttpClient http, ScoutPasswordStore scoutPasswords)
+    public SettingsForm(TraySettings settings, HttpClient http, ScoutPasswordStore scoutPasswords, Action onForget)
     {
         _settings = settings;
         _http = http;
@@ -63,6 +63,7 @@ internal sealed class SettingsForm : Form
         forget.Click += (_, _) =>
         {
             scoutPasswords.Forget();
+            onForget();
             forget.Enabled = false;
         };
 

@@ -41,7 +41,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ScoutPasswordStore _scoutPasswords = new();
     // One cookie-enabled, no-redirect client for the scout (its own, longer timeout): a sign-in is reused by later sends.
     private readonly HttpClient _scoutHttp = new(ScoutClient.CreateHandler()) { Timeout = TimeSpan.FromSeconds(20) };
-    private bool _scoutAllowInsecure;          // the user's explicit yes, for this tray session only
+    private string? _scoutInsecureAuthority;   // the one server the user said yes to for plain HTTP, this session only
     private bool _scouting;
     private string? _balloonUrl;
 
@@ -202,9 +202,11 @@ internal sealed class TrayContext : ApplicationContext
             var client = new ScoutClient(_scoutHttp, serverUri);
             var password = _scoutPasswords.Load(server);
             string? toRemember = null;               // a typed password, saved only once the server accepts it
-            for (var attempt = 0; attempt < 3; attempt++)
+            var prompts = 0;                       // only password prompts count against the budget
+            while (true)
             {
-                var result = await client.SendAsync(items, password, _scoutAllowInsecure, CancellationToken.None);
+                var allowInsecure = _scoutInsecureAuthority == serverUri.Authority.ToLowerInvariant();
+                var result = await client.SendAsync(items, password, allowInsecure, CancellationToken.None);
                 switch (result.Failure)
                 {
                     case ScoutFailure.None:
@@ -217,6 +219,12 @@ internal sealed class TrayContext : ApplicationContext
                     case ScoutFailure.PasswordRequired:
                     case ScoutFailure.WrongPassword:
                         var reason = result.Failure == ScoutFailure.WrongPassword ? "That password was not accepted." : null;
+                        if (prompts == 3)
+                        {
+                            Balloon("Could not send", "The admin password was not accepted.", ToolTipIcon.Warning);
+                            return;                   // budget spent
+                        }
+                        prompts++;
                         (password, var remember) = PromptForPassword(server, reason);
                         if (password is null)
                             return;                       // cancelled
@@ -229,14 +237,18 @@ internal sealed class TrayContext : ApplicationContext
                             MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
                         if (!yes)
                             return;
-                        _scoutAllowInsecure = true;
+                        _scoutInsecureAuthority = serverUri.Authority.ToLowerInvariant();
                         break;
                     default:
                         Balloon("Could not send", result.Message, ToolTipIcon.Warning);
                         return;
                 }
             }
-            Balloon("Could not send", "The admin password was not accepted.", ToolTipIcon.Warning);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Reached from an async-void menu handler: nothing may escape and end the tray. Never includes the password.
+            Balloon("Could not scan or send", ex.Message, ToolTipIcon.Warning);
         }
         finally
         {
@@ -261,7 +273,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowSettings()
     {
-        using var dialog = new SettingsForm(_settings, _http, _scoutPasswords);
+        using var dialog = new SettingsForm(_settings, _http, _scoutPasswords, () => _scoutInsecureAuthority = null);
         if (dialog.ShowDialog() == DialogResult.OK)
             _ = RefreshAsync(); // apply immediately
     }
