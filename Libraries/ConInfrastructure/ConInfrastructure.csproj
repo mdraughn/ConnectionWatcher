@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Discovery\oui.tsv" LogicalName="oui.tsv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="DnsClient" Version="1.8.0" />
   </ItemGroup>
