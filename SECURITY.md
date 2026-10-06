@@ -14,7 +14,8 @@ ConnectionWatcher is designed for a **trusted home LAN**, and its trust
 model is deliberately simple:
 
 - **The watching surface is open by design.** Status, history, reports,
-  exports (sanitized), `/metrics`, and `/mcp` serve without authentication —
+  exports (sanitized), `/metrics`, and `/mcp` (except its `list_discoveries` tool, below) serve
+  without authentication —
   they expose what your dashboard shows. Anyone who can reach the port can
   see your connection history and target names. That includes any LAN
   devices you track as Local targets: their names, addresses and up/down
@@ -42,6 +43,12 @@ model is deliberately simple:
   install`) restricts the data folder — database, admin password, session
   keys — to SYSTEM and Administrators; other local users can read only the
   config file.
+- **The tray remembers an admin password only if you ask it to.** When the Windows tray scouts
+  for a server that has an admin password, ticking Remember saves that password encrypted with
+  DPAPI for your Windows account in `scout.json` under `%APPDATA%\DSoftCo\ConnectionWatcher`. It is
+  bound to the server URL it was entered for, saved only after the server accepts it, and never sent
+  over plain HTTP to another machine unless you approve that host (an approval that lasts only for
+  the session). "Forget saved admin password" in the tray settings deletes it.
 - **No telemetry.** See the Privacy section of the README for the complete
   list of network traffic the app can generate.
 

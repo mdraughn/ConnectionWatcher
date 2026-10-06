@@ -82,7 +82,7 @@ public static class ConWatchApp
         // The Admin page became Settings (2026-10); keep old bookmarks working.
         app.MapGet("/Admin", () => Results.Redirect("/Settings", permanent: true));
         app.MapHub<StatusHub>("/hubs/status");
-        app.MapMcp("/mcp"); // open, read-only (see the MCP design spec)
+        app.MapMcp("/mcp"); // watching tools are open and read-only; list_discoveries follows the admin gate (see the MCP design spec)
         MetricsEndpoint.MapMetrics(app); // open, like the watching surface
 
         var api = app.MapGroup("/api/v1");

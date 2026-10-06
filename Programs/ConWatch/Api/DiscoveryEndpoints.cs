@@ -4,7 +4,7 @@ using ConWatch.Discoveries;
 namespace ConWatch.Api;
 
 /// <summary>The Discoveries inbox. Everything here is admin-gated (mapped on the locked group);
-/// the only open view of discoveries is the read-only MCP tool.</summary>
+/// the MCP list_discoveries tool follows the same gate.</summary>
 public static class DiscoveryEndpoints
 {
     public record UpsertRequest(List<DiscoveryInput>? Items);

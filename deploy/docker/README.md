@@ -15,12 +15,12 @@ The container needs `NET_RAW` (already in `compose.yaml`) so ping and traceroute
 | **Find my router** | returns the bridge | the real default gateway |
 | **Scan local network** (Config → Discoveries) | scans the bridge subnet only | scans your real LAN |
 | Port mapping | `ports:` (left side is yours to choose) | none — the app binds the host's port directly |
-| Where it works | everywhere | **Linux hosts only** (Synology, QNAP, Unraid, Linux servers); Docker Desktop on Windows/macOS ignores it |
+| Where it works | everywhere | **Linux hosts only** (Synology, QNAP, Unraid, Linux servers); Docker Desktop on Windows/macOS does not support it by default (4.34+ offers opt-in host networking) |
 
 If you stay on bridge networking you lose nothing for monitoring. To discover your router and LAN devices
 anyway, run the searches from a computer on your LAN instead: the Windows tray's **Find my router**,
 **Find the network edge** and **Scan this network** menu items scan from the PC and post the results to
-the container's Discoveries page (you will be asked for the admin password once if one is set).
+the container's Discoveries page (you will be asked for the admin password if one is set; tick Remember to save it, encrypted for your Windows account).
 
 ## Switching to host networking
 
@@ -38,6 +38,9 @@ Docker host* instead of editing `ports:`.
 
 - With host networking the container sees every interface on the NAS. The LAN scan sweeps at most the /24
   around each private address, never public ranges.
-- A container that still looks like a bridge (`DOTNET_RUNNING_IN_CONTAINER`) shows a warning on search results
-  that the gateway may be the bridge; that warning is the cue to use host networking or the tray.
+- The container warning on search results keys on `DOTNET_RUNNING_IN_CONTAINER`, which the image always sets,
+  so it appears whenever the app runs in a container. In host-network mode it is expected and you can ignore it;
+  on the default bridge it is the cue to use host networking or the tray.
+- The LAN scan skips interfaces without a default gateway whenever any interface has one, so virtual
+  adapters (docker bridges, WSL) are not swept alongside your real network.
 - Back up `./data` before pulling a new image: releases can include database migrations.

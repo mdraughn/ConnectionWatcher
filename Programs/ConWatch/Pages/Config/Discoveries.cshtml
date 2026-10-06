@@ -114,7 +114,7 @@ else
                     ? nothingFound + (warning ? " " + warning : "")
                     : `Found ${found} (${created} new).` +
                       (partial ? " Stopped at the time limit; this is what it found so far." : "") + (warning ? " " + warning : "");
-                if (found > 0) setTimeout(() => location.reload(), warning ? 4000 : 800);
+                if (found > 0) setTimeout(() => location.reload(), (warning || partial) ? 4000 : 800);
             } catch (err) {
                 statusLine.textContent = `The search could not be started: ${err?.message ?? err}`;
             } finally {
