@@ -52,9 +52,10 @@ public sealed record LanScanResult(IReadOnlyList<DiscoveryCandidate> Found, bool
 /// </summary>
 public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors, IVendorLookup vendors,
     Func<IPAddress, CancellationToken, Task<long?>> ping,
-    Func<IPAddress, CancellationToken, Task<string?>> reverseDns, int concurrency = 64)
+    Func<IPAddress, CancellationToken, Task<string?>> reverseDns, int concurrency = LanScanner.MaxConcurrency)
 {
     public const int MaxHosts = 1024;
+    public const int MaxConcurrency = 64;
     public static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(1);
     private const int DnsParallelism = 16;
 
@@ -71,7 +72,7 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
         try
         {
             await Parallel.ForEachAsync(hosts,
-                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, concurrency), CancellationToken = ct },
+                new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(concurrency, 1, MaxConcurrency), CancellationToken = ct },
                 async (host, token) =>
                 {
                     if (await ping(host, token).ConfigureAwait(false) is { } rtt)

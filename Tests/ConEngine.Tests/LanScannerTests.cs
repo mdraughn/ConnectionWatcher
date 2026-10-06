@@ -39,7 +39,7 @@ public class LanScannerTests
     }
 
     private static LanScanner Scanner(ILocalNetworks nets, INeighborTable arp, Probe probe,
-        Func<IPAddress, CancellationToken, Task<string?>>? dns = null, int concurrency = 64) =>
+        Func<IPAddress, CancellationToken, Task<string?>>? dns = null, int concurrency = LanScanner.MaxConcurrency) =>
         new(nets, arp, new Vendors(), probe.Ping, dns ?? ((_, _) => Task.FromResult<string?>(null)), concurrency);
 
     [Fact]
@@ -160,8 +160,7 @@ public class LanScannerTests
         await Scanner(new Networks(nets.ToArray()), new Arp(), probe).ScanAsync(CancellationToken.None);
 
         Assert.Equal(probe.Pinged.Count, probe.Pinged.Distinct().Count());
-        Assert.True(probe.Pinged.Count <= LanScanner.MaxHosts);
-        Assert.True(probe.Pinged.Count >= 800);    // eight /24s ~ 2000 hosts, capped at 1024
+        Assert.Equal(LanScanner.MaxHosts, probe.Pinged.Count);
     }
 
     [Fact]
@@ -183,6 +182,40 @@ public class LanScannerTests
         await scanner.ScanAsync(CancellationToken.None);
 
         Assert.InRange(peak, 1, 8);
+    }
+
+    [Fact]
+    public void The_limits_are_pinned()
+    {
+        Assert.Equal(1024, LanScanner.MaxHosts);
+        Assert.Equal(TimeSpan.FromSeconds(1), LanScanner.PingTimeout);
+        Assert.Equal(64, LanScanner.MaxConcurrency);
+    }
+
+    [Fact]
+    public async Task A_caller_asking_for_more_than_the_cap_still_gets_at_most_64_simultaneous_pings()
+    {
+        var current = 0;
+        var peak = 0;
+        var atCap = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scanner = new LanScanner(new Networks(Net("192.168.1.50", 24)), new Arp(), new Vendors(),
+            async (_, _) =>
+            {
+                var now = Interlocked.Increment(ref current);
+                InterlockedMax(ref peak, now);
+                if (now >= LanScanner.MaxConcurrency)
+                    atCap.TrySetResult();
+                await atCap.Task;                 // hold until the cap's worth are in flight
+                for (var i = 0; i < 5; i++)
+                    await Task.Yield();           // give any over-limit starters a chance to show up
+                Interlocked.Decrement(ref current);
+                return null;
+            },
+            (_, _) => Task.FromResult<string?>(null), concurrency: 500);
+
+        await scanner.ScanAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(LanScanner.MaxConcurrency, peak);
     }
 
     private static void InterlockedMax(ref int target, int value)
