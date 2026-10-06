@@ -32,13 +32,13 @@ internal sealed class ScoutRunner
             switch (kind)
             {
                 case ScoutKind.Router:
-                    found = await _scanner.FindRouterAsync(cts.Token);
+                    found = await Task.Run(() => _scanner.FindRouterAsync(cts.Token));
                     break;
                 case ScoutKind.NetworkEdge:
-                    found = await _scanner.FindNetworkEdgeAsync(DiscoveryScanner.DefaultEdgeHost, cts.Token);
+                    found = await Task.Run(() => _scanner.FindNetworkEdgeAsync(DiscoveryScanner.DefaultEdgeHost, cts.Token));
                     break;
                 default:
-                    var lan = await _scanner.ScanLanAsync(cts.Token);
+                    var lan = await Task.Run(() => _scanner.ScanLanAsync(cts.Token));
                     found = lan.Found;
                     partial = !lan.Complete;
                     break;

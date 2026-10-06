@@ -39,8 +39,9 @@ public class LanScannerTests
     }
 
     private static LanScanner Scanner(ILocalNetworks nets, INeighborTable arp, Probe probe,
-        Func<IPAddress, CancellationToken, Task<string?>>? dns = null, int concurrency = LanScanner.MaxConcurrency) =>
-        new(nets, arp, new Vendors(), probe.Ping, dns ?? ((_, _) => Task.FromResult<string?>(null)), concurrency);
+        Func<IPAddress, CancellationToken, Task<string?>>? dns = null, int concurrency = LanScanner.MaxConcurrency,
+        TimeSpan? nameBudget = null) =>
+        new(nets, arp, new Vendors(), probe.Ping, dns ?? ((_, _) => Task.FromResult<string?>(null)), concurrency, nameBudget);
 
     [Fact]
     public async Task A_sweep_reports_pingers_and_ARP_only_devices_with_mac_vendor_and_evidence()
@@ -255,6 +256,82 @@ public class LanScannerTests
         Assert.Contains(result.Found, c => c.Address == "192.168.1.30");   // the ARP table is still read
     }
 
+    [Fact]
+    public async Task When_any_network_has_a_gateway_gateway_less_virtual_networks_are_not_swept()
+    {
+        var probe = new Probe();
+        var nets = new Networks(
+            Net("192.168.1.50", 24, "192.168.1.1"),     // the real LAN
+            Net("172.20.0.1", 24),                       // a docker bridge
+            Net("172.28.16.1", 24));                     // a WSL virtual switch
+
+        await Scanner(nets, new Arp(), probe).ScanAsync(CancellationToken.None);
+
+        Assert.Equal(253, probe.Pinged.Count);
+        Assert.All(probe.Pinged, p => Assert.StartsWith("192.168.1.", p));
+    }
+
+    [Fact]
+    public async Task When_no_network_has_a_gateway_all_private_networks_are_swept()
+    {
+        var probe = new Probe();
+        var nets = new Networks(Net("192.168.1.50", 24), Net("10.9.9.5", 24));
+
+        await Scanner(nets, new Arp(), probe).ScanAsync(CancellationToken.None);
+
+        Assert.Equal(506, probe.Pinged.Count);
+    }
+
+    [Fact]
+    public async Task A_ping_that_throws_for_one_host_is_just_no_answer()
+    {
+        var scanner = new LanScanner(new Networks(Net("192.168.1.50", 24)), new Arp(), new Vendors(),
+            (ip, _) => ip.ToString() == "192.168.1.10" ? throw new InvalidOperationException("raw socket exploded")
+                : Task.FromResult<long?>(ip.ToString() == "192.168.1.20" ? 3 : null),
+            (_, _) => Task.FromResult<string?>(null));
+
+        var result = await scanner.ScanAsync(CancellationToken.None);
+
+        Assert.True(result.Complete);
+        Assert.Equal("192.168.1.20", Assert.Single(result.Found).Address);
+    }
+
+    [Fact]
+    public async Task Name_lookups_after_a_cancelled_sweep_are_bounded_and_keep_the_names_resolved_so_far()
+    {
+        using var cts = new CancellationTokenSource();
+        var hungPing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scanner = new LanScanner(new Networks(Net("192.168.1.50", 24)), new Arp(), new Vendors(),
+            async (ip, ct) =>
+            {
+                var last = int.Parse(ip.ToString().Split('.')[3]);
+                if (last is 20 or 21)
+                    return 3;
+                if (last > 21)
+                {
+                    hungPing.TrySetResult();
+                    await Task.Delay(Timeout.Infinite, ct);   // the cap fires while these hang
+                }
+                return null;
+            },
+            async (ip, ct) =>
+            {
+                if (ip.ToString() == "192.168.1.20")
+                    return "nas.example.com";
+                await Task.Delay(Timeout.Infinite, ct);       // only the name budget can end this one
+                return null;
+            },
+            concurrency: 8, nameBudget: TimeSpan.FromMilliseconds(200));
+
+        var scan = scanner.ScanAsync(cts.Token);
+        await hungPing.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        cts.Cancel();
+        var result = await scan.WaitAsync(TimeSpan.FromSeconds(30));   // would hang forever without the budget
+
+        Assert.False(result.Complete);
+        Assert.Equal("nas.example.com", result.Found.Single(c => c.Address == "192.168.1.20").Hostname);
+        Assert.Null(result.Found.Single(c => c.Address == "192.168.1.21").Hostname);
+    }
     [Fact]
     public async Task No_networks_means_an_empty_complete_result()
     {

@@ -158,7 +158,7 @@ internal sealed class TrayContext : ApplicationContext
         var body = next.State == TrayState.Unreachable
             ? $"The monitor at {_settings.EffectiveUrl} is not answering."
             : next.Detail is { Length: > 0 } ? next.Detail : TrayStatus.Describe(next.State);
-        _icon.ShowBalloonTip(5000, title, Truncate(body, 250), icon);
+        Balloon(title, Truncate(body, 250), icon);
     }
 
     /// <summary>

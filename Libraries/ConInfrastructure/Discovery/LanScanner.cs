@@ -52,16 +52,23 @@ public sealed record LanScanResult(IReadOnlyList<DiscoveryCandidate> Found, bool
 /// </summary>
 public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors, IVendorLookup vendors,
     Func<IPAddress, CancellationToken, Task<long?>> ping,
-    Func<IPAddress, CancellationToken, Task<string?>> reverseDns, int concurrency = LanScanner.MaxConcurrency)
+    Func<IPAddress, CancellationToken, Task<string?>> reverseDns, int concurrency = LanScanner.MaxConcurrency,
+    TimeSpan? nameBudget = null)
 {
     public const int MaxHosts = 1024;
     public const int MaxConcurrency = 64;
     public static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(1);
     private const int DnsParallelism = 16;
+    /// <summary>How long the name lookups may run after a cancelled sweep (names are a nicety).</summary>
+    public static readonly TimeSpan DefaultNameBudget = TimeSpan.FromSeconds(3);
 
     public async Task<LanScanResult> ScanAsync(CancellationToken ct)
     {
         var nets = networks.Read().Where(n => IsRfc1918(n.Address)).ToList();
+        // Virtual adapters (WSL, docker bridges) have no default gateway; when any network does, the real
+        // LAN is among those, so sweep only them. With no gateway anywhere, an isolated LAN still gets swept.
+        if (nets.Any(n => n.Gateways.Count > 0))
+            nets = nets.Where(n => n.Gateways.Count > 0).ToList();
         var own = nets.Select(n => n.Address.ToString()).ToHashSet();
         var gateways = nets.SelectMany(n => n.Gateways).Select(g => g.ToString()).ToHashSet();
         var hosts = HostsToSweep(nets).Where(h => !own.Contains(h.ToString())).Take(MaxHosts).ToList();
@@ -75,8 +82,15 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
                 new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(concurrency, 1, MaxConcurrency), CancellationToken = ct },
                 async (host, token) =>
                 {
-                    if (await ping(host, token).ConfigureAwait(false) is { } rtt)
-                        answered[host.ToString()] = rtt;
+                    try
+                    {
+                        if (await ping(host, token).ConfigureAwait(false) is { } rtt)
+                            answered[host.ToString()] = rtt;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // One host that cannot be pinged is just "no answer"; it must not end the scan.
+                    }
                 }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -95,7 +109,9 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
             .OrderBy(a => IpToUInt(IPAddress.Parse(a)))
             .ToList();
 
-        var names = await ResolveNamesAsync(addresses, complete ? ct : CancellationToken.None).ConfigureAwait(false);
+        // After a cancel the names still get a short budget of their own, so the scan cannot overrun its cap by much.
+        using var nameCts = complete ? CancellationTokenSource.CreateLinkedTokenSource(ct) : new CancellationTokenSource(nameBudget ?? DefaultNameBudget);
+        var names = await ResolveNamesAsync(addresses, nameCts.Token).ConfigureAwait(false);
         var found = addresses.Select(a =>
         {
             arp.TryGetValue(a, out var mac);
@@ -190,9 +206,9 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
             var reply = await pinger.SendPingAsync(address, PingTimeout, cancellationToken: ct).ConfigureAwait(false);
             return reply.Status == IPStatus.Success ? reply.RoundtripTime : null;
         }
-        catch (PingException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return null;
+            return null;       // PingException, SocketException, ...: no answer
         }
     }
 
