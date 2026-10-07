@@ -19,7 +19,7 @@ public static class DiscoveryEndpoints
             DiscoveryStatuses.TryParseFilter(status, out var filter)
                 ? Results.Ok(await store.ListAsync(filter))
                 : ApiResults.Error(StatusCodes.Status400BadRequest, null,
-                    "'status' must be new, dismissed, adopted or all."));
+                    "'status' must be new, hidden, adopted or all."));
 
         d.MapPost("/", async (UpsertRequest request, DiscoveryStore store) =>
         {
@@ -41,11 +41,29 @@ public static class DiscoveryEndpoints
         d.MapPost("/restore-dismissed", async (DiscoveryStore store) =>
             Results.Ok(new { restored = await store.RestoreAllDismissedAsync() }));
 
+        d.MapPost("/clear", async (string? kind, DiscoveryStore store) =>
+            TryParseKind(kind, out var parsed)
+                ? Results.Ok(new { removed = await store.ClearAsync(parsed) })
+                : ApiResults.Error(StatusCodes.Status400BadRequest, null,
+                    "'kind' is required and must be NetworkEdge, LocalDevice or Gateway."));
+
+        d.MapDelete("/{id:guid}", async (Guid id, DiscoveryStore store) =>
+            (await store.RemoveAsync(id)).ToHttp());
+
         d.MapPost("/{id:guid}/dismiss", async (Guid id, DiscoveryStore store) =>
             (await store.DismissAsync(id)).ToHttp());
 
         d.MapPost("/{id:guid}/restore", async (Guid id, DiscoveryStore store) =>
             (await store.RestoreAsync(id)).ToHttp());
+    }
+
+    /// <summary>A defined DiscoveryKind by name (case-insensitive); numbers are not accepted.</summary>
+    private static bool TryParseKind(string? text, out ConCore.Discovery.DiscoveryKind kind)
+    {
+        kind = default;
+        text = text?.Trim();
+        return !string.IsNullOrEmpty(text) && char.IsLetter(text[0]) &&
+            Enum.TryParse(text, ignoreCase: true, out kind) && Enum.IsDefined(kind);
     }
 
     private static IResult ToHttp(SearchOutcome outcome)

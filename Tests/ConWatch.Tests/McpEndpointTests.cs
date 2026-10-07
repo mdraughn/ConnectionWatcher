@@ -246,11 +246,13 @@ public class McpEndpointTests : IDisposable
         var newOnes = await ListDiscoveriesAsync(new { });
         var dismissed = await ListDiscoveriesAsync(new { status = "dismissed" });
         var everything = await ListDiscoveriesAsync(new { status = "all" });
+        var hidden = await ListDiscoveriesAsync(new { status = "Hidden" });
 
         Assert.Equal(["192.0.2.1"], newOnes.Select(d => d.GetProperty("address").GetString()));
         Assert.Equal("Gateway", newOnes[0].GetProperty("kind").GetString());
         Assert.Equal("server", newOnes[0].GetProperty("origin").GetString());
         Assert.Equal(["192.0.2.50"], dismissed.Select(d => d.GetProperty("address").GetString()));
+        Assert.Equal(["192.0.2.50"], hidden.Select(d => d.GetProperty("address").GetString()));
         Assert.Equal(2, everything.Count);
     }
 

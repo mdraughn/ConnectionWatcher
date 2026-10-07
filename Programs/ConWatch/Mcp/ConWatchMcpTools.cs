@@ -134,12 +134,12 @@ public class ConWatchMcpTools(WatcherHostService host,
         "router, the first hop beyond their LAN (where the ISP's network begins), and local devices. " +
         "Each has a kind (Gateway, NetworkEdge, LocalDevice), how it was found (method), who found it " +
         "(origin: 'server' or 'tray:<machine>'), evidence, first/last seen (ISO-8601 UTC) and a status: " +
-        "New (not acted on), Dismissed (the user said no), Adopted (turned into a target; adoptedTargetName " +
-        "is null if that target was later deleted). Read-only: searching, adopting and dismissing are done " +
+        "New (not acted on), Hidden (the user said no; stays hidden even if found again), Adopted (turned into a target; adoptedTargetName " +
+        "is null if that target was later deleted). Read-only: searching, adopting, hiding and removing are done " +
         "in the web UI's Config > Discoveries page. When the server has an admin password set this tool " +
         "requires admin mode, like the Discoveries page; without a password it is open.")]
     public async Task<string> ListDiscoveries(
-        [Description("'new' (default), 'dismissed', 'adopted' or 'all'")] string? status = null)
+        [Description("'new' (default), 'hidden', 'adopted' or 'all' ('dismissed' is accepted as a synonym for 'hidden')")] string? status = null)
     {
         // Parity with the web UI: whatever the Discoveries page needs admin mode for, this does too.
         if (gate.IsLocked(http.HttpContext?.User ?? new ClaimsPrincipal()))
@@ -147,7 +147,7 @@ public class ConWatchMcpTools(WatcherHostService host,
                 "and the Discoveries inbox is admin-only, like its web page. Sign in as admin in the web UI, " +
                 "or ask the owner to remove the password.");
         if (!DiscoveryStatuses.TryParseFilter(status, out var filter))
-            throw new McpException("status must be 'new', 'dismissed', 'adopted' or 'all'.");
+            throw new McpException("status must be 'new', 'hidden', 'adopted' or 'all'.");
         return JsonSerializer.Serialize(await discoveries.ListAsync(filter), Json);
     }
 }

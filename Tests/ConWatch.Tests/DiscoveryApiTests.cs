@@ -267,6 +267,89 @@ public class DiscoveryApiTests : IDisposable
         Assert.Contains("1.1.1.1", edge.GetProperty("evidence").GetString());   // the default host
     }
 
+    private async Task<string> PostDeviceAsync(string address, string kind = "LocalDevice")
+    {
+        (await _client.PostAsJsonAsync("/api/v1/discoveries", new
+        {
+            items = new[] { new { address, kind, method = "ArpTable", origin = "tray:PC" } },
+        })).EnsureSuccessStatusCode();
+        return Items(await GetJson("/api/v1/discoveries?status=all"))
+            .Single(d => d.GetProperty("address").GetString() == address).GetProperty("id").GetString()!;
+    }
+
+    [Fact]
+    public async Task Remove_deletes_the_row_and_a_rediscovery_comes_back_as_New()
+    {
+        var id = await PostDeviceAsync("192.0.2.50");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"/api/v1/discoveries/{id}")).StatusCode);
+        Assert.Empty(Items(await GetJson("/api/v1/discoveries?status=all")));
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.DeleteAsync($"/api/v1/discoveries/{id}")).StatusCode);
+
+        await PostDeviceAsync("192.0.2.50");
+        Assert.Single(Items(await GetJson("/api/v1/discoveries")));
+    }
+
+    [Fact]
+    public async Task Remove_of_an_adopted_discovery_is_refused()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var id = await PostDeviceAsync("192.0.2.50");
+        (await _client.PostAsJsonAsync($"/api/v1/targets?discoveryId={id}",
+            new { name = "NasBox", address = "192.0.2.50", profile = "Fast", scope = "Local" })).EnsureSuccessStatusCode();
+
+        var response = await _client.DeleteAsync($"/api/v1/discoveries/{id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("adopted", await response.Content.ReadAsStringAsync());
+        Assert.Single(Items(await GetJson("/api/v1/discoveries?status=adopted")));
+    }
+
+    [Fact]
+    public async Task Clear_removes_only_New_rows_of_the_named_kind_and_reports_the_count()
+    {
+        await PostDeviceAsync("192.0.2.50");
+        var hiddenId = await PostDeviceAsync("192.0.2.51");
+        await PostDeviceAsync("203.0.113.5", "NetworkEdge");
+        await _client.PostAsync($"/api/v1/discoveries/{hiddenId}/dismiss", null);
+
+        var response = await _client.PostAsync("/api/v1/discoveries/clear?kind=localdevice", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, body.GetProperty("removed").GetInt32());
+        var left = Items(await GetJson("/api/v1/discoveries?status=all"))
+            .Select(d => d.GetProperty("address").GetString()).Order().ToList();
+        Assert.Equal(["192.0.2.51", "203.0.113.5"], left);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?kind=")]
+    [InlineData("?kind=Bogus")]
+    [InlineData("?kind=99")]
+    [InlineData("?kind=-1")]
+    public async Task Clear_with_a_missing_or_unknown_kind_is_a_400(string query)
+    {
+        await PostDeviceAsync("192.0.2.50");
+
+        var response = await _client.PostAsync("/api/v1/discoveries/clear" + query, null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("kind", await response.Content.ReadAsStringAsync());
+        Assert.Single(Items(await GetJson("/api/v1/discoveries")));
+    }
+
+    [Fact]
+    public async Task The_hidden_status_is_an_alias_for_dismissed_on_the_list()
+    {
+        var id = await PostDeviceAsync("192.0.2.50");
+        await _client.PostAsync($"/api/v1/discoveries/{id}/dismiss", null);
+
+        Assert.Single(Items(await GetJson("/api/v1/discoveries?status=hidden")));
+        Assert.Single(Items(await GetJson("/api/v1/discoveries?status=Dismissed")));
+    }
+
     [Fact]
     public async Task Every_discovery_route_is_locked_when_an_admin_password_is_set()
     {
@@ -281,6 +364,7 @@ public class DiscoveryApiTests : IDisposable
             ("POST", "/api/v1/discoveries/search/lan"),
             ("POST", "/api/v1/discoveries/restore-dismissed"),
             ("POST", $"/api/v1/discoveries/{id}/dismiss"), ("POST", $"/api/v1/discoveries/{id}/restore"),
+            ("DELETE", $"/api/v1/discoveries/{id}"), ("POST", "/api/v1/discoveries/clear?kind=LocalDevice"),
         })
         {
             var response = await anon.SendAsync(new HttpRequestMessage(new HttpMethod(method), url)

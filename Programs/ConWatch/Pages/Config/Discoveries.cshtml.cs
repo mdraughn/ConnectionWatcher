@@ -11,6 +11,8 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
 {
     public string StatusFilter { get; private set; } = "new";
     public List<DiscoveryDto> Items { get; private set; } = [];
+    public int NewNetworkEdgeCount { get; private set; }
+    public int NewLocalDeviceCount { get; private set; }
     private HashSet<string> _targetNames = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task OnGetAsync(string? status)
@@ -21,6 +23,8 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
             DiscoveryStatuses.TryParseFilter(null, out filter);
         }
         StatusFilter = string.IsNullOrWhiteSpace(status) ? "new" : status.Trim().ToLowerInvariant();
+        if (StatusFilter == "dismissed")
+            StatusFilter = "hidden";
         Items = await store.ListAsync(filter);
         var targets = (await configStore.ExportAsync()).Targets;
         _targetNames = targets.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -29,6 +33,8 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
             _targetByAddress.TryAdd(t.Address.Trim(), t.Name);
 
         var all = await store.ListAsync(null);   // every status: the gateway may already be adopted or dismissed
+        NewNetworkEdgeCount = all.Count(d => d.Kind == DiscoveryKind.NetworkEdge && d.Status == DiscoveryStatus.New);
+        NewLocalDeviceCount = all.Count(d => d.Kind == DiscoveryKind.LocalDevice && d.Status == DiscoveryStatus.New);
         var gateways = all.Where(d => d.Kind == DiscoveryKind.Gateway).OrderByDescending(d => d.LastSeenUtc).ToList();
         _routerName =
             gateways.Where(d => d.Status == DiscoveryStatus.Adopted && d.AdoptedTargetName is not null)

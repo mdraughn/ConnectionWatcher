@@ -45,20 +45,90 @@ public class DiscoveriesPageTests : IDisposable
     }
 
     [Fact]
-    public async Task Dismissed_ones_appear_only_in_the_dismissed_view_which_also_offers_Restore_all()
+    public async Task Hidden_ones_appear_only_in_the_hidden_view_which_also_offers_Unhide_all()
     {
         await PostAsync(Item("192.0.2.1", "Gateway"), Item("192.0.2.50", "LocalDevice"));
         await _client.PostAsync($"/api/v1/discoveries/{await IdOfAsync("192.0.2.50")}/dismiss", null);
 
         var main = await _client.GetStringAsync("/Config/Discoveries");
-        var dismissed = await _client.GetStringAsync("/Config/Discoveries?status=dismissed");
+        var hidden = await _client.GetStringAsync("/Config/Discoveries?status=hidden");
+        var legacy = await _client.GetStringAsync("/Config/Discoveries?status=dismissed");
 
         Assert.DoesNotContain("192.0.2.50", main);
-        Assert.DoesNotContain("Restore all dismissed", main);
-        Assert.Contains("192.0.2.50", dismissed);
-        Assert.DoesNotContain("192.0.2.1<", dismissed);
-        Assert.Contains("Restore all dismissed", dismissed);
-        Assert.Contains("Restore", dismissed);
+        Assert.DoesNotContain("Unhide all", main);
+        Assert.Contains("192.0.2.50", hidden);
+        Assert.DoesNotContain("192.0.2.1<", hidden);
+        Assert.Contains("Unhide all", hidden);
+        Assert.Contains(">Unhide<", hidden);
+        Assert.Contains(">Remove<", hidden);
+        Assert.Contains("Unhide all", legacy);
+    }
+
+    [Fact]
+    public async Task The_page_says_Hide_and_Hidden_never_Dismiss_or_Restore()
+    {
+        await PostAsync(Item("192.0.2.1", "Gateway"), Item("192.0.2.50", "LocalDevice"));
+        await _client.PostAsync($"/api/v1/discoveries/{await IdOfAsync("192.0.2.50")}/dismiss", null);
+
+        var main = await _client.GetStringAsync("/Config/Discoveries");
+        var hidden = await _client.GetStringAsync("/Config/Discoveries?status=hidden");
+
+        Assert.Contains(">Hide<", main);
+        Assert.Contains(">Hidden<", main);
+        Assert.Contains("or hide it", main);
+        foreach (var html in new[] { main, hidden })
+        {
+            Assert.DoesNotContain("Dismiss", html);
+            Assert.DoesNotContain("Restore", html);
+        }
+    }
+
+    [Fact]
+    public async Task Remove_is_offered_on_New_rows_but_not_on_Adopted_rows()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await PostAsync(Item("192.0.2.50", "LocalDevice"), Item("192.0.2.51", "LocalDevice"));
+        var adoptId = await IdOfAsync("192.0.2.51");
+        (await _client.PostAsJsonAsync($"/api/v1/targets?discoveryId={adoptId}",
+            new { name = "NasBox", address = "192.0.2.51", profile = "Fast", scope = "Local" })).EnsureSuccessStatusCode();
+
+        var news = await _client.GetStringAsync("/Config/Discoveries");
+        var adopted = await _client.GetStringAsync("/Config/Discoveries?status=adopted");
+
+        Assert.Contains($"data-action=\"remove\" data-id=\"{await IdOfAsync("192.0.2.50")}\"", news);
+        Assert.DoesNotContain("data-action=\"remove\"", adopted);
+    }
+
+    [Fact]
+    public async Task Clear_buttons_appear_only_for_kinds_with_New_rows_and_only_on_the_New_and_All_tabs()
+    {
+        await PostAsync(Item("192.0.2.50", "LocalDevice"), Item("192.0.2.1", "Gateway"));
+
+        var news = await _client.GetStringAsync("/Config/Discoveries");
+        var all = await _client.GetStringAsync("/Config/Discoveries?status=all");
+        var hidden = await _client.GetStringAsync("/Config/Discoveries?status=hidden");
+
+        foreach (var html in new[] { news, all })
+        {
+            Assert.Contains("id=\"clear-LocalDevice\"", html);
+            Assert.Contains("Clear local devices", html);
+            Assert.DoesNotContain("clear-NetworkEdge", html);    // none of that kind
+            Assert.DoesNotContain("clear-Gateway", html);        // never offered
+        }
+        Assert.DoesNotContain("clear-LocalDevice", hidden);
+        Assert.DoesNotContain("Clear local devices", hidden);
+
+        await PostAsync(Item("203.0.113.5", "NetworkEdge", "Traceroute"));
+        Assert.Contains("Clear network edge", await _client.GetStringAsync("/Config/Discoveries"));
+    }
+
+    [Fact]
+    public async Task A_hidden_only_kind_gets_no_Clear_button()
+    {
+        await PostAsync(Item("192.0.2.50", "LocalDevice"));
+        await _client.PostAsync($"/api/v1/discoveries/{await IdOfAsync("192.0.2.50")}/dismiss", null);
+
+        Assert.DoesNotContain("clear-LocalDevice", await _client.GetStringAsync("/Config/Discoveries?status=all"));
     }
 
     [Fact]

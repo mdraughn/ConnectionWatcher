@@ -233,11 +233,99 @@ public class DiscoveryStoreTests : IDisposable
         Assert.Null(back.AdoptedTargetId);
     }
 
+    private static DiscoveryInput Device(string address) =>
+        new(address, null, DiscoveryKind.LocalDevice, DiscoveryMethod.ArpTable, "server", null);
+
+    private static DiscoveryInput Edge(string address) =>
+        new(address, null, DiscoveryKind.NetworkEdge, DiscoveryMethod.Traceroute, "server", null);
+
+    private async Task<Guid> IdOfAsync(string address) =>
+        (await _store.ListAsync(null)).Single(d => d.Address == address).Id;
+
+    [Fact]
+    public async Task RemoveAsync_deletes_New_and_Hidden_rows()
+    {
+        await _store.UpsertAsync([Device("192.0.2.10"), Device("192.0.2.11")]);
+        var hidden = await IdOfAsync("192.0.2.11");
+        await _store.DismissAsync(hidden);
+
+        Assert.True((await _store.RemoveAsync(await IdOfAsync("192.0.2.10"))).Success);
+        Assert.True((await _store.RemoveAsync(hidden)).Success);
+        Assert.Empty(await _store.ListAsync(null));
+    }
+
+    [Fact]
+    public async Task RemoveAsync_of_a_missing_id_is_NotFound()
+    {
+        Assert.Equal(ConfigErrorKind.NotFound, (await _store.RemoveAsync(Guid.NewGuid())).Kind);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_refuses_a_live_adoption()
+    {
+        var (id, _) = await AdoptedAsync(targetStillExists: true);
+
+        var result = await _store.RemoveAsync(id);
+
+        Assert.Equal(ConfigErrorKind.Conflict, result.Kind);
+        Assert.Single(await _store.ListAsync(DiscoveryStatus.Adopted));
+    }
+
+    [Fact]
+    public async Task A_removed_address_found_again_is_a_fresh_New_row()
+    {
+        await _store.UpsertAsync([Device("192.0.2.10")]);
+        await _store.RemoveAsync(await IdOfAsync("192.0.2.10"));
+
+        var result = await _store.UpsertAsync([Device("192.0.2.10")]);
+
+        Assert.Equal((1, 0), (result.Created, result.Updated));
+        Assert.Single(await _store.ListAsync(DiscoveryStatus.New));
+    }
+
+    [Fact]
+    public async Task A_hidden_address_found_again_stays_Hidden()
+    {
+        await _store.UpsertAsync([Device("192.0.2.10")]);
+        await _store.DismissAsync(await IdOfAsync("192.0.2.10"));
+
+        await _store.UpsertAsync([Device("192.0.2.10")]);
+
+        Assert.Empty(await _store.ListAsync(DiscoveryStatus.New));
+        Assert.Single(await _store.ListAsync(DiscoveryStatus.Dismissed));
+    }
+
+    [Fact]
+    public async Task ClearAsync_removes_only_New_rows_of_that_kind()
+    {
+        await _store.UpsertAsync([Device("192.0.2.10"), Device("192.0.2.11"), Device("192.0.2.12"),
+            Edge("198.51.100.1"), Router()]);
+        await _store.DismissAsync(await IdOfAsync("192.0.2.11"));
+
+        var removed = await _store.ClearAsync(DiscoveryKind.LocalDevice);
+
+        Assert.Equal(2, removed);
+        var left = (await _store.ListAsync(null)).Select(d => d.Address).Order().ToList();
+        Assert.Equal(["192.0.2.1", "192.0.2.11", "198.51.100.1"], left);   // hidden device kept
+    }
+
+    [Fact]
+    public async Task ClearAsync_leaves_adopted_rows_and_returns_zero_when_nothing_matches()
+    {
+        var (id, _) = await AdoptedAsync(targetStillExists: true);   // a Gateway
+
+        Assert.Equal(0, await _store.ClearAsync(DiscoveryKind.Gateway));
+        Assert.Equal(id, Assert.Single(await _store.ListAsync(DiscoveryStatus.Adopted)).Id);
+        Assert.Equal(0, await _store.ClearAsync(DiscoveryKind.NetworkEdge));
+    }
+
     [Theory]
     [InlineData(null, DiscoveryStatus.New, true)]
     [InlineData("", DiscoveryStatus.New, true)]
     [InlineData("NEW", DiscoveryStatus.New, true)]
     [InlineData("dismissed", DiscoveryStatus.Dismissed, true)]
+    [InlineData("hidden", DiscoveryStatus.Dismissed, true)]
+    [InlineData(" Hidden ", DiscoveryStatus.Dismissed, true)]
     [InlineData("Adopted", DiscoveryStatus.Adopted, true)]
     [InlineData("all", null, true)]
     [InlineData("bogus", null, false)]

@@ -8,7 +8,7 @@
 <div class="cw-pageband">
     <div class="titles">
         <h2>Discoveries</h2>
-        <p>Things found on the network that nobody is monitoring yet. Adopt one to turn it into a target, or dismiss it.</p>
+        <p>Things found on the network that nobody is monitoring yet. Adopt one to turn it into a target, or hide it.</p>
     </div>
 </div>
 <partial name="_ConfigTabs" model="@("discoveries")" />
@@ -22,15 +22,29 @@
 <ul class="form-errors" id="errors"></ul>
 
 <div class="cw-segmented" style="margin-bottom: 1rem">
-    @foreach (var (key, label) in new[] { ("new", "New"), ("dismissed", "Dismissed"), ("adopted", "Adopted"), ("all", "All") })
+    @foreach (var (key, label) in new[] { ("new", "New"), ("hidden", "Hidden"), ("adopted", "Adopted"), ("all", "All") })
     {
         <a class="@(Model.StatusFilter == key ? "active" : "")" href="/Config/Discoveries?status=@key">@label</a>
     }
 </div>
 
-@if (Model.StatusFilter == "dismissed" && Model.Items.Count > 0)
+@if (Model.StatusFilter == "hidden" && Model.Items.Count > 0)
 {
-    <p><button type="button" class="outline" id="restore-all">Restore all dismissed</button></p>
+    <p><button type="button" class="outline" id="restore-all">Unhide all</button></p>
+}
+
+@if (Model.StatusFilter is "new" or "all")
+{
+    <p>
+        @if (Model.NewNetworkEdgeCount > 0)
+        {
+            <button type="button" class="outline" id="clear-NetworkEdge" data-clear-kind="NetworkEdge" data-count="@Model.NewNetworkEdgeCount" data-noun="network edge">Clear network edge</button>
+        }
+        @if (Model.NewLocalDeviceCount > 0)
+        {
+            <button type="button" class="outline" id="clear-LocalDevice" data-clear-kind="LocalDevice" data-count="@Model.NewLocalDeviceCount" data-noun="local device">Clear local devices</button>
+        }
+    </p>
 }
 
 @if (Model.Items.Count == 0)
@@ -72,11 +86,15 @@ else
                         }
                         @if (d.Status == DiscoveryStatus.Dismissed)
                         {
-                            <button type="button" class="outline" data-action="restore" data-id="@d.Id">Restore</button>
+                            <button type="button" class="outline" data-action="restore" data-id="@d.Id">Unhide</button>
                         }
                         else
                         {
-                            <button type="button" class="outline" data-action="dismiss" data-id="@d.Id">Dismiss</button>
+                            <button type="button" class="outline" data-action="dismiss" data-id="@d.Id">Hide</button>
+                        }
+                        @if (d.Status != DiscoveryStatus.Adopted)
+                        {
+                            <button type="button" class="outline" data-action="remove" data-id="@d.Id">Remove</button>
                         }
                     }
                 </td>
@@ -136,7 +154,21 @@ else
         document.querySelectorAll("[data-action]").forEach((btn) =>
             btn.addEventListener("click", async () => {
                 clearErrors(errors);
-                const result = await apiFetch("POST", `/api/v1/discoveries/${btn.dataset.id}/${btn.dataset.action}`);
+                const result = btn.dataset.action === "remove"
+                    ? await apiFetch("DELETE", `/api/v1/discoveries/${btn.dataset.id}`)
+                    : await apiFetch("POST", `/api/v1/discoveries/${btn.dataset.id}/${btn.dataset.action}`);
+                if (result.ok) location.reload();
+                else showErrors(errors, result);
+            }));
+
+        document.querySelectorAll("[data-clear-kind]").forEach((btn) =>
+            btn.addEventListener("click", async () => {
+                clearErrors(errors);
+                const count = Number(btn.dataset.count);
+                const noun = btn.dataset.noun + (count === 1 ? "" : "s");
+                if (!await confirmDialog(`Remove ${count} new ${noun} from the list? Hidden and adopted ones are kept.`,
+                        { confirmLabel: "Remove" })) return;
+                const result = await apiFetch("POST", `/api/v1/discoveries/clear?kind=${btn.dataset.clearKind}`);
                 if (result.ok) location.reload();
                 else showErrors(errors, result);
             }));

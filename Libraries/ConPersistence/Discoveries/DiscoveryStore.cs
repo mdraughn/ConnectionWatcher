@@ -20,7 +20,7 @@ public sealed record DiscoveryDto(Guid Id, string Address, string? Hostname, Dis
 
 public static class DiscoveryStatuses
 {
-    /// <summary>"new" (also null/empty), "dismissed", "adopted" or "all" (status = null), case-insensitive.</summary>
+    /// <summary>"new" (also null/empty), "dismissed" (alias "hidden"), "adopted" or "all" (status = null), case-insensitive.</summary>
     public static bool TryParseFilter(string? text, out DiscoveryStatus? status)
     {
         status = DiscoveryStatus.New;
@@ -29,7 +29,8 @@ public static class DiscoveryStatuses
         switch (text.Trim().ToLowerInvariant())
         {
             case "new": return true;
-            case "dismissed": status = DiscoveryStatus.Dismissed; return true;
+            case "dismissed":
+            case "hidden": status = DiscoveryStatus.Dismissed; return true;
             case "adopted": status = DiscoveryStatus.Adopted; return true;
             case "all": status = null; return true;
             default: status = null; return false;
@@ -39,8 +40,8 @@ public static class DiscoveryStatuses
 
 /// <summary>
 /// The Discoveries inbox. Upserts on (Address, Kind): a rescan refreshes LastSeen,
-/// evidence, method and origin but never changes Status, so a dismissed address
-/// stays dismissed. Adoption itself happens in ConfigService, inside the
+/// evidence, method and origin but never changes Status, so a dismissed (user-facing:
+/// "hidden") address stays hidden; a removed one is simply gone and comes back as New. Adoption itself happens in ConfigService, inside the
 /// target-create transaction.
 /// </summary>
 public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider? timeProvider = null)
@@ -225,7 +226,34 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
         return ConfigResult.Ok(id);
     }
 
-    /// <summary>Puts every dismissed discovery back to New; returns how many.</summary>
+    /// <summary>Deletes one New or hidden discovery outright. Unlike hiding, nothing remembers it:
+    /// finding the address again creates a fresh New row. A live adoption is refused.</summary>
+    public async Task<ConfigResult> RemoveAsync(Guid id)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        var row = await db.Discoveries.FindAsync(id);
+        if (row is null)
+            return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {id}.");
+        if (await IsLiveAdoptionAsync(db, row))
+            return ConfigResult.Fail(ConfigErrorKind.Conflict,
+                "This discovery was adopted into a target; remove the target to undo it.");
+        db.Discoveries.Remove(row);
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ConfigResult.Ok(id);
+    }
+
+    /// <summary>Deletes every New discovery of one kind (hidden and adopted ones and other kinds are
+    /// kept); returns how many.</summary>
+    public async Task<int> ClearAsync(DiscoveryKind kind)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.Discoveries.Where(d => d.Kind == kind && d.Status == DiscoveryStatus.New)
+            .ExecuteDeleteAsync();
+    }
+
+    /// <summary>Puts every hidden (dismissed) discovery back to New; returns how many.</summary>
     public async Task<int> RestoreAllDismissedAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
