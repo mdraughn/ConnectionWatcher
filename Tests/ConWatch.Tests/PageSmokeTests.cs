@@ -107,6 +107,15 @@ public class PageSmokeTests : IDisposable
     }
 
     [Fact]
+    public async Task Probe_test_result_clears_the_negative_top_margin_the_stylesheet_gives_small_text()
+    {
+        // Pico pulls <small> up 12px to tuck it under an input; after the Address button group that
+        // drew the Test result over the field. The element must override it.
+        var html = await _factory.CreateClient().GetStringAsync("/Config/Targets");
+        Assert.Matches(@"<small id=""probe-test-out""[^>]*style=""[^""]*margin-top:\s*\.?\d", html);
+    }
+
+    [Fact]
     public async Task Targets_pipeline_lists_parentless_anchors_and_parents_written_in_another_case()
     {
         var client = _factory.CreateClient();
