@@ -134,9 +134,15 @@ export function ribbonSegments(transitions: TransitionEvent[],
   return segments;
 }
 
-export type HistoryScope = "internet" | "local";
+export type HistoryScope = "path" | "pools" | "local";
 
-/** The History subjects for one scope: LAN devices, or everything else (targets, pools, the verdict). */
-export function subjectsForScope<T extends { scope?: string }>(subjects: T[], scope: HistoryScope): T[] {
-  return subjects.filter((s) => (s.scope === "Local") === (scope === "local"));
+/**
+ * The History subjects for one scope: LAN devices ("local"), non-LAN pools
+ * ("pools"), or everything else — the verdict and the path targets ("path").
+ */
+export function subjectsForScope<T extends { scope?: string; kind?: string }>(subjects: T[], scope: HistoryScope): T[] {
+  return subjects.filter((s) => {
+    if (s.scope === "Local") return scope === "local";
+    return scope === "pools" ? s.kind === "pool" : scope === "path" && s.kind !== "pool";
+  });
 }

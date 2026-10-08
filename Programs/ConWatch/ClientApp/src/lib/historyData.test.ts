@@ -147,15 +147,25 @@ describe("ribbonSegments", () => {
 
 describe("subjectsForScope", () => {
   const subjects = [
-    { id: "r", name: "Router", scope: "Verdict" },
-    { id: "n", name: "NAS", scope: "Local" },
-    { id: "p", name: "Internet" }, // no scope: an older page payload means Verdict
+    { id: "r", name: "Router", kind: "target", scope: "Verdict" },
+    { id: "n", name: "NAS", kind: "target", scope: "Local" },
+    { id: "v", name: "Internet", kind: "verdict" }, // no scope: an older page payload means Verdict
+    { id: "p", name: "Anchors", kind: "pool", scope: "Verdict" },
+    { id: "lp", name: "LanPool", kind: "pool", scope: "Local" },
   ];
-  it("internet keeps everything that is not Local", () => {
-    expect(subjectsForScope(subjects, "internet").map((s) => s.id)).toEqual(["r", "p"]);
+  it("path keeps the verdict and path targets, not pools or LAN", () => {
+    expect(subjectsForScope(subjects, "path").map((s) => s.id)).toEqual(["r", "v"]);
   });
-  it("local keeps only Local targets", () => {
-    expect(subjectsForScope(subjects, "local").map((s) => s.id)).toEqual(["n"]);
+  it("pools keeps only non-local pools", () => {
+    expect(subjectsForScope(subjects, "pools").map((s) => s.id)).toEqual(["p"]);
+  });
+  it("local keeps only Local subjects", () => {
+    expect(subjectsForScope(subjects, "local").map((s) => s.id)).toEqual(["n", "lp"]);
+  });
+  it("partitions every subject exactly once", () => {
+    const ids = (["path", "pools", "local"] as const)
+      .flatMap((sc) => subjectsForScope(subjects, sc).map((s) => s.id)).sort();
+    expect(ids).toEqual(subjects.map((s) => s.id).sort());
   });
   it("is empty rather than throwing when nothing matches", () => {
     expect(subjectsForScope([], "local")).toEqual([]);

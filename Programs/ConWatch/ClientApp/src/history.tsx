@@ -88,9 +88,12 @@ function LedgerSection() {
   );
 }
 
+const SCOPES: ReadonlyArray<readonly [HistoryScope, string]> =
+  [["path", "Path"], ["pools", "Pools"], ["local", "LAN"]];
+
 function App({ subjects }: { subjects: Subject[] }) {
-  const hasLan = subjects.some((s) => s.scope === "Local");
-  const [scope, setScope] = useState<HistoryScope>("internet");
+  const groups = SCOPES.filter(([key]) => subjectsForScope(subjects, key).length > 0);
+  const [scope, setScope] = useState<HistoryScope>(groups[0]?.[0] ?? "path");
   const visible = subjectsForScope(subjects, scope);
   const [subjectId, setSubjectId] = useState(visible[0]?.id ?? "");
   const [rangeKey, setRangeKey] = useState("24h");
@@ -118,9 +121,9 @@ function App({ subjects }: { subjects: Subject[] }) {
     return () => { live = false; };
   }, [subject, from, to]);
 
-  const scopeToggle = hasLan && (
+  const scopeToggle = groups.length > 1 && (
     <div className="cw-segmented" style={{ alignSelf: "center" }}>
-      {([["internet", "Internet"], ["local", "LAN"]] as const).map(([key, label]) => (
+      {groups.map(([key, label]) => (
         <button key={key} type="button" className={scope === key ? "active" : ""}
           onClick={() => {
             if (key === scope) return;
@@ -134,7 +137,7 @@ function App({ subjects }: { subjects: Subject[] }) {
   if (!subject) return (
     <div>
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>{scopeToggle}</div>
-      <p>{hasLan ? "No subjects in this view." : "No subjects yet — add targets on the Targets page."}</p>
+      <p>{subjects.length > 0 ? "No subjects in this view." : "No subjects yet — add targets on the Targets page."}</p>
     </div>
   );
 
@@ -204,10 +207,14 @@ function App({ subjects }: { subjects: Subject[] }) {
         </>
       )}
       {subject.kind !== "target" && (
-        <p style={{ opacity: 0.7 }}>Pools and the verdict have no ping rollups; their story is the timeline above.</p>
+        <p style={{ opacity: 0.7 }}>
+          {subject.kind === "pool"
+            ? "Pools have no ping rollups; their story is the timeline above."
+            : "The verdict has no ping rollups; its story is the timeline above."}
+        </p>
       )}
 
-      {scope === "internet" && (
+      {scope === "path" && (
         <>
           <RecurrenceSection to={to} />
 
