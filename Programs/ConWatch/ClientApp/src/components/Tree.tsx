@@ -2,7 +2,8 @@
 // History carry the "what happened" story. With trunk/anchor knowledge the
 // tree renders as trunk-and-pool: the path to the internet flush-left on a
 // heavy spine, off-path targets railed off it, anchors as their own section.
-import { layoutTree, type RailCell, type SpineSegment, type TreeRow } from "../lib/treeLayout";
+import { layoutTree, type TreeRow } from "../lib/treeLayout";
+import { TargetRow } from "./TargetRow";
 import type { PoolStatus, TargetStatus } from "../lib/types";
 
 export interface Topology {
@@ -10,59 +11,12 @@ export interface Topology {
   poolMembers: Record<string, string[]>;
 }
 
-const SPINE_BG: Record<SpineSegment, string | undefined> = {
-  none: undefined,
-  top: "linear-gradient(var(--cw-spine), var(--cw-spine)) 14px 0 / 2px 50% no-repeat",
-  bottom: "linear-gradient(var(--cw-spine), var(--cw-spine)) 14px 100% / 2px 50% no-repeat",
-  both: "linear-gradient(var(--cw-spine), var(--cw-spine)) 14px 0 / 2px 100% no-repeat",
-  pass: "linear-gradient(var(--cw-spine), var(--cw-spine)) 14px 0 / 2px 100% no-repeat",
-};
-
-function Row({ target, rails = [], spine = "none" }: {
-  target: TargetStatus; rails?: RailCell[]; spine?: SpineSegment;
-}) {
-  const assumedTitle = target.assumed
-    ? "assumed from before the restart — confirming with fresh pings" : null;
-  const chipColor: Record<string, string> = {
-    Faltering: "var(--cw-warn)", Recovering: "var(--cw-warn)",
-    Down: "var(--cw-down)", Unreachable: "var(--cw-unreach)",
-    Starting: "var(--cw-quiet)", Initializing: "var(--cw-quiet)",
-  };
-  const chip = chipColor[target.state];
-  return (
-    <div className="cw-row" title={assumedTitle ?? undefined}
-      style={spine !== "none" ? { background: SPINE_BG[spine] } : undefined}>
-      {rails.map((cell, i) => <span key={i} className={`cw-g ${cell}`}></span>)}
-      <span className={`dot ${target.state.toLowerCase()}`}
-        style={target.assumed ? { opacity: 0.45 } : undefined}></span>
-      <span>{target.name}{target.assumed && <small style={{ opacity: 0.5 }}> (assumed)</small>}</span>
-      <span className="addr">
-        {target.address}{target.probe ? ` · ${target.probe.replace(":", "/")}` : ""}
-      </span>
-      <span className="stats">
-        {chip && <span className="statechip" style={{
-          color: chip, background: `color-mix(in srgb, ${chip} 14%, transparent)`,
-          marginRight: 10,
-        }}>{target.state}</span>}
-        <span className="pct">{(target.successRate * 100).toFixed(0)}%</span>
-        <span className="sep">·</span>
-        <span className="rtt">{target.avgRtt.toFixed(0)} ms</span>
-      </span>
-      {/* Activity LED, drive-light style: keyed by the monotonic ping count,
-          so a changed count remounts the node and replays the flash. */}
-      {target.pingCount !== undefined &&
-        <span className="cw-led" key={`led-${target.pingCount}`}
-          title="ping activity" aria-hidden="true"></span>}
-    </div>
-  );
-}
-
 function Section({ label, rows }: { label: string; rows: TreeRow[] }) {
   if (rows.length === 0) return null;
   return (
     <>
       <div className="cw-treecap">{label}</div>
-      {rows.map((r) => <Row key={r.target.id} target={r.target} rails={r.rails} spine={r.spine} />)}
+      {rows.map((r) => <TargetRow key={r.target.id} target={r.target} rails={r.rails} spine={r.spine} />)}
     </>
   );
 }
@@ -78,7 +32,7 @@ function Branch({ parentId, targets, byParent }: {
     <ul className={parentId === null ? "cw-tree" : ""}>
       {children.map((t) => (
         <li key={t.id}>
-          <Row target={t} />
+          <TargetRow target={t} />
           <Branch parentId={t.id} targets={targets} byParent={byParent} />
         </li>
       ))}

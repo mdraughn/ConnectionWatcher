@@ -74,7 +74,6 @@ describe("statusStore", () => {
     store.applyTransition(transition({ subjectId: "t9", subjectName: "NAS", to: "Down", timestamp: "2026-10-02T10:00:00Z" }));
     expect(store.getState().latestTransition).toBeNull();
     expect(store.getState().recentTransitions).toHaveLength(0);
-    expect(store.getState().localChanges["t9"]).toBe("2026-10-02T10:00:00Z");
   });
 
   it("still records verdict-scope transitions as before", () => {
@@ -82,19 +81,5 @@ describe("statusStore", () => {
     store.applySnapshot(lanSnapshot);
     store.applyTransition(transition({}));
     expect(store.getState().latestTransition?.subjectName).toBe("Google");
-    expect(store.getState().localChanges).toEqual({});
-  });
-
-  it("seeds last-change times from history, newest wins, live is never overwritten by older", () => {
-    const store = createStatusStore();
-    store.applySnapshot(lanSnapshot);
-    store.applyTransition(transition({ subjectId: "t9", timestamp: "2026-10-02T11:00:00Z" }));
-    store.seedLocalChanges([ // newest first, as the API returns them
-      transition({ subjectId: "t9", timestamp: "2026-10-02T09:00:00Z" }),
-      transition({ subjectId: "t8", timestamp: "2026-10-02T08:00:00Z" }),
-      transition({ subjectId: "t8", timestamp: "2026-10-01T08:00:00Z" }),
-    ]);
-    expect(store.getState().localChanges["t9"]).toBe("2026-10-02T11:00:00Z");
-    expect(store.getState().localChanges["t8"]).toBe("2026-10-02T08:00:00Z");
   });
 });

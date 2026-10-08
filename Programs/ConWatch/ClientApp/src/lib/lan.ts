@@ -18,17 +18,3 @@ export function summarizeLan(targets: TargetStatus[]): LanSummary {
     down: lan.filter((t) => t.state === "Down" || t.state === "Unreachable").length,
   };
 }
-
-/** Time since an ISO timestamp: "just now", "5 min", "3 h", "3 d"; "—" when unknown. */
-export function sinceLabel(iso: string | null | undefined, now: Date): string {
-  if (!iso) return "—";
-  const ms = now.getTime() - Date.parse(iso);
-  if (!Number.isFinite(ms)) return "—";
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours} h`;
-  return `${Math.floor(hours / 24)} d`;
-}

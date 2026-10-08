@@ -116,7 +116,7 @@ function App({ store, topology, initial }: {
       <EventStrip topology={initial} />
       <Tree topology={topology} targets={state.targets.filter((t) => !isLocal(t))} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
-      <LanSection targets={state.targets} changes={state.localChanges} />
+      <LanSection targets={state.targets} />
       <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}
@@ -141,13 +141,6 @@ if (el && dataEl) {
       if (body?.items) store.seedRecent(body.items as TransitionEvent[]);
     })
     .catch(() => undefined);
-  fetch("/api/v1/transitions?limit=200&scope=local")
-    .then((r) => (r.ok ? r.json() : null))
-    .then((body) => {
-      if (body?.items) store.seedLocalChanges(body.items as TransitionEvent[]);
-    })
-    .catch(() => undefined);
-
   startHub({
     onSnapshot: (s) => store.applySnapshot(s),
     onTransition: (t) => store.applyTransition(t),
