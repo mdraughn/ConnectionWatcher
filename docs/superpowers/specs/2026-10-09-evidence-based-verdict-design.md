@@ -29,7 +29,7 @@ None of these is an internet problem. They are ConnectionWatcher problems, for t
 | # | Decision |
 |---|---|
 | D1 | The headline verdict is decided by **end-to-end evidence** (anchors). The path never declares the internet down by itself; it explains *where* when the anchors say it is down. |
-| D2 | **"Up" needs two.** The internet is up when **at least 2 independent anchors** are answering (independent = distinct operators; see §4.1). |
+| D2 | **"Up" needs one anchor outside your ISP.** The internet is up when **at least one off-net anchor** is answering. An anchor run by your own ISP doesn't count, because it can stay reachable while the ISP has lost the rest of the internet. When ConnectionWatcher can't tell which anchors belong to the ISP (nothing on the path carries an operator tag), it needs **2 independent anchors** instead (§4.1). |
 | D3 | A wrong path model is **not an internet problem**. It shows as a small badge and a message on the dashboard. It sends no toasts, webhooks or MQTT state changes, and doesn't touch the verdict. "The ConnectionWatcher administrator needs to know; nobody else should be bothered." |
 | D4 | **No more inferred Unreachable.** A target is never marked unreachable until its *own* probes have proven it unreachable, independent of anything earlier on the path. |
 | D5 | **Reach beyond immediately.** When something on the path changes state (fails *or* recovers), probe what lies beyond it at once rather than at normal cadence. |
@@ -57,9 +57,13 @@ None of these is an internet problem. They are ConnectionWatcher problems, for t
 
 - An anchor is **answering** when its state is `Responding`, `Faltering` or `Recovering`, all of which mean it got replies in its window. `Down` is not answering. `Initializing`, `Starting` and an anchor with no fresh data are *undetermined*.
 - **Independent anchors** are counted by operator, exactly as weather already does (`CountOperators`): anchors with the same operator tag count once, and untagged anchors count individually.
-- **On-net guard.** An anchor whose operator tag equals the operator tag of any *path* hop (for example, an anchor tagged "Comcast" behind hops tagged "Comcast") is **on-net**. It can stay reachable while the ISP has lost the rest of the internet, so it **does not count toward the two**. It still counts for weather and site-incident classification.
-- **Required count** = `min(2, independent off-net anchors configured)`. With only one independent anchor configured, one is enough. The config page and the setup wizard warn: *"Only one independent anchor — ConnectionWatcher cannot prove your internet is up with confidence; add another."*
-- **No off-net anchors at all** (every anchor shares an operator with a path hop): the on-net guard is dropped, the required count becomes `min(2, independent anchors configured)` over all anchors, and the `UnprovableUp` warning (§4.6) says why.
+- **The ISP.** The ISP's operator is the operator tag(s) found on the **path hops** (for example "Comcast" on the edge). If no path hop has an operator tag, the ISP is **unknown**.
+- **On-net anchors.** An anchor whose operator tag matches the ISP is **on-net**. It can stay reachable while the ISP has lost the rest of the internet, so it **never proves "up"**. It still counts for weather and site-incident classification. Tagging an anchor with the ISP's operator is how the administrator marks it as ISP-owned.
+- **Required count:**
+  - ISP known: **1** off-net anchor answering is enough. Any anchor other than the ISP's own will do.
+  - ISP unknown: on-net and off-net can't be told apart, so **2 independent anchors** must answer (independent = distinct operators, untagged anchors count individually). With only one independent anchor configured in that case, one is used and the `UnprovableUp` warning says why.
+  - ISP known but **no off-net anchor configured** (every anchor is the ISP's): the ISP's own anchors are used as a weaker fallback, and `UnprovableUp` says so.
+- The config page and the setup wizard show the same advice as `UnprovableUp`: *"Tag your ISP on a path hop (or add an anchor outside your ISP) so ConnectionWatcher can prove your internet is up."*
 
 ### 4.2 The verdict, new rules
 
@@ -101,7 +105,7 @@ When the anchors say down or degraded, walk each anchor's path outward from the 
 - **Loss attribution (corollary 3)** is computed only from **burst-aligned windows**: samples from the same sweep, the same time span, and a minimum sample count per target.
   - A hop's *forwarding loss* is the lower of its own loss and the lowest loss among the answering targets beyond it.
   - *Probe-only loss* is its own loss minus its forwarding loss.
-  - It is used for `LinkDegraded` versus `InternetWeather` (§4.2): the loss belongs to our own path when a path hop's forwarding loss is at least the anchors' typical loss. It is also shown as an annotation on the hop row ("loss 75 % · forwarding 0 %").
+  - It is used for `LinkDegraded` versus `InternetWeather` (§4.2): the loss belongs to our own path when a path hop's forwarding loss is at least the anchors' typical loss. It is also shown in the `ProbeOnlyLoss` note ("loss 75 % · forwarding 0 %"), not on the dashboard row.
   - **It never changes a target's own state.**
 
 ### 4.6 Model warnings (admin-facing)
@@ -113,16 +117,16 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 | `HopBypassed` | A path hop is `Down`/`Faltering` while something beyond it is answering | "Business Router Inside isn't answering its probe (tcp/80), but Business Router External beyond it is — traffic is passing it. Its probe may measure a service rather than forwarding, it may not really be on the path, or your network has another route." |
 | `ProbeOnlyLoss` | Over the last N burst-aligned windows a hop's probe-only loss stays ≥ X while its forwarding loss is about 0 | "Router drops some of its own pings (25 %) but forwards fine — common router behaviour; consider a TCP probe." |
 | `NeverAnswered` | A path hop has not answered once since it was added or since startup, for at least T, while something beyond it answers | "Comcast Edge has never answered. Change its probe or remove it from the path." |
-| `UnprovableUp` | Fewer than two independent off-net anchors are configured | as in §4.1 |
+| `UnprovableUp` | The ISP is unknown and fewer than two independent anchors are configured, or no off-net anchor is configured | as in §4.1 |
 
 - A warning is **active** while its condition holds and **clears itself** when it doesn't. Every warning start and end is logged and stored, so History can show it later.
 - **Acknowledge** (admin-locked REST): hides the badge for that warning until it clears and recurs. It never disables the check.
 - **Where it shows (D3):**
   - A small badge on the dashboard header (a wrench, with a count).
   - A "ConnectionWatcher notes" panel listing the active warnings.
-  - A chip on the affected tree row ("not answering · traffic passes").
+  - A **subtle badge on the tray icon** (a small overlay dot, no colour change, no toast), with the active notes listed in the tray tooltip and a menu item that opens the dashboard's notes panel.
   - `/api/v1/status` gets `warnings[]`. MCP `get_current_status` gets `warnings`, which are read-only.
-- **Where it never shows:** the verdict, the tray icon or toasts, webhooks, MQTT state or availability, the ISP report outage counts, and metrics `up`/verdict series. A `conwatch_model_warnings` gauge is acceptable.
+- **Where it never shows:** the verdict, tray toasts or the tray icon's colour, webhooks, MQTT state or availability, the ISP report outage counts, and metrics `up`/verdict series. A `conwatch_model_warnings` gauge is acceptable.
 
 ### 4.7 Critical targets
 
@@ -155,8 +159,8 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 | `ConWatch` status API, MCP `get_current_status` | `warnings[]`; `critical` and `explainedBy` per target. |
 | REST (locked) | `POST /api/v1/warnings/{key}/acknowledge`. |
 | Setup wizard, Discoveries adopt | Router critical; Gateway adopt pre-checks Critical. |
-| Dashboard (React) | Badge, notes panel, row chip "not answering · traffic passes", loss annotation, critical marker. |
-| Tray | Critical toasts (§4.7). No toasts for model warnings. |
+| Dashboard (React) | Header badge, notes panel, critical marker. No per-row warning chip. |
+| Tray | Critical toasts (§4.7). Model warnings: a subtle icon-overlay badge, tooltip list and "ConnectionWatcher notes" menu item; never a toast. The status API's `warnings[]` feeds it. |
 | `ConNotify` webhook / MQTT | `explainedBy`; "Skip explained transitions" setting; critical passes "verdict only"; MQTT target attributes `critical`. |
 | ISP report | Outages counted by the (new) verdict; Unreachable time is attributed to the root cause. Old history unchanged. |
 | Docs | README section on how the verdict is decided; SECURITY.md is unchanged (warnings are read-only on the open surface, like status). |
@@ -169,7 +173,8 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 - **Cellular failover.** The primary edge is Down and the anchors answer through the backup: verdict `Healthy` plus `HopBypassed` on the edge. The administrator sees "your network has another route". If the edge is critical, they are also told it is down.
 - **ICMP-deprioritising router.** Steady 20–40 % loss on the router and 0 % beyond: `ProbeOnlyLoss`, which never degrades the verdict.
 - **A hop that never answers** (ISP gear blocking ping): `NeverAnswered` until fixed or acknowledged. It no longer parks anything.
-- **Only on-net anchors configured** (all tagged with the ISP's operator): the on-net guard is dropped and all anchors count (§4.1), and the `UnprovableUp` warning says the "up" proof is weaker.
+- **Only on-net anchors configured** (all tagged with the ISP's operator): the ISP's own anchors are used as a weaker fallback (§4.1), and the `UnprovableUp` warning says so.
+- **ISP not tagged anywhere:** two independent anchors must answer; with four untagged anchors that is any two of them.
 - **Anchor flapping at the boundary of two.** The anchors' own hysteresis (Faltering/Recovering thresholds) already damps this, and the verdict doesn't add a second hysteresis.
 - **Warm start mid-outage.** §4.8.
 
@@ -181,7 +186,7 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
   - ISP down beyond the edge.
   - The cellular-failover shape.
   - On-net anchors not counting.
-  - Required count with 1, 2 and 3 independent anchors.
+  - Required count: ISP known (1 off-net anchor suffices, ISP-tagged anchors never count), ISP unknown (2 independent needed), no off-net anchor configured (fallback plus warning).
   - Frontier blame with branching anchor paths.
   - Root-cause grouping: N descendants produce one root, and `explainedBy` is set.
   - Recovery bursts.
@@ -191,7 +196,7 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 - **API/MCP:** `warnings[]`, `critical`, `explainedBy`; acknowledge is locked; `ApiSurfaceLockTests` stays green.
 - **Notifiers:** "Skip explained transitions"; critical passes "verdict only"; MQTT attributes.
 - **Tray:** `TrayStatus` mapping and critical toast text (logic in a testable library where possible).
-- **UI (vitest):** badge, panel, row chip, critical marker.
+- **UI (vitest):** header badge, notes panel, critical marker. **Tray:** overlay badge and tooltip text from `warnings[]` (logic in a testable library).
 - **Replay check:** feed the 2026-10-08 transition and rollup sequence into the engine harness and assert the new outcome.
 
 ## 8. Rollout
@@ -204,9 +209,9 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
   5. Loss attribution and `ProbeOnlyLoss` (the most statistical part, last).
 - README gains a short "How the verdict is decided" section. The ISP report wording is checked against the new outage semantics.
 
-## 9. Open questions
+## 9. Decisions on the open questions (Mark, 2026-10-09)
 
-1. **Critical toasts for LAN devices:** should a critical *Local* device (a NAS) toast, or only show on the dashboard? (Proposed: toast. Critical means "tell me".)
-2. **"Skip explained transitions" default for webhooks:** on (proposed) or off (today's behaviour of sending everything)?
-3. **ProbeOnlyLoss thresholds:** proposed N = 10 aligned windows, X = 15 %. Mark may prefer this warning off by default until it has been seen on real data.
-4. **Acknowledge scope:** per warning instance (proposed), or "never warn about this hop again"?
+1. **Critical LAN devices toast:** yes. Critical means "tell me".
+2. **"Skip explained transitions"** for webhooks: **on** by default.
+3. **ProbeOnlyLoss:** explained to Mark on 2026-10-09; decision pending (see the conversation). Until decided, the plan treats it as the last, separately switchable step.
+4. **Acknowledge** hides that instance until it clears and recurs. The way to silence a hop for good is to fix the model.
