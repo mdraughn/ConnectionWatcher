@@ -527,7 +527,28 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
-    public void With_the_isp_unknown_one_answering_anchor_is_not_enough()
+    public void With_the_isp_unknown_one_answering_anchor_proves_it_up()
+    {
+        // Mark's rule 2026-10-09: no ISP tag on the path means no anchor is
+        // the ISP's, and one answering anchor is enough.
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        });
+
+        FeedDown(monitors, graph, "Google");
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+        Assert.Contains("Google", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void With_the_isp_unknown_one_answering_anchor_of_three_is_weather_not_a_link_verdict()
     {
         var (verdict, monitors, graph) = Stack(new WatcherOptions
         {
@@ -543,28 +564,34 @@ public class VerdictCoordinatorTests
 
         FeedDown(monitors, graph, "Google");
         FeedDown(monitors, graph, "Cloudflare");
-        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
-        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
-        Assert.Contains("nothing answers beyond Router", verdict.CurrentDetail);
+        Assert.Equal(VerdictState.InternetWeather, verdict.CurrentVerdict);
     }
 
     [Fact]
-    public void With_the_isp_unknown_two_answering_anchors_prove_it_up()
+    public void When_every_anchor_is_isp_owned_they_count_as_a_fallback()
     {
+        // Decision (a): with no anchor outside the ISP, the ISP's own anchors
+        // are all there is — a weaker check, but one answering is still up.
         var (verdict, monitors, graph) = Stack(new WatcherOptions
         {
             Targets =
             [
                 new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
-                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
-                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
-                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Router" },
+                new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "Comcast DNS", Address = "75.75.75.75", Parent = "Edge", Operator = "Comcast" },
+                new TargetConfig { Name = "Comcast DNS 2", Address = "75.75.76.76", Parent = "Edge", Operator = "comcast " },
             ],
-            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Comcast DNS", "Comcast DNS 2"] }],
         });
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
 
-        FeedDown(monitors, graph, "Google");
+        FeedDown(monitors, graph, "Comcast DNS");
+        Assert.NotEqual(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+
+        FeedDown(monitors, graph, "Comcast DNS 2");
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
     }
 
     [Fact]
@@ -581,8 +608,7 @@ public class VerdictCoordinatorTests
         });
 
         FeedDown(monitors, graph, "Google");
-        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict); // ISP unknown: one of two can't prove it
-        Assert.Equal("LinkDegraded: only 1 answering, 2 needed", verdict.CurrentDetail);
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict); // Cloudflare answering proves it up
 
         FeedDown(monitors, graph, "Cloudflare");
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
@@ -643,10 +669,10 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
-    public void An_untagged_cold_start_waits_for_the_other_anchors_instead_of_reporting_link_degraded()
+    public void An_untagged_cold_start_goes_straight_to_healthy()
     {
-        // Controller ruling on the I2 concern: 0 < answering < required while
-        // undetermined anchors could still close the gap is "waiting".
+        // The first anchor to answer proves the internet up: no link verdict
+        // blips while the others are still starting.
         var transitions = new List<TargetTransition>();
         var (verdict, _, _) = Stack(new WatcherOptions
         {
@@ -666,27 +692,10 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
-    public void A_partial_answer_with_every_anchor_determined_is_still_link_degraded()
+    public void One_answering_anchor_never_waits_for_a_stuck_one()
     {
-        var (verdict, monitors, graph) = Stack(new WatcherOptions
-        {
-            Targets =
-            [
-                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
-                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
-                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
-            ],
-            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
-        });
-
-        FeedDown(monitors, graph, "Cloudflare");
-        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
-        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
-    }
-
-    [Fact]
-    public void A_partial_answer_whose_gap_a_stuck_anchor_could_close_keeps_waiting()
-    {
+        // With one answering anchor enough, an undetermined anchor can change
+        // nothing about reachability: no "waiting", no cap.
         var (verdict, monitors, graph) = Stack(new WatcherOptions
         {
             Targets =
@@ -700,13 +709,11 @@ public class VerdictCoordinatorTests
         }, unresolved: "Quad9");
 
         FeedDown(monitors, graph, "Cloudflare");
-        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
-        Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+        Assert.Contains("Cloudflare", verdict.CurrentDetail);
 
-        // ...but not forever: past the cap the partial answer is concluded.
         _time.Advance(VerdictCoordinator.AnchorWaitCap);
-        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
-        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
     }
 
     [Fact]
@@ -726,8 +733,8 @@ public class VerdictCoordinatorTests
     public void A_tagged_anchor_nested_under_another_anchor_does_not_make_its_operator_the_isp()
     {
         // Final review T4 M1: an anchor is not a path hop. Were Google's tag
-        // taken as the ISP, Google would turn on-net and the lone off-net
-        // anchor failing would read as LinkDown while Google still answers.
+        // taken as the ISP, Google would turn ISP-owned and the other anchors
+        // failing would read as LinkDown while Google still answers.
         var (verdict, monitors, graph) = Stack(new WatcherOptions
         {
             Targets =
@@ -742,8 +749,8 @@ public class VerdictCoordinatorTests
 
         FeedDown(monitors, graph, "Cloudflare");
         FeedDown(monitors, graph, "Google DNS");
-        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict); // ISP unknown: one of two needed
-        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
+        // No ISP: Google counts and proves it up; two anchors degraded is weather.
+        Assert.Equal(VerdictState.InternetWeather, verdict.CurrentVerdict);
         Assert.Null(verdict.CurrentOperator);
     }
 

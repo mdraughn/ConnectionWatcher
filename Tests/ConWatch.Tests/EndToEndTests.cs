@@ -38,11 +38,12 @@ public class EndToEndTests : IDisposable
         await ConfigApiTests.SeedHomeAsync(_client);
         await ConfigApiTests.Eventually(async () => await Verdict() == "Healthy");
 
-        // One anchor down: with the ISP unknown, one answering anchor can't prove the internet up.
+        // One anchor down: Cloudflare still answering proves the internet up (no ISP tag,
+        // so no anchor is the ISP's); one degraded anchor is a site incident.
         _factory.Pings.SetUp(GoogleIp, false);
-        await ConfigApiTests.Eventually(async () => await Verdict() == "LinkDegraded");
+        await ConfigApiTests.Eventually(async () => await Verdict() == "SiteIncident");
 
-        // Both anchors down: nothing answers beyond the router.
+        // Both anchors down: none answers (two anchors can't be weather): nothing answers beyond the router.
         _factory.Pings.SetUp(CloudflareIp, false);
         await ConfigApiTests.Eventually(async () => await Verdict() == "LinkDown");
 
@@ -69,7 +70,7 @@ public class EndToEndTests : IDisposable
             .ToList();
 
         // Chronological sequence must contain this exact progression.
-        var expected = new[] { "Healthy", "LinkDegraded", "LinkDown", "Healthy" };
+        var expected = new[] { "Healthy", "SiteIncident", "LinkDown", "Healthy" };
         int cursor = 0;
         foreach (var v in verdicts)
             if (cursor < expected.Length && v == expected[cursor])

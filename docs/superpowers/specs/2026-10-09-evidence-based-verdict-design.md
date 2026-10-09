@@ -29,7 +29,7 @@ None of these is an internet problem. They are ConnectionWatcher problems, for t
 | # | Decision |
 |---|---|
 | D1 | The headline verdict is decided by **end-to-end evidence** (anchors). The path never declares the internet down by itself; it explains *where* when the anchors say it is down. |
-| D2 | **"Up" needs one anchor outside your ISP.** The internet is up when **at least one off-net anchor** is answering. An anchor run by your own ISP doesn't count, because it can stay reachable while the ISP has lost the rest of the internet. When ConnectionWatcher can't tell which anchors belong to the ISP (nothing on the path carries an operator tag), it needs **2 independent anchors** instead (§4.1). |
+| D2 | **"Up" needs one anchor outside your ISP.** Mark's rule (2026-10-09): *"You only need one responding anchor, but it can't be the ISP anchor. If they don't declare one belongs to the ISP, assume none of them do."* The internet is up when **at least one anchor that is not the ISP's** is answering. An anchor run by your own ISP doesn't count, because it can stay reachable while the ISP has lost the rest of the internet. When nothing on the path carries an operator tag, no anchor is the ISP's and every anchor counts. If every anchor is the ISP's, they all count as a weaker fallback (decision (a), §4.1). |
 | D3 | A wrong path model is **not an internet problem**. It shows as a small badge and a message on the dashboard. It sends no toasts, webhooks or MQTT state changes, and doesn't touch the verdict. "The ConnectionWatcher administrator needs to know; nobody else should be bothered." |
 | D4 | **No more inferred Unreachable.** A target is never marked unreachable until its *own* probes have proven it unreachable, independent of anything earlier on the path. |
 | D5 | **Reach beyond immediately.** When something on the path changes state (fails *or* recovers), probe what lies beyond it at once rather than at normal cadence. |
@@ -56,32 +56,31 @@ None of these is an internet problem. They are ConnectionWatcher problems, for t
 ### 4.1 Anchor evidence decides reachability
 
 - An anchor is **answering** when its state is `Responding`, `Faltering` or `Recovering`, all of which mean it got replies in its window. `Down` is not answering. `Initializing`, `Starting` and an anchor with no fresh data are *undetermined*.
-- **Independent anchors** are counted by operator, exactly as weather already does (`CountOperators`): anchors with the same operator tag count once, and untagged anchors count individually.
-- **The ISP.** The ISP's operator is the operator tag(s) found on the **path hops** (for example "Comcast" on the edge). If no path hop has an operator tag, the ISP is **unknown**.
-- **On-net anchors.** An anchor whose operator tag matches the ISP is **on-net**. It can stay reachable while the ISP has lost the rest of the internet, so it **never proves "up"**. It still counts for weather and site-incident classification. Tagging an anchor with the ISP's operator is how the administrator marks it as ISP-owned.
-- **Required count:**
-  - ISP known: **1** off-net anchor answering is enough. Any anchor other than the ISP's own will do.
-  - ISP unknown: on-net and off-net can't be told apart, so **2 independent anchors** must answer (independent = distinct operators, untagged anchors count individually). With only one independent anchor configured in that case, one is used and the `UnprovableUp` warning says why.
-  - ISP known but **no off-net anchor configured** (every anchor is the ISP's): the ISP's own anchors are used as a weaker fallback, and `UnprovableUp` says so.
+- **Independent anchors** are counted by operator for weather and site-incident *quality* classification (`CountOperators`): anchors with the same operator tag count once, and untagged anchors count individually. Reachability does not count by operator.
+- **The ISP.** The ISP's operator is the operator tag(s) found on the **path hops** (for example "Comcast" on the edge; trimmed, case-insensitive; an anchor nested under another anchor is not a path hop). If no path hop has an operator tag, the ISP is **unknown**.
+- **On-net anchors.** An anchor whose operator tag matches the ISP is **on-net** (ISP-owned). It can stay reachable while the ISP has lost the rest of the internet, so it **never proves "up"**. It still counts for weather and site-incident classification. Tagging an anchor with the ISP's operator is how the administrator marks it as ISP-owned.
+- **Counted anchors and the required count** (Mark's rule, 2026-10-09): the counted anchors are those that are **not** ISP-owned; an untagged anchor counts. **One** counted anchor answering is enough, always.
+  - ISP unknown (no tag on the path): no anchor is the ISP's, so **every** anchor counts and any one answering proves "up".
+  - **Decision (a): every anchor is the ISP's** (no counted anchor configured): all anchors count as a weaker fallback, still with one required, and `UnprovableUp` says so (Plan B).
 - The config page and the setup wizard show the same advice as `UnprovableUp`: *"Tag your ISP on a path hop (or add an anchor outside your ISP) so ConnectionWatcher can prove your internet is up."*
 
 ### 4.2 The verdict, new rules
 
 The verdict states keep their names, and every consumer already understands them. What changes is *when* each fires.
 
-| Anchor evidence (independent, off-net) | Verdict | Blame |
+"Answering" below is the number of **counted** anchors (§4.1) that are answering; one is required.
+
+| Anchor evidence | Verdict | Blame |
 |---|---|---|
-| no anchor determined yet (on-net or off-net) | `Unknown` ("No anchors determined yet"), uncapped | – |
-| answering ≥ required, none degraded | `Healthy` | – |
-| answering ≥ required, some degraded, fewer than the weather threshold | `SiteIncident` | – |
-| answering ≥ required, at least the weather threshold degraded, **and** the loss is attributed to our own path (§4.5) | `LinkDegraded` | deepest path hop carrying real forwarding loss |
-| answering ≥ required, at least the weather threshold degraded, no path attribution | `InternetWeather` | – |
-| 0 < answering < required | `LinkDegraded` ("only N independent anchors answering") | frontier hop (§4.3) |
-| 0 < answering < required, but undetermined counted anchors could still close the gap, for at most 30 s | `Unknown` ("Waiting for anchors to report") | – |
-| answering = 0, at least one anchor determined (ISP known: an on-net one counts as evidence), but an undetermined counted anchor could still answer, for at most 30 s | `Unknown` ("Waiting for anchors to report") | – |
+| no anchor determined yet (counted or ISP-owned) | `Unknown` ("No anchors determined yet"), uncapped | – |
+| answering ≥ 1, none degraded | `Healthy` | – |
+| answering ≥ 1, some degraded, fewer than the weather threshold | `SiteIncident` | – |
+| answering ≥ 1, at least the weather threshold degraded, **and** the loss is attributed to our own path (§4.5) | `LinkDegraded` | deepest path hop carrying real forwarding loss |
+| answering ≥ 1, at least the weather threshold degraded, no path attribution | `InternetWeather` | – |
+| answering = 0, at least one anchor determined (an ISP-owned one counts as evidence), but an undetermined counted anchor could still answer, for at most 30 s | `Unknown` ("Waiting for anchors to report") | – |
 | answering = 0, at least one determined (and nothing left to wait for, or the 30 s cap expired) | `LinkDown` | frontier hop (§4.3) |
 
-The two waits share one clock: it starts when the coordinator first enters either waiting condition and resets when that condition clears. When the 30 s cap (`AnchorWaitCap`) expires, a timer reclassifies even if no monitor changes state; the timer firing ends the wait by itself (it does not re-check the clock, which may read a tick short), so an anchor stuck in `Starting` (an address that never resolves) can never hide `LinkDown` or `LinkDegraded` for longer than the cap. The wait exists so that one permanently dead anchor reporting first, at startup or right after a recovery releases the anchors, does not blip `LinkDown`. "No anchors determined yet" stays uncapped: there is nothing to conclude from. With the ISP known, every off-net anchor still undetermined while an on-net one is determined is a capped wait like the others.
+With one answering anchor enough, a partial answer is never `LinkDegraded` from reachability, and an undetermined anchor can never change a conclusion that one answering anchor already proves — so the only wait is for answering = 0. Its clock starts when the coordinator enters the waiting condition and resets when that condition clears. When the 30 s cap (`AnchorWaitCap`) expires, a timer reclassifies even if no monitor changes state; the timer firing ends the wait by itself (it does not re-check the clock, which may read a tick short), so an anchor stuck in `Starting` (an address that never resolves) can never hide `LinkDown` for longer than the cap. The wait exists so that one permanently dead anchor reporting first, at startup or right after a recovery releases the anchors, does not blip `LinkDown`. "No anchors determined yet" stays uncapped: there is nothing to conclude from. Every counted anchor still undetermined while an ISP-owned one is determined is a capped wait like the others.
 
 **Path hop states never produce `LinkDown` or `LinkDegraded` on their own.** A Down or Faltering path hop while the anchors answer is a **model warning** (§4.6).
 
@@ -124,7 +123,7 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 | `HopBypassed` | A path hop is `Down`/`Faltering` while something beyond it is answering | "Business Router Inside isn't answering its probe (tcp/80), but Business Router External beyond it is — traffic is passing it. Its probe may measure a service rather than forwarding, it may not really be on the path, or your network has another route." |
 | `ProbeOnlyLoss` | Over the last N burst-aligned windows a hop's probe-only loss stays ≥ X while its forwarding loss is about 0 | "Router drops some of its own pings (25 %) but forwards fine — common router behaviour; consider a TCP probe." |
 | `NeverAnswered` | A path hop has not answered once since it was added or since startup, for at least T, while something beyond it answers | "Comcast Edge has never answered. Change its probe or remove it from the path." |
-| `UnprovableUp` | The ISP is unknown and fewer than two independent anchors are configured, or no off-net anchor is configured | as in §4.1 |
+| `UnprovableUp` | Every anchor is ISP-owned, so the decision (a) fallback is in use (§4.1) | as in §4.1 |
 
 - A warning is **active** while its condition holds and **clears itself** when it doesn't. Every warning start and end is logged and stored, so History can show it later.
 - **Acknowledge** (admin-locked REST): hides the badge for that warning until it clears and recurs. It never disables the check.
@@ -181,8 +180,8 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 - **ICMP-deprioritising router.** Steady 20–40 % loss on the router and 0 % beyond: `ProbeOnlyLoss`, which never degrades the verdict.
 - **A hop that never answers** (ISP gear blocking ping): `NeverAnswered` until fixed or acknowledged. It no longer parks anything.
 - **Only on-net anchors configured** (all tagged with the ISP's operator): the ISP's own anchors are used as a weaker fallback (§4.1), and the `UnprovableUp` warning says so.
-- **ISP not tagged anywhere:** two independent anchors must answer; with four untagged anchors that is any two of them.
-- **Anchor flapping at the boundary of two.** The anchors' own hysteresis (Faltering/Recovering thresholds) already damps this, and the verdict doesn't add a second hysteresis.
+- **ISP not tagged anywhere:** no anchor is assumed to be the ISP's, so any one answering anchor proves "up"; with four untagged anchors that is any one of them.
+- **Anchor flapping at the boundary of one** (the last answering anchor). The anchors' own hysteresis (Faltering/Recovering thresholds) already damps this, and the verdict doesn't add a second hysteresis.
 - **Warm start mid-outage.** §4.8.
 
 ## 7. Testing
@@ -193,7 +192,7 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
   - ISP down beyond the edge.
   - The cellular-failover shape.
   - On-net anchors not counting.
-  - Required count: ISP known (1 off-net anchor suffices, ISP-tagged anchors never count), ISP unknown (2 independent needed), no off-net anchor configured (fallback plus warning).
+  - Required count (always 1): ISP known (1 anchor outside the ISP suffices, ISP-tagged anchors never count), ISP unknown (one answering untagged anchor proves "up"), every anchor ISP-owned (decision (a): they all count as a fallback, plus the warning). A partial answer never waits for a stuck anchor; answering = 0 waits at most the 30 s cap.
   - Frontier blame with branching anchor paths.
   - Root-cause grouping: N descendants produce one root, and `explainedBy` is set.
   - Recovery bursts.

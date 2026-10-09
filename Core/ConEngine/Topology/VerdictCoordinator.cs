@@ -20,9 +20,9 @@ public enum VerdictState
 
 /// <summary>
 /// Classifies overall internet health (spec 2026-10-09 §4.1–4.3). The ANCHORS
-/// decide whether the internet is reachable — one answering off-net anchor
-/// when the ISP is known (an operator tag on the path), otherwise two
-/// independent ones — and how good it is (Healthy / SiteIncident /
+/// decide whether the internet is reachable — one answering anchor that is
+/// not the ISP's (the ISP: an operator tag on the path; none tagged, none
+/// is the ISP's) — and how good it is (Healthy / SiteIncident /
 /// InternetWeather). The PATH only assigns blame when the anchors say it is
 /// down: the first silent hop after the last one with proven forwarding.
 /// Evidence from farther away outranks evidence from nearer.
@@ -37,8 +37,8 @@ public class VerdictCoordinator : IDisposable
     public const string SubjectName = "Internet";
 
     /// <summary>The longest the verdict waits for undetermined anchors that
-    /// could still answer before concluding LinkDown / LinkDegraded from the
-    /// ones that have reported (spec §4.2): a stuck anchor — an address that
+    /// could still answer before concluding LinkDown from the ones that have
+    /// reported (spec §4.2): a stuck anchor — an address that
     /// never resolves — must never hide an outage for longer than this.</summary>
     public static readonly TimeSpan AnchorWaitCap = TimeSpan.FromSeconds(30);
 
@@ -49,8 +49,9 @@ public class VerdictCoordinator : IDisposable
     // Each anchor with its path, root first (monitored hops only).
     private readonly List<(TargetMonitor Anchor, List<TargetMonitor> Path)> _paths = new();
     private readonly Dictionary<Guid, List<Guid>> _descendants = new();
-    // Anchors outside the ISP; empty when the ISP is unknown or every anchor is the ISP's.
-    private readonly List<TargetMonitor> _offNet;
+    // The anchors whose answer proves the internet is up: those outside the
+    // ISP (all of them when the ISP is unknown, or when every one is the ISP's).
+    private readonly List<TargetMonitor> _counted;
     private readonly int _weatherThreshold;
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
@@ -142,12 +143,17 @@ public class VerdictCoordinator : IDisposable
             _descendants.TryAdd(hop.Target.Id, _graph.GetDescendants(hop.Target.Id)
                 .Select(d => d.Id).Where(monitors.ContainsKey).ToList());
         }
-        // The ISP is whoever operates the path; an anchor sharing that tag is on-net.
+        // The ISP is whoever operates the path; an anchor sharing that tag is
+        // the ISP's and never proves the internet is up. Untagged anchors are
+        // not the ISP's — with no ISP tag anywhere, every anchor counts.
         var isp = _ancestors.Select(a => Normalize(a.Monitor.Target.Operator))
             .OfType<string>().ToHashSet();
-        _offNet = isp.Count == 0
-            ? new List<TargetMonitor>()
-            : _anchors.Where(a => Normalize(a.Target.Operator) is not { } op || !isp.Contains(op)).ToList();
+        _counted = _anchors.Where(a => Normalize(a.Target.Operator) is not { } op || !isp.Contains(op)).ToList();
+        // Decision (a): if every anchor is the ISP's, they are all there is —
+        // count them all. A weaker check (the ISP's own servers can answer
+        // while the ISP is cut off from the rest of the internet).
+        if (_counted.Count == 0)
+            _counted = _anchors.ToList();
     }
 
     private bool _seeded;
@@ -253,8 +259,8 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
-    /// <summary>Under _lock, from Classify: the anchors that reported are not
-    /// enough, but undetermined ones could still answer. True while the wait
+    /// <summary>Under _lock, from Classify: no counted anchor answers, but
+    /// undetermined ones could still. True while the wait
     /// is within its cap. The first call of a wait starts the clock and arms a
     /// one-shot timer that reclassifies at the cap (Classify otherwise runs
     /// only on monitor transitions, and a stuck anchor emits none).</summary>
@@ -322,46 +328,23 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
-        // Wait (uncapped) while NO anchor is determined. Once one is, a shortfall
-        // is not concluded while undetermined counted anchors could still
-        // answer (no LinkDown / LinkDegraded blip on a cold start or after a
-        // recovery releases the anchors while one is permanently dead) — but
-        // only for AnchorWaitCap: an anchor stuck in Starting (an address that
-        // never resolves) must not hide the outage longer (spec §4.2, I2).
-        const string waiting = "Waiting for anchors to report";
-        int answering, required, potential;
-        if (_offNet.Count > 0)
-        {
-            // Every off-net anchor still undetermined is a capped wait too
-            // (below): an on-net anchor determined Down is evidence.
-            var counted = anchors.Where(a => _offNet.Contains(a.Monitor)).ToList();
-            answering = counted.Count(a => Answering(a.State));
-            required = 1;
-            potential = answering + counted.Count(a => Undetermined(a.State));
-        }
-        else
-        {
-            // Every anchor counts here, and at least one is determined (above).
-            // Independent units: an undetermined anchor of an operator that
-            // already answers adds nothing.
-            answering = CountOperators(anchors.Where(a => Answering(a.State)).Select(a => a.Monitor));
-            required = Math.Min(2, CountOperators(_anchors));
-            potential = CountOperators(anchors
-                .Where(a => Answering(a.State) || Undetermined(a.State)).Select(a => a.Monitor));
-        }
-
-        if (answering >= required)
+        // One answering counted anchor is enough (Mark's rule 2026-10-09).
+        var counted = anchors.Where(a => _counted.Contains(a.Monitor)).ToList();
+        if (counted.Any(a => Answering(a.State)))
             return Quality(determined, states);
-        // Could an undetermined counted unit still change the conclusion?
-        // None answering: any one that might answer. Some: enough to close the gap.
-        var couldChange = answering == 0 ? potential > answering : potential >= required;
-        if (couldChange && StillWaiting())
-            return (VerdictState.Unknown, waiting, null);
 
-        // 2. Down or partial: the path says where (spec §4.3).
-        return answering == 0
-            ? Blame(VerdictState.LinkDown, states, suffix: "")
-            : Blame(VerdictState.LinkDegraded, states, suffix: $"only {answering} answering, {required} needed");
+        // None answering. Wait (uncapped) while NO anchor is determined (above).
+        // Once one is — an ISP-owned anchor determined Down is evidence too —
+        // LinkDown is not concluded while an undetermined counted anchor could
+        // still answer (no blip on a cold start or after a recovery releases
+        // the anchors while one is permanently dead) — but only for
+        // AnchorWaitCap: an anchor stuck in Starting (an address that never
+        // resolves) must not hide the outage longer (spec §4.2, I2).
+        if (counted.Any(a => Undetermined(a.State)) && StillWaiting())
+            return (VerdictState.Unknown, "Waiting for anchors to report", null);
+
+        // 2. Down: the path says where (spec §4.3).
+        return Blame(VerdictState.LinkDown, states);
     }
 
     /// <summary>The internet is reachable: how good is it? Anchor evidence only,
@@ -408,7 +391,7 @@ public class VerdictCoordinator : IDisposable
             .OrderByDescending(a => a.Depth).FirstOrDefault();
         if (losingHop.Monitor is not null)
             return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
-                $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}", "");
+                $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}");
 
         var counts = grouped
             ? $"{degradedUnits} of {determinedUnits} operators ({degraded.Count} of {determined.Count} anchors)"
@@ -423,7 +406,7 @@ public class VerdictCoordinator : IDisposable
     /// about where, so "no anchor is answering" is used only when no failing
     /// anchor has a path (final review T4 M2).</summary>
     private (VerdictState, string, string? Operator) Blame(
-        VerdictState verdict, IReadOnlyDictionary<Guid, HostState> states, string suffix)
+        VerdictState verdict, IReadOnlyDictionary<Guid, HostState> states)
     {
         bool Proven(TargetMonitor hop) =>
             Answering(states[hop.Target.Id]) ||
@@ -449,21 +432,18 @@ public class VerdictCoordinator : IDisposable
         }
 
         if (blamed is not null)
-            return Wording(verdict, blamed, $"{blamed.Target.Name} is {states[blamed.Target.Id]}", suffix);
+            return Wording(verdict, blamed, $"{blamed.Target.Name} is {states[blamed.Target.Id]}");
         if (beyond is not null)
-            return Wording(verdict, beyond, $"nothing answers beyond {beyond.Target.Name}", suffix);
+            return Wording(verdict, beyond, $"nothing answers beyond {beyond.Target.Name}");
         // No failing anchor has a path (anchors hung off the root).
-        return (verdict, $"{verdict}: {(suffix.Length > 0 ? suffix : "no anchor is answering")}", null);
+        return (verdict, $"{verdict}: no anchor is answering", null);
     }
 
-    /// <summary>Link verdicts name the blamed hop's operator ("Comcast") when tagged;
-    /// an optional suffix ("only 1 answering, 2 needed") follows after "; ".</summary>
-    private static (VerdictState, string, string?) Wording(VerdictState verdict, TargetMonitor hop, string what, string suffix)
+    /// <summary>Link verdicts name the blamed hop's operator ("Comcast") when tagged.</summary>
+    private static (VerdictState, string, string?) Wording(VerdictState verdict, TargetMonitor hop, string what)
     {
         var op = hop.Target.Operator;
         var text = op is { Length: > 0 } ? $"{verdict}: {op} — {what}" : $"{verdict}: {what}";
-        if (suffix.Length > 0)
-            text += "; " + suffix;
         return (verdict, text, op is { Length: > 0 } ? op : null);
     }
 
