@@ -19,14 +19,16 @@ public class EndToEndTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private async Task<string?> Verdict()
+    private async Task<string?> Verdict() => await VerdictField("state");
+
+    private async Task<string?> VerdictField(string field)
     {
         var response = await _client.GetAsync("/api/v1/status");
         if (!response.IsSuccessStatusCode)
             return null;
         var status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
         return status.GetProperty("verdict").ValueKind == JsonValueKind.Object
-            ? status.GetProperty("verdict").GetProperty("state").GetString()
+            ? status.GetProperty("verdict").GetProperty(field).GetString()
             : null;
     }
 
@@ -46,7 +48,8 @@ public class EndToEndTests : IDisposable
 
         // Router down too: now the router itself is blamed.
         _factory.Pings.SetUp(RouterIp, false);
-        await ConfigApiTests.Eventually(async () => await Verdict() == "LinkDown");
+        await ConfigApiTests.Eventually(async () =>
+            await Verdict() == "LinkDown" && (await VerdictField("detail") ?? "").Contains("Router is Down"));
 
         // Full recovery.
         _factory.Pings.SetUp(RouterIp, true);

@@ -83,7 +83,10 @@ public class VerdictCoordinator : IDisposable
         _anchors = anchorPool.MemberTargetIds
             .Where(monitors.ContainsKey).Select(id => monitors[id]).ToList();
 
-        // Union of ancestors of all anchors, with depth (root = 0).
+        // Union of ancestors of all anchors, with depth (root = 0). An anchor
+        // nested under another anchor is not a path hop: it never names the
+        // ISP and is never the losing hop (final review T4 M1).
+        var anchorIds = _anchors.Select(a => a.Target.Id).ToHashSet();
         var seen = new Dictionary<Guid, int>();
         foreach (var anchor in _anchors)
         {
@@ -96,7 +99,8 @@ public class VerdictCoordinator : IDisposable
             }
             chain.Reverse(); // root first => index == depth
             for (int depth = 0; depth < chain.Count; depth++)
-                seen[chain[depth]] = depth;
+                if (!anchorIds.Contains(chain[depth]))
+                    seen[chain[depth]] = depth;
         }
         _ancestors = seen.Where(kv => monitors.ContainsKey(kv.Key))
             .Select(kv => (monitors[kv.Key], kv.Value)).ToList();
@@ -115,10 +119,12 @@ public class VerdictCoordinator : IDisposable
             path.Reverse();
             _paths.Add((anchor, path));
         }
-        foreach (var (monitor, _) in _ancestors)
+        // Every hop on any anchor's path (a nested anchor included: it still
+        // proves forwarding for what lies beyond it).
+        foreach (var hop in _paths.SelectMany(p => p.Path))
         {
-            _descendants[monitor.Target.Id] = _graph.GetDescendants(monitor.Target.Id)
-                .Select(d => d.Id).Where(monitors.ContainsKey).ToList();
+            _descendants.TryAdd(hop.Target.Id, _graph.GetDescendants(hop.Target.Id)
+                .Select(d => d.Id).Where(monitors.ContainsKey).ToList());
         }
         // The ISP is whoever operates the path; an anchor sharing that tag is on-net.
         var isp = _ancestors.Select(a => Normalize(a.Monitor.Target.Operator))
@@ -241,26 +247,27 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
+        // Wait only while NO counted anchor is determined: one stuck in
+        // Starting (an address that never resolves) must not hide LinkDown
+        // or LinkDegraded once the others have reported (spec §4.2, final review I2).
         int answering, required;
-        bool waiting;
         if (_offNet.Count > 0)
         {
             var counted = anchors.Where(a => _offNet.Contains(a.Monitor)).ToList();
+            if (counted.All(a => Undetermined(a.State)))
+                return (VerdictState.Unknown, "Waiting for anchors to report", null);
             answering = counted.Count(a => Answering(a.State));
             required = 1;
-            waiting = counted.Any(a => Undetermined(a.State));
         }
         else
         {
+            // Every anchor counts here, and at least one is determined (above).
             answering = CountOperators(anchors.Where(a => Answering(a.State)).Select(a => a.Monitor));
             required = Math.Min(2, CountOperators(_anchors));
-            waiting = anchors.Any(a => Undetermined(a.State));
         }
 
         if (answering >= required)
             return Quality(determined, states);
-        if (waiting)
-            return (VerdictState.Unknown, "Waiting for anchors to report", null);
 
         // 2. Down or partial: the path says where (spec §4.3).
         return answering == 0
@@ -300,8 +307,15 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.SiteIncident, $"SiteIncident: {List()}{sharedOperator}{qualifier}", null);
         }
 
+        // A Down hop that something beyond answers through is bypassed (its
+        // probe lies): it carries no forwarding loss and is never blamed (M1).
         var losingHop = _ancestors
-            .Where(a => states[a.Monitor.Target.Id] is HostState.Faltering or HostState.Down)
+            .Where(a => states[a.Monitor.Target.Id] switch
+            {
+                HostState.Faltering => true,
+                HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
+                _ => false,
+            })
             .OrderByDescending(a => a.Depth).FirstOrDefault();
         if (losingHop.Monitor is not null)
             return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
@@ -315,7 +329,10 @@ public class VerdictCoordinator : IDisposable
 
     /// <summary>Frontier blame: along each failing anchor's path, the last hop
     /// with proven forwarding (it or anything beyond it answers) is the
-    /// frontier; the hop after it is blamed. The shallowest blame wins.</summary>
+    /// frontier; the hop after it is blamed. The shallowest blame wins among
+    /// anchors that HAVE a path; an anchor hung off the root says nothing
+    /// about where, so "no anchor is answering" is used only when no failing
+    /// anchor has a path (final review T4 M2).</summary>
     private (VerdictState, string, string? Operator) Blame(
         VerdictState verdict, IReadOnlyDictionary<Guid, HostState> states, string suffix)
     {
@@ -327,7 +344,7 @@ public class VerdictCoordinator : IDisposable
         int bestIndex = int.MaxValue;
         foreach (var (anchor, path) in _paths)
         {
-            if (Answering(states[anchor.Target.Id]))
+            if (Answering(states[anchor.Target.Id]) || path.Count == 0)
                 continue;
             int frontier = -1;
             for (int i = 0; i < path.Count; i++)
@@ -346,7 +363,7 @@ public class VerdictCoordinator : IDisposable
             return Wording(verdict, blamed, $"{blamed.Target.Name} is {states[blamed.Target.Id]}", suffix);
         if (beyond is not null)
             return Wording(verdict, beyond, $"nothing answers beyond {beyond.Target.Name}", suffix);
-        // No path hops at all (anchors hung off the root).
+        // No failing anchor has a path (anchors hung off the root).
         return (verdict, $"{verdict}: {(suffix.Length > 0 ? suffix : "no anchor is answering")}", null);
     }
 

@@ -243,7 +243,7 @@ public class VerdictCoordinatorTests
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
         verdict.Start();
 
-        foreach (var m in monitors.Values)
+        foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
             for (int i = 0; i < 5; i++)
             {
                 _time.Advance(TimeSpan.FromSeconds(1));
@@ -282,7 +282,7 @@ public class VerdictCoordinatorTests
         var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
         verdict.Start();
-        foreach (var m in monitors.Values)
+        foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
             for (int i = 0; i < 5; i++)
             {
                 _time.Advance(TimeSpan.FromSeconds(1));
@@ -329,7 +329,9 @@ public class VerdictCoordinatorTests
     }
 
     /// <summary>Builds a coordinator stack (topology + verdict) for an ad-hoc topology and makes it healthy.</summary>
-    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Stack(WatcherOptions options)
+    /// <param name="unresolved">Targets whose address never resolves: they stay undetermined.</param>
+    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Stack(
+        WatcherOptions options, params string[] unresolved)
     {
         var graph = TargetGraph.FromOptions(options);
         var monitors = new Dictionary<Guid, TargetMonitor>();
@@ -337,14 +339,15 @@ public class VerdictCoordinatorTests
         {
             var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
                 _time, NullLoggerFactory.Instance);
-            monitor.StartTracking(IPAddress.Parse(target.Address));
+            if (!unresolved.Contains(target.Name))
+                monitor.StartTracking(IPAddress.Parse(target.Address));
             monitors[target.Id] = monitor;
         }
         new TopologyCoordinator(graph, monitors, NullLogger<TopologyCoordinator>.Instance).Start();
         var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
         verdict.Start();
-        foreach (var m in monitors.Values)
+        foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
             for (int i = 0; i < 5; i++)
             {
                 _time.Advance(TimeSpan.FromSeconds(1));
@@ -436,6 +439,111 @@ public class VerdictCoordinatorTests
         FeedDown(monitors, graph, "Cloudflare");
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Equal("LinkDown: no anchor is answering", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void An_anchor_stuck_undetermined_does_not_hide_link_down_when_the_isp_is_known()
+    {
+        // Final review I2 / spec §4.2: answering = 0 with at least one counted
+        // anchor determined is LinkDown, not "waiting".
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Edge" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Edge" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Edge" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        }, unresolved: "Quad9");
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+
+        FeedDown(monitors, graph, "Google");
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void An_anchor_stuck_undetermined_does_not_hide_link_down_when_the_isp_is_unknown()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        }, unresolved: "Quad9");
+
+        FeedDown(monitors, graph, "Google");
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Contains("nothing answers beyond Router", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void A_bypassed_down_hop_is_never_blamed_for_weather()
+    {
+        // Final review M1: the Modem's probe fails but Quad9 answers through
+        // it, so weather-level anchor loss is weather, not "Comcast — Modem".
+        AllHealthy();
+        Fail("Modem");
+        Fail("Google", "Cloudflare");
+        Assert.Equal(HostState.Down, _monitors[_graph.GetByName("Modem").Id].CurrentState);
+        Assert.Equal(VerdictState.InternetWeather, Verdict);
+        Assert.DoesNotContain("Modem", _verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void A_tagged_anchor_nested_under_another_anchor_does_not_make_its_operator_the_isp()
+    {
+        // Final review T4 M1: an anchor is not a path hop. Were Google's tag
+        // taken as the ISP, Google would turn on-net and the lone off-net
+        // anchor failing would read as LinkDown while Google still answers.
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router", Operator = "Google" },
+                new TargetConfig { Name = "Google DNS", Address = "8.8.4.4", Parent = "Google" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Google DNS", "Cloudflare"] }],
+        });
+
+        FeedDown(monitors, graph, "Cloudflare");
+        FeedDown(monitors, graph, "Google DNS");
+        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict); // ISP unknown: one of two needed
+        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
+        Assert.Null(verdict.CurrentOperator);
+    }
+
+    [Fact]
+    public void An_anchor_without_a_path_never_outranks_one_with_a_path_for_blame()
+    {
+        // Final review T4 M2.
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Root Anchor", Address = "9.9.9.9" },
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Root Anchor", "Google"] }],
+        });
+
+        FeedDown(monitors, graph, "Root Anchor");
+        FeedDown(monitors, graph, "Google");
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: nothing answers beyond Router", verdict.CurrentDetail);
     }
 
     [Fact]
