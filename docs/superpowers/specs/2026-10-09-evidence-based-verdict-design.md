@@ -1,7 +1,7 @@
 # Evidence-Based Verdict, Model Warnings and Critical Targets — Design
 
 **Date:** 2026-10-09
-**Status:** Draft for review
+**Status:** Approved by Mark 2026-10-09 (pending final read)
 **Trigger:** 2026-10-08 23:42:16–23:43:08Z on the home NAS instance. "Business Router Inside" (10.1.10.1, `tcp/80`, a path hop) lost 15 of 20 probes. It went Down, every target beyond it was parked Unreachable, and the verdict said **Your internet is DOWN — Comcast is not carrying your traffic** for 27 s. The engine's own corroboration burst had just seen the anchors answer 35 of 36 pings, and all of them answered within seconds of the release. The internet was almost certainly up; one hop's *probe* failed.
 
 ## 1. The principle
@@ -213,5 +213,5 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 
 1. **Critical LAN devices toast:** yes. Critical means "tell me".
 2. **"Skip explained transitions"** for webhooks: **on** by default.
-3. **ProbeOnlyLoss:** explained to Mark on 2026-10-09; decision pending (see the conversation). Until decided, the plan treats it as the last, separately switchable step.
+3. **ProbeOnlyLoss:** **on** by default, firing after at least 10 burst-aligned windows with probe-only loss ≥ 15 % while forwarding loss is about 0. It stays the last rollout step.
 4. **Acknowledge** hides that instance until it clears and recurs. The way to silence a hop for good is to fix the model.
