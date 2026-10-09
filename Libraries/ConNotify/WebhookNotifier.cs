@@ -64,8 +64,9 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
     {
         if (await settings.GetAsync(SettingKeys.WebhookEnabled) != "true")
             return;
-        if (await settings.GetAsync(SettingKeys.WebhookVerdictOnly) == "true" &&
-            transition.Kind != TransitionSubjectKind.Verdict)
+        var verdictOnly = await settings.GetAsync(SettingKeys.WebhookVerdictOnly) == "true";
+        var skipExplained = await settings.GetAsync(SettingKeys.WebhookSkipExplained) != "false";
+        if (!WebhookFilter.ShouldDeliver(transition, verdictOnly, skipExplained))
             return;
 
         var urls = (await settings.GetAsync(SettingKeys.WebhookUrls) ?? "")

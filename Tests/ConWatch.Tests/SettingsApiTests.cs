@@ -66,6 +66,7 @@ public class SettingsApiTests : IDisposable
     [InlineData("Mqtt.Enabled", "false")]
     [InlineData("Webhook.Urls", "http://example.com/hook\nhttps://other.example/x")]
     [InlineData("Webhook.VerdictOnly", "true")]
+    [InlineData("Webhook.SkipExplained", "false")]
     [InlineData("Heartbeat.Url", "https://hc-ping.com/some-uuid")]
     [InlineData("Heartbeat.IntervalMinutes", "5")]
     public async Task Valid_notifier_settings_are_accepted(string key, string value)
@@ -79,6 +80,7 @@ public class SettingsApiTests : IDisposable
     [Theory]
     [InlineData("Mqtt.Port", "70000")]
     [InlineData("Mqtt.Enabled", "yes")]
+    [InlineData("Webhook.SkipExplained", "maybe")]
     [InlineData("Webhook.Urls", "not-a-url")]
     [InlineData("Webhook.Urls", "ftp://example.com/x")]
     [InlineData("Heartbeat.Url", "not-a-url")]

@@ -26,6 +26,10 @@ public static class SettingKeys
     public const string WebhookUrls = "Webhook.Urls";
     public const string WebhookVerdictOnly = "Webhook.VerdictOnly";
 
+    /// <summary>Anything but "false" (including absent): skip target transitions
+    /// explained by an upstream root cause, and their recovery.</summary>
+    public const string WebhookSkipExplained = "Webhook.SkipExplained";
+
     public const string HeartbeatUrl = "Heartbeat.Url";
     public const string HeartbeatIntervalMinutes = "Heartbeat.IntervalMinutes";
 

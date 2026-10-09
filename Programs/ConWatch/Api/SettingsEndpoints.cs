@@ -70,6 +70,7 @@ public static class SettingsEndpoints
                     case SettingKeys.MqttEnabled:
                     case SettingKeys.WebhookEnabled:
                     case SettingKeys.WebhookVerdictOnly:
+                    case SettingKeys.WebhookSkipExplained:
                     case SettingKeys.EngineEnabled:
                     case SettingKeys.TracerouteAsnLookup:
                         if (value is not (null or "true" or "false"))
