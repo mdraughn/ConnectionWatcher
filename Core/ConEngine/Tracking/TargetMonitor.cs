@@ -41,6 +41,7 @@ public class TargetMonitor : IDisposable
     private HostState _preTrackerState = HostState.Initializing;
     private Guid? _explanation; // topology's latest word, applied once tracking starts
     private bool _explanationGiven; // topology has spoken (null is a word too)
+    private Guid? _preTrackerReleasedFrom; // released before tracking: handed to the tracker
     private bool _resolutionFailureReported;
     private HostState? _seedState;
 
@@ -121,6 +122,8 @@ public class TargetMonitor : IDisposable
             _tracker = new HostTracker(resolvedAddress, Profile, _timeProvider);
             if (_seedState is { } seed)
                 QueueOutcomeLocked(_tracker.Seed(seed));
+            if (_preTrackerReleasedFrom is { } former)
+                _tracker.AdoptRelease(former);
 
             // Honor the topology's explanation if it spoke before we started.
             // A null still matters: it withdraws a seeded Unreachable's placeholder cause.
@@ -158,24 +161,59 @@ public class TargetMonitor : IDisposable
 
     /// <summary>Topology names (or withdraws) the upstream root cause. Only an
     /// own Down shows it (as Unreachable); before tracking it is remembered.</summary>
-    public void SetExplanation(Guid? ancestorId)
+    /// <remarks>
+    /// Withdrawing it (null) from a monitor shown Unreachable RELEASES the
+    /// monitor — history cleared, back to Starting, burst — checked and done
+    /// atomically under <c>_lock</c>, so topology never acts on a stale read
+    /// of this monitor (final review I1/I4). Returns true when this call
+    /// released the monitor.
+    /// </remarks>
+    public bool SetExplanation(Guid? ancestorId)
     {
+        bool released;
         lock (_lock)
         {
-            _explanation = ancestorId;
-            _explanationGiven = true;
             if (_tracker is not null)
-                QueueOutcomeLocked(_tracker.SetExplanation(ancestorId));
+            {
+                _explanation = ancestorId;
+                _explanationGiven = true;
+                var outcome = _tracker.SetExplanation(ancestorId);
+                released = outcome?.Transition is { Reason.Trigger: TransitionTrigger.ParentRecovered };
+                QueueOutcomeLocked(outcome);
+            }
+            else if (ancestorId is null && _preTrackerState == HostState.Unreachable)
+            {
+                released = true;
+                ReleasePreTrackerLocked();
+            }
+            else
+            {
+                _explanation = ancestorId;
+                _explanationGiven = true;
+                released = false;
+            }
         }
         DrainOutbox();
+        return released;
     }
 
-    /// <summary>The root cause while shown Unreachable; null otherwise.</summary>
+    /// <summary>The root cause while shown Unreachable; null otherwise. Before
+    /// tracking (a seeded Unreachable awaiting DNS) it is topology's latest word.</summary>
     public Guid? ExplainedBy
     {
-        get { lock (_lock) { return _tracker?.ExplainedBy; } }
+        get
+        {
+            lock (_lock)
+            {
+                if (_tracker is not null)
+                    return _tracker.ExplainedBy;
+                return _preTrackerState == HostState.Unreachable ? _explanation : null;
+            }
+        }
     }
 
+    /// <summary>Releases an Unreachable monitor to re-prove from Starting
+    /// (no-op otherwise). Topology releases through SetExplanation(null).</summary>
     public void Release()
     {
         lock (_lock)
@@ -187,13 +225,24 @@ public class TargetMonitor : IDisposable
             }
             else if (_preTrackerState == HostState.Unreachable)
             {
-                _seedState = null; // released: re-prove from Starting, not the presumption
-                _explanation = null;
-                QueuePreTrackerTransitionLocked(HostState.Starting,
-                    new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
+                ReleasePreTrackerLocked();
             }
         }
         DrainOutbox();
+    }
+
+    /// <summary>A seeded Unreachable released before DNS resolved: re-prove
+    /// from Starting, not the presumption. Called under _lock.</summary>
+    private void ReleasePreTrackerLocked()
+    {
+        var formerCause = _explanation;
+        _seedState = null;
+        _explanation = null;
+        _explanationGiven = true;
+        _preTrackerReleasedFrom = formerCause;
+        QueuePreTrackerTransitionLocked(HostState.Starting,
+            new TransitionReason { Trigger = TransitionTrigger.ParentRecovered, AncestorId = formerCause });
+        Discipline.ForceBurst();
     }
 
     /// <summary>Reports a DNS resolution failure. Emits one transition; later failures are quiet.</summary>
@@ -256,6 +305,8 @@ public class TargetMonitor : IDisposable
         }
 
         Discipline.OnStateChanged(at.To);
+        if (reason.Trigger == TransitionTrigger.ParentRecovered)
+            Discipline.ForceBurst(); // released: reach it NOW so it re-proves within seconds
 
         var transition = new TargetTransition
         {

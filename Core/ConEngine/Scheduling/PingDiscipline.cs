@@ -96,7 +96,7 @@ public class PingDiscipline : IPingCadence
         {
             if (_state is not (HostState.Responding or HostState.Starting))
                 return;
-            StartSuspicionBurstLocked();
+            StartBurstLocked(guarded: true);
         }
     }
 
@@ -105,7 +105,7 @@ public class PingDiscipline : IPingCadence
     {
         lock (_lock)
         {
-            StartSuspicionBurstLocked();
+            StartBurstLocked(guarded: true);
         }
     }
 
@@ -116,21 +116,19 @@ public class PingDiscipline : IPingCadence
     {
         lock (_lock)
         {
-            var now = _time.GetUtcNow();
-            if (_burstStartedAt is { } active && now - active < _profile.BurstMaxDuration)
-                return;
-            _burstStartedAt = now;
-            _lastBurstStart = now;
-            WakeLocked();
+            StartBurstLocked(guarded: false);
         }
     }
 
-    private void StartSuspicionBurstLocked()
+    /// <summary>Starts a burst window unless one is active (bursts are never
+    /// extended). Guarded: also refuse within SuspicionGuard of the last
+    /// burst start, so a chronically lossy line cannot chain bursts forever.</summary>
+    private void StartBurstLocked(bool guarded)
     {
         var now = _time.GetUtcNow();
         if (_burstStartedAt is { } active && now - active < _profile.BurstMaxDuration)
             return; // already bursting; never extend
-        if (_lastBurstStart is { } last && now - last < SuspicionGuard)
+        if (guarded && _lastBurstStart is { } last && now - last < SuspicionGuard)
             return; // politeness: a lossy line must not chain bursts forever
         _burstStartedAt = now;
         _lastBurstStart = now;

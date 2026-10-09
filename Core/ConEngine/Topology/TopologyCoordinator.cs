@@ -90,38 +90,26 @@ public class TopologyCoordinator : IDisposable
                 foreach (var id in beyond)
                     _monitors[id].Discipline.ForceBurst();
             }
-            if (transition.From == HostState.Down && recovering)
-            {
-                // Recompute releases (and bursts) what it explained. Releasing
-                // here in a loop is unsafe: the first Release publishes, which
-                // re-enters Recompute, which would withdraw the remaining
-                // explanations (the cause is no longer Down) before the loop
-                // reached them, leaving them Down instead of re-proving.
-                _log.LogInformation("{Target} recovered; releasing what it explained", transition.TargetName);
-            }
         }
+        // Recompute releases (and bursts) whatever this transition stopped
+        // explaining, one monitor at a time and each atomically.
         Recompute();
     }
 
     /// <summary>
-    /// Applies the current root cause to one monitor. A target explained by an
-    /// ancestor that has since left Down is released to re-prove from Starting
-    /// (its window is from the outage); one whose cause is still Down but now
-    /// proven to forward simply loses the explanation and shows its own Down.
+    /// Applies the current root cause to one monitor; returns true when that
+    /// withdrew an explanation and so released the monitor. A withdrawn
+    /// explanation ALWAYS releases (final review I1): whether the cause left
+    /// Down or is still Down but now proven to forward, the target's window
+    /// is from the outage, so it re-proves from Starting (burst, ~MinUsableSample
+    /// pings) rather than flipping Unreachable -> Down "no longer explained" —
+    /// a storm of false own-problem alarms. A target that really is down
+    /// re-proves Down on its own seconds later. A different non-null root
+    /// re-pins silently: <see cref="TargetMonitor.ExplainedBy"/> reports the
+    /// current root, while persisted ParentDown rows keep naming the cause at
+    /// failure time (the transition stream is not re-emitted on a shift).
     /// </summary>
-    private void Settle(Guid id, TargetMonitor monitor)
-    {
-        var root = RootCause(id);
-        if (root is null && monitor.ExplainedBy is { } cause &&
-            _monitors.TryGetValue(cause, out var causeMonitor) &&
-            causeMonitor.CurrentState != HostState.Down)
-        {
-            monitor.Release();
-            monitor.Discipline.ForceBurst();
-            return;
-        }
-        monitor.SetExplanation(root);
-    }
+    private bool Settle(Guid id, TargetMonitor monitor) => monitor.SetExplanation(RootCause(id));
 
     /// <summary>
     /// One thread at a time recomputes; a request that arrives meanwhile (from
@@ -138,8 +126,15 @@ public class TopologyCoordinator : IDisposable
             {
                 while (Interlocked.Exchange(ref _dirty, 0) == 1)
                 {
+                    List<string>? released = null;
                     foreach (var (id, monitor) in _monitors)
-                        Settle(id, monitor);
+                    {
+                        if (Settle(id, monitor))
+                            (released ??= new()).Add(monitor.Target.Name);
+                    }
+                    if (released is not null)
+                        _log.LogInformation("Released {Count} explained target(s) to re-prove: {Targets}",
+                            released.Count, string.Join(", ", released));
                 }
             }
             finally

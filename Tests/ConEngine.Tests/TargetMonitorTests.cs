@@ -126,18 +126,77 @@ public class TargetMonitorTests
     }
 
     [Fact]
-    public void Seeded_unreachable_with_no_cause_before_tracking_is_corrected_to_down_at_start()
+    public void Seeded_unreachable_with_no_cause_before_tracking_is_released_not_downed()
     {
         // "Topology said null" is not "topology never spoke": the placeholder
-        // cause must be withdrawn once tracking starts.
+        // cause is withdrawn, and with no evidence of an own Down the target
+        // re-proves from Starting (final review I1, warm-start variant).
         var (m, transitions, _) = Make();
         m.Seed(HostState.Unreachable);
         m.SetExplanation(null);
+        Assert.Equal(HostState.Starting, m.CurrentState);
 
-        m.StartTracking(Ip);
-        Assert.Equal(HostState.Down, m.CurrentState);
+        m.StartTracking(Ip); // a fresh tracker, no seed: it re-proves from its first samples
+        Assert.NotEqual(HostState.Down, m.CurrentState);
+        Assert.NotEqual(HostState.Unreachable, m.CurrentState);
         var t = Assert.Single(transitions);
-        Assert.Equal((HostState.Unreachable, HostState.Down), (t.From, t.To));
+        Assert.Equal((HostState.Unreachable, HostState.Starting), (t.From, t.To));
+        Assert.Equal(TransitionTrigger.ParentRecovered, t.Reason.Trigger);
+    }
+
+    [Fact]
+    public void An_unseeded_monitor_told_null_before_tracking_emits_nothing()
+    {
+        var (m, transitions, _) = Make();
+        m.SetExplanation(null);
+        m.StartTracking(Ip);
+        Assert.Empty(transitions);
+        Assert.Null(m.ExplainedBy);
+    }
+
+    [Fact]
+    public void A_seeded_unreachable_awaiting_dns_reports_its_cause_and_is_released_with_it()
+    {
+        // Final review T3 M3: before tracking, ExplainedBy reports topology's
+        // word for a seeded Unreachable, and withdrawing it releases the target.
+        var (m, transitions, time) = Make();
+        var root = Guid.NewGuid();
+        m.Seed(HostState.Unreachable);
+        Assert.Null(m.ExplainedBy); // the placeholder is not a cause
+        m.SetExplanation(root);
+        Assert.Equal(root, m.ExplainedBy);
+
+        m.SetExplanation(null); // the cause recovered while DNS still fails
+        Assert.Equal(HostState.Starting, m.CurrentState);
+        Assert.Null(m.ExplainedBy);
+        var t = Assert.Single(transitions);
+        Assert.Equal((HostState.Unreachable, HostState.Starting), (t.From, t.To));
+        Assert.Equal(root, t.Reason.AncestorId);
+
+        // Once DNS resolves, the first verdict on its own evidence carries the former cause.
+        m.StartTracking(Ip);
+        Feed(m, time, 5, success: true);
+        var first = transitions.Last();
+        Assert.Equal((HostState.Starting, HostState.Responding), (first.From, first.To));
+        Assert.Equal(root, first.Reason.AncestorId);
+    }
+
+    [Fact]
+    public void Withdrawing_an_explanation_releases_the_monitor_and_bursts_it()
+    {
+        var (m, transitions, time) = Make();
+        m.StartTracking(Ip);
+        Feed(m, time, 5, success: true);
+        m.SetExplanation(Guid.NewGuid());
+        Feed(m, time, 20, success: false);
+        Assert.Equal(HostState.Unreachable, m.CurrentState);
+        time.Advance(TimeSpan.FromMinutes(5)); // the Down burst has expired
+
+        Assert.True(m.SetExplanation(null));
+        Assert.Equal(HostState.Starting, m.CurrentState);
+        Assert.True(m.Discipline.IsBurstActive);
+        Assert.DoesNotContain(transitions, t => t.To == HostState.Down);
+        Assert.False(m.SetExplanation(null)); // nothing left to release
     }
 
     [Fact]

@@ -128,23 +128,74 @@ public class HostAnalysisEngineTests
         Assert.Equal(HostState.Unreachable, tracker.CurrentState);
         Assert.Equal((HostState.Down, HostState.Unreachable), (transitions.Last().From, transitions.Last().To));
         Assert.Equal(root, transitions.Last().Reason.AncestorId);
+        Assert.Equal(0.0, transitions.Last().Reason.SuccessRate!.Value, 3); // the evidence behind the own Down
+        Assert.Equal(5, transitions.Last().Reason.SampleSize);
     }
 
     [Fact]
-    public void Withdrawing_the_explanation_leaves_a_still_down_host_down_on_its_own()
+    public void Withdrawing_the_explanation_releases_the_host_to_reprove_on_its_own_evidence()
+    {
+        // Final review I1: an explanation withdrawn while the cause is still
+        // Down (proof of forwarding appeared) must not raise "no longer
+        // explained" Down alarms; the host re-proves from Starting instead.
+        var (tracker, transitions, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        var root = Guid.NewGuid();
+        tracker.SetExplanation(root);
+        Feed(tracker, time, 20, success: false);
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+
+        tracker.SetExplanation(null);
+        Assert.Equal(HostState.Starting, tracker.CurrentState);
+        Assert.Equal(0, tracker.HistoryCount);
+        var t = transitions.Last();
+        Assert.Equal((HostState.Unreachable, HostState.Starting), (t.From, t.To));
+        Assert.Equal(TransitionTrigger.ParentRecovered, t.Reason.Trigger);
+        Assert.Equal(root, t.Reason.AncestorId);
+        Assert.DoesNotContain(transitions, x => x.To == HostState.Down);
+
+        // Still down on its own: re-proves Down, stamped with the former cause.
+        Feed(tracker, time, 5, success: false);
+        var own = transitions.Last();
+        Assert.Equal((HostState.Starting, HostState.Down), (own.From, own.To));
+        Assert.Equal(TransitionTrigger.ThresholdCrossed, own.Reason.Trigger);
+        Assert.Equal(root, own.Reason.AncestorId);
+    }
+
+    [Fact]
+    public void Only_the_first_transition_out_of_a_released_starting_carries_the_former_cause()
+    {
+        var (tracker, transitions, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        var root = Guid.NewGuid();
+        tracker.SetExplanation(root);
+        Feed(tracker, time, 20, success: false);
+        tracker.Release();
+
+        Feed(tracker, time, 5, success: true);
+        var first = transitions.Last();
+        Assert.Equal((HostState.Starting, HostState.Responding), (first.From, first.To));
+        Assert.Equal(TransitionTrigger.ThresholdCrossed, first.Reason.Trigger);
+        Assert.Equal(root, first.Reason.AncestorId);
+
+        Feed(tracker, time, 2, success: false); // Responding -> Faltering: its own business
+        Assert.Equal(HostState.Faltering, transitions.Last().To);
+        Assert.Null(transitions.Last().Reason.AncestorId);
+    }
+
+    [Fact]
+    public void A_new_explanation_forgets_the_cause_a_release_came_from()
     {
         var (tracker, transitions, time) = Make();
         Feed(tracker, time, 5, success: true);
         tracker.SetExplanation(Guid.NewGuid());
         Feed(tracker, time, 20, success: false);
-        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+        tracker.Release();
 
-        tracker.SetExplanation(null);
-        Assert.Equal(HostState.Down, tracker.CurrentState);
-        var t = transitions.Last();
-        Assert.Equal((HostState.Unreachable, HostState.Down), (t.From, t.To));
-        Assert.Equal(TransitionTrigger.ThresholdCrossed, t.Reason.Trigger);
-        Assert.Contains("no longer explained", t.Reason.Detail);
+        tracker.SetExplanation(Guid.NewGuid()); // a cause fails again before this re-proved
+        Feed(tracker, time, 5, success: true);
+        Assert.Equal((HostState.Starting, HostState.Responding), (transitions.Last().From, transitions.Last().To));
+        Assert.Null(transitions.Last().Reason.AncestorId);
     }
 
     [Fact]
@@ -177,6 +228,19 @@ public class HostAnalysisEngineTests
 
         Feed(tracker, time, 5, success: true);
         Assert.Equal(HostState.Responding, tracker.CurrentState);
+    }
+
+    [Fact]
+    public void Release_of_a_host_that_is_not_unreachable_keeps_its_history()
+    {
+        // Final review I4: the history is cleared only when the engine releases.
+        var (tracker, _, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        Assert.Equal(5, tracker.HistoryCount);
+
+        tracker.Release();
+        Assert.Equal(HostState.Responding, tracker.CurrentState);
+        Assert.Equal(5, tracker.HistoryCount);
     }
 
     [Fact]

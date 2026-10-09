@@ -108,7 +108,8 @@ public class WarmStartTests
         tracker.Seed(HostState.Down);
         Feed(tracker, time, 6, success: true);
 
-        // Topology releases parked children only on Down -> Recovering/Responding.
+        // A recovery is a recovery: it surfaces as Down -> Recovering, which
+        // bursts everything beyond this hop.
         Assert.Equal(HostState.Down, transitions[0].From);
         Assert.Equal(HostState.Recovering, transitions[0].To);
         Assert.Equal(HostState.Responding, tracker.CurrentState);
@@ -128,14 +129,21 @@ public class WarmStartTests
     }
 
     [Fact]
-    public void Seeded_unreachable_without_a_root_cause_is_corrected_to_down()
+    public void Seeded_unreachable_without_a_root_cause_is_released_to_starting_not_down()
     {
+        // Final review I1: with no fresh samples there is no evidence of an
+        // own Down, so a withdrawn placeholder cause re-proves from Starting.
         var (tracker, transitions, _) = Make();
         tracker.Seed(HostState.Unreachable);
+        Assert.Null(tracker.ExplainedBy); // the placeholder is not a cause
 
         tracker.SetExplanation(null); // topology: nothing upstream explains it
-        Assert.Equal(HostState.Down, tracker.CurrentState);
-        Assert.Equal((HostState.Unreachable, HostState.Down), (transitions.Single().From, transitions.Single().To));
+        Assert.Equal(HostState.Starting, tracker.CurrentState);
+        Assert.False(tracker.Assumed);
+        var t = transitions.Single();
+        Assert.Equal((HostState.Unreachable, HostState.Starting), (t.From, t.To));
+        Assert.Equal(TransitionTrigger.ParentRecovered, t.Reason.Trigger);
+        Assert.Null(t.Reason.AncestorId); // no cause was ever named
     }
 
     [Fact]

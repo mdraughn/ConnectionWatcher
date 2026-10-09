@@ -21,6 +21,11 @@ internal class HostAnalysisEngine
     private IPAddress _hostAddress;
     private HostState _own = HostState.Initializing;
     private Guid? _explainedBy;
+    // The cause this host was released from: stamped on its first threshold
+    // transition out of Starting so notifiers can treat that transition as
+    // part of the upstream incident. Cleared after that transition, or when
+    // topology names a cause again.
+    private Guid? _releasedFrom;
 
     public HostAnalysisEngine(PingProfile profile, IPAddress hostAddress, TimeProvider timeProvider)
     {
@@ -32,8 +37,10 @@ internal class HostAnalysisEngine
     /// <summary>What everyone sees: Unreachable = own Down + an upstream root cause.</summary>
     public HostState CurrentState => Show(_own, _explainedBy);
 
-    /// <summary>The root cause while shown Unreachable; null otherwise.</summary>
-    public Guid? ExplainedBy => CurrentState == HostState.Unreachable ? _explainedBy : null;
+    /// <summary>The root cause while shown Unreachable; null otherwise —
+    /// including a seeded Unreachable whose cause topology has not named yet.</summary>
+    public Guid? ExplainedBy =>
+        CurrentState == HostState.Unreachable && _explainedBy != SeededCause ? _explainedBy : null;
 
     private static HostState Show(HostState own, Guid? explainedBy) =>
         own == HostState.Down && explainedBy is not null ? HostState.Unreachable : own;
@@ -87,39 +94,57 @@ internal class HostAnalysisEngine
     /// <summary>
     /// Topology names (or withdraws) the upstream root cause. It only shows
     /// when this host's own evidence says Down; an explanation never makes a
-    /// healthy host Unreachable.
+    /// healthy host Unreachable. Withdrawing the explanation of a host shown
+    /// Unreachable RELEASES it (see <see cref="Release"/>): its window is
+    /// from the outage, so it re-proves on fresh evidence instead of turning
+    /// Down "no longer explained" — whatever state the old cause is in.
     /// </summary>
     public AnalysisOutcome? SetExplanation(Guid? ancestorId)
     {
+        if (ancestorId is null && CurrentState == HostState.Unreachable)
+            return Release();
+        if (ancestorId is not null)
+            _releasedFrom = null; // a new incident: the old one's recovery is over
         var before = CurrentState;
         _explainedBy = ancestorId;
         var after = CurrentState;
         if (after == before)
             return null;
-        var reason = after == HostState.Unreachable
-            ? new TransitionReason { Trigger = TransitionTrigger.ParentDown, AncestorId = ancestorId }
-            : new TransitionReason
-            {
-                Trigger = TransitionTrigger.ThresholdCrossed,
-                SuccessRate = SuccessRate,
-                SampleSize = SampleSize,
-                Detail = "no longer explained by an upstream failure",
-            };
-        return Emit(before, after, reason, _timeProvider.GetUtcNow());
+        // Only Down -> Unreachable remains: a withdrawal from Unreachable released above.
+        return Emit(before, after, new TransitionReason
+        {
+            Trigger = TransitionTrigger.ParentDown, AncestorId = ancestorId,
+            SuccessRate = SuccessRate, SampleSize = SampleSize,
+        }, _timeProvider.GetUtcNow());
     }
 
-    /// <summary>Commanded by topology: the root cause recovered; re-prove from Starting.</summary>
+    /// <summary>Commanded by topology: the explanation is gone (the root cause
+    /// recovered, or forwarding past it was proven); clear the statistics and
+    /// re-prove from Starting. The first threshold transition out of Starting
+    /// will name the former cause.</summary>
     public AnalysisOutcome? Release()
     {
         if (CurrentState != HostState.Unreachable)
             return null;
+        var formerCause = _explainedBy == SeededCause ? null : _explainedBy;
         _seeded = false;
         SampleSize = 0; NumSuccess = 0; NumFailed = 0;
         SuccessRate = 0; FailureRate = 0; AverageRoundtripTime = 0;
         _own = HostState.Starting;
         _explainedBy = null;
+        _releasedFrom = formerCause;
         return Emit(HostState.Unreachable, HostState.Starting,
-            new TransitionReason { Trigger = TransitionTrigger.ParentRecovered }, _timeProvider.GetUtcNow());
+            new TransitionReason { Trigger = TransitionTrigger.ParentRecovered, AncestorId = formerCause },
+            _timeProvider.GetUtcNow());
+    }
+
+    /// <summary>The owning monitor released this host before tracking began
+    /// (a seeded Unreachable awaiting DNS): remember the former cause for the
+    /// first transition out of Starting. Valid only before the first sample.</summary>
+    public void AdoptRelease(Guid? formerCause)
+    {
+        if (_own == HostState.Initializing)
+            _releasedFrom = formerCause;
     }
 
     /// <summary>Folds the sample window into statistics and state — always,
@@ -163,9 +188,9 @@ internal class HostAnalysisEngine
             {
                 _seeded = false;
                 next = ClassifyFreshSample();
-                // A seeded Down that proves alive must exit via Recovering:
-                // topology releases the children it explained only on a
-                // Down -> Recovering/Responding transition.
+                // A seeded Down that proves alive exits via Recovering, like
+                // any Down: notifiers and History see a recovery, and topology
+                // bursts everything beyond this hop on Down -> Recovering.
                 if (_own == HostState.Down && next != HostState.Down)
                     next = HostState.Recovering;
             }
@@ -202,6 +227,14 @@ internal class HostAnalysisEngine
                     Trigger = TransitionTrigger.ThresholdCrossed,
                     SuccessRate = SuccessRate, SampleSize = SampleSize,
                 };
+            if (before == HostState.Starting)
+            {
+                // A released host's first verdict on its own evidence belongs
+                // to the upstream incident it was released from (I1).
+                if (reason.Trigger == TransitionTrigger.ThresholdCrossed && _releasedFrom is { } former)
+                    reason = reason with { AncestorId = former };
+                _releasedFrom = null;
+            }
             return Emit(before, after, reason, LastUpdated);
         }
         return new AnalysisOutcome(BuildStatus(LastUpdated), null);

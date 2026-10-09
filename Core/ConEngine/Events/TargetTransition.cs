@@ -21,7 +21,9 @@ public record TransitionReason
     public int? SampleSize { get; init; }
     /// <summary>Loss rate measured over the current burst window, if a burst was active.</summary>
     public double? BurstLossRate { get; init; }
-    /// <summary>The ancestor target responsible, for ParentDown/ParentRecovered.</summary>
+    /// <summary>The ancestor target responsible, for ParentDown/ParentRecovered;
+    /// also the FORMER cause on a released target's first ThresholdCrossed
+    /// transition out of Starting (that transition belongs to the incident).</summary>
     public Guid? AncestorId { get; init; }
     public string? Detail { get; init; }
     /// <summary>Verdict label (e.g. "InternetWeather") when Trigger is VerdictChanged.</summary>

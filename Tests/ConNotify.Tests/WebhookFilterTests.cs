@@ -28,6 +28,31 @@ public class WebhookFilterTests
     }
 
     [Fact]
+    public void A_released_targets_recovery_naming_its_former_cause_is_part_of_the_incident()
+    {
+        var cause = Guid.NewGuid();
+        var back = T(HostState.Starting, HostState.Responding) with
+        {
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed, AncestorId = cause },
+        };
+        Assert.False(WebhookFilter.ShouldDeliver(back, false, true));
+        Assert.False(WebhookFilter.ShouldDeliver(back with { To = HostState.Recovering }, false, true));
+        Assert.True(WebhookFilter.ShouldDeliver(back, false, false)); // skipping off
+    }
+
+    [Fact]
+    public void A_released_target_still_down_after_its_cause_recovered_is_delivered()
+    {
+        var stillDown = T(HostState.Starting, HostState.Down) with
+        {
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed, AncestorId = Guid.NewGuid() },
+        };
+        Assert.True(WebhookFilter.ShouldDeliver(stillDown, false, true));
+        // A plain first verdict (no former cause) is delivered as before.
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Starting, HostState.Responding), false, true));
+    }
+
+    [Fact]
     public void The_root_cause_and_ordinary_transitions_are_delivered()
     {
         Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Faltering, HostState.Down), false, true));

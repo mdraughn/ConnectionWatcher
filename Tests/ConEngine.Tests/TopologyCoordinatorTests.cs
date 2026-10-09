@@ -147,7 +147,7 @@ public class TopologyCoordinatorTests
     }
 
     [Fact]
-    public void When_proof_of_forwarding_appears_an_explained_target_becomes_down_on_its_own()
+    public void When_proof_of_forwarding_appears_an_explained_target_reproves_and_is_down_on_its_own()
     {
         AllHealthy();
         Feed("Inside", 20, false);
@@ -157,6 +157,10 @@ public class TopologyCoordinatorTests
         Assert.Equal(HostState.Unreachable, State("Google"));
 
         Feed("Cloudflare", 5, true); // something beyond Inside answers again
+        Assert.Equal(HostState.Starting, State("Google")); // released, not "no longer explained" Down
+        Assert.Null(M("Google").ExplainedBy);
+
+        Feed("Google", 5, false); // its own fresh evidence
         Assert.Equal(HostState.Down, State("Google"));
         Assert.Null(M("Google").ExplainedBy);
     }
@@ -175,6 +179,99 @@ public class TopologyCoordinatorTests
             Assert.Equal(HostState.Starting, State(name));
             Assert.True(M(name).Discipline.IsBurstActive);
         }
+    }
+
+    [Fact]
+    public void A_descendant_reproving_while_the_root_is_still_down_releases_the_others_instead_of_alarming()
+    {
+        // Final review I1(b): the Switch answering proves the router forwards,
+        // so the router no longer explains anything. The others must re-prove
+        // from Starting, not flip Unreachable -> Down "no longer explained".
+        AllHealthy();
+        Feed("Router", 20, false);
+        foreach (var name in BeyondRouter)
+            Feed(name, 20, false);
+        lock (_transitions) _transitions.Clear();
+
+        Feed("Switch", 5, true);
+        Assert.Equal(HostState.Down, State("Router"));
+        Assert.True(TopologyCoordinator.Answering(State("Switch")));
+        foreach (var name in new[] { "Inside", "Edge", "Google", "Cloudflare" })
+        {
+            Assert.Equal(HostState.Starting, State(name));
+            Assert.Null(M(name).ExplainedBy);
+            Assert.True(M(name).Discipline.IsBurstActive);
+        }
+        lock (_transitions)
+        {
+            Assert.DoesNotContain(_transitions, t => t.From == HostState.Unreachable && t.To == HostState.Down);
+            Assert.DoesNotContain(_transitions, t => t.To == HostState.Down);
+        }
+
+        // Still dead on their own: they re-prove Down, naming the former cause.
+        Feed("Google", 5, false);
+        lock (_transitions)
+        {
+            var own = _transitions.Last(t => t.TargetName == "Google");
+            Assert.Equal((HostState.Starting, HostState.Down), (own.From, own.To));
+            Assert.Equal(TransitionTrigger.ThresholdCrossed, own.Reason.Trigger);
+            Assert.Equal(Id("Router"), own.Reason.AncestorId);
+        }
+    }
+
+    [Fact]
+    public void A_released_target_names_its_former_cause_on_its_first_transition_out_of_starting()
+    {
+        AllHealthy();
+        Feed("Router", 20, false);
+        foreach (var name in BeyondRouter)
+            Feed(name, 20, false);
+        Feed("Router", 10, true); // recovers: everything it explained is released
+
+        Feed("Google", 5, true);
+        lock (_transitions)
+        {
+            var first = _transitions.Last(t => t.TargetName == "Google");
+            Assert.Equal((HostState.Starting, HostState.Responding), (first.From, first.To));
+            Assert.Equal(TransitionTrigger.ThresholdCrossed, first.Reason.Trigger);
+            Assert.Equal(Id("Router"), first.Reason.AncestorId);
+            Assert.DoesNotContain(_transitions, t => t.From == HostState.Unreachable && t.To == HostState.Down);
+        }
+    }
+
+    [Fact]
+    public void A_hop_recovering_bursts_everything_beyond_it_even_when_it_explained_nothing()
+    {
+        AllHealthy();
+        Feed("Inside", 20, false); // Down, but bypassed: Edge and beyond answer
+        Feed("Edge", 5, true);
+        Assert.Equal(HostState.Down, State("Inside"));
+        Assert.Null(M("Edge").ExplainedBy);
+        _time.Advance(TimeSpan.FromMinutes(5)); // earlier bursts long expired
+        Assert.False(M("Edge").Discipline.IsBurstActive);
+
+        Feed("Inside", 3, true); // Down -> Recovering
+        Assert.Equal(HostState.Recovering, State("Inside"));
+        Assert.True(M("Edge").Discipline.IsBurstActive);
+        Assert.True(M("Google").Discipline.IsBurstActive);
+        Assert.False(M("Switch").Discipline.IsBurstActive);
+    }
+
+    [Fact]
+    public void A_hop_returning_from_faltering_to_responding_bursts_everything_beyond_it()
+    {
+        AllHealthy();
+        _time.Advance(TimeSpan.FromMinutes(5));
+        Feed("Inside", 2, false); // Responding -> Faltering
+        Assert.Equal(HostState.Faltering, State("Inside"));
+        _time.Advance(TimeSpan.FromMinutes(5)); // that burst expires too
+        Assert.False(M("Edge").Discipline.IsBurstActive);
+
+        Feed("Inside", 5, true); // Faltering -> Responding
+        Assert.Equal(HostState.Responding, State("Inside"));
+        Assert.True(M("Edge").Discipline.IsBurstActive);
+        Assert.True(M("Cloudflare").Discipline.IsBurstActive);
+        Assert.False(M("Switch").Discipline.IsBurstActive);
     }
 
     [Fact]
@@ -202,5 +299,84 @@ public class TopologyCoordinatorTests
 
         foreach (var name in new[] { "Inside", "Edge", "Google", "Cloudflare", "Switch" })
             Assert.Equal(Id("Router"), M(name).ExplainedBy);
+    }
+}
+
+/// <summary>Final review I1 / T3 M3: a warm start seeds Unreachable with a
+/// placeholder cause; when topology finds nothing upstream to blame before
+/// any fresh sample arrives, the target re-proves from Starting — it never
+/// becomes a false Down.</summary>
+public class TopologyWarmStartTests
+{
+    private readonly FakeTimeProvider _time = new(DateTimeOffset.Parse("2026-10-09T00:00:00Z"));
+    private readonly TargetGraph _graph = TargetGraph.FromOptions(new WatcherOptions
+    {
+        Targets =
+        [
+            new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+            new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+        ],
+    });
+    private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
+    private readonly List<TargetTransition> _transitions = new();
+
+    private static readonly PingProfile Fast = new()
+    {
+        Name = "Fast", HistorySize = 20, MinUsableSample = 5,
+    };
+
+    private TargetMonitor M(string name) => _monitors[_graph.GetByName(name).Id];
+
+    private TopologyCoordinator Build(HostState router, HostState google, bool googleResolved)
+    {
+        foreach (var target in _graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
+                _time, NullLoggerFactory.Instance);
+            monitor.TransitionSource.Subscribe(t => { lock (_transitions) _transitions.Add(t); });
+            _monitors[target.Id] = monitor;
+        }
+        M("Router").Seed(router);
+        M("Google").Seed(google);
+        M("Router").StartTracking(IPAddress.Parse("192.168.1.1"));
+        if (googleResolved)
+            M("Google").StartTracking(IPAddress.Parse("8.8.8.8"));
+        var coordinator = new TopologyCoordinator(_graph, _monitors, NullLogger<TopologyCoordinator>.Instance);
+        coordinator.Start();
+        return coordinator;
+    }
+
+    [Fact]
+    public void A_seeded_unreachable_whose_cause_is_gone_at_start_reproves_from_starting_not_down()
+    {
+        using var _ = Build(HostState.Responding, HostState.Unreachable, googleResolved: true);
+
+        Assert.Equal(HostState.Starting, M("Google").CurrentState);
+        lock (_transitions)
+        {
+            Assert.DoesNotContain(_transitions, t => t.To == HostState.Down);
+            var t = Assert.Single(_transitions);
+            Assert.Equal((HostState.Unreachable, HostState.Starting), (t.From, t.To));
+        }
+    }
+
+    [Fact]
+    public void A_seeded_unreachable_awaiting_dns_is_released_when_its_root_recovers()
+    {
+        using var _ = Build(HostState.Down, HostState.Unreachable, googleResolved: false);
+        var router = _graph.GetByName("Router").Id;
+        Assert.Equal(HostState.Unreachable, M("Google").CurrentState);
+        Assert.Equal(router, M("Google").ExplainedBy);
+
+        var r = M("Router");
+        for (int i = 0; i < 6; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            r.RecordPingResult(new PingResult(r.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+        }
+        Assert.Equal(HostState.Responding, r.CurrentState);
+        Assert.Equal(HostState.Starting, M("Google").CurrentState);
+        lock (_transitions)
+            Assert.DoesNotContain(_transitions, t => t.To == HostState.Down);
     }
 }

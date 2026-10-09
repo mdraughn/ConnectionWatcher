@@ -1,6 +1,7 @@
 using System.Net;
 using ConCore;
 using ConCore.Targets;
+using ConEngine.Events;
 
 namespace ConEngine.Tracking;
 
@@ -56,18 +57,32 @@ public class HostTracker
         return _analysisEngine.Recalculate(Sample());
     }
 
-    /// <summary>Topology names (or withdraws) the upstream root cause of an own Down.</summary>
-    public AnalysisOutcome? SetExplanation(Guid? ancestorId) => _analysisEngine.SetExplanation(ancestorId);
+    /// <summary>Topology names (or withdraws) the upstream root cause of an
+    /// own Down. Withdrawing it from an Unreachable host releases the host,
+    /// which clears its history as <see cref="Release"/> does.</summary>
+    public AnalysisOutcome? SetExplanation(Guid? ancestorId)
+    {
+        var outcome = _analysisEngine.SetExplanation(ancestorId);
+        if (outcome?.Transition is { Reason.Trigger: TransitionTrigger.ParentRecovered })
+            _history.Clear();
+        return outcome;
+    }
 
     /// <summary>The root cause while shown Unreachable; null otherwise.</summary>
     public Guid? ExplainedBy => _analysisEngine.ExplainedBy;
 
-    /// <summary>Commanded by topology: the root cause recovered; clear history and re-prove.</summary>
+    /// <summary>Commanded by topology: the explanation is gone; clear history
+    /// and re-prove. A host that is not Unreachable keeps its history.</summary>
     public AnalysisOutcome? Release()
     {
-        _history.Clear();
-        return _analysisEngine.Release();
+        var outcome = _analysisEngine.Release();
+        if (outcome is not null)
+            _history.Clear();
+        return outcome;
     }
+
+    /// <summary>Released before tracking began: remember the former cause.</summary>
+    public void AdoptRelease(Guid? formerCause) => _analysisEngine.AdoptRelease(formerCause);
 
     /// <summary>History entries with Timestamp &gt;= since, oldest first (a snapshot).</summary>
     public IReadOnlyList<PingHistoryEntry> EntriesSince(DateTimeOffset since) =>
