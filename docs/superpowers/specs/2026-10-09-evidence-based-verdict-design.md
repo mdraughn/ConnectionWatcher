@@ -1,7 +1,7 @@
 # Evidence-Based Verdict, Model Warnings and Critical Targets — Design
 
 **Date:** 2026-10-09
-**Status:** Approved by Mark 2026-10-09 (pending final read)
+**Status:** Draft for review — all open questions decided 2026-10-09
 **Trigger:** 2026-10-08 23:42:16–23:43:08Z on the home NAS instance. "Business Router Inside" (10.1.10.1, `tcp/80`, a path hop) lost 15 of 20 probes. It went Down, every target beyond it was parked Unreachable, and the verdict said **Your internet is DOWN — Comcast is not carrying your traffic** for 27 s. The engine's own corroboration burst had just seen the anchors answer 35 of 36 pings, and all of them answered within seconds of the release. The internet was almost certainly up; one hop's *probe* failed.
 
 ## 1. The principle
