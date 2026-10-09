@@ -71,6 +71,14 @@ public class VerdictCoordinatorTests
             Feed(name, 5, true);
     }
 
+    private void Fail(params string[] names)
+    {
+        foreach (var name in names)
+            Feed(name, 20, false);
+    }
+
+    private VerdictState Verdict => _verdict.CurrentVerdict;
+
     [Fact]
     public void Verdict_transitions_are_named_by_the_subject_constants()
     {
@@ -100,17 +108,28 @@ public class VerdictCoordinatorTests
     }
 
     [Fact]
+    public void A_down_hop_alone_is_not_an_internet_outage()
+    {
+        // The 2026-10-08 incident at verdict level: the anchors still answer.
+        AllHealthy();
+        Fail("Modem");
+        Assert.Equal(HostState.Down, _monitors[_graph.GetByName("Modem").Id].CurrentState);
+        Assert.Equal(VerdictState.Healthy, Verdict);
+        Assert.DoesNotContain(_verdictTransitions, t => t.Reason.Verdict == "LinkDown");
+    }
+
+    [Fact]
     public void Link_verdicts_name_the_operator_when_the_blamed_hop_has_one()
     {
         AllHealthy();
-        Feed("Modem", 20, false); // Modem carries Operator = "Comcast"
-        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+        Fail("Modem", "Google", "Cloudflare", "Quad9"); // Modem carries Operator = "Comcast"
+        Assert.Equal(VerdictState.LinkDown, Verdict);
         Assert.Equal("LinkDown: Comcast — Modem is Down", _verdict.CurrentDetail);
         Assert.Equal("Comcast", _verdict.CurrentOperator);
 
         Feed("Modem", 20, true);
         AllHealthy(); // released anchors re-prove from Starting
-        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Equal(VerdictState.Healthy, Verdict);
         Assert.Null(_verdict.CurrentOperator);
     }
 
@@ -118,10 +137,50 @@ public class VerdictCoordinatorTests
     public void Link_verdicts_without_an_operator_keep_plain_wording()
     {
         AllHealthy();
-        Feed("Router", 20, false); // Router has no operator (Mark's own gear)
-        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+        Fail("Router", "Modem", "Google", "Cloudflare", "Quad9"); // Router: Mark's own gear, untagged
+        Assert.Equal(VerdictState.LinkDown, Verdict);
         Assert.Equal("LinkDown: Router is Down", _verdict.CurrentDetail);
         Assert.Null(_verdict.CurrentOperator);
+    }
+
+    [Fact]
+    public void Blame_skips_a_hop_that_traffic_passes_and_lands_after_the_last_proven_one()
+    {
+        AllHealthy();
+        Fail("Router");                            // Router's probe fails…
+        Fail("Google", "Cloudflare", "Quad9");     // …and the anchors fail, but Modem still answers
+        Assert.Equal(VerdictState.LinkDown, Verdict);
+        Assert.Equal("LinkDown: Comcast — nothing answers beyond Modem", _verdict.CurrentDetail);
+        Assert.Equal("Comcast", _verdict.CurrentOperator);
+    }
+
+    [Fact]
+    public void A_faltering_hop_with_healthy_anchors_is_still_healthy()
+    {
+        AllHealthy();
+        Feed("Modem", 3, false);
+        Assert.Equal(HostState.Faltering, _monitors[_graph.GetByName("Modem").Id].CurrentState);
+        Assert.Equal(VerdictState.Healthy, Verdict);
+    }
+
+    [Fact]
+    public void Weather_shared_by_a_faltering_path_hop_is_link_degraded()
+    {
+        AllHealthy();
+        Fail("Google", "Cloudflare");   // weather level (threshold 2)…
+        Feed("Modem", 3, false);        // …and our own hop is losing too
+        Assert.Equal(VerdictState.LinkDegraded, Verdict);
+        Assert.Contains("Modem", _verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void One_off_net_anchor_answering_proves_the_internet_is_up()
+    {
+        AllHealthy();
+        Fail("Google", "Cloudflare");   // Quad9 still answers; the ISP (Comcast) is known
+        Assert.NotEqual(VerdictState.LinkDown, Verdict);
+        Assert.NotEqual(VerdictState.LinkDegraded, Verdict);
+        Assert.Equal(VerdictState.InternetWeather, Verdict);
     }
 
     [Fact]
@@ -143,24 +202,6 @@ public class VerdictCoordinatorTests
         var t = _verdictTransitions.Last();
         Assert.Equal(HostState.Responding, t.From);
         Assert.Equal(HostState.Faltering, t.To);
-    }
-
-    [Fact]
-    public void Ancestor_down_beats_weather()
-    {
-        AllHealthy();
-        Feed("Modem", 20, false);
-        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
-        Assert.Contains("Modem", _verdict.CurrentDetail);
-    }
-
-    [Fact]
-    public void Ancestor_faltering_is_link_degraded()
-    {
-        AllHealthy();
-        Feed("Modem", 3, false);
-        Assert.Equal(VerdictState.LinkDegraded, _verdict.CurrentVerdict);
-        Assert.Contains("Modem", _verdict.CurrentDetail);
     }
 
     [Fact]
@@ -222,10 +263,11 @@ public class VerdictCoordinatorTests
             Targets =
             [
                 new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
-                new TargetConfig { Name = "MS-1", Address = "20.0.0.1", Parent = "Router", Operator = "Microsoft" },
-                new TargetConfig { Name = "MS-2", Address = "20.0.0.2", Parent = "Router", Operator = "microsoft " },
-                new TargetConfig { Name = "MS-3", Address = "20.0.0.3", Parent = "Router", Operator = "Microsoft" },
-                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "MS-1", Address = "20.0.0.1", Parent = "Edge", Operator = "Microsoft" },
+                new TargetConfig { Name = "MS-2", Address = "20.0.0.2", Parent = "Edge", Operator = "microsoft " },
+                new TargetConfig { Name = "MS-3", Address = "20.0.0.3", Parent = "Edge", Operator = "Microsoft" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Edge" },
             ],
             Pools = [new PoolConfig { Name = "Internet", Members = ["MS-1", "MS-2", "MS-3", "Google"] }],
         });
@@ -286,6 +328,116 @@ public class VerdictCoordinatorTests
         Assert.Contains("3 of 4 anchors", verdict.CurrentDetail);
     }
 
+    /// <summary>Builds a coordinator stack (topology + verdict) for an ad-hoc topology and makes it healthy.</summary>
+    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Stack(WatcherOptions options)
+    {
+        var graph = TargetGraph.FromOptions(options);
+        var monitors = new Dictionary<Guid, TargetMonitor>();
+        foreach (var target in graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
+                _time, NullLoggerFactory.Instance);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            monitors[target.Id] = monitor;
+        }
+        new TopologyCoordinator(graph, monitors, NullLogger<TopologyCoordinator>.Instance).Start();
+        var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
+            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+        verdict.Start();
+        foreach (var m in monitors.Values)
+            for (int i = 0; i < 5; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+            }
+        return (verdict, monitors, graph);
+    }
+
+    [Fact]
+    public void An_isp_owned_anchor_never_proves_the_internet_is_up()
+    {
+        // The ISP is cut off from the rest of the internet: its own DNS still answers.
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "Comcast DNS", Address = "75.75.75.75", Parent = "Edge", Operator = " comcast" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Edge" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Comcast DNS", "Google"] }],
+        });
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+
+        FeedDown(monitors, graph, "Google");
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void With_the_isp_unknown_one_answering_anchor_is_not_enough()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        });
+
+        FeedDown(monitors, graph, "Google");
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
+        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
+        Assert.Contains("nothing answers beyond Router", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void With_the_isp_unknown_two_answering_anchors_prove_it_up()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        });
+
+        FeedDown(monitors, graph, "Google");
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+    }
+
+    [Fact]
+    public void Anchors_hung_directly_off_the_root_with_none_answering_say_so()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Google", Address = "8.8.8.8" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        });
+
+        FeedDown(monitors, graph, "Google");
+        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict); // ISP unknown: one of two can't prove it
+        Assert.Equal("LinkDegraded: only 1 answering, 2 needed", verdict.CurrentDetail);
+
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: no anchor is answering", verdict.CurrentDetail);
+    }
+
     [Fact]
     public void At_or_above_threshold_has_no_qualifier()
     {
@@ -314,7 +466,7 @@ public class VerdictCoordinatorTests
         Assert.Equal(VerdictState.Healthy, healthy.State);
         Assert.StartsWith("Healthy", healthy.Detail);
 
-        Feed("Modem", 10, false);
+        Fail("Modem", "Google", "Cloudflare", "Quad9");
         var down = _verdict.Current;
         Assert.Equal(VerdictState.LinkDown, down.State);
         Assert.StartsWith("LinkDown", down.Detail);

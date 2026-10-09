@@ -19,10 +19,13 @@ public enum VerdictState
 }
 
 /// <summary>
-/// Classifies overall internet health from anchor-pool member states and their
-/// ancestors: Healthy / SiteIncident / InternetWeather / LinkDegraded / LinkDown.
-/// A Down ancestor always outranks anchor evidence (you can't blame the weather
-/// when your own link is down).
+/// Classifies overall internet health (spec 2026-10-09 §4.1–4.3). The ANCHORS
+/// decide whether the internet is reachable — one answering off-net anchor
+/// when the ISP is known (an operator tag on the path), otherwise two
+/// independent ones — and how good it is (Healthy / SiteIncident /
+/// InternetWeather). The PATH only assigns blame when the anchors say it is
+/// down: the first silent hop after the last one with proven forwarding.
+/// Evidence from farther away outranks evidence from nearer.
 /// </summary>
 public class VerdictCoordinator : IDisposable
 {
@@ -36,6 +39,12 @@ public class VerdictCoordinator : IDisposable
     private readonly TargetGraph _graph;
     private readonly IReadOnlyList<TargetMonitor> _anchors;
     private readonly IReadOnlyList<(TargetMonitor Monitor, int Depth)> _ancestors;
+    private readonly IReadOnlyDictionary<Guid, TargetMonitor> _all;
+    // Each anchor with its path, root first (monitored hops only).
+    private readonly List<(TargetMonitor Anchor, List<TargetMonitor> Path)> _paths = new();
+    private readonly Dictionary<Guid, List<Guid>> _descendants = new();
+    // Anchors outside the ISP; empty when the ISP is unknown or every anchor is the ISP's.
+    private readonly List<TargetMonitor> _offNet;
     private readonly int _weatherThreshold;
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
@@ -91,6 +100,32 @@ public class VerdictCoordinator : IDisposable
         }
         _ancestors = seen.Where(kv => monitors.ContainsKey(kv.Key))
             .Select(kv => (monitors[kv.Key], kv.Value)).ToList();
+
+        _all = monitors;
+        foreach (var anchor in _anchors)
+        {
+            var path = new List<TargetMonitor>();
+            var parent = _graph.Targets[anchor.Target.Id].ParentId;
+            while (parent is { } pid)
+            {
+                if (monitors.TryGetValue(pid, out var hop))
+                    path.Add(hop);
+                parent = _graph.Targets[pid].ParentId;
+            }
+            path.Reverse();
+            _paths.Add((anchor, path));
+        }
+        foreach (var (monitor, _) in _ancestors)
+        {
+            _descendants[monitor.Target.Id] = _graph.GetDescendants(monitor.Target.Id)
+                .Select(d => d.Id).Where(monitors.ContainsKey).ToList();
+        }
+        // The ISP is whoever operates the path; an anchor sharing that tag is on-net.
+        var isp = _ancestors.Select(a => Normalize(a.Monitor.Target.Operator))
+            .OfType<string>().ToHashSet();
+        _offNet = isp.Count == 0
+            ? new List<TargetMonitor>()
+            : _anchors.Where(a => Normalize(a.Target.Operator) is not { } op || !isp.Contains(op)).ToList();
     }
 
     private bool _seeded;
@@ -109,10 +144,11 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
-    /// <summary>Subscribes to anchors and their ancestors. Call once after monitors exist.</summary>
+    /// <summary>Subscribes to every monitor (proof of forwarding can come from
+    /// any descendant). Call once after monitors exist.</summary>
     public void Start()
     {
-        foreach (var m in _anchors.Concat(_ancestors.Select(a => a.Monitor)).Distinct())
+        foreach (var m in _all.Values)
             _subscriptions.Add(m.TransitionSource.Subscribe(_ => Recalculate()));
 
         // A fully confirmed warm start emits no monitor transitions at all, so
@@ -129,9 +165,8 @@ public class VerdictCoordinator : IDisposable
         {
             // One read per monitor: classification, detail and blame all come
             // from the same snapshot, so the detail can never contradict the state.
-            var anchors = _anchors.Select(a => (Monitor: a, State: a.CurrentState)).ToList();
-            var ancestors = _ancestors.Select(a => (a.Monitor, a.Depth, State: a.Monitor.CurrentState)).ToList();
-            var (verdict, detail, operatorName) = Classify(anchors, ancestors);
+            var states = _all.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState);
+            var (verdict, detail, operatorName) = Classify(states);
             var previous = Current;
             if (verdict == previous.State)
             {
@@ -191,35 +226,54 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
-    private (VerdictState, string, string? Operator) Classify(
-        IReadOnlyList<(TargetMonitor Monitor, HostState State)> anchors,
-        IReadOnlyList<(TargetMonitor Monitor, int Depth, HostState State)> ancestors)
+    private static bool Answering(HostState s) => TopologyCoordinator.Answering(s);
+
+    private static bool Undetermined(HostState s) => s is HostState.Initializing or HostState.Starting;
+
+    private static string? Normalize(string? op) =>
+        op?.Trim() is { Length: > 0 } t ? t.ToLowerInvariant() : null;
+
+    private (VerdictState, string, string? Operator) Classify(IReadOnlyDictionary<Guid, HostState> states)
     {
-        // Link verdicts name the blamed hop's operator ("Comcast") when tagged.
-        static (VerdictState, string, string?) Blame(VerdictState verdict, TargetMonitor monitor, string state)
-        {
-            var op = monitor.Target.Operator;
-            var wording = op is { Length: > 0 }
-                ? $"{verdict}: {op} — {monitor.Target.Name} is {state}"
-                : $"{verdict}: {monitor.Target.Name} is {state}";
-            return (verdict, wording, op);
-        }
-
-        var downAncestor = ancestors.Where(a => a.State == HostState.Down)
-            .OrderByDescending(a => a.Depth).FirstOrDefault();
-        if (downAncestor.Monitor is not null)
-            return Blame(VerdictState.LinkDown, downAncestor.Monitor, "Down");
-
-        var faltAncestor = ancestors.Where(a => a.State == HostState.Faltering)
-            .OrderByDescending(a => a.Depth).FirstOrDefault();
-        if (faltAncestor.Monitor is not null)
-            return Blame(VerdictState.LinkDegraded, faltAncestor.Monitor, "Faltering");
-
-        var determined = anchors.Where(a => a.State
-            is not (HostState.Initializing or HostState.Starting)).ToList();
+        var anchors = _anchors.Select(a => (Monitor: a, State: states[a.Target.Id])).ToList();
+        var determined = anchors.Where(a => !Undetermined(a.State)).ToList();
         if (determined.Count == 0)
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
+        // 1. Reachability: did packets get out and back? (spec §4.1, D2)
+        int answering, required;
+        bool waiting;
+        if (_offNet.Count > 0)
+        {
+            var counted = anchors.Where(a => _offNet.Contains(a.Monitor)).ToList();
+            answering = counted.Count(a => Answering(a.State));
+            required = 1;
+            waiting = counted.Any(a => Undetermined(a.State));
+        }
+        else
+        {
+            answering = CountOperators(anchors.Where(a => Answering(a.State)).Select(a => a.Monitor));
+            required = Math.Min(2, CountOperators(_anchors));
+            waiting = anchors.Any(a => Undetermined(a.State));
+        }
+
+        if (answering >= required)
+            return Quality(determined, states);
+        if (waiting)
+            return (VerdictState.Unknown, "Waiting for anchors to report", null);
+
+        // 2. Down or partial: the path says where (spec §4.3).
+        return answering == 0
+            ? Blame(VerdictState.LinkDown, states, suffix: "")
+            : Blame(VerdictState.LinkDegraded, states, suffix: $"only {answering} answering, {required} needed");
+    }
+
+    /// <summary>The internet is reachable: how good is it? Anchor evidence only,
+    /// except that weather our own path shares is our link (interim attribution;
+    /// Plan D replaces it with burst-aligned loss attribution).</summary>
+    private (VerdictState, string, string? Operator) Quality(
+        List<(TargetMonitor Monitor, HostState State)> determined, IReadOnlyDictionary<Guid, HostState> states)
+    {
         var degraded = determined.Where(a => a.State
             is HostState.Down or HostState.Faltering or HostState.Recovering).ToList();
         string List() => string.Join(", ", degraded.Select(a => $"{a.Monitor.Target.Name}={a.State}"));
@@ -245,10 +299,66 @@ public class VerdictCoordinator : IDisposable
                 ? $" — all {degraded[0].Monitor.Target.Operator}" : "";
             return (VerdictState.SiteIncident, $"SiteIncident: {List()}{sharedOperator}{qualifier}", null);
         }
+
+        var losingHop = _ancestors
+            .Where(a => states[a.Monitor.Target.Id] is HostState.Faltering or HostState.Down)
+            .OrderByDescending(a => a.Depth).FirstOrDefault();
+        if (losingHop.Monitor is not null)
+            return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
+                $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}", "");
+
         var counts = grouped
             ? $"{degradedUnits} of {determinedUnits} operators ({degraded.Count} of {determined.Count} anchors)"
             : $"{degraded.Count} of {determined.Count} anchors";
         return (VerdictState.InternetWeather, $"InternetWeather: {counts} degraded ({List()})", null);
+    }
+
+    /// <summary>Frontier blame: along each failing anchor's path, the last hop
+    /// with proven forwarding (it or anything beyond it answers) is the
+    /// frontier; the hop after it is blamed. The shallowest blame wins.</summary>
+    private (VerdictState, string, string? Operator) Blame(
+        VerdictState verdict, IReadOnlyDictionary<Guid, HostState> states, string suffix)
+    {
+        bool Proven(TargetMonitor hop) =>
+            Answering(states[hop.Target.Id]) ||
+            _descendants[hop.Target.Id].Any(id => Answering(states[id]));
+
+        TargetMonitor? blamed = null, beyond = null;
+        int bestIndex = int.MaxValue;
+        foreach (var (anchor, path) in _paths)
+        {
+            if (Answering(states[anchor.Target.Id]))
+                continue;
+            int frontier = -1;
+            for (int i = 0; i < path.Count; i++)
+                if (Proven(path[i]))
+                    frontier = i;
+            int index = frontier + 1;
+            if (index >= bestIndex)
+                continue;
+            bestIndex = index;
+            (blamed, beyond) = index < path.Count
+                ? (path[index], (TargetMonitor?)null)
+                : ((TargetMonitor?)null, path.Count > 0 ? path[^1] : null);
+        }
+
+        if (blamed is not null)
+            return Wording(verdict, blamed, $"{blamed.Target.Name} is {states[blamed.Target.Id]}", suffix);
+        if (beyond is not null)
+            return Wording(verdict, beyond, $"nothing answers beyond {beyond.Target.Name}", suffix);
+        // No path hops at all (anchors hung off the root).
+        return (verdict, $"{verdict}: {(suffix.Length > 0 ? suffix : "no anchor is answering")}", null);
+    }
+
+    /// <summary>Link verdicts name the blamed hop's operator ("Comcast") when tagged;
+    /// an optional suffix ("only 1 answering, 2 needed") follows after "; ".</summary>
+    private static (VerdictState, string, string?) Wording(VerdictState verdict, TargetMonitor hop, string what, string suffix)
+    {
+        var op = hop.Target.Operator;
+        var text = op is { Length: > 0 } ? $"{verdict}: {op} — {what}" : $"{verdict}: {what}";
+        if (suffix.Length > 0)
+            text += "; " + suffix;
+        return (verdict, text, op is { Length: > 0 } ? op : null);
     }
 
     /// <summary>Distinct operators among the anchors; an untagged anchor is its own.</summary>

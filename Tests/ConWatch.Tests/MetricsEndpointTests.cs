@@ -122,8 +122,9 @@ public class MetricsEndpointTests : IDisposable
         await ConfigApiTests.Eventually(async () =>
         {
             var body = await ScrapeAsync();
+            // two untagged anchors, one down: "up" can no longer be proven (spec 2026-10-09 D2)
             return body.Contains("conwatch_target_up{name=\"Google\"} 0")
-                && body.Contains("conwatch_verdict{state=\"SiteIncident\"} 1");
+                && body.Contains("conwatch_verdict{state=\"LinkDegraded\"} 1");
         }, timeoutMs: 40000);
 
         var body = await ScrapeAsync();

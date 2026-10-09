@@ -36,15 +36,15 @@ public class EndToEndTests : IDisposable
         await ConfigApiTests.SeedHomeAsync(_client);
         await ConfigApiTests.Eventually(async () => await Verdict() == "Healthy");
 
-        // One anchor down: that's Google's problem, not the internet's.
+        // One anchor down: with the ISP unknown, one answering anchor can't prove the internet up.
         _factory.Pings.SetUp(GoogleIp, false);
-        await ConfigApiTests.Eventually(async () => await Verdict() == "SiteIncident");
+        await ConfigApiTests.Eventually(async () => await Verdict() == "LinkDegraded");
 
-        // Second anchor down: internet weather.
+        // Both anchors down: nothing answers beyond the router.
         _factory.Pings.SetUp(CloudflareIp, false);
-        await ConfigApiTests.Eventually(async () => await Verdict() == "InternetWeather");
+        await ConfigApiTests.Eventually(async () => await Verdict() == "LinkDown");
 
-        // Router down outranks everything: it's your link.
+        // Router down too: now the router itself is blamed.
         _factory.Pings.SetUp(RouterIp, false);
         await ConfigApiTests.Eventually(async () => await Verdict() == "LinkDown");
 
@@ -66,7 +66,7 @@ public class EndToEndTests : IDisposable
             .ToList();
 
         // Chronological sequence must contain this exact progression.
-        var expected = new[] { "Healthy", "SiteIncident", "InternetWeather", "LinkDown", "Healthy" };
+        var expected = new[] { "Healthy", "LinkDegraded", "LinkDown", "Healthy" };
         int cursor = 0;
         foreach (var v in verdicts)
             if (cursor < expected.Length && v == expected[cursor])
