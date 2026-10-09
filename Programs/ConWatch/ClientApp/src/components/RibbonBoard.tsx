@@ -1,7 +1,8 @@
 // Cause-aligned ribbon board: every target on one shared time axis, so
 // causality reads as vertical alignment. Trunk rows wear the grey ramp
 // (your equipment), everything else the warm ramp; Unreachable is hatched
-// (inherited from a down parent — no data, no blame). Placement-agnostic.
+// (explained by an upstream failure; no data recorded, no blame).
+// Placement-agnostic.
 import { useEffect, useState } from "react";
 import { ribbonFill, type RowRole } from "../lib/encoding";
 import { clipAtReset, ribbonSegments, type RibbonSegment } from "../lib/historyData";

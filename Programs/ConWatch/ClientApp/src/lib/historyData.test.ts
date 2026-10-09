@@ -45,6 +45,16 @@ describe("incidents (split semantics)", () => {
     expect(stats.unreachableMs).toBe(60_000);
   });
 
+  it("unreachable time ends when the target answers again (Unreachable -> Recovering)", () => {
+    const stats = incidents([
+      t("2026-08-20T05:00:00Z", "Unreachable", "Faltering", "ParentDown"),
+      t("2026-08-20T05:02:00Z", "Recovering", "Unreachable"),
+      t("2026-08-20T05:10:00Z", "Responding", "Recovering"),
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(0);
+    expect(stats.unreachableMs).toBe(2 * 60_000);
+  });
+
   it("an open outage runs to range end", () => {
     const stats = incidents([t("2026-08-20T01:00:00Z", "Down")], "2026-08-20T00:00:00Z", "2026-08-20T02:00:00Z");
     expect(stats.outageCount).toBe(1);

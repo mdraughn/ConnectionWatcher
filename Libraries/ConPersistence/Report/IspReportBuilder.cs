@@ -281,8 +281,11 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
             {
                 Close(row.TimestampUtc);
             }
-            else if (row.Trigger == "ParentRecovered" && open is { Kind: "unreach" })
+            else if (open is { Kind: "unreach" } &&
+                     (row.Trigger == "ParentRecovered" || row.FromState == "Unreachable"))
             {
+                // The release, or the target answering again (Unreachable ->
+                // Recovering): the explained window ends either way.
                 Close(row.TimestampUtc);
             }
         }

@@ -1,8 +1,10 @@
 ﻿using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
+using ConCore.Targets;
 using ConEngine;
 using ConEngine.Events;
+using ConEngine.Scheduling;
 using ConEngine.Tracking;
 using ConPersistence.Recording;
 using Microsoft.EntityFrameworkCore;
@@ -103,6 +105,51 @@ public class RecorderCollectorTests : IDisposable
             Assert.Equal(3, minute0.SuccessCount);
             Assert.Equal(40, minute0.RttMax);
         }
+    }
+
+    [Fact]
+    public async Task Samples_taken_while_the_target_shows_unreachable_are_not_rolled_up()
+    {
+        // Final review I3 / spec §4.4: explained time carries no data and no
+        // blame — an own-router outage must not count against the anchors.
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-08-16T12:00:00Z"));
+        var profile = new PingProfile { Name = "Test", HistorySize = 20, MinUsableSample = 5 };
+        var target = new Target { Id = Guid.NewGuid(), Name = "Google", Address = "8.8.8.8", ProfileName = "Test" };
+        var monitor = new TargetMonitor(target, profile, new PingDiscipline(profile, time), time, NullLoggerFactory.Instance);
+        monitor.StartTracking(Ip);
+        void Drive(int count, bool ok)
+        {
+            for (int i = 0; i < count; i++)
+                monitor.RecordPingResult(new PingResult(Ip, ok, ok ? 10 : 0, timestamp: time.GetUtcNow()));
+        }
+
+        var collector = new RollupCollector(_factory, time, NullLogger<RollupCollector>.Instance);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source, new Dictionary<Guid, TargetMonitor> { [target.Id] = monitor });
+        void Sample(int atSeconds, bool ok) =>
+            source.OnNext((target.Id, new PingResult(Ip, ok, ok ? 10 : 0,
+                timestamp: DateTimeOffset.Parse("2026-08-16T12:00:00Z").AddSeconds(atSeconds))));
+
+        Drive(5, true);
+        Assert.Equal(HostState.Responding, monitor.CurrentState);
+        Sample(5, true);                         // minute 0: counted
+
+        monitor.SetExplanation(Guid.NewGuid());  // the router died…
+        Drive(20, false);                        // …and this target proves itself down
+        Assert.Equal(HostState.Unreachable, monitor.CurrentState);
+        Sample(65, false); Sample(70, false);    // minute 1: explained, not rolled up
+
+        monitor.SetExplanation(null);            // the router recovered: released
+        Sample(130, true);                       // minute 2: counted again
+
+        await collector.FlushAllAsync();
+        await using var db = _factory.CreateDbContext();
+        var rows = await db.Rollups.Where(r => r.TargetId == target.Id).OrderBy(r => r.PeriodStartUtc).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(DateTime.Parse("2026-08-16T12:00:00Z").ToUniversalTime(), rows[0].PeriodStartUtc);
+        Assert.Equal(1, rows[0].PingCount);
+        Assert.Equal(DateTime.Parse("2026-08-16T12:02:00Z").ToUniversalTime(), rows[1].PeriodStartUtc);
+        Assert.Equal(1, rows[1].PingCount);
     }
 
     [Fact]

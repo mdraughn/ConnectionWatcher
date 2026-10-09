@@ -55,13 +55,13 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
     }
 
     private async Task AddTransition(Guid subject, string name, DateTime at, string to,
-        string trigger = "ThresholdCrossed")
+        string trigger = "ThresholdCrossed", string from = "Responding")
     {
         await using var db = _factory.CreateDbContext();
         db.Transitions.Add(new TransitionRow
         {
             TimestampUtc = at, SubjectId = subject, SubjectName = name, SubjectKind = "Target",
-            FromState = "Responding", ToState = to, Trigger = trigger,
+            FromState = from, ToState = to, Trigger = trigger,
         });
         await db.SaveChangesAsync();
     }
@@ -140,6 +140,22 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         var google = report.Targets.Single(t => t.Name == "Google");
         Assert.Equal(1, google.OutageCount);
         Assert.Equal(TimeSpan.FromHours(1), google.LongestOutage);
+    }
+
+    [Fact]
+    public async Task An_unreachable_target_answering_again_closes_its_unreachable_window()
+    {
+        // Final review M5: Unreachable -> Recovering ends the explained window,
+        // as a release or a recovery does.
+        await AddTransition(_googleId, "Google", From.AddHours(1), "Unreachable", "ParentDown", from: "Faltering");
+        await AddTransition(_googleId, "Google", From.AddHours(2), "Recovering", from: "Unreachable");
+        await AddTransition(_googleId, "Google", From.AddHours(3), "Responding", from: "Recovering");
+
+        var report = await _builder.BuildAsync(From, To);
+
+        var google = report.Targets.Single(t => t.Name == "Google");
+        Assert.Equal(TimeSpan.FromHours(1), google.UnreachableTime);
+        Assert.Equal(0, google.OutageCount);
     }
 
     [Fact]

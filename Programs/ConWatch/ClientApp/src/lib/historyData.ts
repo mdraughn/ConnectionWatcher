@@ -18,7 +18,8 @@ export function uptimePercent(points: RollupPoint[]): number | null {
  *   window reported. It ends at recovery (`Responding`) or when superseded by
  *   `Unreachable`.
  * - UNREACHABLE is a coverage gap — no data, never the target's fault: only
- *   total time is reported. It ends at the release (`ParentRecovered`) or any
+ *   total time is reported. It ends at the release (`ParentRecovered`), at
+ *   any transition out of `Unreachable` (e.g. to `Recovering`), or at any
  *   transition to `Responding`/`Down`.
  * Open windows run to the range end. Transitions must be chronological and
  * already clipped via clipAtReset().
@@ -70,7 +71,8 @@ export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
       open = { kind: "unreach", start: at };
     } else if (t.to === "Responding") {
       close(at);
-    } else if (t.trigger === "ParentRecovered" && open?.kind === "unreach") {
+    } else if (open?.kind === "unreach" && (t.trigger === "ParentRecovered" || t.from === "Unreachable")) {
+      // The release, or the target answering again (Unreachable -> Recovering).
       close(at);
     }
   }

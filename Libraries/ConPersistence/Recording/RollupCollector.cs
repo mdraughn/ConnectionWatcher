@@ -1,5 +1,6 @@
 using ConCore;
 using ConEngine;
+using ConEngine.Tracking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,16 +23,33 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
     private int _consecutiveFailures;
     private IDisposable? _subscription;
 
-    /// <summary>Subscribes to a ping-sample stream, replacing any prior subscription.</summary>
-    public void Attach(IObservable<(Guid TargetId, PingResult Result)> source)
+    /// <summary>
+    /// Subscribes to a ping-sample stream, replacing any prior subscription.
+    /// With <paramref name="monitors"/>, a sample recorded while its target
+    /// shows Unreachable is skipped: explained time carries no data and no
+    /// blame (spec 2026-10-09 §4.4), so an own-router outage never counts
+    /// against the anchors in History uptime or the ISP report. The state is
+    /// read as the sample arrives (the engine publishes it right after the
+    /// monitor recorded it), so the sample that tips a target into or out of
+    /// Unreachable may land on either side of the boundary — an accepted
+    /// one-sample race.
+    /// </summary>
+    public void Attach(IObservable<(Guid TargetId, PingResult Result)> source,
+        IReadOnlyDictionary<Guid, TargetMonitor>? monitors = null)
     {
         _subscription?.Dispose();
         _subscription = source.Subscribe(
-            s => _accumulator.AddSample(s.TargetId, s.Result),
+            s =>
+            {
+                if (monitors is not null && monitors.TryGetValue(s.TargetId, out var monitor) &&
+                    monitor.CurrentState == HostState.Unreachable)
+                    return;
+                _accumulator.AddSample(s.TargetId, s.Result);
+            },
             ex => log.LogError(ex, "Ping sample stream error"));
     }
 
-    public void Attach(WatcherEngine engine) => Attach(engine.PingSampleSource);
+    public void Attach(WatcherEngine engine) => Attach(engine.PingSampleSource, engine.Monitors);
 
     public void Detach()
     {

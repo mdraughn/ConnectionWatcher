@@ -24,7 +24,8 @@ export const RAMP: Record<Hue, Record<Depth, string>> = {
   grey: { glitch: "var(--grey-glitch)", degraded: "var(--grey-degraded)", out: "var(--grey-out)" },
 };
 
-/** Unreachable behind a down parent: inherited, no data, no blame. */
+/** Unreachable: own Down explained by an upstream failure; no data
+ *  recorded, no blame. */
 export const HATCH =
   "repeating-linear-gradient(45deg, var(--grey-glitch) 0 3px, var(--surface-2) 3px 6px)";
 
@@ -51,7 +52,8 @@ export type RowRole = "trunk" | "anchor" | "other";
 
 /** Ribbon fill for a target's state, colored by whose gear the row is:
  *  trunk rows use the grey ramp, everything else the warm ramp. Returns
- *  "hatch" for Unreachable (inherited, no data, no blame). */
+ *  "hatch" for Unreachable (explained by an upstream failure; no data
+ *  recorded, no blame). */
 export function ribbonFill(role: RowRole, state: string): string {
   const ramp = role === "trunk" ? RAMP.grey : RAMP.warm;
   switch (state) {

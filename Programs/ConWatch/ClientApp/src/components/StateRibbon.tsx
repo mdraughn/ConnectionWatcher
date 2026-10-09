@@ -1,7 +1,8 @@
 // The state-timeline ribbon: colored stripes from the transition log, in the
 // shared incident encoding — grey ramp for trunk rows (your equipment), warm
 // for everything else, verdict names mapped by whose gear was blamed, and
-// hatching for Unreachable (inherited, no data, no blame).
+// hatching for Unreachable (explained by an upstream failure; no data
+// recorded, no blame).
 import { ribbonFill, verdictFill, type RowRole } from "../lib/encoding";
 import type { RibbonSegment } from "../lib/historyData";
 
