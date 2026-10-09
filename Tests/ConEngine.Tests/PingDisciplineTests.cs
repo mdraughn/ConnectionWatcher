@@ -99,21 +99,48 @@ public class PingDisciplineTests
     }
 
     [Fact]
-    public async Task Unreachable_parks_until_state_change()
+    public async Task Unreachable_keeps_probing_at_burst_cadence()
     {
-        var time = new TimerCountingTime();
+        // Spec 2026-10-09 D4: a target is never parked; Unreachable is a
+        // failing state like Down and keeps proving itself.
+        var time = new FakeTimeProvider();
         var d = new PingDiscipline(Profile, time);
         d.OnStateChanged(HostState.Unreachable);
-        Assert.True(d.IsParked);
+        Assert.NotNull(d.BurstStartedAt);
 
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
-        Assert.True(await StaysPending(wait, time, TimeSpan.FromMinutes(30)));
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
+    }
 
-        var timers = time.TimersCreated;
-        d.OnStateChanged(HostState.Starting);
-        Assert.False(d.IsParked);
-        await time.NewTimerArmedSince(timers); // the unparked waiter reached its next fake-time timer
-        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(10)));
+    [Fact]
+    public void ForceBurst_ignores_the_suspicion_guard()
+    {
+        var time = new FakeTimeProvider();
+        var shortBurst = Profile with { BurstMaxDuration = TimeSpan.FromSeconds(10) };
+        var d = new PingDiscipline(shortBurst, time);
+        d.OnStateChanged(HostState.Responding);
+
+        d.OnPingResult(success: false);       // suspicion burst starts the 60 s guard
+        time.Advance(TimeSpan.FromSeconds(30)); // burst over, guard still active
+        d.TriggerBurst();
+        Assert.False(d.IsBurstActive);         // the guard refuses a polite burst…
+
+        d.ForceBurst();
+        Assert.True(d.IsBurstActive);          // …but topology's "reach beyond now" is not polite
+    }
+
+    [Fact]
+    public void ForceBurst_never_extends_an_active_burst()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Responding);
+        d.ForceBurst();
+        var started = d.BurstStartedAt;
+
+        time.Advance(TimeSpan.FromSeconds(30));
+        d.ForceBurst();
+        Assert.Equal(started, d.BurstStartedAt);
     }
 
     [Fact]
@@ -300,13 +327,14 @@ public class PingDisciplineTests
     }
 
     [Fact]
-    public void TriggerBurst_is_ignored_while_parked()
+    public void TriggerBurst_works_while_unreachable()
     {
         var time = new FakeTimeProvider();
         var d = new PingDiscipline(Profile, time);
         d.OnStateChanged(HostState.Unreachable);
+        time.Advance(TimeSpan.FromSeconds(120)); // the state-change burst and the guard have expired
         d.TriggerBurst();
-        Assert.False(d.IsBurstActive);
+        Assert.True(d.IsBurstActive);
     }
 
     [Fact]

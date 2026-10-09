@@ -97,12 +97,10 @@ public class TargetMonitorTests
 
         m.SetUnreachable(ancestor);
         Assert.Equal(HostState.Unreachable, m.CurrentState);
-        Assert.True(m.Discipline.IsParked);
         Assert.Equal(ancestor, transitions.Last().Reason.AncestorId);
 
         m.Release();
         Assert.Equal(HostState.Starting, m.CurrentState);
-        Assert.False(m.Discipline.IsParked);
     }
 
     [Fact]
@@ -111,7 +109,6 @@ public class TargetMonitorTests
         var (m, transitions, _) = Make();
         m.SetUnreachable(Guid.NewGuid());
         Assert.Equal(HostState.Unreachable, m.CurrentState);
-        Assert.True(m.Discipline.IsParked);
         Assert.Equal(TransitionTrigger.ParentDown, transitions.Last().Reason.Trigger);
 
         m.Release();

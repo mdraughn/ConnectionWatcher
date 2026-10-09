@@ -5,7 +5,7 @@ namespace ConEngine.Scheduling;
 
 /// <summary>
 /// Adaptive per-target ping cadence: normal interval when healthy, burst interval
-/// (time-capped) while Faltering/Recovering/Down, parked while Unreachable.
+/// (time-capped) while Faltering/Recovering/Down/Unreachable.
 /// A lost ping (or an external TriggerBurst from the corroboration sweep) also
 /// starts a "suspicion burst" while still Responding, guarded so a chronically
 /// lossy line cannot keep the burst alive forever. Normal-cadence pings are
@@ -25,7 +25,6 @@ public class PingDiscipline : IPingCadence
     private HostState _state = HostState.Initializing;
     private DateTimeOffset? _burstStartedAt;
     private DateTimeOffset? _lastBurstStart;
-    private TaskCompletionSource _releaseTcs = NewTcs();
     private TaskCompletionSource _wakeTcs = NewTcs();
 
     private static TaskCompletionSource NewTcs() =>
@@ -53,21 +52,14 @@ public class PingDiscipline : IPingCadence
         get { lock (_lock) { return _burstStartedAt; } }
     }
 
-    /// <summary>True while the target is Unreachable and pinging is suspended.</summary>
-    public bool IsParked
-    {
-        get { lock (_lock) { return _state == HostState.Unreachable; } }
-    }
-
     /// <summary>Feed state transitions in; the cadence adapts.</summary>
     public void OnStateChanged(HostState newState)
     {
         lock (_lock)
         {
-            var oldState = _state;
             _state = newState;
 
-            if (newState is HostState.Faltering or HostState.Recovering or HostState.Down)
+            if (newState is HostState.Faltering or HostState.Recovering or HostState.Down or HostState.Unreachable)
             {
                 // State changes always (re)start the burst window: they are
                 // rate-limited by the analysis window itself, not the guard.
@@ -78,14 +70,6 @@ public class PingDiscipline : IPingCadence
             else
             {
                 _burstStartedAt = null;
-            }
-
-            if (oldState == HostState.Unreachable && newState != HostState.Unreachable)
-                _releaseTcs.TrySetResult(); // unpark any waiter
-            if (newState == HostState.Unreachable && oldState != HostState.Unreachable)
-            {
-                _releaseTcs = NewTcs();
-                _nextNormalDue = null; // the grid re-anchors after the park
             }
         }
     }
@@ -121,9 +105,23 @@ public class PingDiscipline : IPingCadence
     {
         lock (_lock)
         {
-            if (_state == HostState.Unreachable)
-                return;
             StartSuspicionBurstLocked();
+        }
+    }
+
+    /// <summary>Commanded by topology when a hop on the path changes state
+    /// (spec 2026-10-09 D5): reach what lies beyond it NOW. Ignores the
+    /// suspicion guard but, like every burst, never extends an active one.</summary>
+    public void ForceBurst()
+    {
+        lock (_lock)
+        {
+            var now = _time.GetUtcNow();
+            if (_burstStartedAt is { } active && now - active < _profile.BurstMaxDuration)
+                return;
+            _burstStartedAt = now;
+            _lastBurstStart = now;
+            WakeLocked();
         }
     }
 
@@ -143,48 +141,28 @@ public class PingDiscipline : IPingCadence
     {
         while (true)
         {
-            Task? parkTask = null;
             Task wake;
-            TimeSpan delay = TimeSpan.Zero;
+            TimeSpan delay;
             lock (_lock)
             {
                 wake = _wakeTcs.Task;
-                if (_state == HostState.Unreachable)
-                {
-                    parkTask = _releaseTcs.Task;
-                }
-                else
-                {
-                    delay = ComputeDelay();
-                }
+                delay = ComputeDelay();
             }
 
-            if (parkTask is not null)
-            {
-                await parkTask.WaitAsync(ct).ConfigureAwait(false);
-                continue; // re-evaluate now that we're released
-            }
+            if (delay <= TimeSpan.Zero)
+                return;
 
-            if (delay > TimeSpan.Zero)
+            // Race the sleep against a burst start: a sweep, a lost ping,
+            // or a state change must not wait out a normal interval.
+            var sleep = Task.Delay(delay, _time, ct);
+            var first = await Task.WhenAny(sleep, wake).ConfigureAwait(false);
+            if (first == wake)
             {
-                // Race the sleep against a burst start: a sweep, a lost ping,
-                // or a state change must not wait out a normal interval.
-                var sleep = Task.Delay(delay, _time, ct);
-                var first = await Task.WhenAny(sleep, wake).ConfigureAwait(false);
-                if (first == wake)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    continue; // ComputeDelay now returns the burst interval
-                }
-                await sleep.ConfigureAwait(false); // propagates cancellation
+                ct.ThrowIfCancellationRequested();
+                continue; // ComputeDelay now returns the burst interval
             }
-
-            lock (_lock)
-            {
-                if (_state != HostState.Unreachable)
-                    return;
-                // Went unreachable while we were waiting: loop around and park.
-            }
+            await sleep.ConfigureAwait(false); // propagates cancellation
+            return;
         }
     }
 
