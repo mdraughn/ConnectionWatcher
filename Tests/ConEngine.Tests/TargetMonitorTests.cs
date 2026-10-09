@@ -126,6 +126,35 @@ public class TargetMonitorTests
     }
 
     [Fact]
+    public void Seeded_unreachable_with_no_cause_before_tracking_is_corrected_to_down_at_start()
+    {
+        // "Topology said null" is not "topology never spoke": the placeholder
+        // cause must be withdrawn once tracking starts.
+        var (m, transitions, _) = Make();
+        m.Seed(HostState.Unreachable);
+        m.SetExplanation(null);
+
+        m.StartTracking(Ip);
+        Assert.Equal(HostState.Down, m.CurrentState);
+        var t = Assert.Single(transitions);
+        Assert.Equal((HostState.Unreachable, HostState.Down), (t.From, t.To));
+    }
+
+    [Fact]
+    public void Seeded_unreachable_with_a_cause_before_tracking_stays_silent_at_start()
+    {
+        var (m, transitions, _) = Make();
+        var root = Guid.NewGuid();
+        m.Seed(HostState.Unreachable);
+        m.SetExplanation(root);
+
+        m.StartTracking(Ip);
+        Assert.Equal(HostState.Unreachable, m.CurrentState);
+        Assert.Equal(root, m.ExplainedBy);
+        Assert.Empty(transitions);
+    }
+
+    [Fact]
     public void Two_hundred_refusals_with_no_accept_flags_persistent_refusal()
     {
         var (m, _, time) = Make();

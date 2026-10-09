@@ -40,6 +40,7 @@ public class TargetMonitor : IDisposable
     // Pre-tracker state bookkeeping (before StartTracking / for resolution failures).
     private HostState _preTrackerState = HostState.Initializing;
     private Guid? _explanation; // topology's latest word, applied once tracking starts
+    private bool _explanationGiven; // topology has spoken (null is a word too)
     private bool _resolutionFailureReported;
     private HostState? _seedState;
 
@@ -122,8 +123,9 @@ public class TargetMonitor : IDisposable
                 QueueOutcomeLocked(_tracker.Seed(seed));
 
             // Honor the topology's explanation if it spoke before we started.
-            if (_explanation is { } cause)
-                QueueOutcomeLocked(_tracker.SetExplanation(cause));
+            // A null still matters: it withdraws a seeded Unreachable's placeholder cause.
+            if (_explanationGiven)
+                QueueOutcomeLocked(_tracker.SetExplanation(_explanation));
         }
         DrainOutbox();
     }
@@ -161,6 +163,7 @@ public class TargetMonitor : IDisposable
         lock (_lock)
         {
             _explanation = ancestorId;
+            _explanationGiven = true;
             if (_tracker is not null)
                 QueueOutcomeLocked(_tracker.SetExplanation(ancestorId));
         }
