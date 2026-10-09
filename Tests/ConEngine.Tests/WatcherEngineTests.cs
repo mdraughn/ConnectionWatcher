@@ -115,11 +115,13 @@ public class WatcherEngineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Router_down_cascades_and_pinging_pauses_for_descendants()
+    public async Task Router_down_with_everything_beyond_down_is_explained_by_the_router()
     {
         await Eventually(() => State("Google") == HostState.Responding);
 
         _factory.SetUp(RouterIp, false);
+        _factory.SetUp(GoogleIp, false);
+        _factory.SetUp(IPAddress.Parse("1.1.1.1"), false);
         await Eventually(() => State("Router") == HostState.Down);
         await Eventually(() => State("Google") == HostState.Unreachable);
         await Eventually(() => State("Cloudflare") == HostState.Unreachable);
@@ -132,10 +134,28 @@ public class WatcherEngineTests : IAsyncLifetime
         }
         Assert.True(sawParentDown);
 
-        // Recovery: router back up -> descendants released and re-prove.
+        // Recovery: everything back -> descendants released and re-prove.
         _factory.SetUp(RouterIp, true);
+        _factory.SetUp(GoogleIp, true);
+        _factory.SetUp(IPAddress.Parse("1.1.1.1"), true);
         await Eventually(() => State("Router") == HostState.Responding);
         await Eventually(() => State("Google") == HostState.Responding);
+    }
+
+    [Fact]
+    public async Task Router_down_while_everything_beyond_answers_parks_nothing()
+    {
+        await Eventually(() => State("Google") == HostState.Responding);
+
+        _factory.SetUp(RouterIp, false); // only the router's own probe fails
+        await Eventually(() => State("Router") == HostState.Down);
+
+        // Wait for enough fresh probes beyond it to have been judged.
+        var google = _engine.Monitors.Values.Single(m => m.Target.Name == "Google");
+        var after = google.PingCount;
+        await Eventually(() => google.PingCount >= after + 10);
+        Assert.Equal(HostState.Responding, State("Google"));
+        Assert.Equal(HostState.Responding, State("Cloudflare"));
     }
 
     [Fact]

@@ -36,7 +36,7 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
     /// <param name="ipAddress">The IP address to probe.</param>
     /// <param name="resultWriter">Channel to report results.</param>
     /// <param name="probe">How to probe the target (ICMP echo or TCP connect).</param>
-    /// <param name="cadence">Decides when each probe happens (may park indefinitely).</param>
+    /// <param name="cadence">Decides when each probe happens (targets are never parked).</param>
     /// <param name="timeoutMsProvider">Per-probe timeout in milliseconds, read before
     /// every probe (bursting shortens the timeout).</param>
     /// <param name="cancellationToken">Engine-wide cancellation.</param>
@@ -73,7 +73,7 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
             {
                 try
                 {
-                    // Cadence first: honors initial phase offsets and parking.
+                    // Cadence first: honors initial phase offsets and bursts.
                     await _cadence!.WaitForNextPingAsync(_cancellationToken).ConfigureAwait(false);
                     if (_cancellationToken.IsCancellationRequested)
                         break;

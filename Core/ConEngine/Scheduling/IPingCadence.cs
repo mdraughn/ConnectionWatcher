@@ -5,6 +5,6 @@ namespace ConEngine.Scheduling;
 /// </summary>
 public interface IPingCadence
 {
-    /// <summary>Completes when it is time for the next ping. May park indefinitely.</summary>
+    /// <summary>Completes when it is time for the next ping. Waits only until cancellation; targets are never parked.</summary>
     Task WaitForNextPingAsync(CancellationToken ct);
 }

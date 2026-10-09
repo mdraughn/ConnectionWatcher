@@ -271,7 +271,7 @@ public class WatcherEngine
         StartController(monitor, ip);
         // Warm starts burst everything so presumed states confirm in seconds
         // (seeded Faltering/Down already burst via the discipline; this covers
-        // Responding/Starting, and no-ops on parked or already-bursting ones).
+        // Responding/Starting, and no-ops on already-bursting ones; nothing is parked).
         if (_warmStart)
             monitor.Discipline.TriggerBurst();
         _log.LogInformation("Activated {Target} at {Ip}", monitor.Target.Name, ip);

@@ -46,10 +46,15 @@ public class HistoryApiTests : IDisposable
         await ConfigApiTests.Eventually(async () => await StateOf("Google") == "Responding");
 
         // Outage: router down -> descendants unreachable; then restore.
+        // A real outage: the router and everything beyond it stop answering.
         _factory.Pings.SetUp(RouterIp, false);
+        _factory.Pings.SetUp(System.Net.IPAddress.Parse("8.8.8.8"), false);
+        _factory.Pings.SetUp(System.Net.IPAddress.Parse("1.1.1.1"), false);
         await ConfigApiTests.Eventually(async () => await StateOf("Router") == "Down");
         await ConfigApiTests.Eventually(async () => await StateOf("Google") == "Unreachable");
         _factory.Pings.SetUp(RouterIp, true);
+        _factory.Pings.SetUp(System.Net.IPAddress.Parse("8.8.8.8"), true);
+        _factory.Pings.SetUp(System.Net.IPAddress.Parse("1.1.1.1"), true);
         await ConfigApiTests.Eventually(async () => await StateOf("Router") == "Responding");
 
         // Deterministic persistence: drain the recorder and flush open rollup buckets.
