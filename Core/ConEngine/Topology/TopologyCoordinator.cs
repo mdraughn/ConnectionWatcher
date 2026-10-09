@@ -144,7 +144,8 @@ public class TopologyCoordinator : IDisposable
             }
             finally
             {
-                Volatile.Write(ref _recomputing, 0);
+                // Full fence, not Volatile.Write: the _dirty re-check below must not be reordered before this release, or a request made in between is lost.
+                Interlocked.Exchange(ref _recomputing, 0);
             }
             if (Volatile.Read(ref _dirty) == 0)
                 return;
