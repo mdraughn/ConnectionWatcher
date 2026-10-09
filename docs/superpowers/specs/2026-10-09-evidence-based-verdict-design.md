@@ -71,7 +71,7 @@ The verdict states keep their names, and every consumer already understands them
 
 | Anchor evidence (independent, off-net) | Verdict | Blame |
 |---|---|---|
-| none determined yet | `Unknown` | – |
+| none determined yet (ISP known: no off-net anchor determined yet) | `Unknown` | – |
 | answering ≥ required, none degraded | `Healthy` | – |
 | answering ≥ required, some degraded, fewer than the weather threshold | `SiteIncident` | – |
 | answering ≥ required, at least the weather threshold degraded, **and** the loss is attributed to our own path (§4.5) | `LinkDegraded` | deepest path hop carrying real forwarding loss |
@@ -95,9 +95,12 @@ When the anchors say down or degraded, walk each anchor's path outward from the 
 - **Every target keeps probing on its own schedule, whatever its ancestors are doing.** The parked state in `PingDiscipline` goes away.
 - A target's state comes only from its own probes. It goes `Faltering`/`Down` on its own evidence.
 - **Unreachable is redefined:** a target is `Unreachable` when its own probes show it **Down** *and* an ancestor is also Down **without proven forwarding** (§4.3). That is two observed facts, not an inference. The `ParentDown` trigger stays, with `AncestorId` naming the **root cause**: the shallowest such ancestor on its path, which is also the blamed hop when the anchors agree. A Down ancestor that traffic is visibly passing (a bypassed hop) never explains anything: a target behind it that is Down is plain `Down`, its own problem. Visuals stay as they are (the hatch: "explained, no blame").
-- When the root cause recovers, an `Unreachable` target that is answering again leaves through `Recovering`. One that is still failing becomes plain `Down`, now its own problem.
+- An `Unreachable` target that answers again leaves through `Recovering` on its own evidence.
+- **Release (as built).** When the root cause recovers, or the explanation is withdrawn for any other reason (forwarding past the cause is proven, or a warm-start placeholder finds no cause), each target it explained is **released** to `Starting` (`ParentRecovered`): its history is cleared and it is burst. Its window is from the outage, so it re-proves on its own fresh evidence within about `MinUsableSample` burst pings instead of flipping to `Down` "no longer explained". A target that really is still down re-proves `Down`, now its own problem. A different non-null root re-pins silently (`explainedBy` reports the current root; persisted `ParentDown` rows keep the cause at failure time).
+- **The release belongs to the incident.** The released target's first threshold transition out of `Starting` carries `AncestorId` = the former cause (trigger stays `ThresholdCrossed`). Notifiers can treat it as part of the incident: with "Skip explained transitions" on, a webhook skips `Starting → Responding/Recovering` that names a former cause, and still delivers `Starting → Down` (still down after its cause recovered).
+- **Explained time carries no data and no blame.** Samples taken while a target shows `Unreachable` are not rolled up, so History uptime and the ISP report never count an own-router outage against the anchors. The state is read when the sample arrives; the sample that crosses the boundary may land on either side.
 - **Grouping:** anything that notifies or counts outages handles a `ParentDown`/`Unreachable` transition as part of its root cause's incident. That covers the tray, webhooks, MQTT transitions, the ISP report and glitches. One router failure is one incident.
-- **Webhook:** transitions carry `explainedBy` (the root-cause target id and name). A setting "Skip explained transitions" (default **on**) suppresses `Unreachable` and `ParentDown` deliveries. The existing "verdict only" setting is unchanged.
+- **Webhook:** transitions carry `explainedBy` (the root-cause target id and name). A setting "Skip explained transitions" (default **on**) suppresses `Unreachable` and `ParentDown` deliveries, the release out of `Unreachable`, and a released target's recovery that names its former cause. The existing "verdict only" setting is unchanged.
 
 ### 4.5 Reach beyond immediately; loss attribution
 
@@ -150,8 +153,8 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 | Component | Change |
 |---|---|
 | `ConEngine/Topology/VerdictCoordinator` | New classification (§4.2): anchor-first, on-net guard, required count, frontier blame, loss attribution input. Drop "Down ancestor outranks". |
-| `ConEngine/Topology/TopologyCoordinator` | No longer calls `SetUnreachable` on descendants. Instead it (a) triggers the D5 burst of descendants on a hop's Faltering/Down and on its recovery, and (b) computes root causes: a descendant whose own state goes Down while an ancestor is Down becomes `Unreachable` with `AncestorId` = the root cause. |
-| `ConEngine/Tracking/TargetMonitor`, `HostAnalysisEngine` | `MarkUnreachable` becomes "explain my Down"; `Recalculate` keeps running for Unreachable targets (it no longer returns null); `Release` becomes "re-classify" on root-cause recovery. |
+| `ConEngine/Topology/TopologyCoordinator` | No longer calls `SetUnreachable` on descendants. Instead it (a) triggers the D5 burst of descendants on a hop's Faltering/Down and on its recovery, and (b) computes root causes: a descendant whose own state goes Down while an ancestor is Down becomes `Unreachable` with `AncestorId` = the root cause; when no root remains, the explanation is withdrawn, which releases the target (§4.4). |
+| `ConEngine/Tracking/TargetMonitor`, `HostAnalysisEngine` | `MarkUnreachable` becomes "explain my Down" (`SetExplanation`); `Recalculate` keeps running for Unreachable targets (it no longer returns null). Withdrawing an explanation from an Unreachable target releases it (history cleared, `Starting`, burst) atomically under the monitor's lock; the first transition out of that `Starting` names the former cause (§4.4). |
 | `ConEngine/Scheduling/PingDiscipline` | No parking: Unreachable pings like Down (burst-capped). |
 | `ConEngine/Topology/SuspicionCoordinator` | Provides burst-aligned windows for loss attribution; the D5 burst trigger. Glitch correlation attributes descendant glitches to the root cause. |
 | new `ConEngine/Topology/ModelCheckCoordinator` | Evaluates the §4.6 warnings from monitor states and burst windows, and emits warning start/end events. |
@@ -162,7 +165,7 @@ A **model warning** says ConnectionWatcher's map disagrees with what the probes 
 | Dashboard (React) | Header badge, notes panel, critical marker. No per-row warning chip. |
 | Tray | Critical toasts (§4.7). Model warnings: a subtle icon-overlay badge, tooltip list and "ConnectionWatcher notes" menu item; never a toast. The status API's `warnings[]` feeds it. |
 | `ConNotify` webhook / MQTT | `explainedBy`; "Skip explained transitions" setting; critical passes "verdict only"; MQTT target attributes `critical`. |
-| ISP report | Outages counted by the (new) verdict; Unreachable time is attributed to the root cause. Old history unchanged. |
+| ISP report, History | Outages counted by the (new) verdict; Unreachable time is attributed to the root cause and ends at any transition out of `Unreachable`. Samples taken while `Unreachable` are not rolled up (`RollupCollector`). Old history unchanged. |
 | Docs | README section on how the verdict is decided; SECURITY.md is unchanged (warnings are read-only on the open surface, like status). |
 
 ## 6. Edge cases

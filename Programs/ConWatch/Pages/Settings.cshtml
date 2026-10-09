@@ -129,7 +129,7 @@ else
                 <option value="true" selected="@(Model.Setting(SettingKeys.WebhookVerdictOnly) == "true")">yes — verdict only</option>
             </select>
         </label>
-        <label>Skip explained failures
+        <label>Skip explained transitions
             <select name="@SettingKeys.WebhookSkipExplained">
                 <option value="true" selected="@(Model.Setting(SettingKeys.WebhookSkipExplained, "true") != "false")">yes — one message per root cause</option>
                 <option value="false" selected="@(Model.Setting(SettingKeys.WebhookSkipExplained) == "false")">no — every target behind it too</option>
