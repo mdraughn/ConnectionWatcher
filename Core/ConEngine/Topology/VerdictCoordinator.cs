@@ -247,27 +247,38 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
-        // Wait only while NO counted anchor is determined: one stuck in
-        // Starting (an address that never resolves) must not hide LinkDown
-        // or LinkDegraded once the others have reported (spec §4.2, final review I2).
-        int answering, required;
+        // Wait while NO counted anchor is determined. Once one is, an anchor
+        // stuck in Starting (an address that never resolves) must not hide
+        // LinkDown (spec §4.2, final review I2). A PARTIAL answer is not
+        // concluded while the undetermined counted anchors could still lift
+        // it to the required count (controller ruling: no LinkDegraded blip
+        // on a cold start while the second anchor is still starting).
+        const string waiting = "Waiting for anchors to report";
+        int answering, required, potential;
         if (_offNet.Count > 0)
         {
             var counted = anchors.Where(a => _offNet.Contains(a.Monitor)).ToList();
             if (counted.All(a => Undetermined(a.State)))
-                return (VerdictState.Unknown, "Waiting for anchors to report", null);
+                return (VerdictState.Unknown, waiting, null);
             answering = counted.Count(a => Answering(a.State));
             required = 1;
+            potential = answering + counted.Count(a => Undetermined(a.State));
         }
         else
         {
             // Every anchor counts here, and at least one is determined (above).
+            // Independent units: an undetermined anchor of an operator that
+            // already answers adds nothing.
             answering = CountOperators(anchors.Where(a => Answering(a.State)).Select(a => a.Monitor));
             required = Math.Min(2, CountOperators(_anchors));
+            potential = CountOperators(anchors
+                .Where(a => Answering(a.State) || Undetermined(a.State)).Select(a => a.Monitor));
         }
 
         if (answering >= required)
             return Quality(determined, states);
+        if (answering > 0 && potential >= required)
+            return (VerdictState.Unknown, waiting, null);
 
         // 2. Down or partial: the path says where (spec §4.3).
         return answering == 0

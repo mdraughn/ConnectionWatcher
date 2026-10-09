@@ -77,6 +77,7 @@ The verdict states keep their names, and every consumer already understands them
 | answering ≥ required, at least the weather threshold degraded, **and** the loss is attributed to our own path (§4.5) | `LinkDegraded` | deepest path hop carrying real forwarding loss |
 | answering ≥ required, at least the weather threshold degraded, no path attribution | `InternetWeather` | – |
 | 0 < answering < required | `LinkDegraded` ("only N independent anchors answering") | frontier hop (§4.3) |
+| 0 < answering < required, but undetermined counted anchors could still close the gap | `Unknown` ("Waiting for anchors to report") | – |
 | answering = 0, at least one determined | `LinkDown` | frontier hop (§4.3) |
 
 **Path hop states never produce `LinkDown` or `LinkDegraded` on their own.** A Down or Faltering path hop while the anchors answer is a **model warning** (§4.6).

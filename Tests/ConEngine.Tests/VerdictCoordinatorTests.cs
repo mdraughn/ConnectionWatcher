@@ -282,7 +282,7 @@ public class VerdictCoordinatorTests
         var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
         verdict.Start();
-        foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
+        foreach (var m in monitors.Values)
             for (int i = 0; i < 5; i++)
             {
                 _time.Advance(TimeSpan.FromSeconds(1));
@@ -331,7 +331,10 @@ public class VerdictCoordinatorTests
     /// <summary>Builds a coordinator stack (topology + verdict) for an ad-hoc topology and makes it healthy.</summary>
     /// <param name="unresolved">Targets whose address never resolves: they stay undetermined.</param>
     private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Stack(
-        WatcherOptions options, params string[] unresolved)
+        WatcherOptions options, params string[] unresolved) => Stack(options, null, unresolved);
+
+    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Stack(
+        WatcherOptions options, List<TargetTransition>? transitions, params string[] unresolved)
     {
         var graph = TargetGraph.FromOptions(options);
         var monitors = new Dictionary<Guid, TargetMonitor>();
@@ -346,6 +349,8 @@ public class VerdictCoordinatorTests
         new TopologyCoordinator(graph, monitors, NullLogger<TopologyCoordinator>.Instance).Start();
         var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+        if (transitions is not null)
+            verdict.TransitionSource.Subscribe(transitions.Add);
         verdict.Start();
         foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
             for (int i = 0; i < 5; i++)
@@ -485,6 +490,68 @@ public class VerdictCoordinatorTests
         FeedDown(monitors, graph, "Cloudflare");
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Contains("nothing answers beyond Router", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void An_untagged_cold_start_waits_for_the_other_anchors_instead_of_reporting_link_degraded()
+    {
+        // Controller ruling on the I2 concern: 0 < answering < required while
+        // undetermined anchors could still close the gap is "waiting".
+        var transitions = new List<TargetTransition>();
+        var (verdict, _, _) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        }, transitions);
+
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        Assert.DoesNotContain(transitions, t => t.Reason.Verdict is "LinkDegraded" or "LinkDown");
+        Assert.Equal(["Healthy"], transitions.Select(t => t.Reason.Verdict).ToArray());
+    }
+
+    [Fact]
+    public void A_partial_answer_with_every_anchor_determined_is_still_link_degraded()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        });
+
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
+        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void A_partial_answer_whose_gap_a_stuck_anchor_could_close_keeps_waiting()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        }, unresolved: "Quad9");
+
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
     }
 
     [Fact]
