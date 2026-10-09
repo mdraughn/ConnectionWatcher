@@ -36,6 +36,12 @@ public class VerdictCoordinator : IDisposable
     /// glitches and the metrics series.</summary>
     public const string SubjectName = "Internet";
 
+    /// <summary>The longest the verdict waits for undetermined anchors that
+    /// could still answer before concluding LinkDown / LinkDegraded from the
+    /// ones that have reported (spec §4.2): a stuck anchor — an address that
+    /// never resolves — must never hide an outage for longer than this.</summary>
+    public static readonly TimeSpan AnchorWaitCap = TimeSpan.FromSeconds(30);
+
     private readonly TargetGraph _graph;
     private readonly IReadOnlyList<TargetMonitor> _anchors;
     private readonly IReadOnlyList<(TargetMonitor Monitor, int Depth)> _ancestors;
@@ -72,14 +78,23 @@ public class VerdictCoordinator : IDisposable
     /// next transition.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
+    private readonly TimeSpan _anchorWaitCap;
+    // Guarded by _lock. When the current wait for undetermined anchors began
+    // (null: not waiting), and the one-shot timer that reclassifies at its cap.
+    private DateTimeOffset? _waitingSince;
+    private ITimer? _waitTimer;
+    private bool _waitingThisPass;
+    private bool _disposed;
+
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
         IReadOnlyDictionary<Guid, TargetMonitor> monitors, int weatherThreshold,
-        TimeProvider timeProvider, ILogger<VerdictCoordinator> log)
+        TimeProvider timeProvider, ILogger<VerdictCoordinator> log, TimeSpan? anchorWaitCap = null)
     {
         _graph = graph;
         _weatherThreshold = weatherThreshold;
         _time = timeProvider;
         _log = log;
+        _anchorWaitCap = anchorWaitCap ?? AnchorWaitCap;
         _anchors = anchorPool.MemberTargetIds
             .Where(monitors.ContainsKey).Select(id => monitors[id]).ToList();
 
@@ -169,10 +184,15 @@ public class VerdictCoordinator : IDisposable
     {
         lock (_lock)
         {
+            if (_disposed)
+                return; // a wait-cap timer callback racing Dispose
             // One read per monitor: classification, detail and blame all come
             // from the same snapshot, so the detail can never contradict the state.
             var states = _all.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState);
+            _waitingThisPass = false;
             var (verdict, detail, operatorName) = Classify(states);
+            if (!_waitingThisPass)
+                EndWait();
             var previous = Current;
             if (verdict == previous.State)
             {
@@ -232,6 +252,33 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
+    /// <summary>Under _lock, from Classify: the anchors that reported are not
+    /// enough, but undetermined ones could still answer. True while the wait
+    /// is within its cap. The first call of a wait starts the clock and arms a
+    /// one-shot timer that reclassifies at the cap (Classify otherwise runs
+    /// only on monitor transitions, and a stuck anchor emits none).</summary>
+    private bool StillWaiting()
+    {
+        _waitingThisPass = true;
+        var now = _time.GetUtcNow();
+        if (_waitingSince is not { } since)
+        {
+            _waitingSince = now;
+            _waitTimer?.Dispose();
+            _waitTimer = _time.CreateTimer(_ => Recalculate(), null, _anchorWaitCap, Timeout.InfiniteTimeSpan);
+            return true;
+        }
+        return now - since < _anchorWaitCap;
+    }
+
+    /// <summary>Under _lock: the waiting condition has cleared.</summary>
+    private void EndWait()
+    {
+        _waitingSince = null;
+        _waitTimer?.Dispose();
+        _waitTimer = null;
+    }
+
     private static bool Answering(HostState s) => TopologyCoordinator.Answering(s);
 
     private static bool Undetermined(HostState s) => s is HostState.Initializing or HostState.Starting;
@@ -247,12 +294,12 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
-        // Wait while NO counted anchor is determined. Once one is, an anchor
-        // stuck in Starting (an address that never resolves) must not hide
-        // LinkDown (spec §4.2, final review I2). A PARTIAL answer is not
-        // concluded while the undetermined counted anchors could still lift
-        // it to the required count (controller ruling: no LinkDegraded blip
-        // on a cold start while the second anchor is still starting).
+        // Wait while NO counted anchor is determined. Once one is, a shortfall
+        // is not concluded while undetermined counted anchors could still
+        // answer (no LinkDown / LinkDegraded blip on a cold start or after a
+        // recovery releases the anchors while one is permanently dead) — but
+        // only for AnchorWaitCap: an anchor stuck in Starting (an address that
+        // never resolves) must not hide the outage longer (spec §4.2, I2).
         const string waiting = "Waiting for anchors to report";
         int answering, required, potential;
         if (_offNet.Count > 0)
@@ -277,7 +324,10 @@ public class VerdictCoordinator : IDisposable
 
         if (answering >= required)
             return Quality(determined, states);
-        if (answering > 0 && potential >= required)
+        // Could an undetermined counted unit still change the conclusion?
+        // None answering: any one that might answer. Some: enough to close the gap.
+        var couldChange = answering == 0 ? potential > answering : potential >= required;
+        if (couldChange && StillWaiting())
             return (VerdictState.Unknown, waiting, null);
 
         // 2. Down or partial: the path says where (spec §4.3).
@@ -409,6 +459,8 @@ public class VerdictCoordinator : IDisposable
         List<IDisposable> toDispose;
         lock (_lock)
         {
+            _disposed = true;
+            EndWait();
             toDispose = new List<IDisposable>(_subscriptions);
             _subscriptions.Clear();
         }

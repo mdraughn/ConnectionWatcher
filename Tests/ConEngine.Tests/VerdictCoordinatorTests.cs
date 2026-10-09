@@ -336,6 +336,20 @@ public class VerdictCoordinatorTests
     private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Stack(
         WatcherOptions options, List<TargetTransition>? transitions, params string[] unresolved)
     {
+        var (verdict, monitors, graph) = ColdStack(options, transitions, unresolved);
+        foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
+            for (int i = 0; i < 5; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+            }
+        return (verdict, monitors, graph);
+    }
+
+    /// <summary>The same stack with no samples yet: every monitor is still starting.</summary>
+    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) ColdStack(
+        WatcherOptions options, List<TargetTransition>? transitions, params string[] unresolved)
+    {
         var graph = TargetGraph.FromOptions(options);
         var monitors = new Dictionary<Guid, TargetMonitor>();
         foreach (var target in graph.Targets.Values)
@@ -352,13 +366,67 @@ public class VerdictCoordinatorTests
         if (transitions is not null)
             verdict.TransitionSource.Subscribe(transitions.Add);
         verdict.Start();
-        foreach (var m in monitors.Values.Where(m => m.ResolvedAddress is not null))
-            for (int i = 0; i < 5; i++)
-            {
-                _time.Advance(TimeSpan.FromSeconds(1));
-                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
-            }
         return (verdict, monitors, graph);
+    }
+
+    private void FeedUp(Dictionary<Guid, TargetMonitor> monitors, TargetGraph graph, string name)
+    {
+        var monitor = monitors[graph.GetByName(name).Id];
+        for (int i = 0; i < 5; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            monitor.RecordPingResult(new PingResult(monitor.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+        }
+    }
+
+    private static WatcherOptions IspKnownTwoAnchors() => new()
+    {
+        Targets =
+        [
+            new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+            new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+            new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Edge" },
+            new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Edge" },
+        ],
+        Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+    };
+
+    [Fact]
+    public void A_cold_start_whose_first_anchor_reports_down_waits_for_the_others_instead_of_link_down()
+    {
+        // 2026-10-09 ruling: one permanently dead anchor must not blip LinkDown
+        // at startup while the other anchors are still starting.
+        var transitions = new List<TargetTransition>();
+        var (verdict, monitors, graph) = ColdStack(IspKnownTwoAnchors(), transitions);
+        FeedUp(monitors, graph, "Router");
+        FeedUp(monitors, graph, "Edge");
+
+        FeedDown(monitors, graph, "Google"); // Cloudflare is still Starting
+        Assert.Equal(HostState.Down, monitors[graph.GetByName("Google").Id].CurrentState);
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
+
+        FeedUp(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict); // Google is still dead
+
+        // The wait ended when its condition cleared: the cap timer changes nothing.
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+        Assert.DoesNotContain(transitions, t => t.Reason.Verdict is "LinkDown" or "LinkDegraded");
+    }
+
+    [Fact]
+    public void A_cold_start_with_every_anchor_down_is_link_down_without_waiting_for_the_cap()
+    {
+        var (verdict, monitors, graph) = ColdStack(IspKnownTwoAnchors(), null);
+        FeedUp(monitors, graph, "Router");
+        FeedUp(monitors, graph, "Edge");
+
+        FeedDown(monitors, graph, "Google");
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        FeedDown(monitors, graph, "Cloudflare"); // every anchor determined: nothing left to wait for
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
     }
 
     [Fact]
@@ -467,6 +535,12 @@ public class VerdictCoordinatorTests
 
         FeedDown(monitors, graph, "Google");
         FeedDown(monitors, graph, "Cloudflare");
+        // Quad9 could still answer: wait, but never longer than the cap.
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
+
+        // No further samples: the cap timer alone must reclassify.
+        _time.Advance(VerdictCoordinator.AnchorWaitCap);
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
     }
@@ -488,6 +562,7 @@ public class VerdictCoordinatorTests
 
         FeedDown(monitors, graph, "Google");
         FeedDown(monitors, graph, "Cloudflare");
+        _time.Advance(VerdictCoordinator.AnchorWaitCap); // the stuck Quad9 holds the verdict at most this long
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Contains("nothing answers beyond Router", verdict.CurrentDetail);
     }
@@ -552,6 +627,11 @@ public class VerdictCoordinatorTests
         FeedDown(monitors, graph, "Cloudflare");
         Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
         Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
+
+        // ...but not forever: past the cap the partial answer is concluded.
+        _time.Advance(VerdictCoordinator.AnchorWaitCap);
+        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
+        Assert.Contains("only 1 answering, 2 needed", verdict.CurrentDetail);
     }
 
     [Fact]
