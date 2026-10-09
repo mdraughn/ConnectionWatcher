@@ -56,10 +56,13 @@ public class HostTracker
         return _analysisEngine.Recalculate(Sample());
     }
 
-    /// <summary>Commanded by topology: an ancestor is Down.</summary>
-    public AnalysisOutcome? MarkUnreachable(Guid ancestorId) => _analysisEngine.MarkUnreachable(ancestorId);
+    /// <summary>Topology names (or withdraws) the upstream root cause of an own Down.</summary>
+    public AnalysisOutcome? SetExplanation(Guid? ancestorId) => _analysisEngine.SetExplanation(ancestorId);
 
-    /// <summary>Commanded by topology: the ancestor recovered; clear history and re-prove.</summary>
+    /// <summary>The root cause while shown Unreachable; null otherwise.</summary>
+    public Guid? ExplainedBy => _analysisEngine.ExplainedBy;
+
+    /// <summary>Commanded by topology: the root cause recovered; clear history and re-prove.</summary>
     public AnalysisOutcome? Release()
     {
         _history.Clear();

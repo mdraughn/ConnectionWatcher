@@ -88,31 +88,41 @@ public class TargetMonitorTests
     }
 
     [Fact]
-    public void SetUnreachable_and_release_work_after_tracking()
+    public void An_explained_monitor_becomes_unreachable_only_on_its_own_down()
     {
         var (m, transitions, time) = Make();
         m.StartTracking(Ip);
         Feed(m, time, 5, success: true);
-        var ancestor = Guid.NewGuid();
+        var root = Guid.NewGuid();
 
-        m.SetUnreachable(ancestor);
+        m.SetExplanation(root);
+        Assert.Equal(HostState.Responding, m.CurrentState);
+        Assert.Null(m.ExplainedBy);
+
+        Feed(m, time, 20, success: false);
         Assert.Equal(HostState.Unreachable, m.CurrentState);
-        Assert.Equal(ancestor, transitions.Last().Reason.AncestorId);
+        Assert.Equal(root, m.ExplainedBy);
+        Assert.Equal(root, transitions.Last().Reason.AncestorId);
+        Assert.NotNull(m.Discipline.BurstStartedAt); // still probing, at burst cadence
 
         m.Release();
         Assert.Equal(HostState.Starting, m.CurrentState);
+        Assert.Null(m.ExplainedBy);
     }
 
     [Fact]
-    public void SetUnreachable_before_tracking_starts_parked()
+    public void An_explanation_given_before_tracking_applies_once_tracking_starts()
     {
-        var (m, transitions, _) = Make();
-        m.SetUnreachable(Guid.NewGuid());
-        Assert.Equal(HostState.Unreachable, m.CurrentState);
-        Assert.Equal(TransitionTrigger.ParentDown, transitions.Last().Reason.Trigger);
+        var (m, transitions, time) = Make();
+        var root = Guid.NewGuid();
+        m.SetExplanation(root);
+        Assert.Equal(HostState.Initializing, m.CurrentState);
+        Assert.Empty(transitions);
 
-        m.Release();
-        Assert.Equal(HostState.Starting, m.CurrentState);
+        m.StartTracking(Ip);
+        Feed(m, time, 5, success: false); // first window: straight to (Down, explained)
+        Assert.Equal(HostState.Unreachable, m.CurrentState);
+        Assert.Equal(root, m.ExplainedBy);
     }
 
     [Fact]
@@ -169,15 +179,16 @@ public class TargetMonitorTests
         Feed(m, time, 5, success: true); // Responding
         var ancestor = Guid.NewGuid();
         Parallel.Invoke(
-            () => m.SetUnreachable(ancestor),
+            () => m.SetExplanation(ancestor),
             () => m.RecordPingResult(new PingResult(Ip, false, 0, timestamp: time.GetUtcNow())));
         m.Release();
 
+        // Whatever order the two threads ran in, delivery order equals state
+        // order: every transition starts where the previous one ended.
         var states = transitions.Select(t => (t.From, t.To)).ToList();
         Assert.Equal((HostState.Starting, HostState.Responding), states[0]);
-        Assert.Equal((HostState.Responding, HostState.Unreachable), states[1]);
-        Assert.Equal((HostState.Unreachable, HostState.Starting), states[2]);
-        Assert.Equal(3, states.Count);
+        for (int i = 1; i < states.Count; i++)
+            Assert.Equal(states[i - 1].To, states[i].From);
     }
 
     [Fact]

@@ -39,7 +39,7 @@ public class TargetMonitor : IDisposable
 
     // Pre-tracker state bookkeeping (before StartTracking / for resolution failures).
     private HostState _preTrackerState = HostState.Initializing;
-    private Guid? _pendingUnreachableAncestor;
+    private Guid? _explanation; // topology's latest word, applied once tracking starts
     private bool _resolutionFailureReported;
     private HostState? _seedState;
 
@@ -121,9 +121,9 @@ public class TargetMonitor : IDisposable
             if (_seedState is { } seed)
                 QueueOutcomeLocked(_tracker.Seed(seed));
 
-            // Honor topology commands that arrived before we started.
-            if (_pendingUnreachableAncestor is { } ancestor)
-                QueueOutcomeLocked(_tracker.MarkUnreachable(ancestor));
+            // Honor the topology's explanation if it spoke before we started.
+            if (_explanation is { } cause)
+                QueueOutcomeLocked(_tracker.SetExplanation(cause));
         }
         DrainOutbox();
     }
@@ -154,25 +154,23 @@ public class TargetMonitor : IDisposable
         DrainOutbox();
     }
 
-    public void SetUnreachable(Guid ancestorId)
+    /// <summary>Topology names (or withdraws) the upstream root cause. Only an
+    /// own Down shows it (as Unreachable); before tracking it is remembered.</summary>
+    public void SetExplanation(Guid? ancestorId)
     {
         lock (_lock)
         {
+            _explanation = ancestorId;
             if (_tracker is not null)
-            {
-                QueueOutcomeLocked(_tracker.MarkUnreachable(ancestorId));
-            }
-            else if (_preTrackerState != HostState.Unreachable)
-            {
-                _seedState = null; // topology has spoken; the presumption is void
-                _pendingUnreachableAncestor = ancestorId;
-                QueuePreTrackerTransitionLocked(HostState.Unreachable, new TransitionReason
-                {
-                    Trigger = TransitionTrigger.ParentDown, AncestorId = ancestorId,
-                });
-            }
+                QueueOutcomeLocked(_tracker.SetExplanation(ancestorId));
         }
         DrainOutbox();
+    }
+
+    /// <summary>The root cause while shown Unreachable; null otherwise.</summary>
+    public Guid? ExplainedBy
+    {
+        get { lock (_lock) { return _tracker?.ExplainedBy; } }
     }
 
     public void Release()
@@ -181,12 +179,13 @@ public class TargetMonitor : IDisposable
         {
             if (_tracker is not null)
             {
+                _explanation = null;
                 QueueOutcomeLocked(_tracker.Release());
             }
             else if (_preTrackerState == HostState.Unreachable)
             {
                 _seedState = null; // released: re-prove from Starting, not the presumption
-                _pendingUnreachableAncestor = null;
+                _explanation = null;
                 QueuePreTrackerTransitionLocked(HostState.Starting,
                     new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
             }

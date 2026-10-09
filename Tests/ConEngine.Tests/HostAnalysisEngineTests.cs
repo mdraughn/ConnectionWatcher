@@ -81,49 +81,118 @@ public class HostAnalysisEngineTests
     }
 
     [Fact]
-    public void MarkUnreachable_parks_and_ignores_stale_results()
+    public void An_explanation_alone_does_not_make_a_healthy_host_unreachable()
     {
+        // Spec 2026-10-09 D4: never infer Unreachable; own evidence first.
         var (tracker, transitions, time) = Make();
         Feed(tracker, time, 5, success: true);
-        var ancestor = Guid.NewGuid();
+        var count = transitions.Count;
 
-        tracker.MarkUnreachable(ancestor);
-        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
-        var t = transitions.Last();
-        Assert.Equal(TransitionTrigger.ParentDown, t.Reason.Trigger);
-        Assert.Equal(ancestor, t.Reason.AncestorId);
+        tracker.SetExplanation(Guid.NewGuid());
+        Assert.Equal(HostState.Responding, tracker.CurrentState);
+        Assert.Null(tracker.ExplainedBy);
+        Assert.Equal(count, transitions.Count);
 
-        // A stale in-flight result must not move the state.
-        Feed(tracker, time, 1, success: false);
-        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+        Feed(tracker, time, 5, success: true); // still answering: still Responding
+        Assert.Equal(HostState.Responding, tracker.CurrentState);
     }
 
     [Fact]
-    public void Release_returns_to_starting_with_fresh_history()
+    public void Own_down_with_an_explanation_is_unreachable_naming_the_root_cause()
     {
         var (tracker, transitions, time) = Make();
         Feed(tracker, time, 5, success: true);
-        tracker.MarkUnreachable(Guid.NewGuid());
+        var root = Guid.NewGuid();
+        tracker.SetExplanation(root);
+
+        Feed(tracker, time, 20, success: false); // Responding -> Faltering -> (Down, explained)
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+        Assert.Equal(root, tracker.ExplainedBy);
+        var t = transitions.Last();
+        Assert.Equal(HostState.Unreachable, t.To);
+        Assert.Equal(TransitionTrigger.ParentDown, t.Reason.Trigger);
+        Assert.Equal(root, t.Reason.AncestorId);
+        Assert.DoesNotContain(transitions, x => x.To == HostState.Down); // never shown Down first
+    }
+
+    [Fact]
+    public void Explaining_an_already_down_host_turns_it_unreachable()
+    {
+        var (tracker, transitions, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        Feed(tracker, time, 20, success: false);
+        Assert.Equal(HostState.Down, tracker.CurrentState);
+
+        var root = Guid.NewGuid();
+        tracker.SetExplanation(root);
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+        Assert.Equal((HostState.Down, HostState.Unreachable), (transitions.Last().From, transitions.Last().To));
+        Assert.Equal(root, transitions.Last().Reason.AncestorId);
+    }
+
+    [Fact]
+    public void Withdrawing_the_explanation_leaves_a_still_down_host_down_on_its_own()
+    {
+        var (tracker, transitions, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        tracker.SetExplanation(Guid.NewGuid());
+        Feed(tracker, time, 20, success: false);
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+
+        tracker.SetExplanation(null);
+        Assert.Equal(HostState.Down, tracker.CurrentState);
+        var t = transitions.Last();
+        Assert.Equal((HostState.Unreachable, HostState.Down), (t.From, t.To));
+        Assert.Equal(TransitionTrigger.ThresholdCrossed, t.Reason.Trigger);
+        Assert.Contains("no longer explained", t.Reason.Detail);
+    }
+
+    [Fact]
+    public void An_unreachable_host_that_answers_again_recovers_on_its_own_evidence()
+    {
+        var (tracker, transitions, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        tracker.SetExplanation(Guid.NewGuid());
+        Feed(tracker, time, 20, success: false);
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
+
+        Feed(tracker, time, 3, success: true); // 3 of 5 >= RecoveringThreshold
+        Assert.Equal(HostState.Recovering, tracker.CurrentState);
+        Assert.Equal((HostState.Unreachable, HostState.Recovering), (transitions.Last().From, transitions.Last().To));
+    }
+
+    [Fact]
+    public void Release_returns_an_unreachable_host_to_starting_with_fresh_history()
+    {
+        var (tracker, transitions, time) = Make();
+        Feed(tracker, time, 5, success: true);
+        tracker.SetExplanation(Guid.NewGuid());
+        Feed(tracker, time, 20, success: false);
 
         tracker.Release();
         Assert.Equal(HostState.Starting, tracker.CurrentState);
         Assert.Equal(0, tracker.HistoryCount);
+        Assert.Null(tracker.ExplainedBy);
         Assert.Equal(TransitionTrigger.ParentRecovered, transitions.Last().Reason.Trigger);
 
-        // Must re-prove itself: 5 good pings to get back to Responding.
         Feed(tracker, time, 5, success: true);
         Assert.Equal(HostState.Responding, tracker.CurrentState);
     }
 
     [Fact]
-    public void MarkUnreachable_is_idempotent()
+    public void Release_and_repeated_explanations_are_idempotent()
     {
         var (tracker, transitions, time) = Make();
         Feed(tracker, time, 5, success: true);
-        tracker.MarkUnreachable(Guid.NewGuid());
-        var countAfterFirst = transitions.Count;
-        tracker.MarkUnreachable(Guid.NewGuid());
-        Assert.Equal(countAfterFirst, transitions.Count);
+        tracker.Release();                      // not Unreachable: no-op
+        var root = Guid.NewGuid();
+        tracker.SetExplanation(root);
+        tracker.SetExplanation(root);           // same: no-op
+        Feed(tracker, time, 20, success: false);
+        var count = transitions.Count;
+        tracker.SetExplanation(Guid.NewGuid()); // another cause, still Unreachable: silent
+        Assert.Equal(count, transitions.Count);
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
     }
 
     [Fact]

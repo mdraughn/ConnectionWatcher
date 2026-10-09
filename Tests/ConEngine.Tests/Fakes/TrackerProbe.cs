@@ -22,7 +22,8 @@ public sealed class TrackerProbe(IPAddress address, PingProfile profile, TimePro
 
     public void Seed(HostState state) => Keep(_tracker.Seed(state));
     public void RecordPingResult(PingResult result) => Keep(_tracker.RecordPingResult(result));
-    public void MarkUnreachable(Guid ancestorId) => Keep(_tracker.MarkUnreachable(ancestorId));
+    public void SetExplanation(Guid? ancestorId) => Keep(_tracker.SetExplanation(ancestorId));
+    public Guid? ExplainedBy => _tracker.ExplainedBy;
     public void Release() => Keep(_tracker.Release());
     public IReadOnlyList<PingHistoryEntry> EntriesSince(DateTimeOffset since) => _tracker.EntriesSince(since);
 

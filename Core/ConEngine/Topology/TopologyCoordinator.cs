@@ -39,7 +39,7 @@ public class TopologyCoordinator : IDisposable
             foreach (var descendant in _graph.GetDescendants(transition.TargetId))
             {
                 if (_monitors.TryGetValue(descendant.Id, out var monitor))
-                    monitor.SetUnreachable(transition.TargetId);
+                    monitor.SetExplanation(transition.TargetId);
             }
         }
         else if (transition.From == HostState.Down &&

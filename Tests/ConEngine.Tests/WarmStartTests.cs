@@ -115,18 +115,38 @@ public class WarmStartTests
     }
 
     [Fact]
-    public void Seeded_unreachable_stays_parked_until_release()
+    public void Seeded_unreachable_confirmed_by_topology_stays_silent()
     {
         var (tracker, transitions, time) = Make();
         tracker.Seed(HostState.Unreachable);
+        Assert.Equal(HostState.Unreachable, tracker.CurrentState);
 
-        Feed(tracker, time, 3, success: true); // stale in-flight results
+        tracker.SetExplanation(Guid.NewGuid()); // topology names the root cause
+        Feed(tracker, time, 5, success: false);  // fresh samples confirm: still down
         Assert.Equal(HostState.Unreachable, tracker.CurrentState);
         Assert.Empty(transitions);
+    }
 
-        tracker.Release();
-        Assert.Equal(HostState.Starting, tracker.CurrentState);
-        Feed(tracker, time, 5, success: true);
+    [Fact]
+    public void Seeded_unreachable_without_a_root_cause_is_corrected_to_down()
+    {
+        var (tracker, transitions, _) = Make();
+        tracker.Seed(HostState.Unreachable);
+
+        tracker.SetExplanation(null); // topology: nothing upstream explains it
+        Assert.Equal(HostState.Down, tracker.CurrentState);
+        Assert.Equal((HostState.Unreachable, HostState.Down), (transitions.Single().From, transitions.Single().To));
+    }
+
+    [Fact]
+    public void Seeded_unreachable_that_proves_alive_exits_via_recovering()
+    {
+        var (tracker, transitions, time) = Make();
+        tracker.Seed(HostState.Unreachable);
+        tracker.SetExplanation(Guid.NewGuid());
+
+        Feed(tracker, time, 6, success: true);
+        Assert.Equal((HostState.Unreachable, HostState.Recovering), (transitions[0].From, transitions[0].To));
         Assert.Equal(HostState.Responding, tracker.CurrentState);
     }
 

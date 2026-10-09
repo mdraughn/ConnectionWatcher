@@ -5,15 +5,22 @@ using System.Net;
 namespace ConEngine.Tracking;
 
 /// <summary>
-/// Per-host state machine. Derives state from recent ping samples and from
-/// topology commands (MarkUnreachable/Release). Pure: every step returns
+/// Per-host state machine. Its OWN state comes only from this host's
+/// samples; topology may add an EXPLANATION — the upstream root cause of an
+/// own Down — which shows the host as Unreachable (spec 2026-10-09 §4.4).
+/// Samples are always analysed, explained or not. Pure: every step returns
 /// its outcome and never publishes, so the owner decides when to emit.
 /// </summary>
 internal class HostAnalysisEngine
 {
+    /// <summary>Seed(Unreachable): an upstream cause topology has not named yet.</summary>
+    private static readonly Guid SeededCause = Guid.Empty;
+
     private readonly PingProfile _profile;
     private readonly TimeProvider _timeProvider;
     private IPAddress _hostAddress;
+    private HostState _own = HostState.Initializing;
+    private Guid? _explainedBy;
 
     public HostAnalysisEngine(PingProfile profile, IPAddress hostAddress, TimeProvider timeProvider)
     {
@@ -22,7 +29,14 @@ internal class HostAnalysisEngine
         _timeProvider = timeProvider;
     }
 
-    public HostState CurrentState { get; private set; } = HostState.Initializing;
+    /// <summary>What everyone sees: Unreachable = own Down + an upstream root cause.</summary>
+    public HostState CurrentState => Show(_own, _explainedBy);
+
+    /// <summary>The root cause while shown Unreachable; null otherwise.</summary>
+    public Guid? ExplainedBy => CurrentState == HostState.Unreachable ? _explainedBy : null;
+
+    private static HostState Show(HostState own, Guid? explainedBy) =>
+        own == HostState.Down && explainedBy is not null ? HostState.Unreachable : own;
 
     /// <summary>True while running on a seeded (presumed) state that fresh
     /// samples have not yet confirmed.</summary>
@@ -47,33 +61,54 @@ internal class HostAnalysisEngine
     /// Warm restart: adopt a presumed state silently — no transition. Fresh
     /// samples confirm it (nothing emitted) or correct it (one transition
     /// from the seeded state) once MinUsableSample is reached; until then no
-    /// threshold transition can fire. Valid only before the first sample.
-    /// Returns the status to publish, or null when ignored.
+    /// threshold transition can fire. Unreachable seeds as own Down with a
+    /// placeholder cause that topology's first explanation replaces.
+    /// Valid only before the first sample. Returns the status to publish, or
+    /// null when ignored.
     /// </summary>
     public AnalysisOutcome? Seed(HostState state)
     {
-        if (CurrentState != HostState.Initializing)
+        if (_own != HostState.Initializing)
             return null;
-        CurrentState = state;
+        if (state == HostState.Unreachable)
+        {
+            _own = HostState.Down;
+            _explainedBy = SeededCause;
+        }
+        else
+        {
+            _own = state;
+        }
         _seeded = true;
         TrackingStarted = _timeProvider.GetUtcNow();
         return new AnalysisOutcome(BuildStatus(TrackingStarted), null);
     }
 
-    /// <summary>Commanded by topology: an ancestor is Down, stop deriving state from data.</summary>
-    public AnalysisOutcome? MarkUnreachable(Guid ancestorId)
+    /// <summary>
+    /// Topology names (or withdraws) the upstream root cause. It only shows
+    /// when this host's own evidence says Down; an explanation never makes a
+    /// healthy host Unreachable.
+    /// </summary>
+    public AnalysisOutcome? SetExplanation(Guid? ancestorId)
     {
-        if (CurrentState == HostState.Unreachable)
+        var before = CurrentState;
+        _explainedBy = ancestorId;
+        var after = CurrentState;
+        if (after == before)
             return null;
-        _seeded = false;
-        return Transition(HostState.Unreachable, new TransitionReason
-        {
-            Trigger = TransitionTrigger.ParentDown,
-            AncestorId = ancestorId,
-        });
+        var reason = after == HostState.Unreachable
+            ? new TransitionReason { Trigger = TransitionTrigger.ParentDown, AncestorId = ancestorId }
+            : new TransitionReason
+            {
+                Trigger = TransitionTrigger.ThresholdCrossed,
+                SuccessRate = SuccessRate,
+                SampleSize = SampleSize,
+                Detail = "no longer explained by an upstream failure",
+            };
+        return Emit(before, after, reason, _timeProvider.GetUtcNow());
     }
 
-    /// <summary>Commanded by topology: the ancestor recovered; re-prove from Starting.</summary>
+    /// <summary>Commanded by topology: the root cause recovered; re-prove from Starting.</summary>
     public AnalysisOutcome? Release()
     {
         if (CurrentState != HostState.Unreachable)
@@ -81,25 +116,25 @@ internal class HostAnalysisEngine
         _seeded = false;
         SampleSize = 0; NumSuccess = 0; NumFailed = 0;
         SuccessRate = 0; FailureRate = 0; AverageRoundtripTime = 0;
-        return Transition(HostState.Starting, new TransitionReason { Trigger = TransitionTrigger.ParentRecovered });
+        _own = HostState.Starting;
+        _explainedBy = null;
+        return Emit(HostState.Unreachable, HostState.Starting,
+            new TransitionReason { Trigger = TransitionTrigger.ParentRecovered }, _timeProvider.GetUtcNow());
     }
 
-    /// <summary>Folds the sample window into statistics and state. Returns
-    /// null while Unreachable (stale in-flight results must not move a parked host).</summary>
-    public AnalysisOutcome? Recalculate(IEnumerable<PingHistoryEntry> samples)
+    /// <summary>Folds the sample window into statistics and state — always,
+    /// explained or not.</summary>
+    public AnalysisOutcome Recalculate(IEnumerable<PingHistoryEntry> samples)
     {
-        if (CurrentState == HostState.Unreachable)
-            return null;
-
         SampleSize = 0; NumSuccess = 0; NumFailed = 0;
         float sumRoundtrip = 0f;
 
         foreach (PingHistoryEntry item in samples)
         {
-            if (CurrentState == HostState.Initializing)
+            if (_own == HostState.Initializing)
             {
                 TrackingStarted = item.Timestamp;
-                CurrentState = HostState.Starting;
+                _own = HostState.Starting;
             }
             if (item.Timestamp > LastUpdated)
                 LastUpdated = item.Timestamp;
@@ -122,22 +157,22 @@ internal class HostAnalysisEngine
             // classify the fresh sample exactly like a Starting exit.
             if (SampleSize < _profile.MinUsableSample)
             {
-                next = CurrentState;
+                next = _own;
             }
             else
             {
                 _seeded = false;
                 next = ClassifyFreshSample();
                 // A seeded Down that proves alive must exit via Recovering:
-                // topology releases the children it parked before the restart
-                // only on a Down -> Recovering/Responding transition.
-                if (CurrentState == HostState.Down && next != HostState.Down)
+                // topology releases the children it explained only on a
+                // Down -> Recovering/Responding transition.
+                if (_own == HostState.Down && next != HostState.Down)
                     next = HostState.Recovering;
             }
         }
         else
         {
-            next = CurrentState switch
+            next = _own switch
             {
                 HostState.Starting when SampleSize >= _profile.MinUsableSample =>
                     ClassifyFreshSample(),
@@ -147,29 +182,33 @@ internal class HostAnalysisEngine
                 HostState.Down when SuccessRate >= _profile.RecoveringThreshold => HostState.Recovering,
                 HostState.Recovering when SuccessRate >= _profile.RespondingThreshold => HostState.Responding,
                 HostState.Recovering when SuccessRate < _profile.DownThreshold => HostState.Down,
-                _ => CurrentState,
+                _ => _own,
             };
         }
 
-        if (next != CurrentState)
+        var before = CurrentState;
+        _own = next;
+        var after = CurrentState;
+        if (after != before)
         {
-            return Transition(next, new TransitionReason
-            {
-                Trigger = TransitionTrigger.ThresholdCrossed,
-                SuccessRate = SuccessRate,
-                SampleSize = SampleSize,
-            });
+            var reason = after == HostState.Unreachable
+                ? new TransitionReason
+                {
+                    Trigger = TransitionTrigger.ParentDown, AncestorId = _explainedBy,
+                    SuccessRate = SuccessRate, SampleSize = SampleSize,
+                }
+                : new TransitionReason
+                {
+                    Trigger = TransitionTrigger.ThresholdCrossed,
+                    SuccessRate = SuccessRate, SampleSize = SampleSize,
+                };
+            return Emit(before, after, reason, LastUpdated);
         }
         return new AnalysisOutcome(BuildStatus(LastUpdated), null);
     }
 
-    private AnalysisOutcome Transition(HostState to, TransitionReason reason)
+    private AnalysisOutcome Emit(HostState from, HostState to, TransitionReason reason, DateTimeOffset timestamp)
     {
-        var from = CurrentState;
-        CurrentState = to;
-        var timestamp = reason.Trigger == TransitionTrigger.ThresholdCrossed
-            ? LastUpdated
-            : _timeProvider.GetUtcNow();
         var status = BuildStatus(timestamp);
         return new AnalysisOutcome(status, new AnalysisTransition
         {
