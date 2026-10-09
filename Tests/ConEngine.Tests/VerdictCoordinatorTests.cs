@@ -362,11 +362,86 @@ public class VerdictCoordinatorTests
         }
         new TopologyCoordinator(graph, monitors, NullLogger<TopologyCoordinator>.Instance).Start();
         var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
-            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+            weatherThreshold: 2, _verdictTime ?? _time, NullLogger<VerdictCoordinator>.Instance);
         if (transitions is not null)
             verdict.TransitionSource.Subscribe(transitions.Add);
         verdict.Start();
         return (verdict, monitors, graph);
+    }
+
+    // When set, the verdict coordinators built by ColdStack/Stack use this clock instead of _time.
+    private TimeProvider? _verdictTime;
+
+    /// <summary>Reads the shared fake clock, but every timer fires 1 ms before
+    /// its due time relative to GetUtcNow — as a real system timer may.</summary>
+    private sealed class EarlyTimers(FakeTimeProvider inner) : TimeProvider
+    {
+        public static readonly TimeSpan Early = TimeSpan.FromMilliseconds(1);
+        public DateTimeOffset LastFire { get; private set; }
+        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
+        public override long GetTimestamp() => inner.GetTimestamp();
+        public override long TimestampFrequency => inner.TimestampFrequency;
+        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var due = dueTime > Early ? dueTime - Early : dueTime;
+            LastFire = inner.GetUtcNow() + due;
+            return inner.CreateTimer(callback, state, due, period);
+        }
+    }
+
+    [Fact]
+    public void A_wait_cap_timer_that_fires_early_still_ends_the_wait()
+    {
+        var early = new EarlyTimers(_time);
+        _verdictTime = early;
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Edge" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Edge" },
+                new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Edge" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        }, unresolved: "Quad9");
+        FeedDown(monitors, graph, "Google");
+        FeedDown(monitors, graph, "Cloudflare");
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+
+        // Land exactly on the early fire: by the clock the cap is 1 ms short.
+        _time.Advance(early.LastFire - _time.GetUtcNow());
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+    }
+
+    [Fact]
+    public void An_off_net_anchor_stuck_undetermined_does_not_hide_link_down_for_longer_than_the_cap()
+    {
+        // Ruling 2026-10-09: with the ISP known, an on-net anchor determined
+        // Down is evidence; a single never-resolving off-net anchor must not
+        // hold the verdict in "waiting" forever.
+        var (verdict, monitors, graph) = ColdStack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "Comcast DNS", Address = "75.75.75.75", Parent = "Edge", Operator = "Comcast" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Edge" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Comcast DNS", "Google"] }],
+        }, null, "Google");
+        FeedUp(monitors, graph, "Router");
+        FeedUp(monitors, graph, "Edge");
+        FeedDown(monitors, graph, "Comcast DNS");
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
+
+        _time.Advance(VerdictCoordinator.AnchorWaitCap);
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
     }
 
     private void FeedUp(Dictionary<Guid, TargetMonitor> monitors, TargetGraph graph, string name)

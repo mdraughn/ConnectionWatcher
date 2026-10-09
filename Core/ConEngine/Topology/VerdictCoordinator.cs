@@ -78,23 +78,24 @@ public class VerdictCoordinator : IDisposable
     /// next transition.</summary>
     public IObservable<TargetTransition> TransitionSource => _transitionSubject;
 
-    private readonly TimeSpan _anchorWaitCap;
     // Guarded by _lock. When the current wait for undetermined anchors began
-    // (null: not waiting), and the one-shot timer that reclassifies at its cap.
+    // (null: not waiting), the one-shot timer that ends it at the cap, and
+    // whether that timer has fired: the timer, not the clock, is authoritative
+    // (a system timer may fire a tick early, the wall clock may step back).
     private DateTimeOffset? _waitingSince;
     private ITimer? _waitTimer;
+    private bool _waitExpired;
     private bool _waitingThisPass;
     private bool _disposed;
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
         IReadOnlyDictionary<Guid, TargetMonitor> monitors, int weatherThreshold,
-        TimeProvider timeProvider, ILogger<VerdictCoordinator> log, TimeSpan? anchorWaitCap = null)
+        TimeProvider timeProvider, ILogger<VerdictCoordinator> log)
     {
         _graph = graph;
         _weatherThreshold = weatherThreshold;
         _time = timeProvider;
         _log = log;
-        _anchorWaitCap = anchorWaitCap ?? AnchorWaitCap;
         _anchors = anchorPool.MemberTargetIds
             .Where(monitors.ContainsKey).Select(id => monitors[id]).ToList();
 
@@ -260,21 +261,48 @@ public class VerdictCoordinator : IDisposable
     private bool StillWaiting()
     {
         _waitingThisPass = true;
+        if (_waitExpired)
+            return false;
         var now = _time.GetUtcNow();
         if (_waitingSince is not { } since)
         {
             _waitingSince = now;
             _waitTimer?.Dispose();
-            _waitTimer = _time.CreateTimer(_ => Recalculate(), null, _anchorWaitCap, Timeout.InfiniteTimeSpan);
+            // The callback takes _lock before reading `timer`, and this
+            // assignment happens under _lock: it always sees its own instance.
+            ITimer? timer = null;
+            timer = _time.CreateTimer(_ => OnWaitCap(timer), null, AnchorWaitCap, Timeout.InfiniteTimeSpan);
+            _waitTimer = timer;
             return true;
         }
-        return now - since < _anchorWaitCap;
+        return now - since < AnchorWaitCap;
+    }
+
+    /// <summary>Timer thread: the cap has passed. Authoritative — the clock
+    /// may read a tick short of the cap here — and never throws.</summary>
+    private void OnWaitCap(ITimer? timer)
+    {
+        try
+        {
+            lock (_lock)
+            {
+                if (timer is null || !ReferenceEquals(timer, _waitTimer))
+                    return; // stale: that wait already ended or was replaced
+                _waitExpired = true;
+            }
+            Recalculate();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Verdict wait-cap reclassification failed");
+        }
     }
 
     /// <summary>Under _lock: the waiting condition has cleared.</summary>
     private void EndWait()
     {
         _waitingSince = null;
+        _waitExpired = false;
         _waitTimer?.Dispose();
         _waitTimer = null;
     }
@@ -294,7 +322,7 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.Unknown, "No anchors determined yet", null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
-        // Wait while NO counted anchor is determined. Once one is, a shortfall
+        // Wait (uncapped) while NO anchor is determined. Once one is, a shortfall
         // is not concluded while undetermined counted anchors could still
         // answer (no LinkDown / LinkDegraded blip on a cold start or after a
         // recovery releases the anchors while one is permanently dead) — but
@@ -304,9 +332,9 @@ public class VerdictCoordinator : IDisposable
         int answering, required, potential;
         if (_offNet.Count > 0)
         {
+            // Every off-net anchor still undetermined is a capped wait too
+            // (below): an on-net anchor determined Down is evidence.
             var counted = anchors.Where(a => _offNet.Contains(a.Monitor)).ToList();
-            if (counted.All(a => Undetermined(a.State)))
-                return (VerdictState.Unknown, waiting, null);
             answering = counted.Count(a => Answering(a.State));
             required = 1;
             potential = answering + counted.Count(a => Undetermined(a.State));
