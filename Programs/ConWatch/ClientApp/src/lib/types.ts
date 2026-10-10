@@ -14,6 +14,10 @@ export interface TargetStatus {
   pingCount?: number;
   /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
   scope?: "Verdict" | "Local";
+  /** Notify when this is down, even if the internet is fine (spec §4.7). */
+  critical?: boolean;
+  /** Id of the upstream target whose failure explains this one's Unreachable state. */
+  explainedBy?: string | null;
 }
 
 export interface PoolStatus {

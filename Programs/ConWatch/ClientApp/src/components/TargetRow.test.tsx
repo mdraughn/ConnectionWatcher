@@ -30,4 +30,14 @@ describe("TargetRow", () => {
     const html = renderToStaticMarkup(<TargetRow target={t({ assumed: true })} />);
     expect(html).toContain("(assumed)");
   });
+  it("marks a critical target and always shows its state chip", () => {
+    const html = renderToStaticMarkup(
+      <TargetRow target={t({ critical: true })} show={{ stateChip: false, rtt: false }} />);
+    expect(html).toContain("cw-critical");
+    expect(html).toContain(">critical<");
+    expect(html).toContain("statechip"); // the LAN section hides chips, but not for critical
+  });
+  it("leaves non-critical rows unmarked", () => {
+    expect(renderToStaticMarkup(<TargetRow target={t()} />)).not.toContain("cw-critical");
+  });
 });

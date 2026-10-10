@@ -30,14 +30,17 @@ export function TargetRow({ target, rails = [], spine = "none", show }: {
   const { stateChip = true, successRate = true, rtt = true, led = true } = show ?? {};
   const assumedTitle = target.assumed
     ? "assumed from before the restart — confirming with fresh pings" : null;
-  const chip = stateChip ? CHIP_COLOR[target.state] : undefined;
+  // a critical row always shows its state (spec §4.7: prominently)
+  const chip = (stateChip || target.critical) ? CHIP_COLOR[target.state] : undefined;
   return (
     <div className="cw-row" title={assumedTitle ?? undefined}
       style={spine !== "none" ? { background: SPINE_BG[spine] } : undefined}>
       {rails.map((cell, i) => <span key={i} className={`cw-g ${cell}`}></span>)}
       <span className={`dot ${target.state.toLowerCase()}`}
         style={target.assumed ? { opacity: 0.45 } : undefined}></span>
-      <span>{target.name}{target.assumed && <small style={{ opacity: 0.5 }}> (assumed)</small>}</span>
+      <span>{target.name}{target.assumed && <small style={{ opacity: 0.5 }}> (assumed)</small>}
+        {target.critical && <span className="cw-critical"
+          title="Notified when this is down, even if the internet is fine">critical</span>}</span>
       <span className="addr">
         {target.address}{target.probe ? ` · ${target.probe.replace(":", "/")}` : ""}
       </span>
