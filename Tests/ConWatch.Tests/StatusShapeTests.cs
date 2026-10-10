@@ -39,10 +39,32 @@ public class StatusShapeTests : IDisposable
         Assert.Equal(new[] { "acknowledged", "key", "kind", "message", "since", "targetId", "targetName" },
             Keys(sample));
         Assert.Equal(new[] { "detail", "operator", "state" }, Keys(status.GetProperty("verdict")));
-        Assert.Equal(new[] { "address", "assumed", "avgRtt", "id", "name", "operator", "pingCount",
-                "probe", "sampleSize", "scope", "state", "successRate" },
+        Assert.Equal(new[] { "address", "assumed", "avgRtt", "critical", "explainedBy", "id", "name",
+                "operator", "pingCount", "probe", "sampleSize", "scope", "state", "successRate" },
             Keys(status.GetProperty("targets")[0]));
         Assert.Equal(new[] { "id", "name", "state" }, Keys(status.GetProperty("pools")[0]));
+    }
+
+    [Fact]
+    public async Task Status_reports_which_targets_are_critical()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var targets = (await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"))!;
+        var router = targets.Single(t => t.Name == "Router");
+        (await _client.PutAsJsonAsync($"/api/v1/targets/{router.Id}", router with { Critical = true }))
+            .EnsureSuccessStatusCode();
+
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var response = await _client.GetAsync("/api/v1/status");
+            if (!response.IsSuccessStatusCode)
+                return false;
+            var status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+            var rows = status.GetProperty("targets").EnumerateArray().ToList();
+            return rows.Count == 3
+                && rows.Single(t => t.GetProperty("name").GetString() == "Router").GetProperty("critical").GetBoolean()
+                && !rows.Single(t => t.GetProperty("name").GetString() == "Google").GetProperty("critical").GetBoolean();
+        });
     }
 
     [Fact]

@@ -145,8 +145,9 @@ public class McpEndpointTests : IDisposable
         var router = json.GetProperty("targets").EnumerateArray()
             .Single(t => t.GetProperty("name").GetString() == "Router");
         foreach (var key in new[] { "id", "address", "state", "assumed", "successRate", "avgRtt",
-                     "sampleSize", "pingCount", "operator", "scope" })
+                     "sampleSize", "pingCount", "operator", "scope", "critical", "explainedBy" })
             Assert.True(router.TryGetProperty(key, out _), $"missing '{key}'");
+        Assert.Equal(JsonValueKind.False, router.GetProperty("critical").ValueKind);
     }
 
     [Fact]

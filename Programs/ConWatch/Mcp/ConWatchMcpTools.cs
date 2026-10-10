@@ -43,7 +43,8 @@ public class ConWatchMcpTools(WatcherHostService host,
         "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering. " +
         "Targets with scope 'Local' are LAN devices (cameras, NAS, IoT) tracked on the side; they say " +
         "nothing about the internet connection and never affect the verdict." +
-        " Includes warnings: admin notes where ConnectionWatcher's map disagrees with what the probes prove; they never affect the verdict.")]
+        " Includes warnings: admin notes where ConnectionWatcher's map disagrees with what the probes prove; they never affect the verdict." +
+        " Each target carries critical (the user asked to be told when it is down, even if the internet is fine) and explainedBy (the id of the upstream target whose failure explains this one, or null).")]
     public Task<string> GetCurrentStatus()
     {
         var snapshot = StatusSnapshotBuilder.Build(host.Engine, warnings);
