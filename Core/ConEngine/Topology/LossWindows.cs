@@ -1,6 +1,5 @@
 
 using System.Collections.Concurrent;
-using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using Microsoft.Extensions.Logging;
 
@@ -53,16 +52,27 @@ public sealed class LossWindows
         new(at.UtcTicks - at.UtcTicks % Span.Ticks, TimeSpan.Zero);
 
     /// <summary>A window closed. Published outside the collector's lock.</summary>
-    public IObservable<LossWindow> WindowClosed => Observable.Create<LossWindow>(observer =>
-        // A Subject stops at the first throwing observer, so each subscriber is isolated here.
-        _windowClosed.Subscribe(window =>
-        {
-            try { observer.OnNext(window); }
-            catch (Exception ex)
-            {
-                _log?.LogWarning(ex, "A loss-window subscriber threw; window {Start} still recorded", window.Start);
-            }
-        }));
+    public IObservable<LossWindow> WindowClosed => new IsolatedObservable(this);
+
+    /// <summary>A Subject stops at its first throwing observer, and Rx's
+    /// auto-detaching observers (Observable.Create) unsubscribe a thrower. Here a
+    /// subscriber that throws is logged and stays subscribed.</summary>
+    private sealed class IsolatedObservable(LossWindows owner) : IObservable<LossWindow>
+    {
+        public IDisposable Subscribe(IObserver<LossWindow> observer) =>
+            owner._windowClosed.Subscribe(
+                window =>
+                {
+                    try { observer.OnNext(window); }
+                    catch (Exception ex)
+                    {
+                        owner._log?.LogWarning(ex,
+                            "A loss-window subscriber threw; it stays subscribed. Window {Start} is still recorded.", window.Start);
+                    }
+                },
+                observer.OnError,
+                observer.OnCompleted);
+    }
 
     /// <summary>Closed windows, oldest first, at most <see cref="Keep"/>.</summary>
     public IReadOnlyList<LossWindow> Closed
@@ -101,16 +111,18 @@ public sealed class LossWindows
             counts[targetId] = new WindowCount(prior.Samples + 1, prior.Lost + (success ? 0 : 1));
 
             // Per-ping hot path: build the due list only when the oldest open window is due.
-            if (_open.Count > 0 && _open.Keys.First() + Span + CloseDelay <= at)
-            foreach (var due in _open.Keys.Where(s => s + Span + CloseDelay <= at).ToList())
+            if (_open.Keys.First() + Span + CloseDelay <= at)
             {
-                var window = new LossWindow(due, _open[due]);
-                _open.Remove(due);
-                _closed.Add(window);
-                if (_closed.Count > Keep)
-                    _closed.RemoveAt(0);
-                _closedThrough = window.End;
-                _outbox.Enqueue(window);
+                foreach (var due in _open.Keys.Where(s => s + Span + CloseDelay <= at).ToList())
+                {
+                    var window = new LossWindow(due, _open[due]);
+                    _open.Remove(due);
+                    _closed.Add(window);
+                    if (_closed.Count > Keep)
+                        _closed.RemoveAt(0);
+                    _closedThrough = window.End;
+                    _outbox.Enqueue(window);
+                }
             }
         }
         Drain();
@@ -127,14 +139,7 @@ public sealed class LossWindows
             try
             {
                 while (_outbox.TryDequeue(out var window))
-                {
-                    // One bad subscriber must not strand the rest of the outbox.
-                    try { _windowClosed.OnNext(window); }
-                    catch (Exception ex)
-                    {
-                        _log?.LogWarning(ex, "A loss-window subscriber threw; window {Start} still recorded", window.Start);
-                    }
-                }
+                    _windowClosed.OnNext(window);
             }
             finally
             {
