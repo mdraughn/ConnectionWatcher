@@ -68,4 +68,46 @@ public class TrayStatusTests
         Assert.Equal("Internet: DOWN\nLinkDown: Router is Down",
             TrayStatus.Tooltip(new TrayInfo(TrayState.Down, "LinkDown: Router is Down", [])));
     }
+
+    private const string RouterId = "11111111-1111-1111-1111-111111111111";
+
+    private static string Status(string routerState, bool critical = true, string verdict = "Healthy",
+        string warnings = "[]") =>
+        $$"""
+        {"enabled":true,"verdict":{"state":"{{verdict}}","detail":"d","operator":null},
+         "targets":[{"id":"{{RouterId}}","name":"Router","state":"{{routerState}}","scope":"Verdict","critical":{{(critical ? "true" : "false")}}},
+                    {"id":"22222222-2222-2222-2222-222222222222","name":"Google","state":"Responding","scope":"Verdict","critical":false}],
+         "pools":[],"warnings":{{warnings}}}
+        """;
+
+    [Fact]
+    public void Critical_targets_are_parsed_with_whether_traffic_passes_them()
+    {
+        var info = TrayStatus.FromStatusJson(Status("Down", warnings:
+            $$"""[{"key":"hop-bypassed:{{RouterId}}","kind":"HopBypassed","targetId":"{{RouterId}}","targetName":"Router","message":"m","since":"x","acknowledged":true}]"""));
+        var router = Assert.Single(info.Critical);
+        Assert.Equal("Router", router.Name);
+        Assert.True(router.IsDown);
+        Assert.True(router.Bypassed); // acknowledged notes still say traffic passes it
+        Assert.Equal(TrayState.Healthy, info.State); // critical never changes the state
+    }
+
+    [Fact]
+    public void Non_critical_targets_and_old_servers_yield_no_critical_entries()
+    {
+        Assert.Empty(TrayStatus.FromStatusJson(Status("Down", critical: false)).Critical);
+        Assert.Empty(TrayStatus.FromStatusJson(Healthy + "}").Critical); // no targets[] critical keys
+        Assert.Empty(TrayStatus.FromStatusJson("not json").Critical);
+    }
+
+    [Fact]
+    public void Tooltip_lists_down_critical_targets_before_notes()
+    {
+        var info = new TrayInfo(TrayState.Healthy, "d", ["Router isn't answering (traffic passes it)"])
+        {
+            Critical = [new TrayCritical(RouterId, "Router", "Down", Bypassed: true)],
+        };
+        Assert.Equal("Internet: healthy\nd\n⚠ Router is Down\n🔧 Router isn't answering (traffic passes it)",
+            TrayStatus.Tooltip(info));
+    }
 }

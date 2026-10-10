@@ -11,9 +11,20 @@ public enum TrayState
     Down           // link down / a target hard-down (no-verdict fallback)
 }
 
+/// <summary>A target marked critical, as the status reports it.</summary>
+/// <param name="Bypassed">A HopBypassed note exists for it: traffic is passing it.</param>
+public record TrayCritical(string Id, string Name, string State, bool Bypassed)
+{
+    public bool IsDown => State is "Down" or "Unreachable";
+}
+
 /// <summary>State, the human-readable evidence line, and the short labels of
 /// unacknowledged admin notes (never part of the state: spec 2026-10-09 D3).</summary>
-public record TrayInfo(TrayState State, string? Detail, IReadOnlyList<string> Notes);
+public record TrayInfo(TrayState State, string? Detail, IReadOnlyList<string> Notes)
+{
+    /// <summary>Targets marked critical (spec §4.7), any state.</summary>
+    public IReadOnlyList<TrayCritical> Critical { get; init; } = [];
+}
 
 /// <summary>
 /// Pure mapping from the /api/v1/status JSON to a tray state. Verdict wins
@@ -32,6 +43,26 @@ public static class TrayStatus
                     .Where(w => !(w.TryGetProperty("acknowledged", out var a) && a.ValueKind == JsonValueKind.True))
                     .Select(NoteLabel).ToList()
                 : new List<string>();
+            var bypassed = status.TryGetProperty("warnings", out var ws) && ws.ValueKind == JsonValueKind.Array
+                ? ws.EnumerateArray()
+                    .Where(w => w.ValueKind == JsonValueKind.Object
+                                && w.TryGetProperty("kind", out var k) && k.ValueKind == JsonValueKind.String
+                                && k.GetString() == "HopBypassed"
+                                && w.TryGetProperty("targetId", out var id) && id.ValueKind == JsonValueKind.String)
+                    .Select(w => w.GetProperty("targetId").GetString()!)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>();
+            var critical = status.TryGetProperty("targets", out var ts) && ts.ValueKind == JsonValueKind.Array
+                ? ts.EnumerateArray()
+                    .Where(t => t.TryGetProperty("critical", out var c) && c.ValueKind == JsonValueKind.True)
+                    .Select(t =>
+                    {
+                        var id = t.GetProperty("id").GetString() ?? "";
+                        return new TrayCritical(id, t.GetProperty("name").GetString() ?? "",
+                            t.GetProperty("state").GetString() ?? "", bypassed.Contains(id));
+                    })
+                    .ToList()
+                : new List<TrayCritical>();
             if (status.TryGetProperty("verdict", out var verdict) &&
                 verdict.ValueKind == JsonValueKind.Object)
             {
@@ -45,13 +76,13 @@ public static class TrayStatus
                     "LinkDown" => TrayState.Down,
                     _ => TrayState.Measuring,
                 };
-                return new TrayInfo(state, detail, notes);
+                return new TrayInfo(state, detail, notes) { Critical = critical };
             }
 
             // No verdict configured: derive from target states.
             if (!status.TryGetProperty("targets", out var targets) ||
                 targets.GetArrayLength() == 0)
-                return new TrayInfo(TrayState.Measuring, null, notes);
+                return new TrayInfo(TrayState.Measuring, null, notes) { Critical = critical };
             var states = targets.EnumerateArray()
                 .Where(t => !(t.TryGetProperty("scope", out var scope) && scope.GetString() == "Local"))
                 .Select(t => (Name: t.GetProperty("name").GetString() ?? "",
@@ -60,14 +91,14 @@ public static class TrayStatus
             var bad = states.Where(s => s.State is "Down" or "Unreachable").ToList();
             if (bad.Count > 0)
                 return new TrayInfo(TrayState.Down,
-                    string.Join(", ", bad.Select(b => $"{b.Name}={b.State}")), notes);
+                    string.Join(", ", bad.Select(b => $"{b.Name}={b.State}")), notes) { Critical = critical };
             var shaky = states.Where(s => s.State is "Faltering" or "Recovering").ToList();
             if (shaky.Count > 0)
                 return new TrayInfo(TrayState.Degraded,
-                    string.Join(", ", shaky.Select(b => $"{b.Name}={b.State}")), notes);
+                    string.Join(", ", shaky.Select(b => $"{b.Name}={b.State}")), notes) { Critical = critical };
             if (states.All(s => s.State is "Starting" or "Initializing"))
-                return new TrayInfo(TrayState.Measuring, null, notes);
-            return new TrayInfo(TrayState.Healthy, null, notes);
+                return new TrayInfo(TrayState.Measuring, null, notes) { Critical = critical };
+            return new TrayInfo(TrayState.Healthy, null, notes) { Critical = critical };
         }
         catch (JsonException)
         {
@@ -107,6 +138,8 @@ public static class TrayStatus
         var text = Describe(info.State);
         if (info.Detail is { Length: > 0 })
             text += $"\n{info.Detail}";
+        foreach (var c in info.Critical.Where(c => c.IsDown))
+            text += $"\n⚠ {c.Name} is {c.State}";
         foreach (var note in info.Notes)
             text += $"\n🔧 {note}";
         const int max = 127;

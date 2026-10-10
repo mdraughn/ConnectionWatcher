@@ -38,6 +38,8 @@ internal sealed class TrayContext : ApplicationContext
     private readonly Dictionary<(TrayState, bool), Icon> _icons = new();
     private TrayState _state = TrayState.Unreachable;
     private bool _firstPoll = true;
+    private readonly CriticalWatch _critical = new();
+    private IReadOnlyList<TrayCritical> _criticalShown = [];
     private IReadOnlyList<string> _notes = [];
     private ToolStripItem _notesItem = null!;
     private readonly ScoutRunner _scout = new();
@@ -128,11 +130,13 @@ internal sealed class TrayContext : ApplicationContext
 
         bool stateChanged = next.State != _state;
         bool notesChanged = !next.Notes.SequenceEqual(_notes);
-        if (stateChanged || notesChanged)
+        bool criticalChanged = !next.Critical.SequenceEqual(_criticalShown);
+        if (stateChanged || notesChanged || criticalChanged)
         {
             var previous = _state;
             _state = next.State;
             _notes = next.Notes;
+            _criticalShown = next.Critical;
             _icon.Icon = IconFor(next.State, badge: next.Notes.Count > 0);
             _icon.Text = TrayStatus.Tooltip(next);
             _notesItem.Text = $"ConnectionWatcher notes ({next.Notes.Count})";
@@ -140,6 +144,14 @@ internal sealed class TrayContext : ApplicationContext
             if (stateChanged)
                 MaybeToast(previous, next); // notes never toast (spec D3)
         }
+
+        // Critical devices (spec §4.7): their own failure and recovery toast,
+        // even while the internet is fine. Notes never toast (D3).
+        var critical = _critical.Update(next, announce: !_firstPoll && _settings.NotificationsEnabled);
+        foreach (var toast in critical)
+            Balloon(toast.Title, Truncate(toast.Body, 250),
+                toast.Title.EndsWith("again", StringComparison.Ordinal) ? ToolTipIcon.Info : ToolTipIcon.Warning,
+                toast.Body.Contains("notes", StringComparison.Ordinal) ? "/#notes" : null);
         _firstPoll = false;
     }
 
