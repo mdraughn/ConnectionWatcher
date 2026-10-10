@@ -20,4 +20,8 @@ public record Target
     public string? Probe { get; init; } = null;
     /// <summary>Whether this target feeds the verdict (default) or is a LAN device tracked on the side.</summary>
     public TargetScope Scope { get; init; } = TargetScope.Verdict;
+
+    /// <summary>Report this target's own failure and recovery even while the
+    /// internet is fine (spec 2026-10-09 §4.7). Never affects the verdict.</summary>
+    public bool Critical { get; init; }
 }

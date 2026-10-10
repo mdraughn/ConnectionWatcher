@@ -41,6 +41,10 @@ public record TargetDto
     public string? Probe { get; init; }
     /// <summary>Verdict (default) or Local; a missing value (older clients/snapshots) means Verdict.</summary>
     public TargetScope Scope { get; init; } = TargetScope.Verdict;
+
+    /// <summary>Notify when this is down, even if the internet is fine. A
+    /// missing value (older clients/snapshots) means false.</summary>
+    public bool Critical { get; init; }
 }
 
 /// <summary>Pool for API/CRUD and export. Members/Parent referenced by name.</summary>

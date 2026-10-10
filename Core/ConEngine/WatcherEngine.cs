@@ -116,6 +116,15 @@ public class WatcherEngine
         _graph is { } graph && graph.Targets.TryGetValue(subjectId, out var target)
         && target.Scope == TargetScope.Local;
 
+    /// <summary>
+    /// True when <paramref name="subjectId"/> is a target marked critical: the
+    /// notifiers report its own failure and recovery even while the internet
+    /// is fine. False for pools, the verdict subject, unknown ids and before
+    /// the engine starts.
+    /// </summary>
+    public bool IsCriticalSubject(Guid subjectId) =>
+        _graph is { } graph && graph.Targets.TryGetValue(subjectId, out var target) && target.Critical;
+
     private bool _warmStart;
 
     /// <summary>

@@ -40,6 +40,8 @@ public class TargetRow
     public string? Probe { get; set; }
     /// <summary>Verdict (default) or Local; stored as text.</summary>
     public TargetScope Scope { get; set; } = TargetScope.Verdict;
+
+    public bool Critical { get; set; }
 }
 
 /// <summary>A rotation pool as stored.</summary>

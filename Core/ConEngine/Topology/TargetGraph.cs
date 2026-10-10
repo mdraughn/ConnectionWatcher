@@ -54,6 +54,7 @@ public class TargetGraph
                 Operator = t.Operator,
                 Probe = t.Probe,
                 Scope = t.Scope,
+                Critical = t.Critical,
             });
 
         var poolDefs = options.Pools

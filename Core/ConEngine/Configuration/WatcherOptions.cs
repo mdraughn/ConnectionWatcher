@@ -31,6 +31,9 @@ public class TargetConfig
     public string? Probe { get; set; }
     /// <summary>Verdict (default) or Local; Local targets never affect the verdict.</summary>
     public TargetScope Scope { get; set; } = TargetScope.Verdict;
+
+    /// <summary>Notify when this is down, even if the internet is fine.</summary>
+    public bool Critical { get; set; }
 }
 
 /// <summary>A rotation pool, as authored in configuration.</summary>
