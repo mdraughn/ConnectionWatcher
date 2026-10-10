@@ -112,6 +112,48 @@ namespace ConPersistence.Migrations
                     b.ToTable("Glitches");
                 });
 
+            modelBuilder.Entity("ConPersistence.Entities.ModelWarningRow", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("AcknowledgedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EndUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetName")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartUtc");
+
+                    b.HasIndex("Key", "EndUtc");
+
+                    b.ToTable("ModelWarnings");
+                });
+
             modelBuilder.Entity("ConPersistence.Entities.PoolMemberRow", b =>
                 {
                     b.Property<Guid>("PoolId")

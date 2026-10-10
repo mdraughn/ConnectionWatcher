@@ -50,3 +50,19 @@ public class RollupRow
     public long RttMin { get; set; }
     public long RttMax { get; set; }
 }
+
+/// <summary>One model-warning instance (an admin note): opened when its
+/// condition starts holding, closed when it stops. Ended rows are pruned with
+/// transitions (Retention.TransitionMonths).</summary>
+public class ModelWarningRow
+{
+    public long Id { get; set; }
+    public string Key { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public Guid? TargetId { get; set; }
+    public string? TargetName { get; set; }
+    public string Message { get; set; } = "";
+    public DateTime StartUtc { get; set; }
+    public DateTime? EndUtc { get; set; }
+    public DateTime? AcknowledgedUtc { get; set; }
+}

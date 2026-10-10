@@ -16,6 +16,7 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
     public DbSet<TransitionRow> Transitions => Set<TransitionRow>();
     public DbSet<RollupRow> Rollups => Set<RollupRow>();
     public DbSet<GlitchRow> Glitches => Set<GlitchRow>();
+    public DbSet<ModelWarningRow> ModelWarnings => Set<ModelWarningRow>();
     public DbSet<SettingRow> Settings => Set<SettingRow>();
     public DbSet<DiscoveryRow> Discoveries => Set<DiscoveryRow>();
 
@@ -62,6 +63,12 @@ public class ConWatchDbContext(DbContextOptions<ConWatchDbContext> options) : Db
         {
             e.HasIndex(g => g.StartUtc);
             e.HasIndex(g => new { g.TargetId, g.StartUtc });
+        });
+
+        modelBuilder.Entity<ModelWarningRow>(e =>
+        {
+            e.HasIndex(w => w.StartUtc);
+            e.HasIndex(w => new { w.Key, w.EndUtc });
         });
 
         modelBuilder.Entity<RollupRow>(e =>

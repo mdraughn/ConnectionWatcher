@@ -52,6 +52,18 @@ public class RetentionPass(ILogger log)
                 prunedTransitions, windows.TransitionMonths);
             converted += prunedTransitions;
         }
+
+        // Ended model warnings (admin notes) age out with transitions; an
+        // open one stays however old it is.
+        var prunedWarnings = await db.ModelWarnings
+            .Where(w => w.EndUtc != null && w.EndUtc < transitionThreshold)
+            .ExecuteDeleteAsync(ct);
+        if (prunedWarnings > 0)
+        {
+            log.LogInformation("Pruned {Count} model warnings older than {Months} months",
+                prunedWarnings, windows.TransitionMonths);
+            converted += prunedWarnings;
+        }
         return converted;
     }
 

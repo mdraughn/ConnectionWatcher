@@ -150,4 +150,27 @@ public class RetentionTests : IDisposable
         await using var check = _factory.CreateDbContext();
         Assert.Equal(2, await check.Transitions.CountAsync());
     }
+
+    [Fact]
+    public async Task Ended_model_warnings_age_out_with_transitions_and_open_ones_stay()
+    {
+        var now = DateTime.Parse("2026-10-09T00:00:00Z").ToUniversalTime();
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.ModelWarnings.AddRange(
+                new ModelWarningRow { Key = "old-ended", Kind = "HopBypassed", Message = "m",
+                    StartUtc = now.AddMonths(-30), EndUtc = now.AddMonths(-30).AddMinutes(1) },
+                new ModelWarningRow { Key = "old-open", Kind = "UnprovableUp", Message = "m",
+                    StartUtc = now.AddMonths(-30) },
+                new ModelWarningRow { Key = "recent", Kind = "HopBypassed", Message = "m",
+                    StartUtc = now.AddDays(-1), EndUtc = now.AddDays(-1).AddMinutes(1) });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = _factory.CreateDbContext())
+            await _pass.RunAsync(db, now, _windows, CancellationToken.None);
+
+        await using (var db = _factory.CreateDbContext())
+            Assert.Equal(["old-open", "recent"], db.ModelWarnings.OrderBy(w => w.Key).Select(w => w.Key).ToArray());
+    }
 }
