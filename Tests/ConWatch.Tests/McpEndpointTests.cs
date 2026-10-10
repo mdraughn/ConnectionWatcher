@@ -140,6 +140,7 @@ public class McpEndpointTests : IDisposable
         })));
 
         Assert.True(json.GetProperty("monitoringEnabled").GetBoolean());
+        Assert.Equal(JsonValueKind.Array, json.GetProperty("warnings").ValueKind);
         Assert.True(json.GetProperty("verdict").TryGetProperty("operator", out _));
         var router = json.GetProperty("targets").EnumerateArray()
             .Single(t => t.GetProperty("name").GetString() == "Router");

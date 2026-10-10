@@ -25,7 +25,8 @@ namespace ConWatch.Mcp;
 [McpServerToolType]
 public class ConWatchMcpTools(WatcherHostService host,
     IDbContextFactory<ConWatchDbContext> dbFactory, IspReportBuilder reportBuilder,
-    DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http)
+    DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http,
+    ConPersistence.Warnings.ModelWarningLedger warnings)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -41,10 +42,11 @@ public class ConWatchMcpTools(WatcherHostService host,
         "LinkDown means it is down. " +
         "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering. " +
         "Targets with scope 'Local' are LAN devices (cameras, NAS, IoT) tracked on the side; they say " +
-        "nothing about the internet connection and never affect the verdict.")]
+        "nothing about the internet connection and never affect the verdict." +
+        " Includes warnings: admin notes where ConnectionWatcher's map disagrees with what the probes prove; they never affect the verdict.")]
     public Task<string> GetCurrentStatus()
     {
-        var snapshot = StatusSnapshotBuilder.Build(host.Engine);
+        var snapshot = StatusSnapshotBuilder.Build(host.Engine, warnings);
         return Task.FromResult(JsonSerializer.Serialize(new
         {
             monitoringEnabled = host.EngineEnabled,
@@ -52,6 +54,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             builtUtc = BuildInfo.BuiltUtc,
             verdict = snapshot?.Verdict,
             targets = snapshot?.Targets,
+            warnings = snapshot?.Warnings,
         }, Json));
     }
 

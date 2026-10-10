@@ -37,6 +37,8 @@ public class MetricsEndpointTests : IDisposable
         Assert.Contains("conwatch_build_info{version=\"", body);
         Assert.Contains("# TYPE conwatch_engine_enabled gauge", body);
         Assert.DoesNotContain("conwatch_last_sample_age_seconds ", body);
+        Assert.Contains("# TYPE conwatch_model_warnings gauge", body);
+        Assert.Contains("conwatch_model_warnings 0", body);
     }
 
     [Fact]

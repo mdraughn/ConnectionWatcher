@@ -1,5 +1,6 @@
 using ConCore.Targets;
 using ConEngine;
+using ConPersistence.Warnings;
 
 namespace ConWatch;
 
@@ -10,10 +11,11 @@ namespace ConWatch;
 /// order the anonymous objects they replace used.
 /// </summary>
 public sealed record StatusSnapshot(bool Enabled, StatusVerdict? Verdict,
-    IReadOnlyList<StatusTarget> Targets, IReadOnlyList<StatusPool> Pools)
+    IReadOnlyList<StatusTarget> Targets, IReadOnlyList<StatusPool> Pools,
+    IReadOnlyList<StatusWarning> Warnings)
 {
     /// <summary>Archive mode (monitoring disabled): no live states.</summary>
-    public static StatusSnapshot Disabled { get; } = new(false, null, [], []);
+    public static StatusSnapshot Disabled { get; } = new(false, null, [], [], []);
 }
 
 /// <param name="Operator">The ISP blamed by a Link* verdict ("Comcast"), else null.</param>
@@ -26,9 +28,15 @@ public sealed record StatusTarget(Guid Id, string Name, string Address, string? 
 
 public sealed record StatusPool(Guid Id, string Name, string State);
 
+/// <summary>An admin note (model warning, spec 2026-10-09 §4.6): where the map
+/// disagrees with what the probes prove. Read-only here; never part of the verdict.</summary>
+/// <param name="Kind">"HopBypassed", "NeverAnswered" or "UnprovableUp".</param>
+public sealed record StatusWarning(string Key, string Kind, Guid? TargetId, string? TargetName,
+    string Message, DateTimeOffset Since, bool Acknowledged);
+
 public static class StatusSnapshotBuilder
 {
-    public static StatusSnapshot? Build(WatcherEngine? engine)
+    public static StatusSnapshot? Build(WatcherEngine? engine, ModelWarningLedger warnings)
     {
         if (engine is null)
             return null;
@@ -54,6 +62,10 @@ public static class StatusSnapshotBuilder
             .Select(p => new StatusPool(p.Pool.Id, p.Pool.Name, p.CurrentState.ToString()))
             .OrderBy(p => p.Name).ToList();
 
-        return new StatusSnapshot(true, verdict, targets, pools);
+        var notes = warnings.Current.Select(w => new StatusWarning(w.Key, w.Kind.ToString(),
+                w.TargetId, w.TargetName, w.Message, w.SinceUtc, w.Acknowledged))
+            .ToList();
+
+        return new StatusSnapshot(true, verdict, targets, pools, notes);
     }
 }

@@ -11,7 +11,8 @@ namespace ConWatch;
 /// transition as its own message. Reattached across engine rebuilds.
 /// </summary>
 public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProvider,
-    ILogger<StatusBroadcaster> log) : BackgroundService, IEngineObserver
+    ILogger<StatusBroadcaster> log,
+    ConPersistence.Warnings.ModelWarningLedger warnings) : BackgroundService, IEngineObserver
 {
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MinGap = TimeSpan.FromMilliseconds(250);
@@ -126,7 +127,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
                 return;
             _lastSnapshotSent = now;
         }
-        var snapshot = StatusSnapshotBuilder.Build(engine);
+        var snapshot = StatusSnapshotBuilder.Build(engine, warnings);
         if (snapshot is null)
             return;
 

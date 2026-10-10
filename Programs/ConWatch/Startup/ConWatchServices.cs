@@ -81,6 +81,8 @@ public static class ConWatchServices
         services.AddSingleton<TransitionRecorder>();
         services.AddSingleton<GlitchRecorder>();
         services.AddSingleton<RollupCollector>();
+        services.AddSingleton<ConPersistence.Warnings.ModelWarningRecorder>();
+        services.AddSingleton<ConPersistence.Warnings.ModelWarningLedger>();
         return services;
     }
 
@@ -175,6 +177,9 @@ public static class ConWatchServices
         services.AddHostedService(sp => sp.GetRequiredService<TransitionRecorder>());
         services.AddHostedService(sp => sp.GetRequiredService<GlitchRecorder>());
         services.AddHostedService(sp => sp.GetRequiredService<RollupCollector>());
+        services.AddHostedService(sp => sp.GetRequiredService<ConPersistence.Warnings.ModelWarningRecorder>());
+        // Loads open notes before the engine starts (hosted services start in order).
+        services.AddHostedService(sp => sp.GetRequiredService<ConPersistence.Warnings.ModelWarningLedger>());
         services.AddHostedService<RetentionService>();
         services.AddHostedService(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());
         services.AddHostedService(sp => sp.GetRequiredService<ConNotify.WebhookNotifier>());
@@ -187,6 +192,7 @@ public static class ConWatchServices
         services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<TransitionRecorder>());
         services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<GlitchRecorder>());
         services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<RollupCollector>());
+        services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<ConPersistence.Warnings.ModelWarningLedger>());
         services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<StatusBroadcaster>());
         services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<Metrics.MetricsCounters>());
         services.AddSingleton<ConEngine.IEngineObserver>(sp => sp.GetRequiredService<ConNotify.MqttNotifier>());

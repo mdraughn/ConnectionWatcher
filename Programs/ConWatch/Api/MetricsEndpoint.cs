@@ -17,11 +17,13 @@ namespace ConWatch.Api;
 public static class MetricsEndpoint
 {
     public static void MapMetrics(this WebApplication app) =>
-        app.MapGet("/metrics", (WatcherHostService host, MetricsCounters counters, TimeProvider time) =>
-            Results.Text(Render(host.Engine, counters, host.EngineEnabled, time.GetUtcNow()),
+        app.MapGet("/metrics", (WatcherHostService host, MetricsCounters counters,
+            ConPersistence.Warnings.ModelWarningLedger warnings, TimeProvider time) =>
+            Results.Text(Render(host.Engine, counters, warnings, host.EngineEnabled, time.GetUtcNow()),
                 "text/plain; version=0.0.4", Encoding.UTF8));
 
-    internal static string Render(WatcherEngine? engine, MetricsCounters counters, bool enabled, DateTimeOffset now)
+    internal static string Render(WatcherEngine? engine, MetricsCounters counters,
+        ConPersistence.Warnings.ModelWarningLedger warnings, bool enabled, DateTimeOffset now)
     {
         var sb = new StringBuilder();
         var localNames = engine is null
@@ -34,6 +36,11 @@ public static class MetricsEndpoint
 
         Family(sb, "conwatch_engine_enabled", "gauge", "1 when monitoring is enabled, 0 in archive mode.");
         sb.Append("conwatch_engine_enabled ").Append(enabled ? 1 : 0).Append('\n');
+
+        // Admin notes only (spec §4.6, D3): never part of up/verdict series.
+        Family(sb, "conwatch_model_warnings", "gauge",
+            "Active ConnectionWatcher notes (model warnings), acknowledged or not.");
+        sb.Append("conwatch_model_warnings ").Append(warnings.Current.Count).Append('\n');
 
         if (engine?.LastResultUtc is { } last)
         {

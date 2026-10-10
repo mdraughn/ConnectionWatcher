@@ -31,7 +31,13 @@ public class StatusShapeTests : IDisposable
                 && status.GetProperty("pools").GetArrayLength() == 1;
         });
 
-        Assert.Equal(new[] { "enabled", "pools", "targets", "verdict" }, Keys(status));
+        Assert.Equal(new[] { "enabled", "pools", "targets", "verdict", "warnings" }, Keys(status));
+        Assert.Equal(JsonValueKind.Array, status.GetProperty("warnings").ValueKind);
+        var sample = JsonSerializer.SerializeToElement(
+            new StatusWarning("k", "HopBypassed", Guid.Empty, "Router", "m", DateTimeOffset.UnixEpoch, false),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(new[] { "acknowledged", "key", "kind", "message", "since", "targetId", "targetName" },
+            Keys(sample));
         Assert.Equal(new[] { "detail", "operator", "state" }, Keys(status.GetProperty("verdict")));
         Assert.Equal(new[] { "address", "assumed", "avgRtt", "id", "name", "operator", "pingCount",
                 "probe", "sampleSize", "scope", "state", "successRate" },
@@ -53,6 +59,6 @@ public class StatusShapeTests : IDisposable
             return response.IsSuccessStatusCode && body.Contains("\"enabled\":false");
         });
 
-        Assert.Equal("""{"enabled":false,"verdict":null,"targets":[],"pools":[]}""", body);
+        Assert.Equal("""{"enabled":false,"verdict":null,"targets":[],"pools":[],"warnings":[]}""", body);
     }
 }

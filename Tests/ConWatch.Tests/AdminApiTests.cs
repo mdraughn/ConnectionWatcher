@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConPersistence;
 using ConPersistence.Recording;
 using ConPersistence.Settings;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -71,11 +73,22 @@ public class AdminApiTests : IDisposable
         var lastBefore = (await _client.GetFromJsonAsync<System.Text.Json.JsonElement>(
             "/api/v1/transitions?limit=1")).GetProperty("items")[0].GetProperty("id").GetInt64();
 
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            db.ModelWarnings.Add(new ConPersistence.Entities.ModelWarningRow
+                { Key = "unprovable-up", Kind = "UnprovableUp", Message = "m", StartUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
         var wrong = await _client.PostAsJsonAsync("/api/v1/admin/clear-history", new { confirm = "clear" });
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
 
         var ok = await _client.PostAsJsonAsync("/api/v1/admin/clear-history", new { confirm = "CLEAR" });
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
+
+        await using (var db = await dbFactory.CreateDbContextAsync())
+            Assert.Empty(db.ModelWarnings);
 
         var afterItems = (await _client.GetFromJsonAsync<System.Text.Json.JsonElement>(
             "/api/v1/transitions?limit=500")).GetProperty("items").EnumerateArray().ToList();

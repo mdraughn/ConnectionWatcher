@@ -66,6 +66,7 @@ public static class AdminEndpoints
                     PoolMembers = await db.PoolMembers.CountAsync(),
                     Transitions = await db.Transitions.CountAsync(),
                     Rollups = await db.Rollups.CountAsync(),
+                    ModelWarnings = await db.ModelWarnings.CountAsync(),
                     Settings = await db.Settings.CountAsync(),
                 },
                 OldestTransitionUtc = AsUtc(oldestTransition),
@@ -121,6 +122,7 @@ public static class AdminEndpoints
             {
                 await db.Transitions.ExecuteDeleteAsync();
                 await db.Rollups.ExecuteDeleteAsync();
+                await db.ModelWarnings.ExecuteDeleteAsync();
                 await tx.CommitAsync();
             }
             await db.Database.ExecuteSqlRawAsync("PRAGMA incremental_vacuum;");
@@ -141,6 +143,7 @@ public static class AdminEndpoints
             {
                 await db.Transitions.ExecuteDeleteAsync();
                 await db.Rollups.ExecuteDeleteAsync();
+                await db.ModelWarnings.ExecuteDeleteAsync();
                 await db.PoolMembers.ExecuteDeleteAsync();
                 await db.Pools.ExecuteDeleteAsync();
                 await db.Targets.ExecuteDeleteAsync();
