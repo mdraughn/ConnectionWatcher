@@ -49,12 +49,34 @@ public class ModelCheckCoordinatorTests : IDisposable
         _topology.Start();
     }
 
+    private readonly LossWindows _loss = new();
+
     private void StartCheck(bool unprovableUp = false)
     {
         _check = new ModelCheckCoordinator(_graph, _monitors, unprovableUp, _time,
-            NullLogger<ModelCheckCoordinator>.Instance);
+            NullLogger<ModelCheckCoordinator>.Instance, _loss);
         _check.ChangeSource.Subscribe(_changes.Add);
         _check.Start();
+    }
+
+    /// <summary>One closed window: Inside loses <paramref name="insideLost"/> of 12,
+    /// External loses <paramref name="beyondLost"/> of 12, the rest nothing.</summary>
+    private void CloseWindow(int insideLost, int beyondLost = 0)
+    {
+        var start = LossWindows.WindowStart(_time.GetUtcNow());
+        void Fill(string name, int lost)
+        {
+            for (int i = 0; i < 12; i++)
+                _loss.Record(Id(name), start + TimeSpan.FromSeconds(i * 4), success: i >= lost);
+        }
+        Fill("Router", 0);
+        Fill("Inside", insideLost);
+        Fill("External", beyondLost);
+        Fill("Google", beyondLost);
+        Fill("Cloudflare", beyondLost);
+        _time.SetUtcNow(start + LossWindows.Span + LossWindows.CloseDelay);
+        _loss.Record(Id("Router"), _time.GetUtcNow(), true);
+        _time.Advance(ModelCheckCoordinator.EvaluateEvery); // let the periodic evaluation run
     }
 
     public void Dispose()
@@ -259,5 +281,80 @@ public class ModelCheckCoordinatorTests : IDisposable
         _check.Dispose();
         _time.Advance(ModelCheckCoordinator.FalteringHold * 2); // must not throw or publish
         Assert.Empty(_changes);
+    }
+
+    [Fact]
+    public void A_hop_dropping_only_its_own_pings_is_a_note_after_ten_windows_and_not_before()
+    {
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows - 1; i++)
+            CloseWindow(insideLost: 3); // 25 % of its own probes, 0 % beyond
+        Assert.DoesNotContain(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+
+        CloseWindow(insideLost: 3);
+        var note = Assert.Single(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+        Assert.Equal($"probe-only-loss:{Id("Inside"):D}", note.Key);
+        Assert.Equal("Inside drops some of its own pings but forwards fine (loss 25 % · forwarding 0 % " +
+            "over the last 10 minutes) — common router behaviour; consider a different probe.", note.Message);
+    }
+
+    [Fact]
+    public void Real_forwarding_loss_is_never_probe_only()
+    {
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 3, beyondLost: 3); // everything beyond loses as much
+        Assert.DoesNotContain(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+    }
+
+    [Fact]
+    public void The_note_clears_with_hysteresis_not_on_one_clean_window()
+    {
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 3);
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+
+        CloseWindow(insideLost: 0); // average now 22.5 %: still above the 10 % clear line
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+
+        for (int i = 0; i < 6; i++)
+            CloseWindow(insideLost: 0); // average now 7.5 %
+        Assert.DoesNotContain(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+    }
+
+    [Fact]
+    public void Probe_only_loss_never_changes_any_targets_state()
+    {
+        StartCheck();
+        AllHealthy();
+        var before = _monitors.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState);
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 3);
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+        Assert.Equal(before, _monitors.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState));
+    }
+
+    [Fact]
+    public void An_icmp_hop_is_advised_to_try_tcp()
+    {
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+        {
+            // Router (ICMP) is the hop this time: it loses 3 of 12, everything beyond nothing.
+            var start = LossWindows.WindowStart(_time.GetUtcNow());
+            foreach (var name in new[] { "Router", "Inside", "External", "Google", "Cloudflare" })
+                for (int s = 0; s < 12; s++)
+                    _loss.Record(Id(name), start + TimeSpan.FromSeconds(s * 4), success: name != "Router" || s >= 3);
+            _time.SetUtcNow(start + LossWindows.Span + LossWindows.CloseDelay);
+            _loss.Record(Id("Inside"), _time.GetUtcNow(), true);
+            _time.Advance(ModelCheckCoordinator.EvaluateEvery);
+        }
+        var note = Assert.Single(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+        Assert.EndsWith("consider a TCP probe.", note.Message);
     }
 }

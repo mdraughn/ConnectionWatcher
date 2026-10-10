@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reactive.Subjects;
 using ConCore;
 using ConCore.Targets;
@@ -16,6 +17,8 @@ public enum ModelWarningKind
     NeverAnswered,
     /// <summary>Every anchor is the ISP's: "up" is proven only as far as the ISP.</summary>
     UnprovableUp,
+    /// <summary>A hop keeps dropping its own probes while forwarding fine (spec §4.5, §4.6).</summary>
+    ProbeOnlyLoss,
 }
 
 /// <summary>One condition that holds right now. Keyed so the same condition
@@ -30,6 +33,7 @@ public sealed record ModelCondition(string Key, ModelWarningKind Kind, Guid? Tar
             ModelWarningKind.HopBypassed => "hop-bypassed",
             ModelWarningKind.NeverAnswered => "never-answered",
             ModelWarningKind.UnprovableUp => "unprovable-up",
+            ModelWarningKind.ProbeOnlyLoss => "probe-only-loss",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
         return targetId is { } id ? $"{kindKey}:{id:D}" : kindKey;
@@ -56,6 +60,16 @@ public class ModelCheckCoordinator : IDisposable
     /// build, so a zero-reply hop is not yet evidence of a bypass.)</summary>
     public static readonly TimeSpan NeverAnsweredAfter = TimeSpan.FromMinutes(5);
 
+    /// <summary>ProbeOnlyLoss needs this many usable windows (spec §9.3).</summary>
+    public const int ProbeOnlyWindows = 10;
+    public const double ProbeOnlyRaise = 0.15;
+    public const double ProbeOnlyClear = 0.10;
+    /// <summary>"Forwarding loss about 0" to raise, and the most it may grow to stay raised.</summary>
+    public const double ForwardingRaise = 0.02;
+    public const double ForwardingClear = 0.05;
+    /// <summary>How long a ProbeOnlyLoss takes to prove itself from nothing.</summary>
+    public static readonly TimeSpan ProbeOnlyProveTime = LossWindows.Span * ProbeOnlyWindows;
+
     public const string UnprovableUpMessage =
         "Every anchor is tagged as your ISP's, so ConnectionWatcher can only prove your ISP answers, " +
         "not the rest of the internet. Tag your ISP on a path hop (or add an anchor outside your ISP) " +
@@ -71,6 +85,7 @@ public class ModelCheckCoordinator : IDisposable
     private readonly bool _unprovableUp;
     private readonly TimeProvider _time;
     private readonly ILogger<ModelCheckCoordinator> _log;
+    private readonly LossWindows? _loss;
     private readonly Lock _lock = new();
     private readonly Lock _publishLock = new();
     private readonly ConcurrentQueue<ModelConditionChange> _outbox = new();
@@ -85,12 +100,14 @@ public class ModelCheckCoordinator : IDisposable
     private bool _disposed;
 
     public ModelCheckCoordinator(TargetGraph graph, IReadOnlyDictionary<Guid, TargetMonitor> monitors,
-        bool unprovableUp, TimeProvider timeProvider, ILogger<ModelCheckCoordinator> log)
+        bool unprovableUp, TimeProvider timeProvider, ILogger<ModelCheckCoordinator> log,
+        LossWindows? loss = null)
     {
         _monitors = monitors;
         _unprovableUp = unprovableUp;
         _time = timeProvider;
         _log = log;
+        _loss = loss;
         foreach (var id in monitors.Keys)
         {
             // GetDescendants is breadth-first: the first answering one is the nearest witness.
@@ -152,6 +169,10 @@ public class ModelCheckCoordinator : IDisposable
                     _falteringSince.TryAdd(id, now);
                 else
                     _falteringSince.Remove(id);
+                // A hop that keeps dropping its own probes while forwarding fine
+                // (spec §4.5 corollary 3, §9.3). A Down hop is HopBypassed's business.
+                if (_loss is not null && state is not (HostState.Down or HostState.Unreachable))
+                    CheckProbeOnlyLoss(found, _monitors[id], beyond);
                 if (state is not (HostState.Down or HostState.Faltering))
                     continue;
                 var witnessId = beyond.FirstOrDefault(d => TopologyCoordinator.Answering(states[d]));
@@ -197,6 +218,34 @@ public class ModelCheckCoordinator : IDisposable
         }
         DrainOutbox();
     }
+
+    private void CheckProbeOnlyLoss(Dictionary<string, ModelCondition> found, TargetMonitor hop, List<Guid> beyond)
+    {
+        var losses = _loss!.Closed
+            .Select(w => LossAttribution.ForHop(w, hop.Target.Id, beyond))
+            .OfType<LossAttribution.HopLoss>()
+            .TakeLast(ProbeOnlyWindows)
+            .ToList();
+        if (losses.Count < ProbeOnlyWindows)
+            return;
+        double own = losses.Average(l => l.Own);
+        double forwarding = losses.Average(l => l.Forwarding);
+        double probeOnly = own - forwarding;
+        bool active = _active.ContainsKey(ModelCondition.KeyFor(ModelWarningKind.ProbeOnlyLoss, hop.Target.Id));
+        bool holds = active
+            ? probeOnly >= ProbeOnlyClear && forwarding <= ForwardingClear
+            : probeOnly >= ProbeOnlyRaise && forwarding <= ForwardingRaise;
+        if (!holds)
+            return;
+        ProbeSpec.TryParse(hop.Target.Probe, out var probe);
+        var advice = probe.Kind == ProbeKind.Tcp ? "consider a different probe" : "consider a TCP probe";
+        Add(found, ModelWarningKind.ProbeOnlyLoss, hop.Target,
+            $"{hop.Target.Name} drops some of its own pings but forwards fine (loss {Pct(own)} · " +
+            $"forwarding {Pct(forwarding)} over the last {ProbeOnlyWindows} minutes) — " +
+            $"common router behaviour; {advice}.");
+    }
+
+    private static string Pct(double value) => value.ToString("P0", CultureInfo.InvariantCulture);
 
     private static void Add(Dictionary<string, ModelCondition> found, ModelWarningKind kind,
         Target? target, string message)

@@ -44,6 +44,15 @@ public class TrayStatusTests
     }
 
     [Fact]
+    public void Probe_only_loss_has_a_short_label()
+    {
+        var info = TrayStatus.FromStatusJson(With("""
+            [{"key":"p","kind":"ProbeOnlyLoss","targetName":"Router","message":"m","since":"x","acknowledged":false}]
+            """));
+        Assert.Equal(["Router drops its own pings (forwards fine)"], info.Notes);
+    }
+
+    [Fact]
     public void Tooltip_lists_notes_after_the_state_and_detail()
     {
         var info = new TrayInfo(TrayState.Healthy, "Healthy: 2 anchors responding",

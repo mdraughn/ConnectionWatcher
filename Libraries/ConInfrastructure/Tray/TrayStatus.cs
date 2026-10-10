@@ -133,6 +133,7 @@ public static class TrayStatus
             "HopBypassed" when target is not null => $"{target} isn't answering (traffic passes it)",
             "NeverAnswered" when target is not null => $"{target} never answers its probe",
             "UnprovableUp" => "Can't prove the internet is up beyond your ISP",
+            "ProbeOnlyLoss" when target is not null => $"{target} drops its own pings (forwards fine)",
             _ => "ConnectionWatcher note",
         };
     }

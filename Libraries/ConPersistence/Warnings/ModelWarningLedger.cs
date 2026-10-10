@@ -18,9 +18,12 @@ namespace ConPersistence.Warnings;
 /// </summary>
 public class ModelWarningLedger : IEngineObserver, IHostedService
 {
-    /// <summary>Long enough for a new engine to re-raise every kind (the slowest
-    /// is NeverAnswered).</summary>
-    public static readonly TimeSpan ResyncGrace = ModelCheckCoordinator.NeverAnsweredAfter + TimeSpan.FromMinutes(1);
+    /// <summary>Long enough for a new engine to re-raise every kind: the slowest
+    /// are NeverAnswered (5 min) and ProbeOnlyLoss (10 windows).</summary>
+    public static readonly TimeSpan ResyncGrace =
+        (ModelCheckCoordinator.ProbeOnlyProveTime > ModelCheckCoordinator.NeverAnsweredAfter
+            ? ModelCheckCoordinator.ProbeOnlyProveTime : ModelCheckCoordinator.NeverAnsweredAfter)
+        + TimeSpan.FromMinutes(2);
 
     private readonly IDbContextFactory<ConWatchDbContext> _dbFactory;
     private readonly TimeProvider _time;
