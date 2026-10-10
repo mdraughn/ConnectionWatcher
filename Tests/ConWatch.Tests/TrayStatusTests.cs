@@ -107,7 +107,16 @@ public class TrayStatusTests
         {
             Critical = [new TrayCritical(RouterId, "Router", "Down", Bypassed: true)],
         };
-        Assert.Equal("Internet: healthy\nd\n⚠ Router is Down\n🔧 Router isn't answering (traffic passes it)",
+        Assert.Equal("Internet: healthy\n⚠ Router is Down\nd\n🔧 Router isn't answering (traffic passes it)",
             TrayStatus.Tooltip(info));
+    }
+
+    [Fact]
+    public void A_malformed_critical_entry_is_skipped_not_fatal()
+    {
+        var info = TrayStatus.FromStatusJson(
+            """{"enabled":true,"verdict":{"state":"Healthy","detail":"d"},"targets":[{"id":"a","name":"X","critical":true},{"id":"b","name":"Router","state":"Down","critical":true}],"warnings":[]}""");
+        Assert.Equal(TrayState.Healthy, info.State);
+        Assert.Equal("Router", Assert.Single(info.Critical).Name);
     }
 }

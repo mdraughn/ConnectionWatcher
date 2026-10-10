@@ -52,17 +52,16 @@ public static class TrayStatus
                     .Select(w => w.GetProperty("targetId").GetString()!)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>();
-            var critical = status.TryGetProperty("targets", out var ts) && ts.ValueKind == JsonValueKind.Array
-                ? ts.EnumerateArray()
-                    .Where(t => t.TryGetProperty("critical", out var c) && c.ValueKind == JsonValueKind.True)
-                    .Select(t =>
-                    {
-                        var id = t.GetProperty("id").GetString() ?? "";
-                        return new TrayCritical(id, t.GetProperty("name").GetString() ?? "",
-                            t.GetProperty("state").GetString() ?? "", bypassed.Contains(id));
-                    })
-                    .ToList()
-                : new List<TrayCritical>();
+            var critical = new List<TrayCritical>();
+            if (status.TryGetProperty("targets", out var ts) && ts.ValueKind == JsonValueKind.Array)
+                foreach (var t in ts.EnumerateArray())
+                {
+                    if (t.ValueKind != JsonValueKind.Object
+                        || !t.TryGetProperty("critical", out var c) || c.ValueKind != JsonValueKind.True
+                        || !Str(t, "id", out var id) || !Str(t, "name", out var name) || !Str(t, "state", out var st))
+                        continue; // a malformed entry is skipped, never fatal
+                    critical.Add(new TrayCritical(id, name, st, bypassed.Contains(id)));
+                }
             if (status.TryGetProperty("verdict", out var verdict) &&
                 verdict.ValueKind == JsonValueKind.Object)
             {
@@ -106,6 +105,13 @@ public static class TrayStatus
         }
     }
 
+    private static bool Str(JsonElement e, string name, out string value)
+    {
+        var ok = e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String;
+        value = ok ? p.GetString() ?? "" : "";
+        return ok;
+    }
+
     public static string Describe(TrayState state) => state switch
     {
         TrayState.Unreachable => "ConnectionWatcher service is not responding",
@@ -136,10 +142,11 @@ public static class TrayStatus
     public static string Tooltip(TrayInfo info)
     {
         var text = Describe(info.State);
-        if (info.Detail is { Length: > 0 })
-            text += $"\n{info.Detail}";
+        // Devices before the verdict detail: truncation cuts the detail first.
         foreach (var c in info.Critical.Where(c => c.IsDown))
             text += $"\n⚠ {c.Name} is {c.State}";
+        if (info.Detail is { Length: > 0 })
+            text += $"\n{info.Detail}";
         foreach (var note in info.Notes)
             text += $"\n🔧 {note}";
         const int max = 127;

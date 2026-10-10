@@ -98,6 +98,19 @@ public class CriticalWatchTests
     {
         var watch = new CriticalWatch();
         var toast = Assert.Single(watch.Update(Info(TrayState.Degraded, Router("Down")), announce: true));
-        Assert.Equal("Marked critical in ConnectionWatcher.", toast.Body);
+        Assert.Equal("Your internet is degraded too.", toast.Body);
+        Assert.Equal(ToastLevel.Warning, toast.Level);
+    }
+
+    [Fact]
+    public void Recoveries_are_info_and_bypassed_failures_open_the_notes()
+    {
+        var watch = new CriticalWatch();
+        var down = Assert.Single(watch.Update(Info(TrayState.Healthy, Router("Down", bypassed: true)), announce: true));
+        Assert.Equal(ToastLevel.Warning, down.Level);
+        Assert.True(down.OpenNotes);
+        var back = Assert.Single(watch.Update(Info(TrayState.Healthy, Router("Responding")), announce: true));
+        Assert.Equal(ToastLevel.Info, back.Level);
+        Assert.False(back.OpenNotes);
     }
 }

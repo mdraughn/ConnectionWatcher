@@ -1,7 +1,9 @@
 namespace ConInfrastructure.Tray;
 
-/// <summary>A toast the tray should show.</summary>
-public record TrayToast(string Title, string Body);
+public enum ToastLevel { Info, Warning, Error }
+
+/// <summary>A toast the tray should show; OpenNotes makes a click open the notes page.</summary>
+public record TrayToast(string Title, string Body, ToastLevel Level = ToastLevel.Warning, bool OpenNotes = false);
 
 /// <summary>
 /// Decides the critical-target toasts (spec 2026-10-09 §4.7) from successive
@@ -31,11 +33,12 @@ public class CriticalWatch
             {
                 _announced.Add(c.Id);
                 if (announce)
-                    toasts.Add(new TrayToast($"{c.Name} is not answering", FailureBody(c, next.State)));
+                    toasts.Add(new TrayToast($"{c.Name} is not answering", FailureBody(c, next.State),
+                        ToastLevel.Warning, OpenNotes: c.Bypassed));
             }
             else if (c.State is "Responding" or "Recovering" or "Faltering" && _announced.Remove(c.Id) && announce)
             {
-                toasts.Add(new TrayToast($"{c.Name} is answering again", "Marked critical in ConnectionWatcher."));
+                toasts.Add(new TrayToast($"{c.Name} is answering again", "Marked critical in ConnectionWatcher.", ToastLevel.Info));
             }
         }
         return toasts;
@@ -47,5 +50,6 @@ public class CriticalWatch
         // An ISP outage usually leaves the router answering: one that is not
         // means your own equipment (Mark, 2026-10-10).
         : internet == TrayState.Down ? $"The internet is down too — check {c.Name} itself."
+        : internet == TrayState.Degraded ? "Your internet is degraded too."
         : "Marked critical in ConnectionWatcher.";
 }

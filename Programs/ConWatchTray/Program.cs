@@ -128,6 +128,7 @@ internal sealed class TrayContext : ApplicationContext
             next = new TrayInfo(TrayState.Unreachable, null, []);
         }
 
+        TrayToast? internetToast = null;
         bool stateChanged = next.State != _state;
         bool notesChanged = !next.Notes.SequenceEqual(_notes);
         bool criticalChanged = !next.Critical.SequenceEqual(_criticalShown);
@@ -142,16 +143,22 @@ internal sealed class TrayContext : ApplicationContext
             _notesItem.Text = $"ConnectionWatcher notes ({next.Notes.Count})";
             _notesItem.Visible = next.Notes.Count > 0;
             if (stateChanged)
-                MaybeToast(previous, next); // notes never toast (spec D3)
+                internetToast = MaybeToast(previous, next); // notes never toast (spec D3)
         }
 
         // Critical devices (spec §4.7): their own failure and recovery toast,
         // even while the internet is fine. Notes never toast (D3).
         var critical = _critical.Update(next, announce: !_firstPoll && _settings.NotificationsEnabled);
-        foreach (var toast in critical)
+        // One balloon per poll: a second would replace the first.
+        if (TrayToasts.Combine(internetToast, critical) is { } toast)
             Balloon(toast.Title, Truncate(toast.Body, 250),
-                toast.Title.EndsWith("again", StringComparison.Ordinal) ? ToolTipIcon.Info : ToolTipIcon.Warning,
-                toast.Body.Contains("notes", StringComparison.Ordinal) ? "/#notes" : null);
+                toast.Level switch
+                {
+                    ToastLevel.Error => ToolTipIcon.Error,
+                    ToastLevel.Warning => ToolTipIcon.Warning,
+                    _ => ToolTipIcon.Info,
+                },
+                toast.OpenNotes ? "/#notes" : null);
         _firstPoll = false;
     }
 
@@ -159,28 +166,28 @@ internal sealed class TrayContext : ApplicationContext
     /// Toast on changes a person would act on: down, degraded, recovered,
     /// monitor lost/back. Never on startup, never for measuring churn.
     /// </summary>
-    private void MaybeToast(TrayState previous, TrayInfo next)
+    private TrayToast? MaybeToast(TrayState previous, TrayInfo next)
     {
         if (_firstPoll || !_settings.NotificationsEnabled)
-            return;
+            return null;
         if (next.State == TrayState.Measuring || previous == TrayState.Measuring)
-            return;
+            return null;
 
-        (string? title, ToolTipIcon icon) = next.State switch
+        (string? title, ToastLevel level) = next.State switch
         {
-            TrayState.Down => ("Internet DOWN", ToolTipIcon.Error),
-            TrayState.Degraded => ("Internet degraded", ToolTipIcon.Warning),
-            TrayState.Healthy => ("Internet healthy again", ToolTipIcon.Info),
-            TrayState.Unreachable => ("ConnectionWatcher unreachable", ToolTipIcon.Warning),
-            _ => (null, ToolTipIcon.None),
+            TrayState.Down => ("Internet DOWN", ToastLevel.Error),
+            TrayState.Degraded => ("Internet degraded", ToastLevel.Warning),
+            TrayState.Healthy => ("Internet healthy again", ToastLevel.Info),
+            TrayState.Unreachable => ("ConnectionWatcher unreachable", ToastLevel.Warning),
+            _ => (null, ToastLevel.Info),
         };
         if (title is null)
-            return;
+            return null;
 
         var body = next.State == TrayState.Unreachable
             ? $"The monitor at {_settings.EffectiveUrl} is not answering."
             : next.Detail is { Length: > 0 } ? next.Detail : TrayStatus.Describe(next.State);
-        Balloon(title, Truncate(body, 250), icon);
+        return new TrayToast(title, body, level);
     }
 
     /// <summary>
