@@ -70,7 +70,7 @@
     @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
     {
         <tr>
-            <td>@t.Name@if (t.Critical) {<small class="cw-critical" title="Notified when this is down, even if the internet is fine">critical</small>}</td><td>@t.Address@(t.Probe is { Length: > 0 } pr ? $" · {pr.Replace(":", "/")}" : "")</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td><td>@(t.Scope == TargetScope.Local ? "Local" : "Verdict")</td>
+            <td>@t.Name @if (t.Critical) {<small class="cw-critical" title="Notified when this is down, even if the internet is fine">critical</small>}</td><td>@t.Address@(t.Probe is { Length: > 0 } pr ? $" · {pr.Replace(":", "/")}" : "")</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td><td>@(t.Scope == TargetScope.Local ? "Local" : "Verdict")</td>
             <td>@(t.Enabled ? "yes" : "no")</td>
             <td>
                 <button class="outline" data-edit="@t.Id" data-json="@json(t)">Edit</button>

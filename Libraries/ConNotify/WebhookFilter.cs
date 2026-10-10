@@ -41,7 +41,9 @@ public static class WebhookFilter
     /// <summary>A target's own failure (entering Down/Unreachable from neither)
     /// or recovery (leaving them for an answering state, or a released
     /// target's first answer naming its former cause). Down↔Unreachable is a
-    /// reclassification, not a new event.</summary>
+    /// reclassification, not a new event. A released target still down (Starting
+    /// into Down/Unreachable, naming its former cause) is the same incident, whose
+    /// failure was already delivered.</summary>
     public static bool IsCriticalEvent(TargetTransition t)
     {
         if (t.Kind != TransitionSubjectKind.Target)
@@ -50,7 +52,8 @@ public static class WebhookFilter
         static bool Answering(HostState s) =>
             s is HostState.Responding or HostState.Recovering or HostState.Faltering;
         if (Failed(t.To))
-            return !Failed(t.From);
+            return !Failed(t.From) &&
+                !(t.From == HostState.Starting && t.Reason.AncestorId is not null);
         if (Failed(t.From))
             return Answering(t.To);
         return t.From == HostState.Starting && t.Reason.AncestorId is not null && Answering(t.To);

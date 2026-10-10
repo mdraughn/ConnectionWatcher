@@ -104,6 +104,36 @@ public class WebhookFilterTests
     }
 
     [Fact]
+    public void A_released_critical_target_still_down_is_the_same_incident_not_a_new_failure()
+    {
+        var stillDown = T(HostState.Starting, HostState.Down) with
+        {
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed, AncestorId = Guid.NewGuid() },
+        };
+        Assert.False(WebhookFilter.IsCriticalEvent(stillDown));
+        Assert.False(WebhookFilter.ShouldDeliver(stillDown, true, true, critical: true));
+        Assert.False(WebhookFilter.IsCriticalEvent(stillDown with { To = HostState.Unreachable }));
+    }
+
+    [Fact]
+    public void A_cold_start_critical_target_going_down_is_a_failure()
+    {
+        var coldDown = T(HostState.Starting, HostState.Down);
+        Assert.True(WebhookFilter.IsCriticalEvent(coldDown));
+        Assert.True(WebhookFilter.ShouldDeliver(coldDown, true, true, critical: true));
+    }
+
+    [Fact]
+    public void A_released_critical_target_that_turns_out_faltering_is_a_recovery()
+    {
+        var faltering = T(HostState.Starting, HostState.Faltering) with
+        {
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed, AncestorId = Guid.NewGuid() },
+        };
+        Assert.True(WebhookFilter.IsCriticalEvent(faltering));
+    }
+
+    [Fact]
     public void Other_transitions_of_a_critical_target_follow_the_normal_filters()
     {
         Assert.False(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Faltering), true, true, critical: true));
