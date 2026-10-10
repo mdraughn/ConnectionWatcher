@@ -110,4 +110,20 @@ public class LossWindowsTests
         w.Record(A, T0 + LossWindows.Span + LossWindows.CloseDelay, true);
         Assert.Equal([1], reads);
     }
+
+    [Fact]
+    public void A_throwing_subscriber_does_not_stop_the_others()
+    {
+        var w = new LossWindows();
+        var received = new List<LossWindow>();
+        w.WindowClosed.Subscribe(_ => throw new InvalidOperationException("boom"));
+        w.WindowClosed.Subscribe(received.Add);
+        Fill(w, A, T0, 6, 0);
+
+        var ex = Record.Exception(() => w.Record(A, T0 + LossWindows.Span + LossWindows.CloseDelay, true));
+
+        Assert.Null(ex);
+        Assert.Single(received);
+        Assert.Single(w.Closed);
+    }
 }

@@ -59,6 +59,7 @@ public class WatcherEngine
         _pingFactory = pingFactory;
         _resolverFactory = resolverFactory;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        Loss = new LossWindows(_loggerFactory.CreateLogger<LossWindows>());
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _verdictOptions = verdictOptions?.Value ?? new VerdictOptions();
         _dnsRefreshInterval = dnsRefreshInterval ?? DefaultDnsRefreshInterval;
@@ -83,7 +84,7 @@ public class WatcherEngine
 
     /// <summary>Verdict-scope ping samples in clock-aligned windows, for loss
     /// attribution (spec §4.5). Exists from construction.</summary>
-    public LossWindows Loss { get; } = new();
+    public LossWindows Loss { get; }
 
     /// <summary>When the result pump last processed a result end to end; null before the first.</summary>
     public DateTimeOffset? LastResultUtc => _manager?.LastResultUtc;
@@ -219,7 +220,7 @@ public class WatcherEngine
         {
             Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
                 _verdictOptions.WeatherThreshold, _timeProvider,
-                _loggerFactory.CreateLogger<VerdictCoordinator>());
+                _loggerFactory.CreateLogger<VerdictCoordinator>(), Loss);
             if (seed?.Verdict is { } verdictSeed)
                 Verdict.Seed(verdictSeed);
             _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));

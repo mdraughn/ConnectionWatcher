@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reactive.Subjects;
 using ConCore.Targets;
 using ConEngine.Events;
@@ -55,6 +56,7 @@ public class VerdictCoordinator : IDisposable
     private readonly int _weatherThreshold;
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
+    private readonly LossWindows? _loss;
     private readonly Lock _lock = new();
     private readonly Lock _publishLock = new();
     private readonly ConcurrentQueue<TargetTransition> _outbox = new();
@@ -94,12 +96,13 @@ public class VerdictCoordinator : IDisposable
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
         IReadOnlyDictionary<Guid, TargetMonitor> monitors, int weatherThreshold,
-        TimeProvider timeProvider, ILogger<VerdictCoordinator> log)
+        TimeProvider timeProvider, ILogger<VerdictCoordinator> log, LossWindows? loss = null)
     {
         _graph = graph;
         _weatherThreshold = weatherThreshold;
         _time = timeProvider;
         _log = log;
+        _loss = loss;
         _anchors = anchorPool.MemberTargetIds
             .Where(monitors.ContainsKey).Select(id => monitors[id]).ToList();
 
@@ -184,6 +187,10 @@ public class VerdictCoordinator : IDisposable
     {
         foreach (var m in _all.Values)
             _subscriptions.Add(m.TransitionSource.Subscribe(_ => Recalculate()));
+
+        // A closed window can change attribution with no monitor transition.
+        if (_loss is not null)
+            _subscriptions.Add(_loss.WindowClosed.Subscribe(_ => Recalculate()));
 
         // A fully confirmed warm start emits no monitor transitions at all, so
         // a seeded verdict must classify once now rather than wait for one.
@@ -353,9 +360,9 @@ public class VerdictCoordinator : IDisposable
         return Blame(VerdictState.LinkDown, states);
     }
 
-    /// <summary>The internet is reachable: how good is it? Anchor evidence only,
-    /// except that weather our own path shares is our link (interim attribution;
-    /// Plan D replaces it with burst-aligned loss attribution).</summary>
+    /// <summary>The internet is reachable: how good is it? Anchor evidence decides
+    /// quality. Weather is our link's only when a path hop's forwarding loss
+    /// explains it (spec §4.5); until a fresh window exists, the interim state rule decides.</summary>
     private (VerdictState, string, string? Operator) Quality(
         List<(TargetMonitor Monitor, HostState State)> determined, IReadOnlyDictionary<Guid, HostState> states)
     {
@@ -385,24 +392,57 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.SiteIncident, $"SiteIncident: {List()}{sharedOperator}{qualifier}", null);
         }
 
-        // A Down hop that something beyond answers through is bypassed (its
-        // probe lies): it carries no forwarding loss and is never blamed (M1).
-        var losingHop = _ancestors
-            .Where(a => states[a.Monitor.Target.Id] switch
-            {
-                HostState.Faltering => true,
-                HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
-                _ => false,
-            })
-            .OrderByDescending(a => a.Depth).FirstOrDefault();
-        if (losingHop.Monitor is not null)
-            return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
-                $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}");
+        // Is the weather our own path's? (spec §4.5) From the latest fresh
+        // window: the deepest path hop whose FORWARDING loss — its own loss,
+        // capped by the lowest loss among the witnesses beyond it — is at least
+        // what the anchors typically lose. A hop that only drops its own
+        // probes forwards fine and is never blamed.
+        if (AttributeLoss() is { } attributed)
+        {
+            if (attributed.Hop is { } hop)
+                return Wording(VerdictState.LinkDegraded, hop,
+                    $"{hop.Target.Name} is {states[hop.Target.Id]} (forwarding loss " +
+                    $"{attributed.Forwarding.ToString("P0", CultureInfo.InvariantCulture)})");
+        }
+        else
+        {
+            // No fresh usable window yet (first minute, slow profiles): the
+            // interim state rule. A Down hop that something beyond answers
+            // through is bypassed (its probe lies): never blamed (M1).
+            var losingHop = _ancestors
+                .Where(a => states[a.Monitor.Target.Id] switch
+                {
+                    HostState.Faltering => true,
+                    HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
+                    _ => false,
+                })
+                .OrderByDescending(a => a.Depth).FirstOrDefault();
+            if (losingHop.Monitor is not null)
+                return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
+                    $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}");
+        }
 
         var counts = grouped
             ? $"{degradedUnits} of {determinedUnits} operators ({degraded.Count} of {determined.Count} anchors)"
             : $"{degraded.Count} of {determined.Count} anchors";
         return (VerdictState.InternetWeather, $"InternetWeather: {counts} degraded ({List()})", null);
+    }
+
+    /// <summary>Null: no fresh usable window, so use the interim rule. Hop null:
+    /// the window shows no path hop to blame (internet weather).</summary>
+    private (TargetMonitor? Hop, double Forwarding)? AttributeLoss()
+    {
+        if (_loss?.LatestFresh(_time.GetUtcNow()) is not { } window ||
+            LossAttribution.TypicalLoss(window, _anchors.Select(a => a.Target.Id)) is not { } typical)
+            return null;
+        var floor = Math.Max(typical, LossAttribution.MinAttributableLoss);
+        foreach (var (hop, _) in _ancestors.OrderByDescending(a => a.Depth))
+        {
+            if (LossAttribution.ForHop(window, hop.Target.Id, _descendants[hop.Target.Id]) is { } loss &&
+                loss.Forwarding >= floor)
+                return (hop, loss.Forwarding);
+        }
+        return (null, 0);
     }
 
     /// <summary>Frontier blame: along each failing anchor's path, the last hop
