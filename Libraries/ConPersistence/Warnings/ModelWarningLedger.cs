@@ -147,7 +147,7 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
         _unconfirmed.Remove(c.Key);
         if (_instances.TryGetValue(c.Key, out var existing))
         {
-            _instances[c.Key] = existing with { Message = c.Message }; // continuation
+            _instances[c.Key] = existing with { Message = c.Message, TargetName = c.TargetName }; // continuation
             return;
         }
         var w = new ModelWarningInstance(c.Key, c.Kind, c.TargetId, c.TargetName, c.Message, at, false);

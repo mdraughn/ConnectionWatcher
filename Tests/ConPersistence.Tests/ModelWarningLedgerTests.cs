@@ -109,7 +109,33 @@ public class ModelWarningLedgerTests : IDisposable
         _source = new Subject<ModelConditionChange>();
         _time.Advance(TimeSpan.FromSeconds(3));
         _ledger.Attach(_source, () => _active);
-        Raise(Bypassed); // the new engine's first evaluation
+        Raise(Bypassed with { TargetName = "Renamed", Message = "new text" }); // the new engine's first evaluation
+
+        var w = Assert.Single(_ledger.Current);
+        Assert.Equal(since, w.SinceUtc);
+        Assert.True(w.Acknowledged);
+        Assert.Equal("Renamed", w.TargetName);
+        Assert.Equal("new text", w.Message);
+        var row = Assert.Single(await Rows());
+        Assert.Null(row.EndUtc);
+    }
+
+    [Fact]
+    public async Task An_acknowledged_never_answered_note_survives_a_rebuild_that_re_raises_only_it()
+    {
+        var never = new ModelCondition(
+            ModelCondition.KeyFor(ModelWarningKind.NeverAnswered, Inside), ModelWarningKind.NeverAnswered,
+            Inside, "Inside", "Inside has never answered its probe (tcp/80)");
+        Raise(never);
+        var since = _time.GetUtcNow();
+        _ledger.Acknowledge(never.Key);
+
+        _ledger.Detach();
+        _source = new Subject<ModelConditionChange>();
+        _ledger.Attach(_source, () => _active);
+        _time.Advance(TimeSpan.FromMinutes(4)); // the new engine stays quiet until its own wait is up
+        Assert.True(TimeSpan.FromMinutes(4) < ModelWarningLedger.ResyncGrace);
+        Raise(never);
 
         var w = Assert.Single(_ledger.Current);
         Assert.Equal(since, w.SinceUtc);

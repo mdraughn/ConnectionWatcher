@@ -174,7 +174,7 @@ public class ModelCheckCoordinatorTests : IDisposable
         foreach (var name in new[] { "Router", "External", "Google", "Cloudflare" })
             Feed(name, 5, true);
         Feed("Inside", 20, false); // never a single reply
-        Assert.Equal(ModelWarningKind.HopBypassed, Assert.Single(_check.Active).Kind);
+        Assert.Empty(_check.Active); // no note at all until the wait has passed
 
         // Keep the beyond-targets answering while the clock passes the wait.
         while (_time.GetUtcNow() - DateTimeOffset.Parse("2026-10-09T00:00:00Z") < ModelCheckCoordinator.NeverAnsweredAfter)
@@ -185,7 +185,21 @@ public class ModelCheckCoordinatorTests : IDisposable
         Assert.Equal(ModelWarningKind.NeverAnswered, active.Kind);
         Assert.Equal($"never-answered:{Id("Inside"):D}", active.Key);
         Assert.StartsWith("Inside has never answered its probe (tcp/80)", active.Message);
-        Assert.Contains(_changes, c => !c.Active && c.Condition.Kind == ModelWarningKind.HopBypassed);
+        Assert.DoesNotContain(_changes, c => c.Condition.Kind == ModelWarningKind.HopBypassed);
+    }
+
+    [Fact]
+    public void A_subscriber_that_throws_does_not_break_the_ping_result_path()
+    {
+        StartCheck();
+        foreach (var name in new[] { "Router", "External", "Google", "Cloudflare" })
+            Feed(name, 5, true);
+        Feed("Inside", 5, true);
+        _check.ChangeSource.Subscribe(_ => throw new InvalidOperationException("boom"));
+
+        var ex = Record.Exception(() => Feed("Inside", 20, false));
+
+        Assert.Null(ex);
     }
 
     [Fact]

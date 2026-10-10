@@ -51,8 +51,9 @@ public class ModelCheckCoordinator : IDisposable
     /// <summary>A Faltering hop is a note only once it has faltered this long;
     /// a Down hop is a note at once.</summary>
     public static readonly TimeSpan FalteringHold = TimeSpan.FromMinutes(2);
-    /// <summary>How long a target may go without a single reply before it is
-    /// NeverAnswered rather than HopBypassed.</summary>
+    /// <summary>How long a target may go without a single reply before it is a
+    /// note at all — NeverAnswered. (Reply counters restart with every engine
+    /// build, so a zero-reply hop is not yet evidence of a bypass.)</summary>
     public static readonly TimeSpan NeverAnsweredAfter = TimeSpan.FromMinutes(5);
 
     public const string UnprovableUpMessage =
@@ -114,7 +115,7 @@ public class ModelCheckCoordinator : IDisposable
         lock (_lock)
             _startedUtc = _time.GetUtcNow();
         foreach (var monitor in _monitors.Values)
-            _subscriptions.Add(monitor.TransitionSource.Subscribe(_ => Evaluate()));
+            _subscriptions.Add(monitor.TransitionSource.Subscribe(_ => OnTick()));
         _timer = _time.CreateTimer(_ => OnTick(), null, EvaluateEvery, EvaluateEvery);
         Evaluate();
     }
@@ -161,11 +162,14 @@ public class ModelCheckCoordinator : IDisposable
                 var witness = _monitors[witnessId].Target.Name;
                 var probe = ProbeText(hop.Target);
                 bool neverAnswered = hop.AcceptedReplies + hop.RefusedReplies == 0;
-                if (neverAnswered && now - _startedUtc >= NeverAnsweredAfter)
+                if (neverAnswered)
                 {
-                    Add(found, ModelWarningKind.NeverAnswered, hop.Target,
-                        $"{hop.Target.Name} has never answered its probe ({probe}) since monitoring started, " +
-                        $"but {witness} beyond it answers. Change its probe or remove it from the path.");
+                    // No condition until the wait is up: after a rebuild or restart the counters
+                    // are zero, and a HopBypassed here would split an acknowledged NeverAnswered note.
+                    if (now - _startedUtc >= NeverAnsweredAfter)
+                        Add(found, ModelWarningKind.NeverAnswered, hop.Target,
+                            $"{hop.Target.Name} has never answered its probe ({probe}) since monitoring started, " +
+                            $"but {witness} beyond it answers. Change its probe or remove it from the path.");
                 }
                 else if (state == HostState.Down)
                 {
