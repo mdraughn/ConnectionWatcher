@@ -72,4 +72,48 @@ public class WebhookFilterTests
         Assert.True(WebhookFilter.ShouldDeliver(
             T(HostState.Responding, HostState.Down, TransitionSubjectKind.Verdict, TransitionTrigger.VerdictChanged), true, true));
     }
+
+    [Fact]
+    public void A_critical_targets_failure_and_recovery_pass_verdict_only_and_skip_explained()
+    {
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Down), true, true, critical: true));
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Faltering, HostState.Unreachable, trigger: TransitionTrigger.ParentDown), true, true, critical: true));
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Down, HostState.Recovering), true, true, critical: true));
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Unreachable, HostState.Responding), true, true, critical: true));
+    }
+
+    [Fact]
+    public void A_released_critical_targets_recovery_is_delivered_once_and_the_release_itself_is_not()
+    {
+        var cause = Guid.NewGuid();
+        var release = T(HostState.Unreachable, HostState.Starting, trigger: TransitionTrigger.ParentRecovered);
+        var back = T(HostState.Starting, HostState.Responding) with
+        {
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed, AncestorId = cause },
+        };
+        Assert.False(WebhookFilter.ShouldDeliver(release, true, true, critical: true));
+        Assert.True(WebhookFilter.ShouldDeliver(back, true, true, critical: true));
+    }
+
+    [Fact]
+    public void Reclassifying_a_critical_target_between_down_and_unreachable_is_not_a_new_event()
+    {
+        Assert.False(WebhookFilter.IsCriticalEvent(T(HostState.Down, HostState.Unreachable, trigger: TransitionTrigger.ParentDown)));
+        Assert.False(WebhookFilter.IsCriticalEvent(T(HostState.Unreachable, HostState.Down)));
+        Assert.False(WebhookFilter.ShouldDeliver(T(HostState.Down, HostState.Unreachable, trigger: TransitionTrigger.ParentDown), true, true, critical: true));
+    }
+
+    [Fact]
+    public void Other_transitions_of_a_critical_target_follow_the_normal_filters()
+    {
+        Assert.False(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Faltering), true, true, critical: true));
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Faltering), false, true, critical: true));
+    }
+
+    [Fact]
+    public void A_non_critical_target_is_unchanged_by_the_new_parameter()
+    {
+        Assert.False(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Down), true, true));
+        Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Down), false, true));
+    }
 }

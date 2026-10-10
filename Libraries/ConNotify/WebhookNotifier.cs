@@ -17,8 +17,9 @@ namespace ConNotify;
 public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFactory, ILogger<WebhookNotifier> log)
     : BackgroundService, IEngineObserver
 {
-    private readonly Channel<TargetTransition> _queue = Channel.CreateBounded<TargetTransition>(
-        new BoundedChannelOptions(500) { FullMode = BoundedChannelFullMode.DropOldest });
+    private readonly Channel<(TargetTransition Transition, bool Critical)> _queue =
+        Channel.CreateBounded<(TargetTransition, bool)>(
+            new BoundedChannelOptions(500) { FullMode = BoundedChannelFullMode.DropOldest });
     private IDisposable? _subscription;
 
     /// <summary>Called by the host on every engine (re)start.</summary>
@@ -28,9 +29,12 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
         _subscription = engine.TransitionSource.Subscribe(
             t =>
             {
-                // Local (LAN-device) targets never notify; verdict/pool subjects pass.
-                if (!engine.IsLocalSubject(t.TargetId))
-                    _queue.Writer.TryWrite(t);
+                // Local (LAN-device) targets never notify, unless marked critical
+                // (spec §4.7); verdict/pool subjects pass. Criticality is decided
+                // now: the engine that knew it may be gone by delivery.
+                var critical = engine.IsCriticalSubject(t.TargetId);
+                if (critical || !engine.IsLocalSubject(t.TargetId))
+                    _queue.Writer.TryWrite((t, critical));
             },
             ex => log.LogError(ex, "Transition stream error in webhook notifier"));
     }
@@ -43,11 +47,11 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var transition in _queue.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+        await foreach (var (transition, critical) in _queue.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
         {
             try
             {
-                await DeliverAsync(transition, stoppingToken).ConfigureAwait(false);
+                await DeliverAsync(transition, critical, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -60,13 +64,13 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
         }
     }
 
-    private async Task DeliverAsync(TargetTransition transition, CancellationToken ct)
+    private async Task DeliverAsync(TargetTransition transition, bool critical, CancellationToken ct)
     {
         if (await settings.GetAsync(SettingKeys.WebhookEnabled) != "true")
             return;
         var verdictOnly = await settings.GetAsync(SettingKeys.WebhookVerdictOnly) == "true";
         var skipExplained = await settings.GetAsync(SettingKeys.WebhookSkipExplained) != "false";
-        if (!WebhookFilter.ShouldDeliver(transition, verdictOnly, skipExplained))
+        if (!WebhookFilter.ShouldDeliver(transition, verdictOnly, skipExplained, critical))
             return;
 
         var urls = (await settings.GetAsync(SettingKeys.WebhookUrls) ?? "")

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using ConCore.Targets;
 using ConEngine.Events;
 using ConEngine.Tracking;
 using ConPersistence.Queries;
@@ -61,6 +62,7 @@ public class MqttTopics(string baseTopic, string discoveryPrefix)
     public string InternetState => $"{Base}/internet/state";
     public string Transitions => $"{Base}/transitions";
     public string TargetState(string slug) => $"{Base}/target/{slug}/state";
+    public string TargetAttributes(string slug) => $"{Base}/target/{slug}/attributes";
 
     private string Prefix { get; } = discoveryPrefix.Trim('/');
     public string VerdictDiscovery => $"{Prefix}/sensor/{Base}_verdict/config";
@@ -86,10 +88,16 @@ public static class HaDiscovery
             name,
             unique_id = $"{topics.Base}_{targetId:N}",
             state_topic = topics.TargetState(slug),
+            json_attributes_topic = topics.TargetAttributes(slug),
             device_class = "connectivity",
             availability_topic = topics.Availability,
             device = Device(topics),
         }, Options);
+
+    /// <summary>A target sensor's attributes: whether it is critical (spec §4.7)
+    /// and whether it is a LAN device, so automations can single either out.</summary>
+    public static string TargetAttributes(bool critical, TargetScope scope) =>
+        JsonSerializer.Serialize(new { critical, scope = scope.ToString() }, Options);
 
     public static string VerdictConfig(MqttTopics topics) =>
         JsonSerializer.Serialize(new

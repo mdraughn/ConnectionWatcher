@@ -195,6 +195,37 @@ public class NotifierIntegrationTests
     }
 
     [Fact]
+    public async Task A_critical_targets_failure_reaches_a_verdict_only_webhook()
+    {
+        using var hook = new Hook();
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+        await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+        {
+            ["Webhook.Enabled"] = "true",
+            ["Webhook.VerdictOnly"] = "true",
+            ["Webhook.Urls"] = hook.Url("/hook"),
+        });
+        await ConfigApiTests.SeedHomeAsync(client);
+        // A critical LAN device (Local scope, never a verdict subject) that is down from the start.
+        factory.Pings.SetUp(IPAddress.Parse("203.0.113.9"), false);
+        (await client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "CriticalNas", address = "203.0.113.9", profile = "Fast", scope = "Local", critical = true,
+        })).EnsureSuccessStatusCode();
+
+        await ConfigApiTests.Eventually(() => Task.FromResult(hook.Received.Any(r =>
+        {
+            var body = JsonSerializer.Deserialize<JsonElement>(r.Body);
+            return body.GetProperty("subjectName").GetString() == "CriticalNas"
+                && body.GetProperty("to").GetString() == "Down";
+        })));
+        // Only its failure got through verdict-only: no Starting/Initializing noise for it.
+        Assert.All(hook.Received.Where(r => r.Body.Contains("CriticalNas")), r =>
+            Assert.Equal("Down", JsonSerializer.Deserialize<JsonElement>(r.Body).GetProperty("to").GetString()));
+    }
+
+    [Fact]
     public async Task Heartbeat_pings_immediately_when_configured_and_follows_url_changes()
     {
         using var hook = new Hook();

@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-using ConCore.Targets;
 using ConEngine;
 using ConEngine.Events;
 using ConPersistence;
@@ -65,11 +64,9 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             _subscription?.Dispose();
             _engine = engine;
             _subscription = engine.TransitionSource.Subscribe(
-                t =>
-                {
-                    if (!engine.IsLocalSubject(t.TargetId))
-                        _inbox.Post(t);
-                },
+                // Every target is published, LAN devices included: MQTT never notifies
+                // by itself; Home Assistant automations decide (Mark, 2026-10-10).
+                t => _inbox.Post(t),
                 ex => log.LogError(ex, "Transition stream error in MQTT notifier"));
         }
         _inbox.Refresh();
@@ -195,7 +192,6 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         var slugger = new Slugger();
         var slugs = new Dictionary<Guid, string>();
         var monitors = engine.Monitors.Values
-            .Where(m => m.Target.Scope != TargetScope.Local)
             .OrderBy(m => m.Target.Name).ToList();
         foreach (var monitor in monitors)
             slugs[monitor.Target.Id] = slugger.Slug(monitor.Target.Name);
@@ -205,6 +201,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         {
             await PublishAsync(client, _topics.TargetDiscovery(stale), "", retain: true, ct);
             await PublishAsync(client, _topics.TargetState(stale), "", retain: true, ct);
+            await PublishAsync(client, _topics.TargetAttributes(stale), "", retain: true, ct);
         }
 
         await PublishAsync(client, _topics.VerdictDiscovery, HaDiscovery.VerdictConfig(_topics), retain: true, ct);
@@ -216,6 +213,8 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 HaDiscovery.TargetConfig(_topics, monitor.Target.Name, slug, monitor.Target.Id), retain: true, ct);
             await PublishAsync(client, _topics.TargetState(slug),
                 StateMapping.TargetPayload(monitor.CurrentState), retain: true, ct);
+            await PublishAsync(client, _topics.TargetAttributes(slug),
+                HaDiscovery.TargetAttributes(monitor.Target.Critical, monitor.Target.Scope), retain: true, ct);
         }
 
         var current = engine.Verdict?.Current;

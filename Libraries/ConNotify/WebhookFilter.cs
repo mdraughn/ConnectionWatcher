@@ -14,8 +14,14 @@ public static class WebhookFilter
     /// transition out of Starting names the former cause (AncestorId), and if
     /// that is a recovery it belongs to the incident too. Still Down after
     /// its cause recovered is its own problem and is delivered.</param>
-    public static bool ShouldDeliver(TargetTransition t, bool verdictOnly, bool skipExplained)
+    /// <param name="critical">The subject is a target marked critical: its own
+    /// failure and recovery are always delivered, past "verdict only" and
+    /// "skip explained" (spec 2026-10-09 §4.7: critical means tell me).</param>
+    public static bool ShouldDeliver(TargetTransition t, bool verdictOnly, bool skipExplained,
+        bool critical = false)
     {
+        if (critical && IsCriticalEvent(t))
+            return true;
         if (verdictOnly && t.Kind != TransitionSubjectKind.Verdict)
             return false;
         if (skipExplained && t.Kind == TransitionSubjectKind.Target)
@@ -30,5 +36,23 @@ public static class WebhookFilter
                 return false;
         }
         return true;
+    }
+
+    /// <summary>A target's own failure (entering Down/Unreachable from neither)
+    /// or recovery (leaving them for an answering state, or a released
+    /// target's first answer naming its former cause). Down↔Unreachable is a
+    /// reclassification, not a new event.</summary>
+    public static bool IsCriticalEvent(TargetTransition t)
+    {
+        if (t.Kind != TransitionSubjectKind.Target)
+            return false;
+        static bool Failed(HostState s) => s is HostState.Down or HostState.Unreachable;
+        static bool Answering(HostState s) =>
+            s is HostState.Responding or HostState.Recovering or HostState.Faltering;
+        if (Failed(t.To))
+            return !Failed(t.From);
+        if (Failed(t.From))
+            return Answering(t.To);
+        return t.From == HostState.Starting && t.Reason.AncestorId is not null && Answering(t.To);
     }
 }

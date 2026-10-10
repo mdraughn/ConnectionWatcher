@@ -88,11 +88,22 @@ public class HaDiscoveryTests
 
         Assert.Equal("Google DNS", json.GetProperty("name").GetString());
         Assert.Equal("conwatch/target/google_dns/state", json.GetProperty("state_topic").GetString());
+        Assert.Equal("conwatch/target/google_dns/attributes", json.GetProperty("json_attributes_topic").GetString());
         Assert.Equal("conwatch_11111111222233334444555555555555", json.GetProperty("unique_id").GetString());
         Assert.Equal("connectivity", json.GetProperty("device_class").GetString());
         Assert.Equal("conwatch/availability", json.GetProperty("availability_topic").GetString());
         Assert.Equal("conwatch", json.GetProperty("device").GetProperty("identifiers")[0].GetString());
         Assert.Equal("DSoftCo", json.GetProperty("device").GetProperty("manufacturer").GetString());
+    }
+
+    [Fact]
+    public void Target_attributes_carry_critical()
+    {
+        Assert.Equal("conwatch/target/router/attributes", Topics.TargetAttributes("router"));
+        Assert.Equal("{\"critical\":true,\"scope\":\"Local\"}",
+            HaDiscovery.TargetAttributes(critical: true, ConCore.Targets.TargetScope.Local));
+        Assert.Equal("{\"critical\":false,\"scope\":\"Verdict\"}",
+            HaDiscovery.TargetAttributes(critical: false, ConCore.Targets.TargetScope.Verdict));
     }
 
     [Fact]
