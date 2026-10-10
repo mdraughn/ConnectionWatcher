@@ -64,6 +64,8 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
         {
             foreach (var r in open)
             {
+                if (_instances.ContainsKey(r.Key))
+                    continue; // already live (an Attach ran first): the engine owns it
                 if (!Enum.TryParse<ModelWarningKind>(r.Kind, out var kind))
                     continue;
                 _instances[r.Key] = new ModelWarningInstance(r.Key, kind, r.TargetId, r.TargetName, r.Message,

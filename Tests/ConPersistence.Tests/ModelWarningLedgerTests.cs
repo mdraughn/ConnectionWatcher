@@ -194,4 +194,29 @@ public class ModelWarningLedgerTests : IDisposable
         Assert.Empty(await Rows());
         Assert.Empty(_ledger.Current);
     }
+
+    [Fact]
+    public async Task A_late_load_does_not_overwrite_a_live_instance_or_let_the_grace_close_it()
+    {
+        Raise(Bypassed);
+        var since = _time.GetUtcNow();
+        await _recorder.FlushAsync();
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.ModelWarnings.Add(new Entities.ModelWarningRow
+            {
+                Key = Bypassed.Key, Kind = "HopBypassed", Message = "old",
+                StartUtc = since.UtcDateTime.AddDays(-1), AcknowledgedUtc = since.UtcDateTime.AddDays(-1),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await _ledger.LoadAsync();
+
+        var w = Assert.Single(_ledger.Current);
+        Assert.Equal(since, w.SinceUtc);
+        Assert.False(w.Acknowledged);
+        _time.Advance(ModelWarningLedger.ResyncGrace + TimeSpan.FromSeconds(1));
+        Assert.Single(_ledger.Current);
+    }
 }
