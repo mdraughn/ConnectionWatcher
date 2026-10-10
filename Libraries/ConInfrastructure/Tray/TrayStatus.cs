@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ConWatchTray;
+namespace ConInfrastructure.Tray;
 
 public enum TrayState
 {
@@ -11,8 +11,9 @@ public enum TrayState
     Down           // link down / a target hard-down (no-verdict fallback)
 }
 
-/// <summary>State plus the human-readable evidence line, for tooltips and toasts.</summary>
-public record TrayInfo(TrayState State, string? Detail);
+/// <summary>State, the human-readable evidence line, and the short labels of
+/// unacknowledged admin notes (never part of the state: spec 2026-10-09 D3).</summary>
+public record TrayInfo(TrayState State, string? Detail, IReadOnlyList<string> Notes);
 
 /// <summary>
 /// Pure mapping from the /api/v1/status JSON to a tray state. Verdict wins
@@ -25,6 +26,12 @@ public static class TrayStatus
         try
         {
             var status = JsonSerializer.Deserialize<JsonElement>(json);
+            var notes = status.TryGetProperty("warnings", out var warnings) &&
+                        warnings.ValueKind == JsonValueKind.Array
+                ? warnings.EnumerateArray()
+                    .Where(w => !(w.TryGetProperty("acknowledged", out var a) && a.ValueKind == JsonValueKind.True))
+                    .Select(NoteLabel).ToList()
+                : new List<string>();
             if (status.TryGetProperty("verdict", out var verdict) &&
                 verdict.ValueKind == JsonValueKind.Object)
             {
@@ -38,13 +45,13 @@ public static class TrayStatus
                     "LinkDown" => TrayState.Down,
                     _ => TrayState.Measuring,
                 };
-                return new TrayInfo(state, detail);
+                return new TrayInfo(state, detail, notes);
             }
 
             // No verdict configured: derive from target states.
             if (!status.TryGetProperty("targets", out var targets) ||
                 targets.GetArrayLength() == 0)
-                return new TrayInfo(TrayState.Measuring, null);
+                return new TrayInfo(TrayState.Measuring, null, notes);
             var states = targets.EnumerateArray()
                 .Where(t => !(t.TryGetProperty("scope", out var scope) && scope.GetString() == "Local"))
                 .Select(t => (Name: t.GetProperty("name").GetString() ?? "",
@@ -53,18 +60,18 @@ public static class TrayStatus
             var bad = states.Where(s => s.State is "Down" or "Unreachable").ToList();
             if (bad.Count > 0)
                 return new TrayInfo(TrayState.Down,
-                    string.Join(", ", bad.Select(b => $"{b.Name}={b.State}")));
+                    string.Join(", ", bad.Select(b => $"{b.Name}={b.State}")), notes);
             var shaky = states.Where(s => s.State is "Faltering" or "Recovering").ToList();
             if (shaky.Count > 0)
                 return new TrayInfo(TrayState.Degraded,
-                    string.Join(", ", shaky.Select(b => $"{b.Name}={b.State}")));
+                    string.Join(", ", shaky.Select(b => $"{b.Name}={b.State}")), notes);
             if (states.All(s => s.State is "Starting" or "Initializing"))
-                return new TrayInfo(TrayState.Measuring, null);
-            return new TrayInfo(TrayState.Healthy, null);
+                return new TrayInfo(TrayState.Measuring, null, notes);
+            return new TrayInfo(TrayState.Healthy, null, notes);
         }
         catch (JsonException)
         {
-            return new TrayInfo(TrayState.Unreachable, null);
+            return new TrayInfo(TrayState.Unreachable, null, []);
         }
     }
 
@@ -77,4 +84,32 @@ public static class TrayStatus
         TrayState.Down => "Internet: DOWN",
         _ => "ConnectionWatcher",
     };
+
+    /// <summary>A tooltip-sized label for one note.</summary>
+    public static string NoteLabel(JsonElement warning)
+    {
+        var target = warning.TryGetProperty("targetName", out var t) && t.ValueKind == JsonValueKind.String
+            ? t.GetString() : null;
+        var kind = warning.TryGetProperty("kind", out var k) ? k.GetString() : null;
+        return kind switch
+        {
+            "HopBypassed" when target is not null => $"{target} isn't answering (traffic passes it)",
+            "NeverAnswered" when target is not null => $"{target} never answers its probe",
+            "UnprovableUp" => "Can't prove the internet is up beyond your ISP",
+            _ => "ConnectionWatcher note",
+        };
+    }
+
+    /// <summary>NotifyIcon.Text: state, evidence, then one line per note,
+    /// truncated to the 127-character limit.</summary>
+    public static string Tooltip(TrayInfo info)
+    {
+        var text = Describe(info.State);
+        if (info.Detail is { Length: > 0 })
+            text += $"\n{info.Detail}";
+        foreach (var note in info.Notes)
+            text += $"\n🔧 {note}";
+        const int max = 127;
+        return text.Length <= max ? text : text[..(max - 1)] + "…";
+    }
 }

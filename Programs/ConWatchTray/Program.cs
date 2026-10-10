@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using ConInfrastructure.Discovery;
+using ConInfrastructure.Tray;
 
 namespace ConWatchTray;
 
@@ -34,9 +35,11 @@ internal sealed class TrayContext : ApplicationContext
     // ::1 first cost ~2 s per new connection (and made a dead server read as a timeout).
     private readonly HttpClient _http = new(ConConfig.LocalServerHttp.CreateHandler()) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly TraySettings _settings = new();
-    private readonly Dictionary<TrayState, Icon> _icons = new();
+    private readonly Dictionary<(TrayState, bool), Icon> _icons = new();
     private TrayState _state = TrayState.Unreachable;
     private bool _firstPoll = true;
+    private IReadOnlyList<string> _notes = [];
+    private ToolStripItem _notesItem = null!;
     private readonly ScoutRunner _scout = new();
     private readonly ScoutPasswordStore _scoutPasswords = new();
     // One cookie-enabled, no-redirect client for the scout (its own, longer timeout): a sign-in is reused by later sends.
@@ -50,6 +53,8 @@ internal sealed class TrayContext : ApplicationContext
         var menu = new ContextMenuStrip();
         var open = menu.Items.Add("Open ConnectionWatcher", null, (_, _) => Open(""));
         open.Font = new Font(open.Font, FontStyle.Bold);
+        _notesItem = menu.Items.Add("ConnectionWatcher notes", null, (_, _) => Open("/#notes"));
+        _notesItem.Visible = false;
         menu.Items.Add("History", null, (_, _) => Open("/History"));
         menu.Items.Add("ISP report", null, (_, _) => Open("/Report"));
         menu.Items.Add("Server settings", null, (_, _) => Open("/Settings"));
@@ -64,7 +69,7 @@ internal sealed class TrayContext : ApplicationContext
 
         _icon = new NotifyIcon
         {
-            Icon = IconFor(TrayState.Unreachable),
+            Icon = IconFor(TrayState.Unreachable, badge: false),
             Text = TrayStatus.Describe(TrayState.Unreachable),
             Visible = true,
             ContextMenuStrip = menu,
@@ -114,21 +119,26 @@ internal sealed class TrayContext : ApplicationContext
             var response = await _http.GetAsync($"{_settings.EffectiveUrl}/api/v1/status");
             next = response.IsSuccessStatusCode
                 ? TrayStatus.FromStatusJson(await response.Content.ReadAsStringAsync())
-                : new TrayInfo(TrayState.Unreachable, null);
+                : new TrayInfo(TrayState.Unreachable, null, []);
         }
         catch (Exception)
         {
-            next = new TrayInfo(TrayState.Unreachable, null);
+            next = new TrayInfo(TrayState.Unreachable, null, []);
         }
 
-        if (next.State != _state)
+        bool stateChanged = next.State != _state;
+        bool notesChanged = !next.Notes.SequenceEqual(_notes);
+        if (stateChanged || notesChanged)
         {
             var previous = _state;
             _state = next.State;
-            _icon.Icon = IconFor(next.State);
-            _icon.Text = Truncate($"{TrayStatus.Describe(next.State)}" +
-                (next.Detail is { Length: > 0 } ? $"\n{next.Detail}" : ""), 127);
-            MaybeToast(previous, next);
+            _notes = next.Notes;
+            _icon.Icon = IconFor(next.State, badge: next.Notes.Count > 0);
+            _icon.Text = TrayStatus.Tooltip(next);
+            _notesItem.Text = $"ConnectionWatcher notes ({next.Notes.Count})";
+            _notesItem.Visible = next.Notes.Count > 0;
+            if (stateChanged)
+                MaybeToast(previous, next); // notes never toast (spec D3)
         }
         _firstPoll = false;
     }
@@ -299,9 +309,9 @@ internal sealed class TrayContext : ApplicationContext
     /// pairs → inner pair only → dimmed glyph under a slash), so the states
     /// differ in FORM, not only color, and survive a greyscale tray.
     /// </summary>
-    private Icon IconFor(TrayState state)
+    private Icon IconFor(TrayState state, bool badge)
     {
-        if (_icons.TryGetValue(state, out var cached))
+        if (_icons.TryGetValue((state, badge), out var cached))
             return cached;
         var (color, arcPairs, slash) = state switch
         {
@@ -352,9 +362,21 @@ internal sealed class TrayContext : ApplicationContext
                 };
                 g.DrawLine(slashPen, 5f * scale, 19f * scale, 19f * scale, 5f * scale);
             }
+
+            if (badge)
+            {
+                // Subtle note marker: a small neutral dot, bottom-right, ringed
+                // so it reads on light and dark taskbars. Never a state colour.
+                const float d = 9f;
+                var box = new RectangleF(size - d - 0.5f, size - d - 0.5f, d, d);
+                using var ring = new SolidBrush(Color.White);
+                using var fill = new SolidBrush(Color.FromArgb(96, 112, 140));
+                g.FillEllipse(ring, RectangleF.Inflate(box, 1.2f, 1.2f));
+                g.FillEllipse(fill, box);
+            }
         }
         var icon = Icon.FromHandle(bitmap.GetHicon());
-        _icons[state] = icon;
+        _icons[(state, badge)] = icon;
         return icon;
     }
 
