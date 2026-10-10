@@ -49,11 +49,13 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
             }
 
             // Router: reuse any target already at that address.
+            // A router the wizard creates is critical (spec §4.7); a reused target is left as it is (D6).
             routerName = ByAddress(request.Router.Address) ?? Add(new TargetDto
             {
                 Name = Unique(request.Router.Name, NameTaken),
                 Address = request.Router.Address,
                 Profile = "Internal",
+                Critical = true,
             });
 
             // Optional WAN address, chained under the router.

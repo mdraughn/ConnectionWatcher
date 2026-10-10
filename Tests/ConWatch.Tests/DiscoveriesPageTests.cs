@@ -147,7 +147,7 @@ public class DiscoveriesPageTests : IDisposable
 
         var html = System.Net.WebUtility.HtmlDecode(await _client.GetStringAsync("/Config/Discoveries"));
 
-        Assert.Contains($"/Config/Targets?address=192.0.2.1&name=Router&profile=Internal&scope=Verdict&discoveryId={await IdOfAsync("192.0.2.1")}", html);
+        Assert.Contains($"/Config/Targets?address=192.0.2.1&name=Router&profile=Internal&scope=Verdict&critical=true&discoveryId={await IdOfAsync("192.0.2.1")}", html);
         Assert.Contains($"address=203.0.113.5&name=ISP%20edge&profile=Path&scope=Verdict&discoveryId={await IdOfAsync("203.0.113.5")}", html);
         Assert.Contains($"address=192.0.2.50&name=nas.example.com&profile=Local&scope=Local&discoveryId={await IdOfAsync("192.0.2.50")}", html);
     }

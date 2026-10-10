@@ -84,12 +84,31 @@ public class SetupApiTests : IDisposable
         Assert.Equal(3, targets!.Count);
         Assert.Null(targets.Single(t => t.Name == "Router").Parent);
         Assert.Equal("Router", targets.Single(t => t.Address == "8.8.8.8").Parent);
+        Assert.True(targets.Single(t => t.Name == "Router").Critical);
+        Assert.All(targets.Where(t => t.Name != "Router"), t => Assert.False(t.Critical));
 
         var pools = await _client.GetFromJsonAsync<List<PoolDto>>("/api/v1/pools");
         Assert.Equal(2, Assert.Single(pools!).Members.Count);
 
         var settings = await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings");
         Assert.Equal("Internet", settings!["Verdict.AnchorPool"]);
+    }
+
+    [Fact]
+    public async Task Apply_does_not_mark_an_existing_router_target_critical()
+    {
+        // D6: existing installs are unchanged; the wizard reuses a target at the router's address untouched.
+        (await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "My Router", address = "192.168.1.1", profile = "Internal",
+        })).EnsureSuccessStatusCode();
+
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8", "1.1.1.1"]));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
+        Assert.False(targets.Single(t => t.Address == "192.168.1.1").Critical);
     }
 
     [Fact]

@@ -30,6 +30,9 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public string? PrefillProfile => Request.Query["profile"];
     public string? PrefillOperator => Request.Query["operator"];
     public string? PrefillScope => Request.Query["scope"];
+    /// <summary>Adopting a Gateway discovery pre-checks Critical (spec §4.7).</summary>
+    public bool PrefillCritical =>
+        string.Equals(Request.Query["critical"], "true", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The discovery being adopted (from the Discoveries page); null when absent or malformed.</summary>
     public string? PrefillDiscoveryId =>

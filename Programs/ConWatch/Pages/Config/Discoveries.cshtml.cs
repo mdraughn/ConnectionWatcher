@@ -90,6 +90,10 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
         var query = new QueryString()
             .Add("address", d.Address).Add("name", name).Add("profile", profile)
             .Add("scope", scope);
+        // A router is the device you most want to hear about: adopting the
+        // gateway pre-checks Critical (spec §4.7). The admin can uncheck it.
+        if (d.Kind == DiscoveryKind.Gateway)
+            query = query.Add("critical", "true");
         if (d.Kind == DiscoveryKind.NetworkEdge && _routerName is { Length: > 0 })
             query = query.Add("parent", _routerName);
         query = query.Add("discoveryId", d.Id.ToString());

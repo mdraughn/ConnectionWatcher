@@ -188,6 +188,22 @@ public class PageSmokeTests : IDisposable
     }
 
     [Fact]
+    public async Task Targets_dialog_has_a_critical_checkbox_unchecked_by_default()
+    {
+        var html = await _factory.CreateClient().GetStringAsync("/Config/Targets");
+        Assert.Contains("Critical — notify when this is down, even if the internet is fine", html);
+        Assert.Matches("<input[^>]*name=\"critical\"", html);
+        Assert.DoesNotMatch("<input[^>]*name=\"critical\"[^>]*checked", html);
+    }
+
+    [Fact]
+    public async Task Critical_prefill_checks_the_box()
+    {
+        var html = await _factory.CreateClient().GetStringAsync("/Config/Targets?address=192.0.2.1&name=Router&critical=true");
+        Assert.Matches("<input[^>]*name=\"critical\"[^>]*checked", html);
+    }
+
+    [Fact]
     public async Task Targets_page_prefills_profile_and_operator_from_the_query()
     {
         var html = await _factory.CreateClient().GetStringAsync(

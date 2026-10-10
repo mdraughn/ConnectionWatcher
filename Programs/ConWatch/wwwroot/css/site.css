@@ -93,6 +93,9 @@ body { background: var(--bg); }
     border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
     border-radius: 5px; cursor: pointer; padding: 0; margin: 0; }
 .cw-iconbtn:hover { color: var(--text); border-color: var(--border-strong); }
+.cw-critical { margin-left: 0.45rem; padding: 0 0.35rem; border: 1px solid var(--border-strong);
+    border-radius: 4px; color: var(--muted); font-size: 0.7rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.03em; vertical-align: 1px; }
 .cw-notes-badge { position: relative; }
 .cw-notes-badge[hidden] { display: none; }
 .cw-notes-badge .count { position: absolute; top: -5px; right: -5px; min-width: 15px; height: 15px;
