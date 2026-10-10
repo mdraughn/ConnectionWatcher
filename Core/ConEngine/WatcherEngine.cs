@@ -81,6 +81,10 @@ public class WatcherEngine
     /// <summary>Suspicion bursts, corroboration sweeps, and glitch episodes.</summary>
     public SuspicionCoordinator? Suspicion { get; private set; }
 
+    /// <summary>Verdict-scope ping samples in clock-aligned windows, for loss
+    /// attribution (spec §4.5). Exists from construction.</summary>
+    public LossWindows Loss { get; } = new();
+
     /// <summary>When the result pump last processed a result end to end; null before the first.</summary>
     public DateTimeOffset? LastResultUtc => _manager?.LastResultUtc;
 
@@ -263,7 +267,10 @@ public class WatcherEngine
                     // Local targets are tracked on the side: no suspicion bursts,
                     // corroboration sweeps or glitch episodes (spec §3 exclusions).
                     if (monitor.Target.Scope != TargetScope.Local)
+                    {
                         Suspicion?.OnPingSample(monitor.Target.Id, result);
+                        Loss.Record(monitor.Target.Id, result.Timestamp, result.Success);
+                    }
                 }
             },
             ex => _log.LogError(ex, "Error in ping result stream"),

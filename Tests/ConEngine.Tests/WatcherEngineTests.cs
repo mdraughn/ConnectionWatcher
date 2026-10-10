@@ -71,6 +71,23 @@ public class WatcherEngineTests : IAsyncLifetime
     private HostState State(string name) => _engine.Monitors[_engine.Graph.GetByName(name).Id].CurrentState;
 
     [Fact]
+    public async Task Verdict_scope_ping_samples_feed_the_loss_windows()
+    {
+        var google = _engine.Graph.GetByName("Google").Id;
+        await Eventually(() => _engine.Loss.Open(google) is { Samples: > 0 });
+    }
+
+    [Fact]
+    public void The_loss_windows_exist_before_start()
+    {
+        var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(Options()));
+        Assert.NotNull(engine.Loss);
+        Assert.Empty(engine.Loss.Closed);
+    }
+
+    [Fact]
     public async Task Two_targets_on_one_ip_are_tracked_independently()
     {
         var sharedIp = IPAddress.Parse("192.168.9.1");

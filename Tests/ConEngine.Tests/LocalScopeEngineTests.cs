@@ -42,6 +42,12 @@ public class LocalScopeEngineTests
             Assert.False(engine.IsLocalSubject(engine.Graph.GetByName("Router").Id));
             Assert.False(engine.IsLocalSubject(engine.Graph.GetPoolByName("Internet").Id));
             Assert.False(engine.IsLocalSubject(VerdictCoordinator.SubjectId));
+            var routerId = engine.Graph.GetByName("Router").Id;
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (engine.Loss.Open(routerId) is not { Samples: > 0 } && DateTime.UtcNow < deadline)
+                await Task.Delay(25);
+            Assert.True(engine.Loss.Open(routerId) is { Samples: > 0 });
+            Assert.Null(engine.Loss.Open(engine.Graph.GetByName("NAS").Id));
             Assert.False(engine.IsLocalSubject(Guid.NewGuid()));
         }
         finally
