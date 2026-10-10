@@ -82,4 +82,12 @@ describe("statusStore", () => {
     store.applyTransition(transition({}));
     expect(store.getState().latestTransition?.subjectName).toBe("Google");
   });
+  it("keeps the snapshot's notes and defaults them to empty", () => {
+    const store = createStatusStore();
+    store.applySnapshot({ ...snapshot, warnings: [{ key: "unprovable-up", kind: "UnprovableUp",
+      message: "m", since: "2026-10-09T00:00:00Z", acknowledged: false }] });
+    expect(store.getState().warnings).toHaveLength(1);
+    store.applySnapshot({ ...snapshot, warnings: undefined });
+    expect(store.getState().warnings).toEqual([]);
+  });
 });

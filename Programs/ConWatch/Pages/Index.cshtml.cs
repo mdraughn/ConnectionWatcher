@@ -88,6 +88,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
             AnchorNames = names.AnchorNames,
             WeatherThreshold = names.WeatherThreshold,
             EngineDisabled,
+            Admin = !gate.IsLocked(User),
             CloneSource = await settingsStore.GetAsync(ConPersistence.Settings.SettingKeys.CloneSourceUrl),
         }, JsonOptions);
         return Page();

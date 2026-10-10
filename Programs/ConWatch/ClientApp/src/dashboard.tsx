@@ -5,6 +5,7 @@ import { EventStrip } from "./components/EventStrip";
 import { GlitchSection } from "./components/GlitchSection";
 import { LanSection } from "./components/LanSection";
 import { Ledger } from "./components/Ledger";
+import { NotesPanel, acknowledgeWarning } from "./components/NotesPanel";
 import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
@@ -25,6 +26,7 @@ interface InitialData {
   /** Master enable switch off: archive mode — history serves, nothing pings. */
   engineDisabled?: boolean;
   cloneSource?: string | null;
+  admin?: boolean;
 }
 
 // The dashboard ledger is the 10 most recent events, looked for across the
@@ -79,6 +81,11 @@ function App({ store, topology, initial }: {
     ? answerClock(state.verdict.state, trail.items, new Date().toISOString(), trail.complete)
     : null;
 
+  // Keep the header's wrench badge (site-shell.js) live between its polls.
+  useEffect(() => {
+    document.dispatchEvent(new CustomEvent("cw:warnings", { detail: state.warnings }));
+  }, [state.warnings]);
+
   // Recent glitches cover the last 24 h, fixed at page load.
   const [glitchRange] = useState(() => {
     const to = new Date();
@@ -117,6 +124,10 @@ function App({ store, topology, initial }: {
       <Tree topology={topology} targets={state.targets.filter((t) => !isLocal(t))} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
       <LanSection targets={state.targets} />
+      {initial.admin && (
+        <NotesPanel warnings={state.warnings}
+          onAcknowledge={(key) => { void acknowledgeWarning(key); }} />
+      )}
       <RecentEvents initial={initial} />
       <div style={{ marginTop: "1.5rem" }}>
         <GlitchSection from={glitchRange.from} to={glitchRange.to}

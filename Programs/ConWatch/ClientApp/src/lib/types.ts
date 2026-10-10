@@ -29,11 +29,24 @@ export interface VerdictStatus {
   operator?: string | null;
 }
 
+/** An admin note (model warning): where ConnectionWatcher's map disagrees
+ *  with what the probes prove. Never part of the verdict. */
+export interface ModelWarning {
+  key: string;
+  kind: "HopBypassed" | "NeverAnswered" | "UnprovableUp" | string;
+  targetId?: string | null;
+  targetName?: string | null;
+  message: string;
+  since: string;
+  acknowledged: boolean;
+}
+
 export interface Snapshot {
   enabled?: boolean;
   verdict: VerdictStatus | null;
   targets: TargetStatus[];
   pools: PoolStatus[];
+  warnings?: ModelWarning[];
 }
 
 export interface TransitionEvent {

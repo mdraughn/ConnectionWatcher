@@ -49,6 +49,16 @@
     const dot = pip.querySelector(".dot");
     const label = pip.querySelector(".label");
 
+    const notes = document.getElementById("cw-notes");
+    function renderNotes(warnings) {
+        if (!notes) return;
+        const n = (warnings || []).filter((w) => !w.acknowledged).length;
+        notes.hidden = n === 0;
+        notes.querySelector(".count").textContent = String(n);
+        notes.title = n === 1 ? "1 ConnectionWatcher note" : `${n} ConnectionWatcher notes`;
+    }
+    document.addEventListener("cw:warnings", (e) => renderNotes(e.detail));
+
     function render(status) {
         let color = "var(--cw-unreach)", text = "Checking";
         if (status && status.enabled === false) {
@@ -68,6 +78,7 @@
         label.textContent = text;
         pip.title = status?.verdict?.detail ?? "";
         pip.hidden = false;
+        renderNotes(status?.enabled === false ? [] : status?.warnings);
     }
 
     async function poll() {

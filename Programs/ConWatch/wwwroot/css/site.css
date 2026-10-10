@@ -93,6 +93,23 @@ body { background: var(--bg); }
     border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
     border-radius: 5px; cursor: pointer; padding: 0; margin: 0; }
 .cw-iconbtn:hover { color: var(--text); border-color: var(--border-strong); }
+.cw-notes-badge { position: relative; }
+.cw-notes-badge[hidden] { display: none; }
+.cw-notes-badge .count { position: absolute; top: -5px; right: -5px; min-width: 15px; height: 15px;
+    padding: 0 3px; border-radius: 8px; background: var(--muted); color: var(--surface);
+    font-size: 10px; font-weight: 600; line-height: 15px; text-align: center; }
+.cw-notes { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2);
+    padding: 0.8rem 1rem; margin: 1.2rem 0; }
+.cw-notes h3 { font-size: 0.95rem; margin: 0 0 0.3rem; }
+.cw-notes-intro { color: var(--muted); font-size: 0.8rem; margin: 0 0 0.6rem; }
+.cw-notes ul { margin: 0; padding: 0; list-style: none; }
+.cw-notes li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem;
+    padding: 0.45rem 0; border-top: 1px solid var(--border); font-size: 0.85rem; }
+.cw-notes li:first-child { border-top: none; }
+.cw-notes li .message { flex: 1 1 28rem; }
+.cw-notes li .since, .cw-notes li .ack { color: var(--faint); font-size: 0.75rem; }
+.cw-notes li button { padding: 0.15rem 0.6rem; font-size: 0.75rem; margin: 0; width: auto; }
+.cw-notes li.acknowledged .message { color: var(--muted); }
 .cw-burger { display: none; }
 /* Theme button: monitor = follows the OS, moon = dark, sun = light. */
 .cw-theme-ic { display: none; }
