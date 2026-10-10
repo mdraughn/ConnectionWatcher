@@ -46,6 +46,9 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
             warnings.Add(new HealthWarning("anchors-below-recommended",
                 $"Pool '{anchorPool}' has {anchors} anchor(s); {RecommendedAnchors} or more give a more reliable verdict."));
 
+        if (await AllAnchorsIspOwnedAsync(db, pool) is { } unprovable)
+            warnings.Add(unprovable);
+
         // Pool-parent drift: re-parenting the members does not move the pool,
         // and a pool parented above (or without) the members' real parent
         // silently truncates the ISP report's trunk walk. The verdict layer
@@ -53,6 +56,40 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         if (await PoolParentDriftAsync(db, pool) is { } drift)
             warnings.Add(drift);
         return warnings;
+    }
+
+    /// <summary>Every anchor carries the ISP's operator tag: the verdict then
+    /// falls back to the ISP's own servers and cannot prove the internet
+    /// beyond the ISP is up (spec 2026-10-09 §4.1, the UnprovableUp note).</summary>
+    private static async Task<HealthWarning?> AllAnchorsIspOwnedAsync(ConWatchDbContext db,
+        Entities.PoolRow pool)
+    {
+        static string? Normalize(string? op) =>
+            op?.Trim() is { Length: > 0 } t ? t.ToLowerInvariant() : null;
+
+        var targets = await db.Targets.ToDictionaryAsync(t => t.Id);
+        var memberIds = pool.Members.Select(m => m.TargetId).Where(targets.ContainsKey).ToHashSet();
+        if (memberIds.Count == 0)
+            return null;
+
+        var isp = new HashSet<string>();
+        foreach (var id in memberIds)
+        {
+            var parentId = targets[id].ParentId;
+            for (var depth = 0; depth < 20 && parentId is { } pid && targets.TryGetValue(pid, out var hop); depth++)
+            {
+                if (!memberIds.Contains(pid) && Normalize(hop.Operator) is { } op)
+                    isp.Add(op);
+                parentId = hop.ParentId;
+            }
+        }
+        if (isp.Count == 0 || !memberIds.All(id => Normalize(targets[id].Operator) is { } op && isp.Contains(op)))
+            return null;
+
+        return new HealthWarning("anchors-all-isp",
+            $"Every anchor in pool '{pool.Name}' is tagged as your ISP's, so ConnectionWatcher can only " +
+            "prove your ISP answers, not the rest of the internet. Tag your ISP on a path hop " +
+            "(or add an anchor outside your ISP) so ConnectionWatcher can prove your internet is up.");
     }
 
     private static async Task<HealthWarning?> PoolParentDriftAsync(ConWatchDbContext db,

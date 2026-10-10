@@ -109,4 +109,37 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
         var drift = Assert.Single(warnings, w => w.Code == "pool-parent-drift");
         Assert.Contains("not parented", drift.Message);
     }
+
+    // UpsertTargetAsync updates by Id (a null Id inserts, and a duplicate name fails),
+    // so tag the exported targets: the same pattern as the re-parenting test above.
+    private async Task<TargetDto> Existing(string name) =>
+        (await _store.ExportAsync()).Targets.Single(t => t.Name == name);
+
+    [Fact]
+    public async Task Every_anchor_tagged_as_the_isp_warns_unprovable()
+    {
+        await _service.UpsertTargetAsync((await Existing("Modem")) with { Operator = "Comcast" });
+        await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = " comcast" });
+        await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Operator = "Comcast" });
+
+        var warning = (await _health.EvaluateAsync()).Single(w => w.Code == "anchors-all-isp");
+        Assert.Contains("Tag your ISP on a path hop (or add an anchor outside your ISP) so ConnectionWatcher can prove your internet is up.",
+            warning.Message);
+    }
+
+    [Fact]
+    public async Task One_anchor_outside_the_isp_is_enough()
+    {
+        await _service.UpsertTargetAsync((await Existing("Modem")) with { Operator = "Comcast" });
+        await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });
+        Assert.DoesNotContain("anchors-all-isp", await Codes()); // Cloudflare is untagged
+    }
+
+    [Fact]
+    public async Task No_isp_tag_on_the_path_never_warns_unprovable()
+    {
+        await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });
+        await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Operator = "Comcast" });
+        Assert.DoesNotContain("anchors-all-isp", await Codes()); // the path itself is untagged
+    }
 }
