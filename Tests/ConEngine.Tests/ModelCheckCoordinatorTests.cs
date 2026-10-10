@@ -1,0 +1,249 @@
+using System.Net;
+using ConCore;
+using ConCore.Targets;
+using ConEngine.Configuration;
+using ConEngine.Scheduling;
+using ConEngine.Topology;
+using ConEngine.Tracking;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
+
+namespace ConEngine.Tests;
+
+public class ModelCheckCoordinatorTests : IDisposable
+{
+    private static readonly PingProfile Fast = new()
+    {
+        Name = "Fast", HistorySize = 20, MinUsableSample = 5,
+    };
+
+    private readonly FakeTimeProvider _time = new(DateTimeOffset.Parse("2026-10-09T00:00:00Z"));
+    private readonly TargetGraph _graph;
+    private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
+    private readonly TopologyCoordinator _topology;
+    private ModelCheckCoordinator _check = null!;
+    private readonly List<ModelConditionChange> _changes = new();
+
+    public ModelCheckCoordinatorTests()
+    {
+        _graph = TargetGraph.FromOptions(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1", Profile = "Internal" },
+                new TargetConfig { Name = "Inside", Address = "10.1.10.1", Parent = "Router", Profile = "Internal", Probe = "tcp:80" },
+                new TargetConfig { Name = "External", Address = "203.0.113.1", Parent = "Inside", Profile = "Internal" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "External" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "External" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        });
+        foreach (var target in _graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
+                _time, NullLoggerFactory.Instance);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            _monitors[target.Id] = monitor;
+        }
+        _topology = new TopologyCoordinator(_graph, _monitors, NullLogger<TopologyCoordinator>.Instance);
+        _topology.Start();
+    }
+
+    private void StartCheck(bool unprovableUp = false)
+    {
+        _check = new ModelCheckCoordinator(_graph, _monitors, unprovableUp, _time,
+            NullLogger<ModelCheckCoordinator>.Instance);
+        _check.ChangeSource.Subscribe(_changes.Add);
+        _check.Start();
+    }
+
+    public void Dispose()
+    {
+        _check?.Dispose();
+        _topology.Dispose();
+        foreach (var m in _monitors.Values)
+            m.Dispose();
+    }
+
+    private Guid Id(string name) => _graph.GetByName(name).Id;
+
+    private void Feed(string name, int count, bool success)
+    {
+        var monitor = _monitors[Id(name)];
+        for (int i = 0; i < count; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            monitor.RecordPingResult(new PingResult(monitor.ResolvedAddress!, success,
+                success ? 5 : 0, timestamp: _time.GetUtcNow()));
+        }
+    }
+
+    private void AllHealthy()
+    {
+        foreach (var name in new[] { "Router", "Inside", "External", "Google", "Cloudflare" })
+            Feed(name, 5, true);
+    }
+
+    [Fact]
+    public void The_2026_10_08_incident_raises_one_hop_bypassed_note_and_clears_it()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 20, false); // Inside Down; External and the anchors keep answering
+
+        var raised = Assert.Single(_changes);
+        Assert.True(raised.Active);
+        Assert.Equal(ModelWarningKind.HopBypassed, raised.Condition.Kind);
+        Assert.Equal($"hop-bypassed:{Id("Inside"):D}", raised.Condition.Key);
+        Assert.Equal(Id("Inside"), raised.Condition.TargetId);
+        Assert.Equal("Inside", raised.Condition.TargetName);
+        Assert.StartsWith("Inside isn't answering its probe (tcp/80), but External beyond it is",
+            raised.Condition.Message);
+
+        Feed("Inside", 20, true);
+        Assert.Equal(2, _changes.Count);
+        Assert.False(_changes[1].Active);
+        Assert.Equal(raised.Condition.Key, _changes[1].Condition.Key);
+        Assert.Empty(_check.Active);
+    }
+
+    [Fact]
+    public void A_real_outage_beyond_a_hop_raises_no_note()
+    {
+        StartCheck();
+        AllHealthy();
+        // Everything beyond fails first, then the hop: nothing beyond ever answers.
+        Feed("External", 20, false);
+        Feed("Google", 20, false);
+        Feed("Cloudflare", 20, false);
+        Feed("Inside", 20, false);
+
+        Assert.DoesNotContain(_changes, c => c.Active && c.Condition.TargetId == Id("Inside"));
+        Assert.DoesNotContain(_check.Active, c => c.TargetId == Id("Inside"));
+    }
+
+    [Fact]
+    public void A_hop_whose_descendants_go_down_after_it_stops_being_bypassed()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 20, false);
+        Assert.Single(_check.Active);
+
+        Feed("External", 20, false);
+        Feed("Google", 20, false);
+        Feed("Cloudflare", 20, false);
+
+        Assert.Empty(_check.Active);
+        Assert.False(_changes.Last().Active);
+    }
+
+    [Fact]
+    public void A_faltering_hop_is_a_note_only_after_it_holds_for_the_faltering_hold()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 3, false);
+        Assert.Equal(HostState.Faltering, _monitors[Id("Inside")].CurrentState);
+        Assert.Empty(_changes);
+
+        // Ticks are aligned to Start, not to the Faltering transition: one
+        // extra period guarantees a tick after the hold has passed.
+        _time.Advance(ModelCheckCoordinator.FalteringHold + ModelCheckCoordinator.EvaluateEvery);
+        var raised = Assert.Single(_changes);
+        Assert.Equal(ModelWarningKind.HopBypassed, raised.Condition.Kind);
+        Assert.StartsWith("Inside is losing replies to its probe (tcp/80), but External beyond it answers",
+            raised.Condition.Message);
+    }
+
+    [Fact]
+    public void A_faltering_blip_shorter_than_the_hold_leaves_no_note()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 3, false);
+        Feed("Inside", 20, true); // recovered well inside the hold
+        _time.Advance(ModelCheckCoordinator.FalteringHold * 2);
+        Assert.Empty(_changes);
+    }
+
+    [Fact]
+    public void A_hop_that_never_answers_becomes_never_answered_after_the_wait()
+    {
+        StartCheck();
+        foreach (var name in new[] { "Router", "External", "Google", "Cloudflare" })
+            Feed(name, 5, true);
+        Feed("Inside", 20, false); // never a single reply
+        Assert.Equal(ModelWarningKind.HopBypassed, Assert.Single(_check.Active).Kind);
+
+        // Keep the beyond-targets answering while the clock passes the wait.
+        while (_time.GetUtcNow() - DateTimeOffset.Parse("2026-10-09T00:00:00Z") < ModelCheckCoordinator.NeverAnsweredAfter)
+            Feed("External", 5, true);
+        _time.Advance(ModelCheckCoordinator.EvaluateEvery);
+
+        var active = Assert.Single(_check.Active);
+        Assert.Equal(ModelWarningKind.NeverAnswered, active.Kind);
+        Assert.Equal($"never-answered:{Id("Inside"):D}", active.Key);
+        Assert.StartsWith("Inside has never answered its probe (tcp/80)", active.Message);
+        Assert.Contains(_changes, c => !c.Active && c.Condition.Kind == ModelWarningKind.HopBypassed);
+    }
+
+    [Fact]
+    public void A_hop_that_answered_once_is_never_never_answered()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 20, false);
+        _time.Advance(ModelCheckCoordinator.NeverAnsweredAfter * 2);
+        Assert.All(_check.Active, c => Assert.Equal(ModelWarningKind.HopBypassed, c.Kind));
+    }
+
+    [Fact]
+    public void Unprovable_up_is_raised_at_start_when_every_anchor_is_the_isps()
+    {
+        StartCheck(unprovableUp: true);
+        var raised = Assert.Single(_changes);
+        Assert.True(raised.Active);
+        Assert.Equal(ModelWarningKind.UnprovableUp, raised.Condition.Kind);
+        Assert.Equal("unprovable-up", raised.Condition.Key);
+        Assert.Null(raised.Condition.TargetId);
+        Assert.Contains("Tag your ISP on a path hop (or add an anchor outside your ISP) so ConnectionWatcher can prove your internet is up.",
+            raised.Condition.Message);
+    }
+
+    [Fact]
+    public void Repeated_evaluations_of_a_standing_condition_publish_nothing_new()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 20, false);
+        Feed("External", 10, true);
+        _time.Advance(ModelCheckCoordinator.EvaluateEvery * 10);
+        Assert.Single(_changes);
+    }
+
+    [Fact]
+    public void Changes_are_published_outside_the_coordinator_lock()
+    {
+        // A subscriber reading Active from another thread inside OnNext would
+        // deadlock if the change were published under the lock.
+        StartCheck();
+        var reads = new List<int>();
+        _check.ChangeSource.Subscribe(_ =>
+            reads.Add(Task.Run(() => _check.Active.Count).Wait(TimeSpan.FromSeconds(10)) ? 1 : 0));
+        AllHealthy();
+        Feed("Inside", 20, false);
+        Assert.Equal([1], reads);
+    }
+
+    [Fact]
+    public void Dispose_stops_the_periodic_evaluation()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 3, false);
+        _check.Dispose();
+        _time.Advance(ModelCheckCoordinator.FalteringHold * 2); // must not throw or publish
+        Assert.Empty(_changes);
+    }
+}

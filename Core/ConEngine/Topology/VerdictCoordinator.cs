@@ -72,6 +72,9 @@ public class VerdictCoordinator : IDisposable
     /// <summary>The ISP/operator being blamed by a Link* verdict (from the
     /// blamed trunk target's Operator tag), else null.</summary>
     public string? CurrentOperator => Current.Operator;
+    /// <summary>Every anchor is the ISP's, so they all count as a weaker
+    /// fallback (spec §4.1 decision (a)): the UnprovableUp model warning.</summary>
+    public bool UsingIspFallback { get; }
     /// <summary>Transitions this coordinator raises as its own state changes. A
     /// queued transition may be delivered on another thread after the
     /// triggering call has already returned. If a subscriber throws, any
@@ -153,7 +156,10 @@ public class VerdictCoordinator : IDisposable
         // count them all. A weaker check (the ISP's own servers can answer
         // while the ISP is cut off from the rest of the internet).
         if (_counted.Count == 0)
+        {
+            UsingIspFallback = _anchors.Count > 0;
             _counted = _anchors.ToList();
+        }
     }
 
     private bool _seeded;

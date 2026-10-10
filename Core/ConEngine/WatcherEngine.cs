@@ -34,6 +34,7 @@ public class WatcherEngine
     /// <summary>Per hostname target: completing the source wakes its DNS refresh loop early.</summary>
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _dnsRefreshRequests = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
+    private readonly Subject<ModelConditionChange> _modelSubject = new();
     private readonly Subject<(Guid TargetId, PingResult Result)> _pingSampleSubject = new();
 
     private TargetGraph? _graph;
@@ -66,6 +67,16 @@ public class WatcherEngine
 
     /// <summary>The verdict layer, or null when no anchor pool is configured.</summary>
     public VerdictCoordinator? Verdict { get; private set; }
+
+    /// <summary>Model-warning conditions (admin notes), or null before start.</summary>
+    public ModelCheckCoordinator? ModelCheck { get; private set; }
+
+    /// <summary>Model-warning raise/clear changes. Exists from construction, so
+    /// observers can attach before StartAsync.</summary>
+    public IObservable<ModelConditionChange> ModelConditionSource => _modelSubject;
+
+    /// <summary>The conditions holding now; empty before start.</summary>
+    public IReadOnlyList<ModelCondition> ModelConditions => ModelCheck?.Active ?? [];
 
     /// <summary>Suspicion bursts, corroboration sweeps, and glitch episodes.</summary>
     public SuspicionCoordinator? Suspicion { get; private set; }
@@ -201,6 +212,13 @@ public class WatcherEngine
             _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
             Verdict.Start();
         }
+
+        // Model checks: admin-facing notes where the map disagrees with the
+        // probes. They never feed the verdict.
+        ModelCheck = new ModelCheckCoordinator(_graph, _monitors, Verdict?.UsingIspFallback == true,
+            _timeProvider, _loggerFactory.CreateLogger<ModelCheckCoordinator>());
+        _subscriptions.Add(ModelCheck.ChangeSource.Subscribe(_modelSubject.OnNext));
+        ModelCheck.Start();
 
         // Suspicion layer: works without an anchor pool (per-target glitches
         // only); sweeps need the pool.
@@ -417,6 +435,7 @@ public class WatcherEngine
 
         _topology?.Dispose();
         Verdict?.Dispose();
+        ModelCheck?.Dispose();
         Suspicion?.Dispose();
         foreach (var pool in _poolCoordinators)
             pool.Dispose();

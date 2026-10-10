@@ -444,6 +444,12 @@ public class VerdictCoordinatorTests
         Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
     }
 
+    [Fact]
+    public void Untagged_anchors_are_not_the_isp_fallback()
+    {
+        Assert.False(_verdict.UsingIspFallback);
+    }
+
     private void FeedUp(Dictionary<Guid, TargetMonitor> monitors, TargetGraph graph, string name)
     {
         var monitor = monitors[graph.GetByName(name).Id];
@@ -592,6 +598,7 @@ public class VerdictCoordinatorTests
         FeedDown(monitors, graph, "Comcast DNS 2");
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
+        Assert.True(verdict.UsingIspFallback);
     }
 
     [Fact]

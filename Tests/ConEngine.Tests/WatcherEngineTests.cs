@@ -2,6 +2,7 @@ using System.Net;
 using ConCore;
 using ConEngine.Configuration;
 using ConEngine.Events;
+using ConEngine.Topology;
 using ConEngine.Tests.Fakes;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -176,5 +177,34 @@ public class WatcherEngineTests : IAsyncLifetime
             downHasEvidence = t.Reason.SuccessRate is not null && t.Reason.SampleSize is not null;
         }
         Assert.True(downHasEvidence);
+    }
+
+    [Fact]
+    public async Task Model_conditions_flow_through_the_engine_stream()
+    {
+        var changes = new List<ModelConditionChange>();
+        _engine.ModelConditionSource.Subscribe(c => { lock (changes) changes.Add(c); });
+        await Eventually(() => State("Google") == HostState.Responding);
+
+        // Router fails its probe while the targets behind it keep answering.
+        _factory.SetUp(RouterIp, false);
+        await Eventually(() => _engine.ModelConditions.Any(c => c.Kind == ModelWarningKind.HopBypassed));
+        lock (changes)
+            Assert.Contains(changes, c => c.Active && c.Condition.TargetName == "Router");
+        Assert.NotNull(_engine.ModelCheck);
+
+        _factory.SetUp(RouterIp, true);
+        await Eventually(() => _engine.ModelConditions.Count == 0);
+    }
+
+    [Fact]
+    public void Model_conditions_are_empty_not_null_before_start()
+    {
+        var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(Options()));
+        Assert.Empty(engine.ModelConditions);
+        Assert.Null(engine.ModelCheck);
+        Assert.NotNull(engine.ModelConditionSource);
     }
 }
