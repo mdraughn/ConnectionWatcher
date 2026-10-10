@@ -39,11 +39,16 @@
 These are not in the spec.
 
 1. **Critical events bypass both webhook filters,** "verdict only" and "skip explained transitions" (default on). Spec §4.7 says a critical target's own `Down` (or `Unreachable`) and its recovery are reportable, and "critical means tell me" (§9.1). So a critical NAS behind a dead switch (Unreachable, explained) is still delivered. Non-event transitions of a critical target (for example `Responding → Faltering`) follow the normal filters.
-2. **Critical LAN (Local-scope) targets notify through webhooks and the tray,** which today drop Local targets entirely. **MQTT keeps excluding Local targets** (no entity is created for them). The spec only says the existing per-target sensor gains an attribute.
-3. **No tray critical toast while the internet itself is down.** When the tray state is `Down` (LinkDown), the "Internet DOWN" toast already names the blamed hop, and a second toast for the router would be crying wolf (D7). If the critical device is still down when the internet comes back, it toasts then. Its recovery toasts only if its failure did.
-4. **The wizard marks the router critical only when it creates it.** An existing target at the router's address is reused untouched (D6).
-5. **Webhook and MQTT transition payloads do not gain a `critical` field.** A consumer that cares can read `/api/v1/status`. That avoids changing the shared `TransitionDto`.
-6. **The status target also gains `explainedBy`** (spec §5 lists it next to `critical`). It is the monitor's current root cause (`TargetMonitor.ExplainedBy`) and is shown nowhere new yet.
+2. **Critical LAN (Local-scope) targets notify through webhooks and the tray,** which today drop Local targets entirely.
+3. **Every LAN device gets an MQTT sensor, not only critical ones (Mark, 2026-10-10).**
+   - This reverses the 2026-10-02 Local-scope exclusion for MQTT only. Publishing to MQTT never notifies by itself: Home Assistant only records state, and you act on it with automations.
+   - Each target sensor's attributes carry `critical` and `scope` (`Verdict`/`Local`), so automations can single out what matters.
+   - LAN transitions also appear on the `{base}/transitions` topic.
+   - Webhooks and the tray still ignore non-critical LAN devices.
+4. **A critical failure always toasts, even while the internet is down (Mark, 2026-10-10).** In an ISP outage the router usually still answers, so a router that is *not* answering is its own signal: check the equipment. While the internet is down too, the toast says so and points at the device itself.
+5. **The wizard marks the router critical only when it creates it.** An existing target at the router's address is reused untouched (D6).
+6. **Webhook and MQTT transition payloads do not gain a `critical` field.** A consumer that cares can read `/api/v1/status`. That avoids changing the shared `TransitionDto`.
+7. **The status target also gains `explainedBy`** (spec §5 lists it next to `critical`). It is the monitor's current root cause (`TargetMonitor.ExplainedBy`) and is shown nowhere new yet.
 
 ## Review Focus
 
@@ -54,6 +59,7 @@ The failure modes most likely to bite, each pinned by a test in the named task:
 3. **A tray poll that fails** (service restarting) between a critical failure and its recovery. Expect no false "answering again" toast when the service is unreachable, and no duplicate failure toast when it returns still down (Task 5).
 4. **A critical target is deleted or un-marked while down.** Expect no "answering again" toast; the announcement is dropped silently (Task 5).
 5. **A released critical target** (Unreachable → Starting → Responding naming its former cause) gets exactly one recovery delivery, and `Unreachable → Starting` itself is not delivered (Task 4).
+6. **A critical router fails during an ISP outage** (the internet is already down). It still toasts once, and the toast points at the device itself (Task 5).
 
 ---
 
@@ -614,7 +620,7 @@ git commit -m "feat(config): Critical checkbox; the wizard's router and adopted 
 
 ---
 
-### Task 4: Notifiers — critical events pass the webhook filters; MQTT attribute
+### Task 4: Notifiers — critical events pass the webhook filters; MQTT publishes every target
 
 **Files:**
 - Modify: `Libraries/ConNotify/WebhookFilter.cs`, `Libraries/ConNotify/WebhookNotifier.cs`, `Libraries/ConNotify/Builders.cs` (`MqttTopics`, `HaDiscovery`), `Libraries/ConNotify/MqttNotifier.cs` (`RefreshAllAsync`)
@@ -627,7 +633,8 @@ git commit -m "feat(config): Critical checkbox; the wizard's router and adopted 
   - `WebhookFilter.IsCriticalEvent(TargetTransition t)`
   - `MqttTopics.TargetAttributes(string slug)` → `{Base}/target/{slug}/attributes`
   - `HaDiscovery.TargetConfig(...)` gains `json_attributes_topic`
-  - `HaDiscovery.TargetAttributes(bool critical)` → `{"critical":true|false}`
+  - `HaDiscovery.TargetAttributes(bool critical, TargetScope scope)` → `{"critical":true|false,"scope":"Verdict"|"Local"}`
+  - MQTT publishes every target, LAN devices included (decision 3)
 
 - [ ] **Step 1: Write the failing filter tests**
 
@@ -694,8 +701,10 @@ and add:
     public void Target_attributes_carry_critical()
     {
         Assert.Equal("conwatch/target/router/attributes", Topics.TargetAttributes("router"));
-        Assert.Equal("{\"critical\":true}", HaDiscovery.TargetAttributes(critical: true));
-        Assert.Equal("{\"critical\":false}", HaDiscovery.TargetAttributes(critical: false));
+        Assert.Equal("{\"critical\":true,\"scope\":\"Local\"}",
+            HaDiscovery.TargetAttributes(critical: true, ConCore.Targets.TargetScope.Local));
+        Assert.Equal("{\"critical\":false,\"scope\":\"Verdict\"}",
+            HaDiscovery.TargetAttributes(critical: false, ConCore.Targets.TargetScope.Verdict));
     }
 ```
 
@@ -822,21 +831,26 @@ In `WebhookNotifier.cs`:
 - Add:
 
 ```csharp
-    /// <summary>A target sensor's attributes: whether it is critical (spec §4.7).</summary>
-    public static string TargetAttributes(bool critical) =>
-        JsonSerializer.Serialize(new { critical }, Options);
+    /// <summary>A target sensor's attributes: whether it is critical (spec §4.7)
+    /// and whether it is a LAN device, so automations can single either out.</summary>
+    public static string TargetAttributes(bool critical, TargetScope scope) =>
+        JsonSerializer.Serialize(new { critical, scope = scope.ToString() }, Options);
 ```
 
-`MqttNotifier.RefreshAllAsync`:
+`Builders.cs` needs `using ConCore.Targets;` if absent.
+
+`MqttNotifier`, LAN devices included (decision 3, Mark 2026-10-10):
+- `Attach`: drop the `IsLocalSubject` filter so every transition is posted to the inbox (`_inbox.Post(t)`). Replace the comment with "Every target is published, LAN devices included: MQTT never notifies by itself; Home Assistant automations decide (Mark, 2026-10-10)."
+- `RefreshAllAsync`: drop `.Where(m => m.Target.Scope != TargetScope.Local)` from the monitor list. Remove the `using ConCore.Targets;` only if nothing else needs it.
 - In the stale-slug loop, also clear `_topics.TargetAttributes(stale)` (empty, retained).
 - In the per-monitor loop, after publishing `TargetState`:
 
 ```csharp
             await PublishAsync(client, _topics.TargetAttributes(slug),
-                HaDiscovery.TargetAttributes(monitor.Target.Critical), retain: true, ct);
+                HaDiscovery.TargetAttributes(monitor.Target.Critical, monitor.Target.Scope), retain: true, ct);
 ```
 
-Local targets stay excluded from MQTT (decision 2). Changing `Critical` rebuilds the engine, and the new engine's attach triggers this refresh, so the attribute follows edits.
+Changing `Critical` rebuilds the engine, and the new engine's attach triggers this refresh, so the attribute follows edits.
 
 - [ ] **Step 8: Run the tests**
 
@@ -851,7 +865,7 @@ Expected: all PASS. The Docker-broker MQTT tests are `[SkippableFact]` and may s
 
 ```bash
 git add Libraries/ConNotify Tests/ConNotify.Tests Tests/ConWatch.Tests/NotifierIntegrationTests.cs
-git commit -m "feat(notify): a critical target's failure and recovery pass every webhook filter; MQTT attribute critical"
+git commit -m "feat(notify): a critical target's failure and recovery pass every webhook filter; MQTT publishes LAN devices with critical/scope attributes"
 ```
 
 ---
@@ -991,26 +1005,29 @@ public class CriticalWatchTests
     }
 
     [Fact]
-    public void While_the_internet_is_down_the_internet_toast_speaks_and_the_device_waits()
+    public void A_critical_failure_during_an_internet_outage_still_toasts_and_points_at_the_device()
     {
+        // In an ISP outage the router usually still answers; one that does not
+        // is its own signal: check the equipment (Mark, 2026-10-10).
         var watch = new CriticalWatch();
-        Assert.Empty(watch.Update(Info(TrayState.Down, Router("Down")), announce: true));
-        // Internet back, router still down: now it is news.
-        Assert.Single(watch.Update(Info(TrayState.Healthy, Router("Down")), announce: true));
+        var toast = Assert.Single(watch.Update(Info(TrayState.Down, Router("Down")), announce: true));
+        Assert.Equal("Router is not answering", toast.Title);
+        Assert.Equal("The internet is down too — check Router itself.", toast.Body);
+        Assert.Single(watch.Update(Info(TrayState.Healthy, Router("Responding")), announce: true));
     }
 
     [Fact]
-    public void A_recovery_never_toasts_unless_its_failure_did()
+    public void A_router_that_answers_through_an_isp_outage_never_toasts()
     {
         var watch = new CriticalWatch();
-        watch.Update(Info(TrayState.Down, Router("Down")), announce: true); // suppressed
-        Assert.Empty(watch.Update(Info(TrayState.Healthy, Router("Responding")), announce: true));
+        Assert.Empty(watch.Update(Info(TrayState.Down, Router("Responding")), announce: true));
     }
 
     [Fact]
     public void A_silent_update_records_state_without_toasting()
     {
-        // First poll after the tray starts: no toasts, but no later "again" for what was already down.
+        // First poll after the tray starts: no toast for what is already down,
+        // and no repeat later; its recovery still toasts.
         var watch = new CriticalWatch();
         Assert.Empty(watch.Update(Info(TrayState.Healthy, Router("Down")), announce: false));
         Assert.Empty(watch.Update(Info(TrayState.Healthy, Router("Down")), announce: true));
@@ -1121,10 +1138,6 @@ public class CriticalWatch
         {
             if (c.IsDown && !_announced.Contains(c.Id))
             {
-                // While the internet itself is down its own toast names the
-                // blamed hop; a second toast for the device would cry wolf (D7).
-                if (next.State == TrayState.Down && announce)
-                    continue;
                 _announced.Add(c.Id);
                 if (announce)
                     toasts.Add(new TrayToast($"{c.Name} is not answering", FailureBody(c, next.State)));
@@ -1140,6 +1153,9 @@ public class CriticalWatch
     private static string FailureBody(TrayCritical c, TrayState internet) =>
         c.Bypassed ? "Traffic is still passing it, so your internet is up — see ConnectionWatcher notes."
         : internet == TrayState.Healthy ? "Your internet is still up."
+        // An ISP outage usually leaves the router answering: one that is not
+        // means your own equipment (Mark, 2026-10-10).
+        : internet == TrayState.Down ? $"The internet is down too — check {c.Name} itself."
         : "Marked critical in ConnectionWatcher.";
 }
 ```
