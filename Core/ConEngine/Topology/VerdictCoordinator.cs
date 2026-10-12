@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Reactive.Subjects;
 using ConCore.Targets;
 using ConEngine.Events;
@@ -42,6 +41,17 @@ public class VerdictCoordinator : IDisposable
     /// reported (spec §4.2): a stuck anchor — an address that
     /// never resolves — must never hide an outage for longer than this.</summary>
     public static readonly TimeSpan AnchorWaitCap = TimeSpan.FromSeconds(30);
+
+    /// <summary>A path hop is vetoed — never blamed for weather — when its
+    /// forwarding loss over the pooled recent windows is below this: its loss
+    /// is its own probe's (Mark's ruling 2026-10-12).</summary>
+    public const double VetoBelow = 0.05;
+    /// <summary>A veto lifts only once the pooled forwarding loss reaches this
+    /// (hysteresis: noise around one line must not flip the verdict).</summary>
+    public const double VetoLiftAt = 0.10;
+    /// <summary>How many recent closed windows (each ended within four spans)
+    /// are pooled for the veto.</summary>
+    public const int VetoWindows = 3;
 
     private readonly TargetGraph _graph;
     private readonly IReadOnlyList<TargetMonitor> _anchors;
@@ -93,6 +103,8 @@ public class VerdictCoordinator : IDisposable
     private bool _waitExpired;
     private bool _waitingThisPass;
     private bool _disposed;
+    // Guarded by _lock: path hops whose loss the recent windows show is their own probe's.
+    private readonly HashSet<Guid> _vetoed = new();
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
         IReadOnlyDictionary<Guid, TargetMonitor> monitors, int weatherThreshold,
@@ -188,7 +200,7 @@ public class VerdictCoordinator : IDisposable
         foreach (var m in _all.Values)
             _subscriptions.Add(m.TransitionSource.Subscribe(_ => Recalculate()));
 
-        // A closed window can change attribution with no monitor transition.
+        // A closed window can change a veto with no monitor transition.
         if (_loss is not null)
             _subscriptions.Add(_loss.WindowClosed.Subscribe(_ => Recalculate()));
 
@@ -209,6 +221,7 @@ public class VerdictCoordinator : IDisposable
             // One read per monitor: classification, detail and blame all come
             // from the same snapshot, so the detail can never contradict the state.
             var states = _all.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState);
+            UpdateVetoes();
             _waitingThisPass = false;
             var (verdict, detail, operatorName) = Classify(states);
             if (!_waitingThisPass)
@@ -361,8 +374,10 @@ public class VerdictCoordinator : IDisposable
     }
 
     /// <summary>The internet is reachable: how good is it? Anchor evidence decides
-    /// quality. Weather is our link's only when a path hop's forwarding loss
-    /// explains it (spec §4.5); until a fresh window exists, the interim state rule decides.</summary>
+    /// quality. Weather is our link's when a path hop is losing by the state
+    /// rule (the shallowest one is blamed), unless the recent loss windows
+    /// veto that hop because its loss is its own probe only (spec §4.5,
+    /// revised 2026-10-12). With no recent windows the state rule alone decides.</summary>
     private (VerdictState, string, string? Operator) Quality(
         List<(TargetMonitor Monitor, HostState State)> determined, IReadOnlyDictionary<Guid, HostState> states)
     {
@@ -392,35 +407,24 @@ public class VerdictCoordinator : IDisposable
             return (VerdictState.SiteIncident, $"SiteIncident: {List()}{sharedOperator}{qualifier}", null);
         }
 
-        // Is the weather our own path's? (spec §4.5) From the latest fresh
-        // window: the deepest path hop whose FORWARDING loss — its own loss,
-        // capped by the lowest loss among the witnesses beyond it — is at least
-        // what the anchors typically lose. A hop that only drops its own
-        // probes forwards fine and is never blamed.
-        if (AttributeLoss() is { } attributed)
-        {
-            if (attributed.Hop is { } hop)
-                return Wording(VerdictState.LinkDegraded, hop,
-                    $"{hop.Target.Name} is {states[hop.Target.Id]} (forwarding loss " +
-                    $"{attributed.Forwarding.ToString("P0", CultureInfo.InvariantCulture)})");
-        }
-        else
-        {
-            // No fresh usable window yet (first minute, slow profiles): the
-            // interim state rule. A Down hop that something beyond answers
-            // through is bypassed (its probe lies): never blamed (M1).
-            var losingHop = _ancestors
-                .Where(a => states[a.Monitor.Target.Id] switch
-                {
-                    HostState.Faltering => true,
-                    HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
-                    _ => false,
-                })
-                .OrderByDescending(a => a.Depth).FirstOrDefault();
-            if (losingHop.Monitor is not null)
-                return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
-                    $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}");
-        }
+        // Is the weather our own path's? The state rule: the SHALLOWEST path hop
+        // that is Faltering, or Down with nothing answering beyond it (loss that
+        // starts at the router shows at the modem too; it starts where it first
+        // shows). A Down hop that something beyond answers through is bypassed
+        // (its probe lies): never blamed (M1). A vetoed hop — the recent windows
+        // show its loss is its own probe only — forwards fine: never blamed.
+        var losingHop = _ancestors
+            .Where(a => !_vetoed.Contains(a.Monitor.Target.Id))
+            .Where(a => states[a.Monitor.Target.Id] switch
+            {
+                HostState.Faltering => true,
+                HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
+                _ => false,
+            })
+            .OrderBy(a => a.Depth).FirstOrDefault();
+        if (losingHop.Monitor is not null)
+            return Wording(VerdictState.LinkDegraded, losingHop.Monitor,
+                $"{losingHop.Monitor.Target.Name} is {states[losingHop.Monitor.Target.Id]}");
 
         var counts = grouped
             ? $"{degradedUnits} of {determinedUnits} operators ({degraded.Count} of {determined.Count} anchors)"
@@ -428,21 +432,31 @@ public class VerdictCoordinator : IDisposable
         return (VerdictState.InternetWeather, $"InternetWeather: {counts} degraded ({List()})", null);
     }
 
-    /// <summary>Null: no fresh usable window, so use the interim rule. Hop null:
-    /// the window shows no path hop to blame (internet weather).</summary>
-    private (TargetMonitor? Hop, double Forwarding)? AttributeLoss()
+    /// <summary>Under _lock: re-decides each path hop's veto from the pooled
+    /// recent windows. Vetoed when its pooled forwarding loss is below
+    /// <see cref="VetoBelow"/>; a veto lifts at <see cref="VetoLiftAt"/>, or
+    /// when there is no evidence (no recent windows, too few samples, no
+    /// witness beyond it).</summary>
+    private void UpdateVetoes()
     {
-        if (_loss?.LatestFresh(_time.GetUtcNow()) is not { } window ||
-            LossAttribution.TypicalLoss(window, _anchors.Select(a => a.Target.Id)) is not { } typical)
-            return null;
-        var floor = Math.Max(typical, LossAttribution.MinAttributableLoss);
-        foreach (var (hop, _) in _ancestors.OrderByDescending(a => a.Depth))
+        var recent = _loss?.Recent(_time.GetUtcNow(), VetoWindows) ?? [];
+        if (recent.Count == 0)
         {
-            if (LossAttribution.ForHop(window, hop.Target.Id, _descendants[hop.Target.Id]) is { } loss &&
-                loss.Forwarding >= floor)
-                return (hop, loss.Forwarding);
+            _vetoed.Clear();
+            return;
         }
-        return (null, 0);
+        var pooled = LossAttribution.Pool(recent);
+        foreach (var (hop, _) in _ancestors)
+        {
+            var id = hop.Target.Id;
+            if (LossAttribution.ForHop(pooled, id, _descendants[id]) is not { } loss)
+                _vetoed.Remove(id);
+            else if (loss.Forwarding < VetoBelow)
+                _vetoed.Add(id);
+            else if (loss.Forwarding >= VetoLiftAt)
+                _vetoed.Remove(id);
+            // Between the two lines a hop keeps its veto status.
+        }
     }
 
     /// <summary>Frontier blame: along each failing anchor's path, the last hop

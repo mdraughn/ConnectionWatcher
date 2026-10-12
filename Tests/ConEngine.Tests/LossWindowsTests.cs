@@ -89,6 +89,24 @@ public class LossWindowsTests
     }
 
     [Fact]
+    public void Recent_returns_the_newest_windows_that_ended_within_four_spans_oldest_first()
+    {
+        var w = new LossWindows();
+        for (int i = 0; i < 5; i++)
+            Fill(w, A, T0.AddMinutes(i), 6, 0);
+        w.Record(A, T0.AddMinutes(5) + LossWindows.CloseDelay, true); // closes T0 .. T0+4
+        var lastEnd = T0.AddMinutes(5);
+
+        var recent = w.Recent(lastEnd, 3);
+        Assert.Equal([T0.AddMinutes(2), T0.AddMinutes(3), T0.AddMinutes(4)], recent.Select(x => x.Start));
+
+        // A window counts until four spans after it ended.
+        Assert.Equal([T0.AddMinutes(3), T0.AddMinutes(4)], w.Recent(lastEnd + LossWindows.Span * 3, 3).Select(x => x.Start));
+        Assert.Equal([T0.AddMinutes(4)], w.Recent(lastEnd + LossWindows.Span * 4, 3).Select(x => x.Start));
+        Assert.Empty(w.Recent(lastEnd + LossWindows.Span * 4 + TimeSpan.FromSeconds(1), 3));
+    }
+
+    [Fact]
     public void Open_reports_the_newest_open_windows_count()
     {
         var w = new LossWindows();

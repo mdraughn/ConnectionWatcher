@@ -1,4 +1,3 @@
-
 using System.Collections.Concurrent;
 using System.Reactive.Subjects;
 using Microsoft.Extensions.Logging;
@@ -86,6 +85,16 @@ public sealed class LossWindows
         lock (_lock)
         {
             return _closed.Count > 0 && now - _closed[^1].End <= Span * 2 ? _closed[^1] : null;
+        }
+    }
+
+    /// <summary>The newest <paramref name="count"/> closed windows that ended no more
+    /// than four spans before <paramref name="now"/>, oldest first (possibly none).</summary>
+    public IReadOnlyList<LossWindow> Recent(DateTimeOffset now, int count)
+    {
+        lock (_lock)
+        {
+            return _closed.Where(w => w.End >= now - Span * 4).TakeLast(count).ToList();
         }
     }
 

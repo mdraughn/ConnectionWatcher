@@ -9,9 +9,6 @@ namespace ConEngine.Topology;
 /// </summary>
 public static class LossAttribution
 {
-    /// <summary>Below this, loss is noise, never blame.</summary>
-    public const double MinAttributableLoss = 0.05;
-
     /// <param name="Own">The hop's own probe loss in the window.</param>
     /// <param name="Forwarding">The part of it that is real forwarding loss.</param>
     public sealed record HopLoss(double Own, double Forwarding)
@@ -36,18 +33,18 @@ public static class LossAttribution
         return new HopLoss(own.Loss, Math.Min(own.Loss, witnesses.Min()));
     }
 
-    /// <summary>The anchors' median loss in the window (usable anchors only), or null.</summary>
-    public static double? TypicalLoss(LossWindow window, IEnumerable<Guid> anchors)
+    /// <summary>One window holding the summed counts of each target across
+    /// <paramref name="windows"/> (oldest first; it starts where the first does).</summary>
+    public static LossWindow Pool(IReadOnlyList<LossWindow> windows)
     {
-        var losses = anchors
-            .Select(id => window.Targets.GetValueOrDefault(id))
-            .Where(c => c is { Usable: true })
-            .Select(c => c!.Loss)
-            .Order()
-            .ToList();
-        if (losses.Count == 0)
-            return null;
-        int mid = losses.Count / 2;
-        return losses.Count % 2 == 1 ? losses[mid] : (losses[mid - 1] + losses[mid]) / 2;
+        if (windows.Count == 0)
+            throw new ArgumentException("Nothing to pool.", nameof(windows));
+        var sums = new Dictionary<Guid, WindowCount>();
+        foreach (var (id, count) in windows.SelectMany(w => w.Targets))
+        {
+            var prior = sums.GetValueOrDefault(id) ?? new WindowCount(0, 0);
+            sums[id] = new WindowCount(prior.Samples + count.Samples, prior.Lost + count.Lost);
+        }
+        return new LossWindow(windows[0].Start, sums);
     }
 }
