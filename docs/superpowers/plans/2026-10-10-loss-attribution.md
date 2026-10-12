@@ -28,9 +28,9 @@
   - a target beyond the hop is a *witness* in a window when it is usable and answered at least once in it;
   - `ProbeOnlyLoss` raises when, over the last 10 usable windows, average probe-only loss ≥ 15 % and average forwarding loss ≤ 2 %;
   - it clears when average probe-only loss falls below 10 % or average forwarding loss rises above 5 %.
-- **Attribution floor:** a path hop is blamed for weather only when its forwarding loss ≥ max(the anchors' median loss in that window, 5 %).
+- ~~**Attribution floor:** a path hop is blamed for weather only when its forwarding loss ≥ max(the anchors' median loss in that window, 5 %).~~ *Superseded 2026-10-12 by the veto (see Revision below).*
 - Percentages in messages use `ToString("P0", CultureInfo.InvariantCulture)`, which renders as "25 %".
-- Keep the verdict detail prefix `"{Verdict}: {Operator} — {Hop} is {State}"` (or `"{Verdict}: {Hop} is {State}"` without an operator). The attributed `LinkDegraded` appends ` (forwarding loss NN %)`.
+- Keep the verdict detail prefix `"{Verdict}: {Operator} — {Hop} is {State}"` (or `"{Verdict}: {Hop} is {State}"` without an operator). ~~The attributed `LinkDegraded` appends ` (forwarding loss NN %)`.~~ *Superseded 2026-10-12: no suffix.*
 - **Never sleep-then-assert in tests:** wait on conditions. CI runners have 2 cores. Engine tests use `FakeTimeProvider` and feed samples directly.
 - Test commands, per project (never the whole solution): `dotnet test Tests/ConEngine.Tests -c Debug`, `Tests/ConPersistence.Tests`, `Tests/ConWatch.Tests`; filter with `--filter "FullyQualifiedName~<Class>"`. UI: `cd Programs/ConWatch/ClientApp && npx vitest run && npm run build`. `ConWatch.Tests` has known cold-start flakes (`ProbeFieldTests`, the `SettingsApiTests` constructor, `NotifierIntegrationTests.VerdictOnly_…`). Rerun once before calling a failure real.
 - Commit after every task. **Never push.** Commit messages carry no attribution lines. Work on a feature branch `loss-attribution` in a git worktree (`.worktrees/loss-attribution`). Do not edit `README.md` (the user has an uncommitted rewrite). Before merging, check `git status` in the MAIN checkout for stray edits.
@@ -43,10 +43,19 @@ These are not in the spec.
    - Why: spec §4.5 asks for samples "from the same sweep, the same time span, and a minimum sample count per target". But sweeps only start when a *healthy* anchor or trunk hop loses a ping. A router that steadily drops 25 % of its own pings sits in `Faltering`, so it triggers no further sweeps, and burst-only windows would never collect the evidence `ProbeOnlyLoss` needs.
    - Clock-aligned windows keep "same time span" and "minimum sample count". Bursts still enrich them, because burst pings land in the same window.
    - Profiles slower than one ping per 12 s (fewer than 5 samples a minute) never produce usable windows and fall back to the interim rule below.
-2. **When no fresh usable window exists, the verdict keeps Plan A's interim rule.** A window is fresh when it closed no more than two spans ago. The interim rule blames the deepest path hop that is Faltering, or Down with nothing answering beyond it. This happens for about the first minute after start, and on targets with slow profiles.
-3. **The verdict reclassifies whenever a window closes.** So weather attribution can change up to about 65 s after the loss starts. Expect a one-off `InternetWeather → LinkDegraded` (or the reverse) once the first window covering the trouble closes.
-4. **Windows are not carried across engine rebuilds or restarts.** After a config edit, `ProbeOnlyLoss` needs 10 fresh minutes to re-prove itself. The ledger keeps the note meanwhile: its `ResyncGrace` grows from 6 to 12 min. A note for a deleted hop can therefore linger up to 12 min.
+2. ~~**When no fresh usable window exists, the verdict keeps Plan A's interim rule.** A window is fresh when it closed no more than two spans ago. The interim rule blames the deepest path hop that is Faltering, or Down with nothing answering beyond it. This happens for about the first minute after start, and on targets with slow profiles.~~ *Superseded 2026-10-12: the state rule always decides (shallowest hop); windows only veto.*
+3. **The verdict reclassifies whenever a window closes.** ~~So weather attribution can change up to about 65 s after the loss starts. Expect a one-off `InternetWeather → LinkDegraded` (or the reverse) once the first window covering the trouble closes.~~ *Revised 2026-10-12: a closing window can only set or lift a veto, so expect at most a one-off `LinkDegraded → InternetWeather` when a probe-only hop is first vetoed (or the reverse when a veto lifts).*
+4. **Windows are not carried across engine rebuilds or restarts.** After a config edit, `ProbeOnlyLoss` needs 10 fresh minutes to re-prove itself. ~~The ledger keeps the note meanwhile: its `ResyncGrace` grows from 6 to 12 min. A note for a deleted hop can therefore linger up to 12 min.~~ *Revised 2026-10-12: see ruling 4 below.*
 5. **The `ProbeOnlyLoss` advice depends on the probe.** It says "consider a TCP probe" for an ICMP hop and "consider a different probe" for a TCP one.
+
+### Revision 2026-10-12 (Mark, after final review)
+
+The final review showed the per-window rule could not work: forwarding loss is min(own, lowest witness loss) and the anchors are witnesses, so forwarding ≤ the anchors' minimum ≤ their median, and "forwarding ≥ anchors' median" fired only on ties. Simulated real link loss was blamed in 3–24 % of windows, and the verdict flipped `InternetWeather ↔ LinkDegraded` 3.5–22 times an hour, each flip notifying. Mark chose option A:
+
+1. **Verdict:** no per-window attribution and no forwarding-loss suffix. The state rule decides, blaming the **shallowest** eligible path hop (loss that starts at the router also shows at the modem). **Veto:** a hop is not eligible when the last 3 closed windows that ended within 4 spans, pooled, give `ForHop` forwarding < 5 %; once vetoed it lifts only at ≥ 10 % (or when there is no evidence). No windows → no veto.
+2. **Tests** cover the veto, its hysteresis, the shallowest hop, stale windows, and stability: 15 windows of noisy real loss make one transition; 15 of noisy probe-only loss never leave weather.
+3. **Model check:** a hop with a holding `ProbeOnlyLoss` does not also get the Faltering `HopBypassed` (one note, not two). Down hops keep `HopBypassed`.
+4. **Ledger:** per-kind grace. `ResyncGrace` is back to 6 min for every kind but `ProbeOnlyLoss`, which gets `ProbeOnlyResyncGrace` = 15 min, so other notes for a deleted hop no longer linger.
 
 ## Review Focus
 
