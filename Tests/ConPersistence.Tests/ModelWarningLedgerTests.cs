@@ -170,6 +170,37 @@ public class ModelWarningLedgerTests : IDisposable
         Assert.NotNull(Assert.Single(await Rows()).EndUtc);
     }
 
+    private static readonly ModelCondition ProbeOnly = new(
+        ModelCondition.KeyFor(ModelWarningKind.ProbeOnlyLoss, Inside), ModelWarningKind.ProbeOnlyLoss,
+        Inside, "Inside", "Inside drops some of its own pings but forwards fine");
+
+    [Fact]
+    public void The_graces_are_six_minutes_and_fifteen_for_probe_only_loss()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(6), ModelWarningLedger.ResyncGrace);
+        Assert.Equal(TimeSpan.FromMinutes(15), ModelWarningLedger.ProbeOnlyResyncGrace);
+    }
+
+    [Fact]
+    public async Task A_carried_probe_only_note_outlives_the_short_grace_and_closes_at_its_own()
+    {
+        Raise(Bypassed);
+        Raise(ProbeOnly);
+        _ledger.Detach();
+        _ledger.Attach(new Subject<ModelConditionChange>(), () => []);
+
+        _time.Advance(TimeSpan.FromMinutes(6));
+        var left = Assert.Single(_ledger.Current); // the bypass note closed at 6 min
+        Assert.Equal(ProbeOnly.Key, left.Key);
+
+        _time.Advance(TimeSpan.FromMinutes(9) - TimeSpan.FromSeconds(1));
+        Assert.Single(_ledger.Current); // the new engine needs 10 windows to re-prove it
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Empty(_ledger.Current);
+        Assert.All(await Rows(), r => Assert.NotNull(r.EndUtc));
+    }
+
     [Fact]
     public async Task A_stale_grace_timer_from_an_earlier_attach_closes_nothing()
     {

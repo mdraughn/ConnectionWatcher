@@ -197,8 +197,10 @@ public class ModelCheckCoordinator : IDisposable
                     Add(found, ModelWarningKind.HopBypassed, hop.Target,
                         $"{hop.Target.Name} isn't answering its probe ({probe}), but {witness} beyond it is{BypassTail}");
                 }
-                else if (now - _falteringSince[id] >= FalteringHold)
+                else if (now - _falteringSince[id] >= FalteringHold &&
+                         !found.ContainsKey(ModelCondition.KeyFor(ModelWarningKind.ProbeOnlyLoss, id)))
                 {
+                    // A holding ProbeOnlyLoss already explains the faltering: one note, not two.
                     Add(found, ModelWarningKind.HopBypassed, hop.Target,
                         $"{hop.Target.Name} is losing replies to its probe ({probe}), but {witness} beyond it answers{BypassTail}");
                 }

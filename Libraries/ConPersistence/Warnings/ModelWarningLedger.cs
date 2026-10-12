@@ -13,17 +13,20 @@ namespace ConPersistence.Warnings;
 /// outlives engines, so a rebuild (any config edit) continues a note rather
 /// than ending and reopening it: a carried note the new engine re-raises
 /// keeps its start and its acknowledgement; one it never re-raises within
-/// <see cref="ResyncGrace"/> is closed. Acknowledging hides an instance until
+/// <see cref="ResyncGrace"/> (<see cref="ProbeOnlyResyncGrace"/> for
+/// ProbeOnlyLoss) is closed. Acknowledging hides an instance until
 /// it clears and recurs.
 /// </summary>
 public class ModelWarningLedger : IEngineObserver, IHostedService
 {
-    /// <summary>Long enough for a new engine to re-raise every kind: the slowest
-    /// are NeverAnswered (5 min) and ProbeOnlyLoss (10 windows).</summary>
-    public static readonly TimeSpan ResyncGrace =
-        (ModelCheckCoordinator.ProbeOnlyProveTime > ModelCheckCoordinator.NeverAnsweredAfter
-            ? ModelCheckCoordinator.ProbeOnlyProveTime : ModelCheckCoordinator.NeverAnsweredAfter)
-        + TimeSpan.FromMinutes(2);
+    /// <summary>Long enough for a new engine to re-raise every kind but
+    /// ProbeOnlyLoss: the slowest is NeverAnswered (5 min).</summary>
+    public static readonly TimeSpan ResyncGrace = ModelCheckCoordinator.NeverAnsweredAfter + TimeSpan.FromMinutes(1);
+
+    /// <summary>ProbeOnlyLoss's own grace: a new engine needs 10 fresh windows
+    /// to re-prove it. Only this kind waits this long, so a deleted hop's other
+    /// notes do not linger.</summary>
+    public static readonly TimeSpan ProbeOnlyResyncGrace = ModelCheckCoordinator.ProbeOnlyProveTime + TimeSpan.FromMinutes(5);
 
     private readonly IDbContextFactory<ConWatchDbContext> _dbFactory;
     private readonly TimeProvider _time;
@@ -36,6 +39,7 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
     private readonly HashSet<string> _unconfirmed = new();
     private IDisposable? _subscription;
     private ITimer? _resync;
+    private ITimer? _probeOnlyResync;
     private int _generation;
 
     public ModelWarningLedger(ModelWarningRecorder recorder, IDbContextFactory<ConWatchDbContext> dbFactory,
@@ -95,7 +99,10 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
             var now = _time.GetUtcNow();
             foreach (var condition in active())
                 Raise(condition, now);
-            _resync = _time.CreateTimer(_ => Resync(generation), null, ResyncGrace, Timeout.InfiniteTimeSpan);
+            _resync = _time.CreateTimer(_ => Resync(generation, probeOnly: false), null,
+                ResyncGrace, Timeout.InfiniteTimeSpan);
+            _probeOnlyResync = _time.CreateTimer(_ => Resync(generation, probeOnly: true), null,
+                ProbeOnlyResyncGrace, Timeout.InfiniteTimeSpan);
         }
     }
 
@@ -112,6 +119,8 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
         _subscription = null;
         _resync?.Dispose();
         _resync = null;
+        _probeOnlyResync?.Dispose();
+        _probeOnlyResync = null;
         _generation++; // any timer still in flight is now stale
     }
 
@@ -169,9 +178,10 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
         _log.LogInformation("Model warning cleared: {Key}", key);
     }
 
-    /// <summary>Timer thread: the grace is over; close what the engine never
-    /// re-raised. Never throws.</summary>
-    private void Resync(int generation)
+    /// <summary>Timer thread: a grace is over; close what the engine never
+    /// re-raised — every kind but ProbeOnlyLoss at <see cref="ResyncGrace"/>,
+    /// whatever remains at <see cref="ProbeOnlyResyncGrace"/>. Never throws.</summary>
+    private void Resync(int generation, bool probeOnly)
     {
         try
         {
@@ -181,7 +191,10 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
                     return;
                 var now = _time.GetUtcNow();
                 foreach (var key in _unconfirmed.ToList())
-                    Close(key, now);
+                {
+                    if (probeOnly || !_instances.TryGetValue(key, out var w) || w.Kind != ModelWarningKind.ProbeOnlyLoss)
+                        Close(key, now);
+                }
             }
         }
         catch (Exception ex)

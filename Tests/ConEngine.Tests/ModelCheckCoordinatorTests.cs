@@ -339,6 +339,22 @@ public class ModelCheckCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public void A_faltering_hop_with_a_probe_only_note_is_not_also_bypassed()
+    {
+        StartCheck();
+        AllHealthy();
+        Feed("Inside", 3, false);
+        Assert.Equal(HostState.Faltering, _monitors[Id("Inside")].CurrentState);
+
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 3); // ten minutes: well past the faltering hold
+        Assert.Equal(HostState.Faltering, _monitors[Id("Inside")].CurrentState);
+
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss && c.TargetId == Id("Inside"));
+        Assert.DoesNotContain(_check.Active, c => c.Kind == ModelWarningKind.HopBypassed && c.TargetId == Id("Inside"));
+    }
+
+    [Fact]
     public void An_icmp_hop_is_advised_to_try_tcp()
     {
         StartCheck();
