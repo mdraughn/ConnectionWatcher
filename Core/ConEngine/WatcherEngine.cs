@@ -228,7 +228,7 @@ public class WatcherEngine
         }
 
         // Model checks: admin-facing notes where the map disagrees with the
-        // probes. They never feed the verdict.
+        // probes. Only a holding ProbeOnlyLoss note feeds the verdict, as a veto.
         ModelCheck = new ModelCheckCoordinator(_graph, _monitors, Verdict?.UsingIspFallback == true,
             _timeProvider, _loggerFactory.CreateLogger<ModelCheckCoordinator>(), Loss);
         _subscriptions.Add(ModelCheck.ChangeSource.Subscribe(_modelSubject.OnNext));

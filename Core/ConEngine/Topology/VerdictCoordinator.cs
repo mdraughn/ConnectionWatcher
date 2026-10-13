@@ -178,14 +178,13 @@ public class VerdictCoordinator : IDisposable
     {
         lock (_lock)
         {
-            if (_disposed)
+            if (_disposed || _probeOnlyVeto is not null)
                 return;
             _probeOnlyVeto = check;
             _subscriptions.Add(check.ChangeSource
                 .Where(c => c.Condition.Kind == ModelWarningKind.ProbeOnlyLoss)
                 .Subscribe(_ => Recalculate()));
         }
-        Recalculate();
     }
 
     private bool _seeded;
@@ -382,8 +381,8 @@ public class VerdictCoordinator : IDisposable
     /// <summary>The internet is reachable: how good is it? Anchor evidence decides
     /// quality. Weather is our link's when a path hop is Faltering (or Down with
     /// nothing answering beyond it); the SHALLOWEST such hop is blamed — where
-    /// the loss starts. A statistical veto for hops whose loss is only their own
-    /// probe is planned (Plan D2).</summary>
+    /// the loss starts. A Faltering hop whose ProbeOnlyLoss note holds is never
+    /// blamed (the cheap veto); the statistical Plan D2 is parked (spec 2026-10-13-paired-probe-veto-design.md).</summary>
     private (VerdictState, string, string? Operator) Quality(
         List<(TargetMonitor Monitor, HostState State)> determined, IReadOnlyDictionary<Guid, HostState> states)
     {

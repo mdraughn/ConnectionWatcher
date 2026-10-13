@@ -240,4 +240,21 @@ public class VerdictBlameOrderTests : IDisposable
         Assert.False(NoteHolds(check));
         Assert.Equal(VerdictState.LinkDegraded, _verdict.CurrentVerdict);
     }
+    [Fact]
+    public void Wiring_the_veto_does_not_unseat_a_seeded_verdict_while_anchors_are_undetermined()
+    {
+        using var verdict = new VerdictCoordinator(_graph, _graph.GetPoolByName("Internet"), _monitors,
+            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+        var transitions = new List<TargetTransition>();
+        verdict.TransitionSource.Subscribe(transitions.Add);
+        verdict.Seed(VerdictState.Healthy);
+        verdict.Start();
+        using var check = new ModelCheckCoordinator(_graph, _monitors, unprovableUp: false, _time,
+            NullLogger<ModelCheckCoordinator>.Instance, _loss);
+
+        verdict.UseProbeOnlyVeto(check);
+
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        Assert.Empty(transitions);
+    }
 }
