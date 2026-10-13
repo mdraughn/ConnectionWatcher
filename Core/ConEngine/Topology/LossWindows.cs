@@ -1,7 +1,3 @@
-using System.Collections.Concurrent;
-using System.Reactive.Subjects;
-using Microsoft.Extensions.Logging;
-
 namespace ConEngine.Topology;
 
 /// <summary>One target's samples in one window.</summary>
@@ -26,8 +22,7 @@ public sealed record LossWindow(DateTimeOffset Start, IReadOnlyDictionary<Guid, 
 /// §4.5). Bursts land in the same windows and only add samples. A window
 /// closes once a sample arrives past its end plus <see cref="CloseDelay"/>
 /// (controllers run on separate threads; a little lateness is normal); a
-/// sample for an already-closed window is dropped. Closed windows are
-/// published outside the lock, in order.
+/// sample for an already-closed window is dropped.
 /// </summary>
 public sealed class LossWindows
 {
@@ -37,65 +32,17 @@ public sealed class LossWindows
     public const int Keep = 30;
 
     private readonly Lock _lock = new();
-    private readonly Lock _publishLock = new();
     private readonly SortedDictionary<DateTimeOffset, Dictionary<Guid, WindowCount>> _open = new();
     private readonly List<LossWindow> _closed = new();
-    private readonly ConcurrentQueue<LossWindow> _outbox = new();
-    private readonly Subject<LossWindow> _windowClosed = new();
-    private readonly ILogger? _log;
     private DateTimeOffset? _closedThrough;
-
-    public LossWindows(ILogger? log = null) => _log = log;
 
     public static DateTimeOffset WindowStart(DateTimeOffset at) =>
         new(at.UtcTicks - at.UtcTicks % Span.Ticks, TimeSpan.Zero);
-
-    /// <summary>A window closed. Published outside the collector's lock.</summary>
-    public IObservable<LossWindow> WindowClosed => new IsolatedObservable(this);
-
-    /// <summary>A Subject stops at its first throwing observer, and Rx's
-    /// auto-detaching observers (Observable.Create) unsubscribe a thrower. Here a
-    /// subscriber that throws is logged and stays subscribed.</summary>
-    private sealed class IsolatedObservable(LossWindows owner) : IObservable<LossWindow>
-    {
-        public IDisposable Subscribe(IObserver<LossWindow> observer) =>
-            owner._windowClosed.Subscribe(
-                window =>
-                {
-                    try { observer.OnNext(window); }
-                    catch (Exception ex)
-                    {
-                        owner._log?.LogWarning(ex,
-                            "A loss-window subscriber threw; it stays subscribed. Window {Start} is still recorded.", window.Start);
-                    }
-                },
-                observer.OnError,
-                observer.OnCompleted);
-    }
 
     /// <summary>Closed windows, oldest first, at most <see cref="Keep"/>.</summary>
     public IReadOnlyList<LossWindow> Closed
     {
         get { lock (_lock) { return _closed.ToList(); } }
-    }
-
-    /// <summary>The newest closed window if it ended no more than two spans before <paramref name="now"/>.</summary>
-    public LossWindow? LatestFresh(DateTimeOffset now)
-    {
-        lock (_lock)
-        {
-            return _closed.Count > 0 && now - _closed[^1].End <= Span * 2 ? _closed[^1] : null;
-        }
-    }
-
-    /// <summary>The newest <paramref name="count"/> closed windows that ended no more
-    /// than four spans before <paramref name="now"/>, oldest first (possibly none).</summary>
-    public IReadOnlyList<LossWindow> Recent(DateTimeOffset now, int count)
-    {
-        lock (_lock)
-        {
-            return _closed.Where(w => w.End >= now - Span * 4).TakeLast(count).ToList();
-        }
     }
 
     /// <summary>This target's count in the newest open window, or null.</summary>
@@ -130,29 +77,7 @@ public sealed class LossWindows
                     if (_closed.Count > Keep)
                         _closed.RemoveAt(0);
                     _closedThrough = window.End;
-                    _outbox.Enqueue(window);
                 }
-            }
-        }
-        Drain();
-    }
-
-    /// <summary>Same discipline as the coordinators: TryEnter, so a thread that
-    /// finds another draining leaves its items to that thread.</summary>
-    private void Drain()
-    {
-        while (!_outbox.IsEmpty)
-        {
-            if (!_publishLock.TryEnter())
-                return;
-            try
-            {
-                while (_outbox.TryDequeue(out var window))
-                    _windowClosed.OnNext(window);
-            }
-            finally
-            {
-                _publishLock.Exit();
             }
         }
     }

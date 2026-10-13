@@ -44,18 +44,4 @@ public class LossAttributionTests
         Assert.Null(LossAttribution.ForHop(W((Hop, 10, 0), (B1, 10, 10)), Hop, [B1])); // never answered
         Assert.Null(LossAttribution.ForHop(W((Hop, 10, 0)), Hop, [B1]));               // no samples beyond
     }
-
-    [Fact]
-    public void Pool_sums_each_targets_counts_across_windows()
-    {
-        var first = W((Hop, 4, 1), (B1, 10, 0));
-        var second = W((Hop, 4, 2), (B2, 10, 3)) with { Start = first.Start + LossWindows.Span };
-
-        var pooled = LossAttribution.Pool([first, second]);
-
-        Assert.Equal(first.Start, pooled.Start);
-        Assert.Equal(new WindowCount(8, 3), pooled.Targets[Hop]); // usable only once pooled
-        Assert.Equal(new WindowCount(10, 0), pooled.Targets[B1]);
-        Assert.Equal(new WindowCount(10, 3), pooled.Targets[B2]);
-    }
 }

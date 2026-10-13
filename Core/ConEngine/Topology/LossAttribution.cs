@@ -32,19 +32,4 @@ public static class LossAttribution
             return null;
         return new HopLoss(own.Loss, Math.Min(own.Loss, witnesses.Min()));
     }
-
-    /// <summary>One window holding the summed counts of each target across
-    /// <paramref name="windows"/> (oldest first; it starts where the first does).</summary>
-    public static LossWindow Pool(IReadOnlyList<LossWindow> windows)
-    {
-        if (windows.Count == 0)
-            throw new ArgumentException("Nothing to pool.", nameof(windows));
-        var sums = new Dictionary<Guid, WindowCount>();
-        foreach (var (id, count) in windows.SelectMany(w => w.Targets))
-        {
-            var prior = sums.GetValueOrDefault(id) ?? new WindowCount(0, 0);
-            sums[id] = new WindowCount(prior.Samples + count.Samples, prior.Lost + count.Lost);
-        }
-        return new LossWindow(windows[0].Start, sums);
-    }
 }

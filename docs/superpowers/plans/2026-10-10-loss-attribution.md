@@ -9,7 +9,7 @@
 - A pure `LossAttribution` turns one window into a hop's own loss, forwarding loss and probe-only loss (spec corollary 3):
   - forwarding loss = the lower of its own loss and the lowest loss among the answering targets beyond it;
   - probe-only loss = own loss minus forwarding loss.
-- `VerdictCoordinator.Quality` uses the latest fresh window to decide `LinkDegraded` versus `InternetWeather` and reclassifies when a window closes.
+- ~~`VerdictCoordinator.Quality` uses the latest fresh window to decide `LinkDegraded` versus `InternetWeather` and reclassifies when a window closes.~~ *Removed 2026-10-12: the verdict does not read loss windows (see Revision, item 5).*
 - `ModelCheckCoordinator` raises `ProbeOnlyLoss` from the last 10 usable windows.
 - Plan B's ledger, status API, dashboard and tray carry the new kind with small additions.
 
@@ -56,6 +56,7 @@ The final review showed the per-window rule could not work: forwarding loss is m
 2. **Tests** cover the veto, its hysteresis, the shallowest hop, stale windows, and stability: 15 windows of noisy real loss make one transition; 15 of noisy probe-only loss never leave weather.
 3. **Model check:** a hop with a holding `ProbeOnlyLoss` does not also get the Faltering `HopBypassed` (one note, not two). Down hops keep `HopBypassed`.
 4. **Ledger:** per-kind grace. `ResyncGrace` is back to 6 min for every kind but `ProbeOnlyLoss`, which gets `ProbeOnlyResyncGrace` = 15 min, so other notes for a deleted hop no longer linger.
+5. **Veto removed (Mark's final ruling, 2026-10-12).** After a second review (the 3-window veto pre-vetoes healthy hops, so the onset of real loss reads `InternetWeather` and then `LinkDegraded`; and it flaps at 10–20 % real loss), Mark ruled to remove the veto. ~~Items 1 and 2 above (veto, hysteresis, stale windows, stability tests) are superseded.~~ The verdict uses the state rule with shallowest-hop blame and does not read loss windows; `WindowClosed`, `LatestFresh`, `Recent` and `Pool` are gone. Loss windows feed only the `ProbeOnlyLoss` note. A hop whose loss is only its own probe is blamed again until a statistically sound veto lands: **Plan D2** (paired probes, a sequential test calibrated by average run length).
 
 ## Review Focus
 
@@ -65,7 +66,7 @@ The failure modes most likely to bite, each pinned by a test in the named task:
 2. **Real link loss during weather.** The router and everything beyond it lose about as much as the anchors. Expect `LinkDegraded` naming the router and its forwarding loss (Task 2).
 3. **Late, interleaved samples across controller threads.** A sample for an already-closed window is dropped, never miscounted into the next window (Task 1).
 4. **A steady probe-only router.** The note appears after 10 windows and not before. It clears with hysteresis, not on one clean window. The router's own state never changes because of it (Task 3).
-5. **Deadlock between the verdict and the window collector.** The verdict reads windows under its lock, and the collector publishes "window closed" to the verdict. Publication happens outside the collector's lock (Task 1, cross-thread test).
+5. ~~**Deadlock between the verdict and the window collector.**~~ *Moot 2026-10-12: the verdict no longer reads windows or subscribes to window closes.*
 
 ---
 
@@ -76,7 +77,7 @@ The failure modes most likely to bite, each pinned by a test in the named task:
 | `Core/ConEngine/Topology/LossWindows.cs` (new) | `WindowCount`, `LossWindow`, `LossWindows` (collect, close, keep, publish) | 1 |
 | `Core/ConEngine/Topology/LossAttribution.cs` (new) | Pure: `HopLoss`, `ForHop`, `TypicalLoss` | 1 |
 | `Core/ConEngine/WatcherEngine.cs` | `Loss` property; record verdict-scope samples; hand to verdict and model check | 1, 2, 3 |
-| `Core/ConEngine/Topology/VerdictCoordinator.cs` | Attribution in `Quality`; reclassify on window close | 2 |
+| `Core/ConEngine/Topology/VerdictCoordinator.cs` | ~~Attribution in `Quality`; reclassify on window close~~ State rule, shallowest-hop blame; no loss windows (2026-10-12) | 2 |
 | `Core/ConEngine/Topology/ModelCheckCoordinator.cs` | `ProbeOnlyLoss` kind and evaluation | 3 |
 | `Libraries/ConPersistence/Warnings/ModelWarningLedger.cs` | `ResyncGrace` covers the 10-window proof | 3 |
 | `Libraries/ConInfrastructure/Tray/TrayStatus.cs`, `Programs/ConWatch/ClientApp/src/lib/types.ts` | Label and type for the new kind | 3 |

@@ -25,8 +25,6 @@ public class LossWindowsTests
     public void A_window_closes_once_a_sample_passes_its_end_plus_the_close_delay()
     {
         var w = new LossWindows();
-        var closed = new List<LossWindow>();
-        w.WindowClosed.Subscribe(closed.Add);
         Fill(w, A, T0, samples: 10, lost: 3);
         Fill(w, B, T0, samples: 6, lost: 0);
 
@@ -35,7 +33,6 @@ public class LossWindowsTests
 
         w.Record(B, T0 + LossWindows.Span + LossWindows.CloseDelay, true);
         var window = Assert.Single(w.Closed);
-        Assert.Same(window, Assert.Single(closed));
         Assert.Equal(T0, window.Start);
         Assert.Equal(new WindowCount(10, 3), window.Targets[A]);
         Assert.Equal(0.3, window.Targets[A].Loss, 3);
@@ -77,78 +74,11 @@ public class LossWindowsTests
     }
 
     [Fact]
-    public void LatestFresh_ignores_a_stale_window()
-    {
-        var w = new LossWindows();
-        Fill(w, A, T0, 6, 0);
-        w.Record(A, T0 + LossWindows.Span + LossWindows.CloseDelay, true);
-        var end = T0 + LossWindows.Span;
-
-        Assert.NotNull(w.LatestFresh(end + LossWindows.Span * 2));
-        Assert.Null(w.LatestFresh(end + LossWindows.Span * 2 + TimeSpan.FromSeconds(1)));
-    }
-
-    [Fact]
-    public void Recent_returns_the_newest_windows_that_ended_within_four_spans_oldest_first()
-    {
-        var w = new LossWindows();
-        for (int i = 0; i < 5; i++)
-            Fill(w, A, T0.AddMinutes(i), 6, 0);
-        w.Record(A, T0.AddMinutes(5) + LossWindows.CloseDelay, true); // closes T0 .. T0+4
-        var lastEnd = T0.AddMinutes(5);
-
-        var recent = w.Recent(lastEnd, 3);
-        Assert.Equal([T0.AddMinutes(2), T0.AddMinutes(3), T0.AddMinutes(4)], recent.Select(x => x.Start));
-
-        // A window counts until four spans after it ended.
-        Assert.Equal([T0.AddMinutes(3), T0.AddMinutes(4)], w.Recent(lastEnd + LossWindows.Span * 3, 3).Select(x => x.Start));
-        Assert.Equal([T0.AddMinutes(4)], w.Recent(lastEnd + LossWindows.Span * 4, 3).Select(x => x.Start));
-        Assert.Empty(w.Recent(lastEnd + LossWindows.Span * 4 + TimeSpan.FromSeconds(1), 3));
-    }
-
-    [Fact]
     public void Open_reports_the_newest_open_windows_count()
     {
         var w = new LossWindows();
         Assert.Null(w.Open(A));
         Fill(w, A, T0, 3, 1);
         Assert.Equal(new WindowCount(3, 1), w.Open(A));
-    }
-
-    [Fact]
-    public void Window_closed_is_published_outside_the_lock()
-    {
-        // A subscriber reading Closed from another thread inside OnNext would
-        // deadlock if publication happened under the collector's lock.
-        var w = new LossWindows();
-        var reads = new List<int>();
-        w.WindowClosed.Subscribe(_ =>
-            reads.Add(Task.Run(() => w.Closed.Count).Wait(TimeSpan.FromSeconds(10)) ? 1 : 0));
-        Fill(w, A, T0, 6, 0);
-        w.Record(A, T0 + LossWindows.Span + LossWindows.CloseDelay, true);
-        Assert.Equal([1], reads);
-    }
-
-    [Fact]
-    public void A_throwing_subscriber_does_not_stop_the_others()
-    {
-        var w = new LossWindows();
-        int thrown = 0;
-        var received = new List<LossWindow>();
-        w.WindowClosed.Subscribe(_ => { thrown++; throw new InvalidOperationException("boom"); });
-        w.WindowClosed.Subscribe(received.Add);
-        Fill(w, A, T0, 6, 0);
-
-        var ex = Record.Exception(() => w.Record(A, T0 + LossWindows.Span + LossWindows.CloseDelay, true));
-        Assert.Null(ex);
-
-        // The thrower stays subscribed: a second window reaches both again.
-        Fill(w, A, T0 + LossWindows.Span, 6, 0);
-        ex = Record.Exception(() => w.Record(A, T0 + LossWindows.Span * 2 + LossWindows.CloseDelay, true));
-
-        Assert.Null(ex);
-        Assert.Equal(2, thrown);
-        Assert.Equal(2, received.Count);
-        Assert.Equal(2, w.Closed.Count);
     }
 }
