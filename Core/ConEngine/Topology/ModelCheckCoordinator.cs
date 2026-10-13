@@ -127,6 +127,15 @@ public class ModelCheckCoordinator : IDisposable
         get { lock (_lock) { return _active.Values.ToList(); } }
     }
 
+    /// <summary>Whether this condition holds as of the last evaluation. Takes
+    /// only _lock; the coordinator publishes changes outside it and never calls
+    /// the verdict, so a caller holding its own lock may call this.</summary>
+    public bool Holds(ModelWarningKind kind, Guid targetId)
+    {
+        lock (_lock)
+            return _active.ContainsKey(ModelCondition.KeyFor(kind, targetId));
+    }
+
     public void Start()
     {
         lock (_lock)

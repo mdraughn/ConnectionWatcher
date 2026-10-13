@@ -232,6 +232,7 @@ public class WatcherEngine
         ModelCheck = new ModelCheckCoordinator(_graph, _monitors, Verdict?.UsingIspFallback == true,
             _timeProvider, _loggerFactory.CreateLogger<ModelCheckCoordinator>(), Loss);
         _subscriptions.Add(ModelCheck.ChangeSource.Subscribe(_modelSubject.OnNext));
+        Verdict?.UseProbeOnlyVeto(ModelCheck);
         ModelCheck.Start();
 
         // Suspicion layer: works without an anchor pool (per-target glitches

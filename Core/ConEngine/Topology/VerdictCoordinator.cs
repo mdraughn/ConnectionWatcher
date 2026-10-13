@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using ConCore.Targets;
 using ConEngine.Events;
@@ -160,6 +161,31 @@ public class VerdictCoordinator : IDisposable
             UsingIspFallback = _anchors.Count > 0;
             _counted = _anchors.ToList();
         }
+    }
+
+    // Guarded by _lock. The model check whose ProbeOnlyLoss notes veto blaming a
+    // hop (null: no veto). The veto is the note itself, so the banner and the
+    // note can't disagree. Windows aren't carried across a restart or rebuild,
+    // so there is no veto for about 10 minutes after one.
+    private ModelCheckCoordinator? _probeOnlyVeto;
+
+    /// <summary>Never blame a Faltering path hop while its ProbeOnlyLoss note
+    /// holds: the note already proves it forwards fine. Reclassifies whenever
+    /// such a note is raised or cleared. Call once, before the check starts.
+    /// Lock order is this _lock, then the check's (Holds); the check publishes
+    /// outside its lock and never calls the verdict.</summary>
+    public void UseProbeOnlyVeto(ModelCheckCoordinator check)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+                return;
+            _probeOnlyVeto = check;
+            _subscriptions.Add(check.ChangeSource
+                .Where(c => c.Condition.Kind == ModelWarningKind.ProbeOnlyLoss)
+                .Subscribe(_ => Recalculate()));
+        }
+        Recalculate();
     }
 
     private bool _seeded;
@@ -391,12 +417,13 @@ public class VerdictCoordinator : IDisposable
         // that is Faltering, or Down with nothing answering beyond it (loss that
         // starts at the router shows at the modem too; it starts where it first
         // shows). A Down hop that something beyond answers through is bypassed
-        // (its probe lies): never blamed (M1). Known limit: a hop whose loss is only
-        // its own probe is still blamed until the statistical veto (Plan D2).
+        // (its probe lies): never blamed (M1). A Faltering hop whose ProbeOnlyLoss
+        // note holds drops only its own pings: never blamed (the note needs ~10 min
+        // to prove itself, so until then it is blamed).
         var losingHop = _ancestors
             .Where(a => states[a.Monitor.Target.Id] switch
             {
-                HostState.Faltering => true,
+                HostState.Faltering => _probeOnlyVeto?.Holds(ModelWarningKind.ProbeOnlyLoss, a.Monitor.Target.Id) != true,
                 HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
                 _ => false,
             })

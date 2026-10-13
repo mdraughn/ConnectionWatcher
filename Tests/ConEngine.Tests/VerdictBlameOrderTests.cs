@@ -12,7 +12,8 @@ using Microsoft.Extensions.Time.Testing;
 namespace ConEngine.Tests;
 
 /// <summary>During weather the state rule blames the shallowest losing path hop
-/// (spec 2026-10-09 §4.5, veto removed 2026-10-12; a statistical veto is Plan D2).</summary>
+/// (spec 2026-10-09 §4.5, veto removed 2026-10-12); a hop whose ProbeOnlyLoss note
+/// holds is never blamed (2026-10-13).</summary>
 public class VerdictBlameOrderTests : IDisposable
 {
     private static readonly PingProfile Fast = new() { Name = "Fast", HistorySize = 20, MinUsableSample = 5 };
@@ -21,10 +22,11 @@ public class VerdictBlameOrderTests : IDisposable
     private readonly TargetGraph _graph;
     private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
     private readonly TopologyCoordinator _topology;
-    // Fed to show the verdict ignores it: nothing hands these windows to the verdict.
+    // Read by the ModelCheckCoordinator the veto tests start; the verdict reads only its note.
     private readonly LossWindows _loss = new();
     private readonly VerdictCoordinator _verdict;
     private readonly List<TargetTransition> _transitions = new();
+    private readonly List<ModelCheckCoordinator> _checks = new();
 
     public VerdictBlameOrderTests()
     {
@@ -57,6 +59,8 @@ public class VerdictBlameOrderTests : IDisposable
     public void Dispose()
     {
         _verdict.Dispose();
+        foreach (var c in _checks)
+            c.Dispose();
         _topology.Dispose();
         foreach (var m in _monitors.Values)
             m.Dispose();
@@ -138,16 +142,102 @@ public class VerdictBlameOrderTests : IDisposable
         Assert.Equal("LinkDegraded: Router is Faltering", _verdict.CurrentDetail); // the shallowest
     }
 
-    [Fact]
-    public void Until_plan_d2_a_faltering_hop_is_blamed_even_if_its_loss_is_only_its_own_probe()
+    private ModelCheckCoordinator StartVeto()
     {
-        // Known limitation: the modem drops only its own pings (Quad9 beyond it
-        // loses nothing), but the verdict no longer reads loss windows, so the
-        // state rule blames it. A statistical veto is planned (Plan D2).
-        WeatherWithAFalteringModem();
-        CloseProbeOnlyWindow();
+        var check = new ModelCheckCoordinator(_graph, _monitors, unprovableUp: false, _time,
+            NullLogger<ModelCheckCoordinator>.Instance, _loss);
+        _checks.Add(check);
+        _verdict.UseProbeOnlyVeto(check);
+        check.Start();
+        return check;
+    }
 
+    /// <summary>Lets the check's timer fire, so it reads the windows closed so far.</summary>
+    private void Evaluate() => _time.Advance(ModelCheckCoordinator.EvaluateEvery);
+
+    private static bool NoteHolds(ModelCheckCoordinator check) =>
+        check.Active.Any(c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+
+    private Dictionary<Guid, HostState> States() =>
+        _monitors.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState);
+
+    [Fact]
+    public void A_hop_whose_probe_only_note_holds_is_not_blamed_for_weather()
+    {
+        var check = StartVeto();
+        WeatherWithAFalteringModem();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseProbeOnlyWindow();
+        Evaluate();
+
+        Assert.True(check.Holds(ModelWarningKind.ProbeOnlyLoss, Id("Modem")));
+        Assert.Equal(HostState.Faltering, _monitors[Id("Modem")].CurrentState);
+        Assert.Equal(VerdictState.InternetWeather, _verdict.CurrentVerdict);
+    }
+
+    [Fact]
+    public void Before_the_note_holds_the_faltering_hop_is_still_blamed()
+    {
+        var check = StartVeto();
+        WeatherWithAFalteringModem();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows - 1; i++)
+            CloseProbeOnlyWindow();
+        Evaluate();
+
+        // The known gap: the note needs 10 windows (about 10 minutes) to prove itself.
+        Assert.False(check.Holds(ModelWarningKind.ProbeOnlyLoss, Id("Modem")));
         Assert.Equal(VerdictState.LinkDegraded, _verdict.CurrentVerdict);
         Assert.Equal("LinkDegraded: Comcast — Modem is Faltering", _verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void The_note_raising_reclassifies_without_any_state_change()
+    {
+        StartVeto();
+        WeatherWithAFalteringModem();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows - 1; i++)
+            CloseProbeOnlyWindow();
+        Evaluate();
+        Assert.Equal(VerdictState.LinkDegraded, _verdict.CurrentVerdict);
+        var before = States();
+
+        CloseProbeOnlyWindow(); // the 10th
+        Evaluate();
+
+        Assert.Equal(VerdictState.InternetWeather, _verdict.CurrentVerdict);
+        Assert.Equal(before, States());
+    }
+
+    [Fact]
+    public void Real_loss_at_the_hop_raises_no_note_so_it_is_still_blamed()
+    {
+        var check = StartVeto();
+        WeatherWithAFalteringModem();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseRealLossWindow();
+        Evaluate();
+
+        Assert.False(NoteHolds(check));
+        Assert.Equal(VerdictState.LinkDegraded, _verdict.CurrentVerdict);
+        Assert.Equal("LinkDegraded: Comcast — Modem is Faltering", _verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void When_the_note_clears_the_hop_can_be_blamed_again()
+    {
+        var check = StartVeto();
+        WeatherWithAFalteringModem();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseProbeOnlyWindow();
+        Evaluate();
+        Assert.Equal(VerdictState.InternetWeather, _verdict.CurrentVerdict);
+
+        // Now the loss is real: what lies beyond the modem loses as much as it does.
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseRealLossWindow();
+        Evaluate();
+
+        Assert.False(NoteHolds(check));
+        Assert.Equal(VerdictState.LinkDegraded, _verdict.CurrentVerdict);
     }
 }
