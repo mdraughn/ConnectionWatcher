@@ -13,9 +13,10 @@ export interface TargetStatus {
   /** Monotonic count of results ever recorded; the activity LED flickers when it grows. */
   pingCount?: number;
   /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
-  scope?: "Verdict" | "Local";
+  scope?: "Verdict" | "Local" | "Resolver";
   /** Notify when this is down, even if the internet is fine (spec §4.7). */
   critical?: boolean;
+  systemManaged?: boolean;
   /** Id of the upstream target whose failure explains this one's Unreachable state. */
   explainedBy?: string | null;
 }
@@ -68,7 +69,7 @@ export interface TransitionEvent {
   sampleSize: number | null;
   burstLossRate: number | null;
   /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
-  scope?: "Verdict" | "Local";
+  scope?: "Verdict" | "Local" | "Resolver";
 }
 
 export interface RollupPoint {

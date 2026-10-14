@@ -206,8 +206,12 @@ anyone else — no usage analytics, no crash reporting, no version checks (if
 an update check is ever added, it will be opt-in and documented here). The
 complete list of network traffic the app can generate:
 
-- ICMP pings and DNS lookups for the targets **you** configured (that's the
-  product);
+- ICMP pings, TCP connects and DNS lookups for the targets **you** configured
+  (that's the product), plus the name-resolution watch's DNS queries: it asks
+  the resolvers your machine is configured with for the lookup names under
+  Config → DNS (seeded with `dns.google`, `one.one.one.one`, `dns.quad9.net`
+  and `dns.opendns.com`; edit or empty the list, or turn the watch off, and
+  those queries stop);
 - only if you enable them, and only to endpoints you typed in: MQTT to your
   broker, webhooks to your URLs, the heartbeat ping;
 - only when you trigger them: the setup wizard's router probe (your own

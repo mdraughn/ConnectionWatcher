@@ -67,7 +67,7 @@
 <table>
     <thead><tr><th>Name</th><th>Address</th><th>Parent</th><th>Profile</th><th>Scope</th><th>Enabled</th><th></th></tr></thead>
     <tbody>
-    @foreach (var t in Model.Config.Targets.OrderBy(t => t.Name))
+    @foreach (var t in Model.Config.Targets.Where(t => t.Scope != TargetScope.Resolver).OrderBy(t => t.Name))
     {
         <tr>
             <td>@t.Name @if (t.Critical) {<small class="cw-critical" title="Notified when this is down, even if the internet is fine">critical</small>}</td><td>@t.Address@(t.Probe is { Length: > 0 } pr ? $" · {pr.Replace(":", "/")}" : "")</td><td>@(t.Parent ?? "—")</td><td>@t.Profile</td><td>@(t.Scope == TargetScope.Local ? "Local" : "Verdict")</td>
@@ -105,7 +105,7 @@
                 <label>Parent
                     <select name="parent">
                         <option value="">(none — root)</option>
-                        @foreach (var t in Model.Config.Targets.Where(t => t.Scope != TargetScope.Local).OrderBy(t => t.Name))
+                        @foreach (var t in Model.Config.Targets.Where(t => t.Scope == TargetScope.Verdict).OrderBy(t => t.Name))
                         {
                             <option selected="@(t.Name == Model.PrefillParent)">@t.Name</option>
                         }

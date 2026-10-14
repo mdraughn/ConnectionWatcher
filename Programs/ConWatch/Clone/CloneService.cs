@@ -55,6 +55,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         if (fetched.Outcome is { } fetchError)
             return fetchError;
         var snapshot = fetched.Snapshot!;
+        snapshot = WithoutSystemManaged(snapshot);
         var localSkipped = 0;
         if (!includeLocalDevices)
         {
@@ -139,6 +140,7 @@ public class CloneService(IHttpClientFactory httpFactory,
                     " The source has been disabled; re-enable it from its Settings page if you are not migrating.",
             };
         var snapshot = fetched.Snapshot!;
+        snapshot = WithoutSystemManaged(snapshot);
 
         // The clone's choice sticks: a clone without Local devices must not
         // get them back (now pinging foreign private addresses) at take-over.
@@ -236,19 +238,27 @@ public class CloneService(IHttpClientFactory httpFactory,
     /// glitches recorded for them. Pools and the verdict cannot reference Local targets
     /// (validator rule), so nothing else needs rewriting.</summary>
     internal static Snapshot WithoutLocalDevices(Snapshot snapshot)
+        => Without(snapshot, t => t.Scope == TargetScope.Local);
+
+    /// <summary>System resolvers are the SOURCE host's; the destination's
+    /// SystemResolverService regenerates its own (spec 2026-10-10 §5.1).</summary>
+    internal static Snapshot WithoutSystemManaged(Snapshot snapshot)
+        => Without(snapshot, t => t.SystemManaged);
+
+    private static Snapshot Without(Snapshot snapshot, Func<TargetDto, bool> drop)
     {
-        var localIds = snapshot.Config.Targets
-            .Where(t => t.Scope == TargetScope.Local && t.Id is not null)
+        var droppedIds = snapshot.Config.Targets
+            .Where(t => drop(t) && t.Id is not null)
             .Select(t => t.Id!.Value).ToHashSet();
         return snapshot with
         {
             Config = snapshot.Config with
             {
-                Targets = snapshot.Config.Targets.Where(t => t.Scope != TargetScope.Local).ToList(),
+                Targets = snapshot.Config.Targets.Where(t => !drop(t)).ToList(),
             },
-            Transitions = snapshot.Transitions.Where(t => !localIds.Contains(t.SubjectId)).ToList(),
-            Rollups = snapshot.Rollups.Where(r => !localIds.Contains(r.TargetId)).ToList(),
-            Glitches = snapshot.Glitches.Where(g => !localIds.Contains(g.TargetId)).ToList(),
+            Transitions = snapshot.Transitions.Where(t => !droppedIds.Contains(t.SubjectId)).ToList(),
+            Rollups = snapshot.Rollups.Where(r => !droppedIds.Contains(r.TargetId)).ToList(),
+            Glitches = snapshot.Glitches.Where(g => !droppedIds.Contains(g.TargetId)).ToList(),
         };
     }
 

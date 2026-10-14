@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLocal, summarizeLan } from "./lan";
+import { isLocal, isResolver, summarizeLan } from "./lan";
 import type { TargetStatus } from "./types";
 
 const t = (over: Partial<TargetStatus>): TargetStatus => ({
@@ -28,5 +28,18 @@ describe("summarizeLan", () => {
   });
   it("is all zeros with no Local targets", () => {
     expect(summarizeLan([t({})])).toEqual({ total: 0, up: 0, down: 0 });
+  });
+});
+
+describe("isResolver", () => {
+  it("is true only for scope Resolver", () => {
+    expect(isResolver(t({ scope: "Resolver" }))).toBe(true);
+    expect(isResolver(t({ scope: "Local" }))).toBe(false);
+    expect(isResolver(t({}))).toBe(false);
+  });
+
+  it("a resolver is not a LAN device", () => {
+    expect(isLocal(t({ scope: "Resolver" }))).toBe(false);
+    expect(summarizeLan([t({ scope: "Resolver" })]).total).toBe(0);
   });
 });

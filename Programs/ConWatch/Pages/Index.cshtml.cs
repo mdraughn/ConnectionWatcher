@@ -61,6 +61,8 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
                     LocalMonitors.Add(monitor);
                     continue;
                 }
+                if (monitor.Target.Scope == TargetScope.Resolver)
+                    continue; // name-resolution section comes with a later plan; never a tree root
                 if (monitor.Target.ParentId is { } parentId && engine.Monitors.ContainsKey(parentId))
                 {
                     if (!Children.TryGetValue(parentId, out var list))
