@@ -104,10 +104,21 @@ public class SystemResolverReconcilerTests
     }
 
     [Fact]
+    public void An_admin_re_enabled_target_clears_its_retired_entry()
+    {
+        var managed = Managed("10.1.10.1");
+        var plan = SystemResolverReconciler.Reconcile([managed], [Found("10.1.10.1")], true, new HashSet<string> { "10.1.10.1" });
+
+        Assert.True(plan.Changed);
+        Assert.Same(managed, plan.Targets.Single());
+        Assert.DoesNotContain("10.1.10.1", plan.Retired);
+    }
+
+    [Fact]
     public void Addresses_match_case_insensitively_and_retired_entries_for_absent_addresses_are_kept()
     {
         var managed = Managed("fe80::1", enabled: false);
-        var plan = SystemResolverReconciler.Reconcile([managed], [Found("FE80::1")], true, new HashSet<string> { "fe80::1", "10.9.9.9" });
+        var plan = SystemResolverReconciler.Reconcile([managed], [Found("FE80::1")], true, new HashSet<string> { "FE80::1", "10.9.9.9" });
         Assert.True(plan.Targets.Single().Enabled);
         Assert.Equal(new HashSet<string> { "10.9.9.9" }, plan.Retired); // still gone: still remembered
     }

@@ -56,6 +56,12 @@ public static class SystemResolverReconciler
                 log.Add($"re-enabled {result[index].Name}");
                 changed = true;
             }
+            else if (result[index].Enabled && watchActive && retiredNow.Remove(address))
+            {
+                // Enabled by hand (or otherwise): the retired set only holds what we keep disabled.
+                log.Add($"forgot retired {result[index].Name}");
+                changed = true;
+            }
         }
 
         // Managed targets whose address is gone, or the watch is off: retire.
