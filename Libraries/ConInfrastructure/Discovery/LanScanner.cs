@@ -217,7 +217,7 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
     {
         try
         {
-            var lookup = Dns.GetHostEntryAsync(address.ToString(), ct);
+            var lookup = System.Net.Dns.GetHostEntryAsync(address.ToString(), ct);
             var winner = await Task.WhenAny(lookup, Task.Delay(1000, ct)).ConfigureAwait(false);
             return winner == lookup ? (await lookup.ConfigureAwait(false)).HostName : null;
         }

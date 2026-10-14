@@ -73,8 +73,16 @@ public static class SettingsEndpoints
                     case SettingKeys.WebhookSkipExplained:
                     case SettingKeys.EngineEnabled:
                     case SettingKeys.TracerouteAsnLookup:
+                    case SettingKeys.DnsEnabled:
                         if (value is not (null or "true" or "false"))
                             errors.Add($"{key} must be 'true' or 'false'.");
+                        break;
+                    case SettingKeys.DnsLookupNames:
+                        if (value is not null && !ConCore.Dns.DnsLookupName.TryFromJson(value, out _))
+                            errors.Add("Dns.LookupNames must be a JSON array of {\"name\", \"expected\"[]} objects.");
+                        break;
+                    case SettingKeys.DnsRetiredResolvers:
+                        errors.Add("Dns.RetiredResolvers is maintained by ConnectionWatcher, not edited.");
                         break;
                     case SettingKeys.CloneSourceUrl:
                     case SettingKeys.CloneIncludeLocalDevices:

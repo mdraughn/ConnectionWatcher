@@ -1,4 +1,5 @@
 using ConCore;
+using ConCore.Targets;
 using ConEngine;
 using ConEngine.Configuration;
 using ConEngine.Tracking;
@@ -20,6 +21,7 @@ public class WatcherHostService(
     ConfigService configService,
     SettingsStore settingsStore,
     WarmStartSeeder seeder,
+    ConInfrastructure.Dns.DnsLookupNames lookupNames,
     IPingTransceiverFactory pingFactory,
     IDomainNameResolverFactory resolverFactory,
     TimeProvider timeProvider,
@@ -169,6 +171,21 @@ public class WatcherHostService(
         }
 
         var options = await store.LoadWatcherOptionsAsync();
+
+        // The DNS probes ask for the configured lookup names plus every hostname
+        // target's name (the resolver has to resolve those anyway). Refreshed
+        // here, before the engine that will use them exists; empty when the
+        // watch is off, so a stray resolver target reports "NoLookupNames".
+        var dnsEnabled = await settingsStore.GetAsync(SettingKeys.DnsEnabled) != "false";
+        lookupNames.Replace(dnsEnabled
+            ? ConCore.Dns.DnsLookupName.FromJson(await settingsStore.GetAsync(SettingKeys.DnsLookupNames))
+                .Concat(options.Targets
+                    .Where(t => t.Enabled && t.Scope != TargetScope.Resolver && !System.Net.IPAddress.TryParse(t.Address, out _))
+                    .Select(t => new ConCore.Dns.DnsLookupName(t.Address, [])))
+                .DistinctBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList()
+            : []);
+
         var validation = new WatcherOptionsValidator().Validate(null, options);
         if (validation.Failed)
         {

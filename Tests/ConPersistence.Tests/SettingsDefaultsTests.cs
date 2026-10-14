@@ -1,3 +1,4 @@
+using ConCore.Dns;
 using ConEngine.Configuration;
 using ConPersistence.Settings;
 
@@ -25,6 +26,8 @@ public class SettingsDefaultsTests
             [SettingKeys.RetentionRunHourUtc] = "4",
             [SettingKeys.WarmRestartMaxGapMinutes] = "10",
             [SettingKeys.AnchorPool] = "Internet",
+            [SettingKeys.DnsEnabled] = "true",
+            [SettingKeys.DnsLookupNames] = DnsLookupName.ToJson(DnsLookupName.Seeded),
         }, defaults);
     }
 

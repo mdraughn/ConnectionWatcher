@@ -1,4 +1,5 @@
 using System.Globalization;
+using ConCore.Dns;
 using ConEngine.Configuration;
 
 namespace ConPersistence.Settings;
@@ -26,6 +27,8 @@ public static class SettingsDefaults
             [SettingKeys.TransitionRetentionMonths] = Invariant(persistence.TransitionRetentionMonths),
             [SettingKeys.RetentionRunHourUtc] = Invariant(persistence.RetentionRunHourUtc),
             [SettingKeys.WarmRestartMaxGapMinutes] = Invariant(WarmRestartMaxGapMinutes),
+            [SettingKeys.DnsEnabled] = "true",
+            [SettingKeys.DnsLookupNames] = DnsLookupName.ToJson(DnsLookupName.Seeded),
         };
         if (verdict.AnchorPool is { Length: > 0 } anchorPool)
             defaults[SettingKeys.AnchorPool] = anchorPool;

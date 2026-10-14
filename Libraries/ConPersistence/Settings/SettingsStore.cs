@@ -33,6 +33,15 @@ public static class SettingKeys
     public const string HeartbeatUrl = "Heartbeat.Url";
     public const string HeartbeatIntervalMinutes = "Heartbeat.IntervalMinutes";
 
+    /// <summary>"false" turns the name-resolution watch off (spec 2026-10-10). Default "true".</summary>
+    public const string DnsEnabled = "Dns.Enabled";
+    /// <summary>JSON array of {name, expected[]}: the names the resolvers are asked for.</summary>
+    public const string DnsLookupNames = "Dns.LookupNames";
+    /// <summary>Newline-separated resolver addresses the system-resolver service
+    /// itself disabled (gone from the OS list, or the watch was off), so it may
+    /// re-enable them and nothing else. Maintained by the service, not edited.</summary>
+    public const string DnsRetiredResolvers = "Dns.RetiredResolvers";
+
     /// <summary>"true" lets the traceroute page send each public hop's address
     /// to Team Cymru's IP-to-ASN DNS service to name its operator. Off by default.</summary>
     public const string TracerouteAsnLookup = "Traceroute.AsnLookup";
@@ -63,7 +72,7 @@ public static class SettingKeys
     /// <summary>Node identity, not configuration: excluded from snapshot
     /// export AND preserved locally across snapshot import — a take-over's
     /// final sync from a just-disabled source must not import Enabled=false.</summary>
-    public static readonly string[] PerNodeKeys = [EngineEnabled, CloneSourceUrl, CloneIncludeLocalDevices];
+    public static readonly string[] PerNodeKeys = [EngineEnabled, CloneSourceUrl, CloneIncludeLocalDevices, DnsRetiredResolvers];
 }
 
 /// <summary>
