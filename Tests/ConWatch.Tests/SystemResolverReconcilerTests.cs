@@ -2,7 +2,7 @@ using System.Net;
 using ConCore.Targets;
 using ConInfrastructure.NameResolution;
 using ConPersistence.Config;
-using ConWatch.Dns;
+using ConWatch.NameResolution;
 
 namespace ConWatch.Tests;
 

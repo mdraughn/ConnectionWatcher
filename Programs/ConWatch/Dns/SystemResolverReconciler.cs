@@ -2,7 +2,7 @@ using ConCore.Targets;
 using ConInfrastructure.NameResolution;
 using ConPersistence.Config;
 
-namespace ConWatch.Dns;
+namespace ConWatch.NameResolution;
 
 /// <summary>
 /// Decides what the stored targets should look like given the host's OS
