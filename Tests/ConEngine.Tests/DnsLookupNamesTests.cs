@@ -47,6 +47,23 @@ public class DnsLookupNamesTests
     }
 
     [Fact]
+    public void Null_elements_are_dropped_and_blank_text_is_valid_and_empty()
+    {
+        Assert.True(DnsLookupName.TryFromJson("[null,{\"name\":\"a.test\"}]", out var names));
+        Assert.Equal("a.test", Assert.Single(names).Name);
+        Assert.Single(DnsLookupName.FromJson("[null,{\"name\":\"a.test\"}]"));
+        Assert.True(DnsLookupName.TryFromJson("[null]", out var none));
+        Assert.Empty(none);
+
+        Assert.True(DnsLookupName.TryFromJson("", out var blank));
+        Assert.Empty(blank);
+        Assert.True(DnsLookupName.TryFromJson("   ", out var spaces));
+        Assert.Empty(spaces);
+        Assert.True(DnsLookupName.TryFromJson(null, out var nul));
+        Assert.Empty(nul);
+    }
+
+    [Fact]
     public void Next_rotates_per_resolver_and_is_null_when_empty()
     {
         var names = new DnsLookupNames();

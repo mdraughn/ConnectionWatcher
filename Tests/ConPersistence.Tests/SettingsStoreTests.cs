@@ -69,6 +69,10 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal(1, _changeSignals);
         Assert.NotNull(seen);
         Assert.True(seen!.ContainsKey(SettingKeys.DnsLookupNames));
+
+        // the service-written retired list must not trigger an engine rebuild
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.DnsRetiredResolvers] = "10.0.0.1" });
+        Assert.Equal(1, _changeSignals);
     }
 
     [Fact]

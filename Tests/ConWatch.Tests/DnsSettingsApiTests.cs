@@ -23,6 +23,14 @@ public class DnsSettingsApiTests : IDisposable
         });
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
 
+        var cleared = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { [SettingKeys.DnsLookupNames] = "" });
+        Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
+
+        var nullElement = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { [SettingKeys.DnsLookupNames] = "[null]" });
+        Assert.Equal(HttpStatusCode.NoContent, nullElement.StatusCode);
+
         var badFlag = await _client.PutAsJsonAsync("/api/v1/settings",
             new Dictionary<string, string?> { [SettingKeys.DnsEnabled] = "maybe" });
         Assert.Equal(HttpStatusCode.BadRequest, badFlag.StatusCode);

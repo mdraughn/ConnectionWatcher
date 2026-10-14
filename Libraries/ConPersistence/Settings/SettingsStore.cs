@@ -78,7 +78,8 @@ public static class SettingKeys
 /// <summary>
 /// Typed access to the Settings table. Seeded from appsettings at startup for
 /// keys not yet present; the table is authoritative afterwards. Writes to any
-/// Verdict.* key raise SettingsChanged (the host debounces an engine rebuild).
+/// Verdict.*, Engine.* or Dns.* key (except Dns.RetiredResolvers, which a
+/// service writes) raise SettingsChanged (the host debounces an engine rebuild).
 /// </summary>
 public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
 {
@@ -140,7 +141,8 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
 
         if (values.Keys.Any(k =>
                 k.StartsWith("Verdict.", StringComparison.OrdinalIgnoreCase) ||
-                k.StartsWith("Dns.", StringComparison.OrdinalIgnoreCase) ||
+                (k.StartsWith("Dns.", StringComparison.OrdinalIgnoreCase) &&
+                 !string.Equals(k, SettingKeys.DnsRetiredResolvers, StringComparison.OrdinalIgnoreCase)) ||
                 k.StartsWith("Engine.", StringComparison.OrdinalIgnoreCase)))
             SettingsChanged?.Invoke(values);
         if (values.Keys.Any(k =>

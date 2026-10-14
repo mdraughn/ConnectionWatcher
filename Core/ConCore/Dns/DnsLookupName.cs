@@ -39,13 +39,14 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
     public static IReadOnlyList<DnsLookupName> FromJson(string? json) =>
         TryFromJson(json, out var names) ? names : [];
 
-    /// <summary>False when the text is not a JSON array of objects. Blank names
-    /// and expected entries that are not IP literals are dropped, not errors.</summary>
+    /// <summary>False only when the text is not a JSON array of objects. Null or
+    /// blank text is valid and means no names. Null elements, blank names and
+    /// expected entries that are not IP literals are dropped, not errors.</summary>
     public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names)
     {
         names = [];
         if (string.IsNullOrWhiteSpace(json))
-            return false;
+            return true;
         List<Dto>? dtos;
         try
         {
@@ -58,7 +59,7 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
         if (dtos is null)
             return false;
         names = dtos
-            .Where(d => !string.IsNullOrWhiteSpace(d.Name))
+            .Where(d => d is not null && !string.IsNullOrWhiteSpace(d.Name))
             .Select(d => new DnsLookupName(
                 d.Name!.Trim(),
                 (d.Expected ?? []).Where(e => IPAddress.TryParse(e, out _)).Select(e => e.Trim()).ToList()))
