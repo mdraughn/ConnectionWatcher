@@ -23,6 +23,8 @@ Today ConnectionWatcher cannot see this. Every anchor and path hop is probed by 
 | D7 | **Create the system resolver targets on upgrade**, enabled. A read-only probe of the host's own resolver is what an upgrading user expects to get. The named upstream is only ever added by the wizard or the admin, because we cannot guess it. |
 | D8 | **Lookup names are seeded into configuration**, visible and editable, so the README's "only the traffic you configured" promise stays literally true. |
 | D9 | **MQTT internet binary goes OFF for `DnsDown`.** From the person's chair the internet is down. A new `dns` binary sensor carries the distinction for automations that care. |
+| D10 | **A managed resolver that is gone from the OS list is deleted, not kept** (2026-10-14). Its history rows stay under its old id, as for any deleted target. A roaming laptop no longer piles up disabled resolvers. The watch being turned off still only disables present resolvers. |
+| D11 | **A filtering resolver is a distinct `Filtered` state, not a lying one** (2026-10-14). Pi-hole / AdGuard blocklists answer the seeded names with `0.0.0.0`, `::`, `127.0.0.1`, NXDOMAIN or an empty answer. That is a working resolver that blocks, so the sample is a hit with `Message` `Filtered: …`, the resolver stays `Responding`, `DnsDown` never fires for it, and the `dns` summary state is `Filtered` with a `ResolverFiltered` note. A real wrong address (a captive portal's IP) stays a `WrongAnswer` miss. |
 
 Parked: asking DHCP for the LAN's DNS servers via DHCPINFORM (no lease taken). It needs a broadcast socket on port 68 and never crosses a Docker bridge, so it is a later refinement for the native Windows install and host-network NAS case, not a dependency.
 
@@ -71,7 +73,7 @@ Plans C and D landed between the first draft and now. Four points changed; the r
 - One query per sample: a hand-built DNS message (12-byte header, one question, type A, class IN, recursion desired) over UDP to port 53 of the target's address, with the profile's timeout. The parser checks the ID, QR and RCODE, and walks the answer section counting A records. Roughly 150 lines; no new dependency. Truncated or malformed replies are misses with `Message` "malformed answer". The ID is random per query and the reply must match it.
 - **Name rotation.** The factory takes an `IDnsLookupNames` provider that the engine fills from `DnsOptions.LookupNames` plus the hostnames of every enabled hostname target. Rotation is per resolver target, round-robin, so one dead authoritative zone cannot fail a resolver on its own.
 - **Hit and miss.**
-  - A seeded name carries **expected addresses**. A hit is NOERROR with at least one A record in the expected set. NXDOMAIN, an empty answer, or an address outside the set is a **miss** with `Message` "wrong answer: 10.0.0.1".
+  - A seeded name carries **expected addresses**. A hit is NOERROR with at least one A record in the expected set. A **blocked** answer (D11: every address is `0.0.0.0`, `::` or `127.0.0.1`, or NXDOMAIN, or an empty NOERROR answer) is a **hit** with `Message` `Filtered: NXDOMAIN` / `Filtered: 0.0.0.0`: the resolver works, it filters. Any other address outside the set is a **miss** with `Message` `WrongAnswer: 10.0.0.1`.
   - An admin-added name without expected addresses, and a hostname-target name: any real answer (NOERROR with or without records, NXDOMAIN) is a hit. We cannot know the right answer.
   - Timeout, SERVFAIL, REFUSED, and malformed replies are misses.
 - **`DnsResultLog`** in the engine subscribes to `PingSampleSource` and keeps the last 20 results per Resolver target (name asked, hit or miss, `Message`). The notes (§4.5) and the status `lookupNames[]` read it. It is in-memory only, like the loss windows.
@@ -83,7 +85,7 @@ Plans C and D landed between the first draft and now. Four points changed; the r
   - Windows: the `DnsAddresses` of the interface(s) that own a default route (`GetIPProperties()`, same pattern as `GatewayDiscovery`), in order, IPv4 first.
   - Linux: `nameserver` lines of `/etc/resolv.conf`, in order.
   - Returns an ordered, de-duplicated list of addresses, plus a flag per address when it is Docker's embedded resolver (`127.0.0.11`).
-- A host-side **`SystemResolverService`** (hosted after `WatcherHostService`, so the config is seeded) reconciles the list against the `SystemManaged` targets: at startup, every five minutes (the hostname refresh cadence), on `NetworkChange.NetworkAddressChanged`, and when a `Dns.*` setting changes. The engine itself is rebuilt from stored config on every change, so the reconcile lives in the host, not the engine. New address → create a Resolver-scope target, `Probe = dns`, profile `Resolver`, `SystemManaged = true`, no parent, name "Your resolver 10.1.10.1" (or "Docker's resolver" for `127.0.0.11`). Address gone, or the watch off → disable the target and remember its address in `Dns.RetiredResolvers`. Address back → re-enable only an address the service retired; an admin-disabled system resolver stays disabled. Every change goes through `ConfigService.EditDocumentAsync`, so the engine rebuilds the way it does for an edit.
+- A host-side **`SystemResolverService`** (hosted after `WatcherHostService`, so the config is seeded) reconciles the list against the `SystemManaged` targets: at startup, every five minutes (the hostname refresh cadence), on `NetworkChange.NetworkAddressChanged`, and when a `Dns.*` setting changes. The engine itself is rebuilt from stored config on every change, so the reconcile lives in the host, not the engine. New address → create a Resolver-scope target, `Probe = dns`, profile `Resolver`, `SystemManaged = true`, no parent, name "Your resolver 10.1.10.1" (or "Docker's resolver" for `127.0.0.11`). Address gone → **delete** the target (D10; the next appearance creates a fresh one). Watch off → disable every present managed target and remember its address in `Dns.RetiredResolvers`; watch on → re-enable only an address the service retired; an admin-disabled system resolver stays disabled. Every change goes through `ConfigService.EditDocumentAsync`, so the engine rebuilds the way it does for an edit.
 - The upstream resolver(s) are ordinary Resolver-scope targets with `SystemManaged = false`, named by the admin or wizard ("1.1.1.1 directly").
 
 ### 4.4 The verdict
@@ -104,6 +106,7 @@ The coordinator today: `Classify` decides reachability first (one counted anchor
   - every upstream resolver Down, or none configured → kind `NoResolver`: "No resolver is answering, though the internet is reachable." When none is configured the detail adds "Name a public resolver in Config → DNS so ConnectionWatcher can tell your resolver from everyone's."
 - **Interaction with the path (R1).** Resolvers have no path, so they are never a frontier witness, never `Unreachable`, never blamed by `Quality`'s shallowest-losing-hop rule, and never subject to the probe-only veto. Router dead: anchors Down within the burst, `LinkDown` blamed on the router, the resolver's own Down is just one more Down target.
 - **Degraded, not down.** The `dns` summary state (§5.1) is `Degraded` when some system resolver is `Faltering`/`Recovering`, or some but not all are Down. The verdict is unchanged by `Degraded`.
+- **Filtered, not down (D11).** The `dns` summary state is `Filtered` when every answering system resolver's recent results for the seeded names are `Filtered: …` (at least 3 of the last 10 seeded-name asks per resolver, none `Answered`). The verdict is unchanged by `Filtered`; the `ResolverFiltered` note explains it.
 
 ### 4.5 Notes (admin-facing, never verdict)
 
@@ -112,7 +115,8 @@ Added to `ModelCheckCoordinator` as `ModelWarningKind` values with `ModelConditi
 | Kind | Key | Condition | Message (sketch) |
 |---|---|---|---|
 | `ResolverPartial` | `resolver-partial:{id}` | Some but not all enabled system resolvers are Down | "Your secondary resolver 10.1.10.2 isn't answering; 10.1.10.1 is." |
-| `ResolverLying` | `resolver-lying:{id}` | In the `DnsResultLog`, 3 of the last 10 results for this resolver are "wrong answer" | "Your resolver answered dns.google with 10.0.0.1 — a captive portal or interception?" |
+| `ResolverLying` | `resolver-lying:{id}` | In the `DnsResultLog`, 3 of the last 10 results for this resolver are `WrongAnswer: …` | "Your resolver answered dns.google with 10.0.0.1 — a captive portal or interception?" |
+| `ResolverFiltered` | `resolver-filtered:{id}` | In the `DnsResultLog`, 3 of the last 10 seeded-name results for this resolver are `Filtered: …` and none is `Answered` | "Your resolver blocks dns.google (answered 0.0.0.0) — a Pi-hole or AdGuard blocklist? Name resolution still works; the seeded lookup names can't prove it. Add a lookup name your resolver allows." |
 | `UpstreamResolverDown` | `upstream-resolver-down:{id}` | A system resolver answers but this upstream resolver is Down | "1.1.1.1 isn't answering direct queries; your resolver is fine." |
 | `NameUnresolvable` | `name-unresolvable` (no target) | One lookup name missed its last 3 asks on every answering resolver while other names hit | "example.com isn't resolving anywhere." |
 
@@ -132,7 +136,7 @@ Added to `ModelCheckCoordinator` as `ModelWarningKind` values with `ModelConditi
   ```json
   {
     "watched": true,
-    "state": "Ok | Degraded | Down | Unknown",
+    "state": "Ok | Degraded | Filtered | Down | Unknown",
     "systemResolvers": [{ "id": "...", "address": "10.1.10.1", "label": "Your resolver 10.1.10.1", "state": "Responding", "detail": null, "enabled": true }],
     "upstreamResolvers": [{ "id": "...", "address": "1.1.1.1", "label": "1.1.1.1 directly", "state": "Responding", "detail": null }],
     "blame": { "kind": "YourResolver | NoResolver", "message": "...", "resolvers": ["10.1.10.1"] },
@@ -178,10 +182,10 @@ Added to `ModelCheckCoordinator` as `ModelWarningKind` values with `ModelConditi
 - **Link down.** Everything Down; `LinkDown` with "name lookups are failing too". Never `DnsDown`, because reachability is decided first.
 - **Router dead, resolver is the router.** Anchors Down within the burst; `LinkDown` blamed on the router. The resolver's Down is its own transition, filtered from webhooks like a Local target's, and does not become a second incident. It is never a witness for the router (R1).
 - **Two system resolvers, one dead.** `Healthy`, `ResolverPartial` note, `dns` state Degraded.
-- **Pi-hole answers NXDOMAIN for a seeded name** (blocklist includes it, unusual but possible). The name misses on that resolver; rotation keeps the others passing; `ResolverLying`/`NameUnresolvable` surfaces it; the admin removes the name. Never `DnsDown` on its own, because one name in four cannot carry the window below the Down threshold.
-- **Captive portal.** Every seeded name answers with the portal address: misses on all, `DnsDown` with `ResolverLying` explaining it.
+- **Pi-hole / AdGuard blocks the seeded names** (DoH-bypass blocklists block exactly `dns.google`, `one.one.one.one`, …). Each answer is `0.0.0.0` or NXDOMAIN: a `Filtered: …` hit (D11). The resolver stays `Responding`, the `dns` state is `Filtered`, `ResolverFiltered` explains it and suggests adding an allowed lookup name. Never `DnsDown`.
+- **Captive portal.** Every seeded name answers with the portal's real address: `WrongAnswer` misses on all, `DnsDown` with `ResolverLying` explaining it. (A portal that answers `0.0.0.0` instead reads as `Filtered`; the anchors are down behind a portal anyway, so the verdict is `LinkDown`.)
 - **Lookup list emptied and no hostname targets.** Resolvers idle, `dns-not-watched`, `dns.watched = false`, binary sensor unavailable.
-- **DHCP renew changes the resolver.** The network-change event triggers a reconcile: old target retired (disabled, history kept), new one created and burst.
+- **DHCP renew changes the resolver.** The network-change event triggers a reconcile: the old target is deleted (its history rows stay under its id), a new one is created and burst.
 - **Windows DoH.** Probe still runs over port 53; `dns-over-https` explains the gap.
 - **Warm start.** Resolver targets are seeded like any other; a seeded Down resolver re-proves on its own evidence. A seeded `DnsDown` verdict is adopted silently like any seeded verdict and reclassified once at start.
 - **Engine rebuild.** `DnsResultLog` and the ledger's standard grace handle the notes; no DNS note takes longer than a minute to re-prove.
