@@ -78,8 +78,10 @@ public static class SettingsEndpoints
                             errors.Add($"{key} must be 'true' or 'false'.");
                         break;
                     case SettingKeys.DnsLookupNames:
-                        if (value is not null && !ConCore.Dns.DnsLookupName.TryFromJson(value, out _))
-                            errors.Add("Dns.LookupNames must be a JSON array of {\"name\", \"expected\"[]} objects.");
+                        if (value is not null && !ConCore.Dns.DnsLookupName.TryFromJson(value, out _, out var badName))
+                            errors.Add(badName is not null
+                                ? $"Dns.LookupNames: '{badName}' is not a valid host name (ASCII letters, digits, hyphens and dots; labels of 1-63 characters; at most 253 in all)."
+                                : "Dns.LookupNames must be a JSON array of {\"name\", \"expected\"[]} objects.");
                         break;
                     case SettingKeys.DnsRetiredResolvers:
                         errors.Add("Dns.RetiredResolvers is maintained by ConnectionWatcher, not edited.");

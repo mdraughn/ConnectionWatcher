@@ -23,6 +23,17 @@ public class DnsQueryTransceiverTests
         new(IPAddress.Loopback, names, CancellationToken.None, server.Port);
 
     [Fact]
+    public async Task A_name_the_wire_format_cannot_carry_is_BadName_and_nothing_is_sent()
+    {
+        using var server = new FakeDnsServer();
+        using var probe = Probe(server, Names(new DnsLookupName("a..b", [])));
+        var result = await probe.PingAsync(2000);
+        Assert.False(result.Success);
+        Assert.Equal("BadName", result.Message);
+        Assert.Equal(0, server.Received);
+    }
+
+    [Fact]
     public async Task An_expected_address_is_Answered()
     {
         using var server = new FakeDnsServer();

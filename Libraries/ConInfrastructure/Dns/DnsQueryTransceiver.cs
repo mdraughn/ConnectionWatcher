@@ -26,13 +26,21 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
             return new PingResult(ipAddress, false, 0, "NoLookupNames");
 
         var id = (ushort)Random.Shared.Next(1, ushort.MaxValue);
-        var query = DnsMessage.BuildQuery(id, lookup.Name);
         var stopwatch = Stopwatch.StartNew();
         using var udp = new UdpClient(ipAddress.AddressFamily);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(timeoutMs);
         try
         {
+            byte[] query;
+            try
+            {
+                query = DnsMessage.BuildQuery(id, lookup.Name);
+            }
+            catch (ArgumentException)
+            {
+                return new PingResult(ipAddress, false, 0, "BadName"); // a name the wire format cannot carry
+            }
             udp.Connect(new IPEndPoint(ipAddress, port));
             await udp.SendAsync(query, timeout.Token).ConfigureAwait(false);
             while (true)

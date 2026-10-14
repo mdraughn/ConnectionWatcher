@@ -39,6 +39,11 @@ public class DnsSettingsApiTests : IDisposable
             new Dictionary<string, string?> { [SettingKeys.DnsLookupNames] = "not json" });
         Assert.Equal(HttpStatusCode.BadRequest, badJson.StatusCode);
 
+        var badName = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { [SettingKeys.DnsLookupNames] = "[{\"name\":\"a..b\"}]" });
+        Assert.Equal(HttpStatusCode.BadRequest, badName.StatusCode);
+        Assert.Contains("a..b", await badName.Content.ReadAsStringAsync());
+
         var retired = await _client.PutAsJsonAsync("/api/v1/settings",
             new Dictionary<string, string?> { [SettingKeys.DnsRetiredResolvers] = "10.0.0.1" });
         Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);

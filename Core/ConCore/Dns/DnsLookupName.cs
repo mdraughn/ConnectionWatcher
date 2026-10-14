@@ -36,15 +36,24 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
         JsonSerializer.Serialize(names.Select(n => new Dto(n.Name, n.Expected.Count > 0 ? n.Expected.ToList() : null)), Json);
 
     /// <summary>Parses the settings-row form; null, blank or invalid JSON reads as no names.</summary>
-    public static IReadOnlyList<DnsLookupName> FromJson(string? json) =>
-        TryFromJson(json, out var names) ? names : [];
+    public static IReadOnlyList<DnsLookupName> FromJson(string? json)
+    {
+        TryFromJson(json, out var names, out _);
+        return names; // an invalid name is skipped here; the settings PUT rejects it up front
+    }
 
     /// <summary>False only when the text is not a JSON array of objects. Null or
     /// blank text is valid and means no names. Null elements, blank names and
     /// expected entries that are not IP literals are dropped, not errors.</summary>
-    public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names)
+    public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names) =>
+        TryFromJson(json, out names, out _);
+
+    /// <summary>As above, and also false when a name is not a valid host name (see
+    /// <see cref="IsValidName"/>); <paramref name="badName"/> then holds the first offender.</summary>
+    public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names, out string? badName)
     {
         names = [];
+        badName = null;
         if (string.IsNullOrWhiteSpace(json))
             return true;
         List<Dto>? dtos;
@@ -58,12 +67,34 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
         }
         if (dtos is null)
             return false;
-        names = dtos
+        var parsed = dtos
             .Where(d => d is not null && !string.IsNullOrWhiteSpace(d.Name))
             .Select(d => new DnsLookupName(
                 d.Name!.Trim(),
                 (d.Expected ?? []).Where(e => IPAddress.TryParse(e, out _)).Select(e => e.Trim()).ToList()))
             .ToList();
+        badName = parsed.FirstOrDefault(n => !IsValidName(n.Name))?.Name;
+        names = parsed.Where(n => IsValidName(n.Name)).ToList();
+        return badName is null;
+    }
+
+    /// <summary>ASCII letters, digits, hyphen and dot only; labels 1-63 characters, none
+    /// empty and none starting or ending with a hyphen; at most 253 characters in all.
+    /// A single trailing dot (the root) is tolerated.</summary>
+    public static bool IsValidName(string name)
+    {
+        if (name.EndsWith('.'))
+            name = name[..^1];
+        if (name.Length is 0 or > 253)
+            return false;
+        foreach (var label in name.Split('.'))
+        {
+            if (label.Length is 0 or > 63 || label[0] == '-' || label[^1] == '-')
+                return false;
+            foreach (var c in label)
+                if (!(c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-'))
+                    return false;
+        }
         return true;
     }
 

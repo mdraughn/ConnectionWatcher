@@ -46,6 +46,40 @@ public class DnsLookupNamesTests
         Assert.Equal(["1.2.3.4"], names[0].Expected);
     }
 
+    [Theory]
+    [InlineData("a..b")]
+    [InlineData("héllo.test")]
+    [InlineData("-a.test")]
+    [InlineData("a-.test")]
+    [InlineData("bad_name.test")]
+    public void Invalid_names_are_rejected_and_named(string name)
+    {
+        var json = DnsLookupName.ToJson([new DnsLookupName("ok.test", []), new DnsLookupName(name, [])]);
+        Assert.False(DnsLookupName.TryFromJson(json, out var names, out var bad));
+        Assert.Equal(name, bad);
+        Assert.Equal("ok.test", Assert.Single(names).Name); // FromJson keeps the valid ones
+    }
+
+    [Fact]
+    public void A_64_character_label_and_a_254_character_name_are_rejected()
+    {
+        var longLabel = new string('a', 64) + ".test";
+        var longName = string.Join('.', Enumerable.Repeat(new string('a', 62), 4)) + ".bc";
+        Assert.Equal(254, longName.Length);
+        Assert.False(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(longLabel, [])]), out _));
+        Assert.False(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(longName, [])]), out _));
+        var exactly253 = string.Join('.', new string('a', 63), new string('a', 62), new string('a', 62), new string('b', 63));
+        Assert.Equal(253, exactly253.Length);
+        Assert.True(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(exactly253, [])]), out _));
+    }
+
+    [Fact]
+    public void A_hyphenated_multi_label_name_is_accepted()
+    {
+        Assert.True(DnsLookupName.TryFromJson("[{\"name\":\"sub-domain.example-1.test\"}]", out var names));
+        Assert.Equal("sub-domain.example-1.test", Assert.Single(names).Name);
+    }
+
     [Fact]
     public void Null_elements_are_dropped_and_blank_text_is_valid_and_empty()
     {
