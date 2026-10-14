@@ -1,0 +1,82 @@
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+
+namespace ConInfrastructure.NameResolution;
+
+/// <summary>One resolver the host is configured to use; Docker's embedded forwarder is flagged for naming.</summary>
+public sealed record SystemResolver(IPAddress Address, bool IsDockerEmbedded);
+
+public interface ISystemResolverSource
+{
+    /// <summary>The resolvers this host resolves through, in the OS's order, IPv4 first. Never throws.</summary>
+    IReadOnlyList<SystemResolver> Read();
+}
+
+/// <summary>
+/// The way this host resolves (spec 2026-10-10 §4.3, D1): Windows' DNS
+/// addresses on the interfaces that own a default route, or Linux's
+/// resolv.conf nameservers. Inside a Docker bridge network that is 127.0.0.11,
+/// Docker's forwarder, which forwards to the host's resolvers — still "the way
+/// this host resolves".
+/// </summary>
+public sealed class SystemResolverSource(Func<IEnumerable<IPAddress>> raw) : ISystemResolverSource
+{
+    private static readonly IPAddress DockerEmbedded = IPAddress.Parse("127.0.0.11");
+
+    public SystemResolverSource() : this(OperatingSystem.IsWindows() ? WindowsResolvers : LinuxResolvers)
+    {
+    }
+
+    public IReadOnlyList<SystemResolver> Read()
+    {
+        IEnumerable<IPAddress> addresses;
+        try
+        {
+            addresses = raw().ToList();
+        }
+        catch (Exception)
+        {
+            return []; // no interfaces, no resolv.conf: nothing found, not a crash
+        }
+        return addresses
+            .Distinct()
+            .OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1) // stable: keeps OS order within a family
+            .Select(a => new SystemResolver(a, a.Equals(DockerEmbedded)))
+            .ToList();
+    }
+
+    internal static IEnumerable<IPAddress> WindowsResolvers()
+    {
+        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (nic.OperationalStatus != OperationalStatus.Up ||
+                nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                continue;
+            var properties = nic.GetIPProperties();
+            if (!properties.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork))
+                continue; // only interfaces that carry a default route resolve for the host
+            foreach (var address in properties.DnsAddresses)
+                yield return address;
+        }
+    }
+
+    internal static IEnumerable<IPAddress> LinuxResolvers() =>
+        ParseResolvConf(File.ReadLines("/etc/resolv.conf"));
+
+    /// <summary>"nameserver X" lines, in order; comments, options and unparsable entries are skipped;
+    /// an IPv6 zone suffix ("%eth0") is dropped.</summary>
+    internal static IEnumerable<IPAddress> ParseResolvConf(IEnumerable<string> lines)
+    {
+        foreach (var raw in lines)
+        {
+            var line = raw.Split('#', 2)[0].Split(';', 2)[0].Trim();
+            var parts = line.Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2 || !parts[0].Equals("nameserver", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var text = parts[1].Split('%', 2)[0];
+            if (IPAddress.TryParse(text, out var address))
+                yield return address;
+        }
+    }
+}
