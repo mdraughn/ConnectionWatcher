@@ -50,6 +50,8 @@ public static class ConWatchServices
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ConInfrastructure.NameResolution.DnsLookupNames>();
         services.AddSingleton<ConCore.Dns.IDnsLookupNames>(sp => sp.GetRequiredService<ConInfrastructure.NameResolution.DnsLookupNames>());
+        services.AddSingleton<ConInfrastructure.NameResolution.ISystemResolverSource, ConInfrastructure.NameResolution.SystemResolverSource>();
+        services.AddSingleton<NameResolution.SystemResolverService>();
         services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
         services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
@@ -188,6 +190,8 @@ public static class ConWatchServices
         services.AddHostedService<ConNotify.HeartbeatNotifier>();
         services.AddHostedService(sp => sp.GetRequiredService<StatusBroadcaster>());
         services.AddHostedService(sp => sp.GetRequiredService<WatcherHostService>());
+        // After WatcherHostService: the config is seeded and the Resolver profile exists.
+        services.AddHostedService(sp => sp.GetRequiredService<NameResolution.SystemResolverService>());
 
         // Engine observers attach in THIS order on every engine start and detach
         // on stop/disable; recorders first so nothing is emitted before they listen.

@@ -15,6 +15,7 @@ namespace ConWatch.Tests;
 public class ConWatchFactory : WebApplicationFactory<Program>
 {
     public FakePingTransceiverFactory Pings { get; } = new();
+    public FakeSystemResolverSource Resolvers { get; } = new();
     public string DbPath { get; }
     private readonly string? _ownedDir;
 
@@ -48,6 +49,8 @@ public class ConWatchFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IPingTransceiverFactory>();
             services.AddSingleton<IPingTransceiverFactory>(Pings);
+            services.RemoveAll<ConInfrastructure.NameResolution.ISystemResolverSource>();
+            services.AddSingleton<ConInfrastructure.NameResolution.ISystemResolverSource>(Resolvers);
             TestServices?.Invoke(services);
         });
     }
