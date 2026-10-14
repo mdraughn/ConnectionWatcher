@@ -28,7 +28,7 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
 
             var probeValid = ProbeSpec.TryParse(t.Probe, out var probe);
             if (!probeValid)
-                failures.Add($"Target '{t.Name}' has an invalid Probe '{t.Probe}' (expected 'tcp:<port>').");
+                failures.Add($"Target '{t.Name}' has an invalid Probe '{t.Probe}' (expected 'tcp:<port>' or 'dns').");
             else if (!ProbePolicy.IsAllowed(t.Address ?? "", probe, out var probeReason))
                 failures.Add($"Target '{t.Name}': {probeReason}");
 

@@ -83,4 +83,29 @@ public class ProbeSpecTests
     {
         Assert.False(ConCore.ProbePolicy.IsPrivate("100.64.0.1"));
     }
+
+    [Theory]
+    [InlineData("dns")]
+    [InlineData("DNS")]
+    [InlineData(" dns ")]
+    public void Dns_parses_and_prints_as_dns(string text)
+    {
+        Assert.True(ProbeSpec.TryParse(text, out var spec));
+        Assert.Equal(new ProbeSpec(ProbeKind.Dns), spec);
+        Assert.Equal("dns", spec.ToString());
+        Assert.Equal("dns", spec.ToConfigString());
+    }
+
+    [Theory]
+    [InlineData("dns:53")]
+    [InlineData("dns:")]
+    public void Dns_takes_no_port(string text) =>
+        Assert.False(ProbeSpec.TryParse(text, out _));
+
+    [Theory]
+    [InlineData("8.8.8.8")]
+    [InlineData("10.1.10.1")]
+    [InlineData("dns.example.net")]
+    public void Dns_is_allowed_everywhere(string address) =>
+        Assert.True(ProbePolicy.IsAllowed(address, new ProbeSpec(ProbeKind.Dns), out _));
 }

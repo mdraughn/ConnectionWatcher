@@ -265,11 +265,16 @@ public class ModelCheckCoordinator : IDisposable
         found[key] = new ModelCondition(key, kind, target?.Id, target?.Name, message);
     }
 
-    /// <summary>"tcp/80" for a TCP probe, "ping" for ICMP echo.</summary>
+    /// <summary>"tcp/80" for a TCP probe, "dns" for a DNS query, "ping" for ICMP echo.</summary>
     private static string ProbeText(Target target)
     {
         ProbeSpec.TryParse(target.Probe, out var probe);
-        return probe.Kind == ProbeKind.Tcp ? $"tcp/{probe.Port}" : "ping";
+        return probe.Kind switch
+        {
+            ProbeKind.Tcp => $"tcp/{probe.Port}",
+            ProbeKind.Dns => "dns",
+            _ => "ping",
+        };
     }
 
     /// <summary>Same discipline as VerdictCoordinator: TryEnter, so a thread

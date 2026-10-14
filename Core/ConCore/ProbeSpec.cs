@@ -3,17 +3,19 @@ using System.Net.Sockets;
 
 namespace ConCore;
 
-public enum ProbeKind { Icmp, Tcp }
+public enum ProbeKind { Icmp, Tcp, Dns }
 
 /// <summary>
-/// How a target is probed: ICMP echo (the default) or a TCP connect where
-/// any stack response — SYN-ACK or RST — counts as a reply. Stored in
-/// configuration as one optional string ("tcp:80"); absent means ICMP, so
-/// every pre-existing config, snapshot, and seed is valid unchanged.
+/// How a target is probed: ICMP echo (the default), a TCP connect where
+/// any stack response — SYN-ACK or RST — counts as a reply, or a DNS query
+/// (UDP 53) where a well-formed answer counts as a reply. Stored in
+/// configuration as one optional string ("tcp:80", "dns"); absent means
+/// ICMP, so every pre-existing config, snapshot, and seed is valid unchanged.
 /// </summary>
 public readonly record struct ProbeSpec(ProbeKind Kind, int Port = 0)
 {
     public static ProbeSpec Icmp => default;
+    public static ProbeSpec Dns => new(ProbeKind.Dns);
 
     public static bool TryParse(string? text, out ProbeSpec spec)
     {
@@ -23,6 +25,11 @@ public readonly record struct ProbeSpec(ProbeKind Kind, int Port = 0)
         var parts = text.Trim().ToLowerInvariant().Split(':');
         if (parts is ["icmp"])
             return true;
+        if (parts is ["dns"])
+        {
+            spec = Dns;
+            return true;
+        }
         if (parts is ["tcp", var portText] &&
             int.TryParse(portText, out var port) && port is >= 1 and <= 65535)
         {
@@ -32,7 +39,12 @@ public readonly record struct ProbeSpec(ProbeKind Kind, int Port = 0)
         return false;
     }
 
-    public override string ToString() => Kind == ProbeKind.Tcp ? $"tcp:{Port}" : "icmp";
+    public override string ToString() => Kind switch
+    {
+        ProbeKind.Tcp => $"tcp:{Port}",
+        ProbeKind.Dns => "dns",
+        _ => "icmp",
+    };
 
     /// <summary>The storage form: null for the ICMP default.</summary>
     public string? ToConfigString() => Kind == ProbeKind.Icmp ? null : ToString();

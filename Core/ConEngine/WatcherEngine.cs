@@ -321,8 +321,9 @@ public class WatcherEngine
         ProbeSpec.TryParse(monitor.Target.Probe, out var probe);
         // Bursts shorten the timeout — but a refused TCP connect takes ~2s to
         // surface on Windows (the stack retries after the RST), so TCP probes
-        // keep enough budget to classify Refused as a reply during bursts.
-        var burstCapMs = probe.Kind == ProbeKind.Tcp ? 2500 : 1000;
+        // keep enough budget to classify Refused as a reply during bursts. A
+        // recursive DNS answer can take a second or two when nothing is cached.
+        var burstCapMs = probe.Kind switch { ProbeKind.Tcp => 2500, ProbeKind.Dns => 2000, _ => 1000 };
         _manager!.GetOrCreateController(monitor.Target.Id, ip, probe, monitor.Discipline,
             () => monitor.Discipline.IsBurstActive ? Math.Min(steadyTimeoutMs, burstCapMs) : steadyTimeoutMs);
     }
