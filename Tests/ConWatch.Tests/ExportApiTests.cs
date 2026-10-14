@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using ConPersistence;
 using ConPersistence.Entities;
@@ -79,6 +80,23 @@ public class ExportApiTests : IDisposable
         json.EnsureSuccessStatusCode();
         var rows = JsonSerializer.Deserialize<JsonElement>(await json.Content.ReadAsStringAsync());
         Assert.Equal(1, rows.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Config_export_leaves_out_system_managed_resolvers()
+    {
+        _factory.Resolvers.Set("10.0.0.53");
+        await _factory.Services.GetRequiredService<ConWatch.NameResolution.SystemResolverService>()
+            .ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () =>
+            (await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"))!.Any(t => t.SystemManaged));
+
+        var config = await _client.GetFromJsonAsync<ConPersistence.Config.ConfigDocument>("/api/v1/config/export");
+        var snapshot = await _client.GetFromJsonAsync<JsonElement>("/api/v1/export/snapshot");
+
+        Assert.DoesNotContain(config!.Targets, t => t.SystemManaged);
+        Assert.DoesNotContain(snapshot.GetProperty("config").GetProperty("targets").EnumerateArray(),
+            t => t.GetProperty("systemManaged").GetBoolean());
     }
 
     [Fact]

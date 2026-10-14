@@ -48,7 +48,7 @@ public record TargetDto
 
     /// <summary>Created and retired by ConnectionWatcher from the host's OS resolver
     /// list. Read-only through the targets API: the flag is ignored on create and
-    /// update. A missing value (older clients/snapshots) means false.</summary>
+    /// preserved on update (a managed row stays managed, a plain row stays plain). A missing value (older clients/snapshots) means false.</summary>
     public bool SystemManaged { get; init; }
 }
 

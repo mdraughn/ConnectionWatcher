@@ -513,6 +513,32 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task The_API_path_cannot_promote_an_existing_target_to_system_managed()
+    {
+        await _store.SeedAsync(null);
+        var created = await _service.UpsertTargetAsync(ManagedResolver() with { SystemManaged = false });
+        Assert.True(created.Success, string.Join("; ", created.Errors ?? []));
+
+        var promote = await _service.UpsertTargetAsync(ManagedResolver(created.Id) with { SystemManaged = true });
+
+        Assert.True(promote.Success, string.Join("; ", promote.Errors ?? []));
+        Assert.False((await _store.ExportAsync()).Targets.Single().SystemManaged);
+    }
+
+    [Fact]
+    public async Task Import_strips_system_managed_targets_from_the_incoming_document()
+    {
+        var doc = (await _store.ExportAsync()) with { };
+        doc.Targets.Add(ManagedResolver());
+
+        var result = await _service.ImportAsync(doc);
+
+        Assert.True(result.Success, string.Join("; ", result.Errors ?? []));
+        Assert.DoesNotContain((await _store.ExportAsync()).Targets, t => t.SystemManaged);
+        Assert.Equal(4, (await _store.ExportAsync()).Targets.Count);
+    }
+
+    [Fact]
     public async Task The_API_path_cannot_create_a_system_managed_target()
     {
         await _store.SeedAsync(null);

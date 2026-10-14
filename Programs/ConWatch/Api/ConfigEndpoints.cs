@@ -53,7 +53,12 @@ public static class ConfigEndpoints
         pools.MapDelete("/{id:guid}", async (Guid id, ConfigService service) =>
             (await service.DeletePoolAsync(id)).ToHttp());
 
-        api.MapGet("/config/export", async (ConfigStore store) => await store.ExportAsync());
+        api.MapGet("/config/export", async (ConfigStore store) =>
+        {
+            // System resolvers belong to this host (spec 2026-10-10 §5.1).
+            var doc = await store.ExportAsync();
+            return doc with { Targets = doc.Targets.Where(t => !t.SystemManaged).ToList() };
+        });
         api.MapPost("/config/import", async (ConfigDocument doc, ConfigService service) =>
             (await service.ImportAsync(doc)).ToHttp());
     }

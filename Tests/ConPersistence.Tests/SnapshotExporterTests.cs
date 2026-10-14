@@ -1,5 +1,6 @@
 using System.Data.Common;
 using ConPersistence.Config;
+using ConPersistence.Entities;
 using ConPersistence.Settings;
 using ConPersistence.Snapshots;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -50,6 +51,39 @@ public class SnapshotExporterTests
 
         Assert.Equal("2", snapshot.Settings["Verdict.WeatherThreshold"]);
         Assert.Equal("192.168.1.1", Assert.Single(snapshot.Config.Targets).Address); // same moment as the settings
+    }
+
+    [Fact]
+    public async Task System_managed_targets_and_what_was_recorded_for_them_are_left_out()
+    {
+        using var files = new FileDbFactory();
+        await files.PrepareAsync();
+        var writer = new ConfigService(files, new ConfigStore(files));
+        Assert.True((await writer.ImportAsync(Home("192.168.1.1"))).Success);
+        Assert.True((await writer.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto
+            {
+                Name = "Your resolver 10.0.0.53", Address = "10.0.0.53", Profile = "Resolver", Probe = "dns",
+                Scope = ConCore.Targets.TargetScope.Resolver, SystemManaged = true,
+            });
+            return ConfigResult.Ok();
+        })).Success);
+        var managedId = (await new ConfigStore(files).ExportAsync()).Targets.Single(t => t.SystemManaged).Id!.Value;
+        await using (var db = files.CreateDbContext())
+        {
+            db.Transitions.Add(new TransitionRow
+            {
+                TimestampUtc = DateTime.UtcNow, SubjectId = managedId, SubjectName = "Your resolver 10.0.0.53",
+                FromState = "Starting", ToState = "Up", Trigger = "test",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var snapshot = await SnapshotExporter.ExportAsync(files, new ConfigStore(files), TimeProvider.System, includeSecrets: false);
+
+        Assert.Equal("Router", Assert.Single(snapshot.Config.Targets).Name);
+        Assert.DoesNotContain(snapshot.Transitions, t => t.SubjectId == managedId);
     }
 
     [Fact]

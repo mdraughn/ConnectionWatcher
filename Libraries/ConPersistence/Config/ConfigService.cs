@@ -116,12 +116,14 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         }
 
         TargetRow row;
+        var wasManaged = false;
         if (dto.Id is { } id)
         {
             var existing = await db.Targets.FindAsync(id);
             if (existing is null)
                 return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No target with id {id}.");
             row = existing;
+            wasManaged = existing.SystemManaged;
 
             if (existing.SystemManaged)
             {
@@ -174,7 +176,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         row.CopyFrom(dto, profile.Id, parentId);
         // The flag is the reconciler's (EditDocumentAsync), never the API's: a
         // new row is never managed, an existing row keeps what it had.
-        row.SystemManaged = dto.Id is not null && row.SystemManaged;
+        row.SystemManaged = wasManaged;
         if (discovery is not null)
         {
             discovery.Status = DiscoveryStatus.Adopted;
@@ -294,6 +296,10 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
     /// <summary>Validate-then-replace the whole configuration atomically.</summary>
     public async Task<ConfigResult> ImportAsync(ConfigDocument doc)
     {
+        // A foreign node's system resolvers never come in (spec 2026-10-10 §5.1).
+        if (doc.Targets.Any(t => t.SystemManaged))
+            doc = doc with { Targets = doc.Targets.Where(t => !t.SystemManaged).ToList() };
+
         // Validate the incoming document before touching the database.
         var descriptionErrors = doc.Profiles.Select(DescriptionError).Where(e => e is not null).ToArray();
         if (descriptionErrors.Length > 0)

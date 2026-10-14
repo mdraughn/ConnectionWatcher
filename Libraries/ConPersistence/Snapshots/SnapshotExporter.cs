@@ -37,6 +37,7 @@ public static class SnapshotExporter
             Glitches = await db.Glitches.AsNoTracking().OrderBy(g => g.Id).ToListAsync(ct),
         };
         await readSnapshot.CommitAsync(ct);
-        return snapshot;
+        // System resolvers belong to this host (spec 2026-10-10 §5.1).
+        return SnapshotFilter.WithoutSystemManaged(snapshot);
     }
 }

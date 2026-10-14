@@ -238,29 +238,10 @@ public class CloneService(IHttpClientFactory httpFactory,
     /// glitches recorded for them. Pools and the verdict cannot reference Local targets
     /// (validator rule), so nothing else needs rewriting.</summary>
     internal static Snapshot WithoutLocalDevices(Snapshot snapshot)
-        => Without(snapshot, t => t.Scope == TargetScope.Local);
+        => SnapshotFilter.Without(snapshot, t => t.Scope == TargetScope.Local);
 
-    /// <summary>System resolvers are the SOURCE host's; the destination's
-    /// SystemResolverService regenerates its own (spec 2026-10-10 §5.1).</summary>
     internal static Snapshot WithoutSystemManaged(Snapshot snapshot)
-        => Without(snapshot, t => t.SystemManaged);
-
-    private static Snapshot Without(Snapshot snapshot, Func<TargetDto, bool> drop)
-    {
-        var droppedIds = snapshot.Config.Targets
-            .Where(t => drop(t) && t.Id is not null)
-            .Select(t => t.Id!.Value).ToHashSet();
-        return snapshot with
-        {
-            Config = snapshot.Config with
-            {
-                Targets = snapshot.Config.Targets.Where(t => !drop(t)).ToList(),
-            },
-            Transitions = snapshot.Transitions.Where(t => !droppedIds.Contains(t.SubjectId)).ToList(),
-            Rollups = snapshot.Rollups.Where(r => !droppedIds.Contains(r.TargetId)).ToList(),
-            Glitches = snapshot.Glitches.Where(g => !droppedIds.Contains(g.TargetId)).ToList(),
-        };
-    }
+        => SnapshotFilter.WithoutSystemManaged(snapshot);
 
     private static object Summary(Snapshot snapshot, bool includeSecrets, int localDevicesSkipped = 0) => new
     {
