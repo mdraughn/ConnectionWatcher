@@ -378,3 +378,6 @@ testdata/*.json
 
 # Code-signing tools fetched by deploy/windows/Get-SigningTools.ps1
 tools/signing/
+
+# Claude Code worktrees (native EnterWorktree location)
+.claude/worktrees/
