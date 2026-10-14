@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;
@@ -39,7 +40,8 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
         var result = await config.EditDocumentAsync(doc =>
         {
             string? ByAddress(string address) => doc.Targets
-                .FirstOrDefault(t => t.Address.Equals(address, StringComparison.OrdinalIgnoreCase))?.Name;
+                .FirstOrDefault(t => t.Scope == TargetScope.Verdict
+                    && t.Address.Equals(address, StringComparison.OrdinalIgnoreCase))?.Name;
             bool NameTaken(string name) => doc.Targets
                 .Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             string Add(TargetDto target)
@@ -48,7 +50,8 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 return target.Name;
             }
 
-            // Router: reuse any target already at that address.
+            // Router: reuse any Verdict-scope target already at that address (a resolver or
+            // Local target there is a different thing, and cannot parent children).
             // A router the wizard creates is critical (spec §4.7); a reused target is left as it is (D6).
             routerName = ByAddress(request.Router.Address) ?? Add(new TargetDto
             {

@@ -30,7 +30,8 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
 
     public async Task<IActionResult> OnGetAsync()
     {
-        // First boot: nothing configured yet -> hand the user to the wizard.
+        // First boot: nothing configured yet -> hand the user to the wizard. System-managed
+        // resolver targets appear within a second of first boot and do not count.
         // Checked against the DATABASE, not the engine: right after the wizard
         // applies, the engine may still be mid-rebuild with the old empty graph.
         // Never while locked: Setup would bounce straight back here (loop).
@@ -38,7 +39,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
         {
             await using var db = await dbFactory.CreateDbContextAsync();
             if (!await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                    .AnyAsync(db.Targets))
+                    .AnyAsync(db.Targets, t => !t.SystemManaged))
                 return Redirect("/Setup");
         }
 
