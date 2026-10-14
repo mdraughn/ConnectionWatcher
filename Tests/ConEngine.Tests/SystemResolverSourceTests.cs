@@ -40,6 +40,18 @@ public class SystemResolverSourceTests
     }
 
     [Fact]
+    public void Read_drops_the_Windows_site_local_placeholder_resolvers()
+    {
+        var source = new SystemResolverSource(() =>
+        [
+            IPAddress.Parse("fec0:0:0:ffff::1"), IPAddress.Parse("fec0:0:0:ffff::3"),
+            IPAddress.Parse("10.1.10.1"), IPAddress.Parse("fe80::1"),
+        ]);
+        Assert.Equal([IPAddress.Parse("10.1.10.1"), IPAddress.Parse("fe80::1")],
+            source.Read().Select(f => f.Address));
+    }
+
+    [Fact]
     public void A_throwing_source_reads_as_nothing_found()
     {
         var source = new SystemResolverSource(() => throw new IOException("no resolv.conf"));

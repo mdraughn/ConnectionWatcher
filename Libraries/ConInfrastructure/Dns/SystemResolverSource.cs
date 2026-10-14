@@ -40,11 +40,17 @@ public sealed class SystemResolverSource(Func<IEnumerable<IPAddress>> raw) : ISy
             return []; // no interfaces, no resolv.conf: nothing found, not a crash
         }
         return addresses
+            .Where(a => !IsWindowsPlaceholder(a))
             .Distinct()
             .OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1) // stable: keeps OS order within a family
             .Select(a => new SystemResolver(a, a.Equals(DockerEmbedded)))
             .ToList();
     }
+
+    // Windows lists the deprecated site-local fec0:0:0:ffff::1-3 as DNS on NICs with no IPv6 DNS; they never answer.
+    private static bool IsWindowsPlaceholder(IPAddress address) =>
+        address.AddressFamily == AddressFamily.InterNetworkV6 &&
+        address.GetAddressBytes().AsSpan(0, 8).SequenceEqual(new byte[] { 0xfe, 0xc0, 0, 0, 0, 0, 0xff, 0xff });
 
     internal static IEnumerable<IPAddress> WindowsResolvers()
     {
