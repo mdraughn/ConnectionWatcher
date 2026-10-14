@@ -42,7 +42,8 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
         return names; // an invalid name is skipped here; the settings PUT rejects it up front
     }
 
-    /// <summary>False only when the text is not a JSON array of objects. Null or
+    /// <summary>False when the text is not a JSON array of objects, or when a name is not a
+    /// valid host name (see <see cref="IsValidName"/>). Null or
     /// blank text is valid and means no names. Null elements, blank names and
     /// expected entries that are not IP literals are dropped, not errors.</summary>
     public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names) =>

@@ -15,7 +15,7 @@ public class SystemResolverSourceTests
             "nameserver 10.1.10.1",
             "nameserver   10.1.10.2   # secondary",
             "options ndots:1",
-            "nameserver fe80::1%eth0",
+            "nameserver fe80::1%nosuchif0",
             "nameserver not-an-address",
             "nameserver 127.0.0.11",
         };

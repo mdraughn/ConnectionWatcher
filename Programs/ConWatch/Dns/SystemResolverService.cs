@@ -170,6 +170,7 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
             var stored = preview.Retired.IsSubsetOf(retired) ? retired : retired.Union(preview.Retired).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (!plan.Retired.SetEquals(stored))
                 await WriteRetiredAsync(plan.Retired);
+            _lastSkipLog = string.Join("; ", plan.Log.Where(l => l.StartsWith("skipped", StringComparison.Ordinal)));
             foreach (var line in plan.Log)
                 log.LogInformation("System resolvers: {Change}", line);
             return true;
