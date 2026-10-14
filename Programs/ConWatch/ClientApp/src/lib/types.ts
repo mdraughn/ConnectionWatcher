@@ -16,6 +16,7 @@ export interface TargetStatus {
   scope?: "Verdict" | "Local" | "Resolver";
   /** Notify when this is down, even if the internet is fine (spec §4.7). */
   critical?: boolean;
+  /** Created from the host's OS resolver list; the admin can only disable it. */
   systemManaged?: boolean;
   /** Id of the upstream target whose failure explains this one's Unreachable state. */
   explainedBy?: string | null;

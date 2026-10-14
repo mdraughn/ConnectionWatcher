@@ -241,7 +241,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         => Without(snapshot, t => t.Scope == TargetScope.Local);
 
     /// <summary>System resolvers are the SOURCE host's; the destination's
-    /// SystemResolverService regenerates its own (spec 2026-10-10 ง5.1).</summary>
+    /// SystemResolverService regenerates its own (spec 2026-10-10 ยง5.1).</summary>
     internal static Snapshot WithoutSystemManaged(Snapshot snapshot)
         => Without(snapshot, t => t.SystemManaged);
 
