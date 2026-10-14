@@ -36,7 +36,9 @@ public class SystemResolverServiceTests : IDisposable
         await ConfigApiTests.SeedHomeAsync(_client);
         _factory.Resolvers.Set("10.0.0.53");
 
-        Assert.True(await Service.ReconcileNowAsync(CancellationToken.None));
+        // The background loop may get there first; assert the state, not who reconciled.
+        await Service.ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () => await ManagedAsync("10.0.0.53") is not null);
         var managed = await ManagedAsync("10.0.0.53");
         Assert.NotNull(managed);
         Assert.Equal("Your resolver 10.0.0.53", managed.Name);
@@ -79,15 +81,19 @@ public class SystemResolverServiceTests : IDisposable
         await Service.ReconcileNowAsync(CancellationToken.None);
 
         _factory.Resolvers.Set("10.0.0.53");
-        Assert.True(await Service.ReconcileNowAsync(CancellationToken.None));
-        Assert.False((await ManagedAsync("10.0.0.54"))!.Enabled);
+        await Service.ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () => (await ManagedAsync("10.0.0.54"))?.Enabled == false);
         Assert.True((await ManagedAsync("10.0.0.53"))!.Enabled);
         var settings = _factory.Services.GetRequiredService<SettingsStore>();
+        // Ordering guarantee: the retired set is written before the config commit
+        // (as a superset), so once the target is disabled its address is in the set.
         Assert.Contains("10.0.0.54", await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "");
 
         _factory.Resolvers.Set("10.0.0.53", "10.0.0.54");
-        Assert.True(await Service.ReconcileNowAsync(CancellationToken.None));
-        Assert.True((await ManagedAsync("10.0.0.54"))!.Enabled);
+        await Service.ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () => (await ManagedAsync("10.0.0.54"))?.Enabled == true);
+        await ConfigApiTests.Eventually(async () =>
+            !(await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "").Contains("10.0.0.54"));
         Assert.DoesNotContain("10.0.0.54", await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "");
     }
 
@@ -106,7 +112,7 @@ public class SystemResolverServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Nothing_is_created_before_the_config_is_seeded_or_when_nothing_is_found()
+    public async Task Nothing_is_created_when_the_OS_list_is_empty()
     {
         // The factory's default source is empty: the home seed stays exactly what the test wrote.
         await ConfigApiTests.SeedHomeAsync(_client);

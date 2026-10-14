@@ -98,7 +98,18 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
             _wake.Writer.TryWrite(true);
     }
 
-    /// <summary>One reconcile, serialized. True when the stored config changed.</summary>
+    /// <summary>
+    /// One reconcile, serialized. True when the stored config changed.
+    /// The config commit and the Dns.RetiredResolvers write are two separate
+    /// transactions, so the order keeps the retired set a SUPERSET at every
+    /// failure point: (1) plan on a snapshot; (2) before committing, write the
+    /// union of the stored and planned retired sets; (3) commit the config;
+    /// (4) after the commit, narrow the stored set to exactly the plan's.
+    /// A crash after (2) leaves a harmless extra entry (the reconciler forgets
+    /// it once that target is enabled and present); it can never leave a
+    /// reconciler-disabled target missing from the set, which would make the
+    /// target look admin-disabled and never be restored.
+    /// </summary>
     public async Task<bool> ReconcileNowAsync(CancellationToken ct)
     {
         await _once.WaitAsync(ct);
@@ -112,14 +123,25 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
             var names = DnsLookupName.FromJson(await settings.GetAsync(SettingKeys.DnsLookupNames));
             var retired = Parse(await settings.GetAsync(SettingKeys.DnsRetiredResolvers));
 
-            SystemResolverReconciler.Plan? plan = null;
-            var result = await config.EditDocumentAsync(doc =>
+            SystemResolverReconciler.Plan PlanFor(ConfigDocument doc)
             {
                 // Active: the watch is on and there is something to ask for — the
                 // configured names, or any hostname target the resolver must resolve anyway.
                 var active = enabled && (names.Count > 0 || doc.Targets.Any(t =>
                     t.Enabled && t.Scope != TargetScope.Resolver && !IPAddress.TryParse(t.Address, out _)));
-                plan = SystemResolverReconciler.Reconcile(doc.Targets, found, active, retired);
+                return SystemResolverReconciler.Reconcile(doc.Targets, found, active, retired);
+            }
+
+            var preview = PlanFor(await store.ExportAsync());
+            if (!preview.Changed)
+                return false;
+            if (!preview.Retired.IsSubsetOf(retired))
+                await WriteRetiredAsync(retired.Union(preview.Retired, StringComparer.OrdinalIgnoreCase));
+
+            SystemResolverReconciler.Plan? plan = null;
+            var result = await config.EditDocumentAsync(doc =>
+            {
+                plan = PlanFor(doc);
                 // A failed edit commits nothing, so "no change" is expressed as a
                 // non-success result; the caller checks plan.Changed before the result.
                 if (!plan.Changed)
@@ -134,13 +156,11 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
             if (!result.Success)
             {
                 log.LogWarning("System resolver reconcile rejected: {Errors}", string.Join("; ", result.Errors ?? []));
-                return false;
+                return false; // the pre-written union stays: harmless
             }
-            if (!plan.Retired.SetEquals(retired))
-                await settings.SetManyAsync(new Dictionary<string, string?>
-                {
-                    [SettingKeys.DnsRetiredResolvers] = plan.Retired.Count == 0 ? null : string.Join('\n', plan.Retired.Order()),
-                });
+            var stored = preview.Retired.IsSubsetOf(retired) ? retired : retired.Union(preview.Retired).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!plan.Retired.SetEquals(stored))
+                await WriteRetiredAsync(plan.Retired);
             foreach (var line in plan.Log)
                 log.LogInformation("System resolvers: {Change}", line);
             return true;
@@ -149,6 +169,15 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
         {
             _once.Release();
         }
+    }
+
+    private Task WriteRetiredAsync(IEnumerable<string> addresses)
+    {
+        var sorted = addresses.Order(StringComparer.OrdinalIgnoreCase).ToList();
+        return settings.SetManyAsync(new Dictionary<string, string?>
+        {
+            [SettingKeys.DnsRetiredResolvers] = sorted.Count == 0 ? null : string.Join('\n', sorted),
+        });
     }
 
     private static HashSet<string> Parse(string? value) =>
