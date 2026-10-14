@@ -86,6 +86,9 @@ public class WatcherEngine
     /// attribution (spec §4.5). Exists from construction.</summary>
     public LossWindows Loss { get; }
 
+    /// <summary>The last DNS results per Resolver target (spec 2026-10-10 §4.2). Exists from construction.</summary>
+    public ConEngine.Dns.DnsResultLog DnsResults { get; } = new();
+
     /// <summary>When the result pump last processed a result end to end; null before the first.</summary>
     public DateTimeOffset? LastResultUtc => _manager?.LastResultUtc;
 
@@ -285,6 +288,8 @@ public class WatcherEngine
                         Suspicion?.OnPingSample(monitor.Target.Id, result);
                         Loss.Record(monitor.Target.Id, result.Timestamp, result.Success);
                     }
+                    else if (monitor.Target.Scope == TargetScope.Resolver)
+                        DnsResults.Record(monitor.Target.Id, result);
                 }
             },
             ex => _log.LogError(ex, "Error in ping result stream"),
