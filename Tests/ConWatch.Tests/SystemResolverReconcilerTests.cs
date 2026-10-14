@@ -1,0 +1,114 @@
+using System.Net;
+using ConCore.Targets;
+using ConInfrastructure.NameResolution;
+using ConPersistence.Config;
+using ConWatch.Dns;
+
+namespace ConWatch.Tests;
+
+public class SystemResolverReconcilerTests
+{
+    private static SystemResolver Found(string address, bool docker = false) => new(IPAddress.Parse(address), docker);
+    private static readonly IReadOnlySet<string> NoneRetired = new HashSet<string>();
+
+    private static TargetDto Managed(string address, bool enabled = true) => new()
+    {
+        Id = Guid.NewGuid(), Name = $"Your resolver {address}", Address = address, Profile = "Resolver",
+        Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true, Enabled = enabled,
+    };
+
+    private static readonly TargetDto Router = new() { Id = Guid.NewGuid(), Name = "Router", Address = "10.1.10.1", Profile = "Internal" };
+
+    [Fact]
+    public void A_found_address_becomes_an_enabled_managed_Resolver_target()
+    {
+        var plan = SystemResolverReconciler.Reconcile([Router], [Found("10.1.10.1")], watchActive: true, NoneRetired);
+
+        Assert.True(plan.Changed);
+        var created = Assert.Single(plan.Targets, t => t.SystemManaged);
+        Assert.Equal("Your resolver 10.1.10.1", created.Name);
+        Assert.Equal("10.1.10.1", created.Address);
+        Assert.Equal("Resolver", created.Profile);
+        Assert.Equal("dns", created.Probe);
+        Assert.Equal(TargetScope.Resolver, created.Scope);
+        Assert.Null(created.Parent);
+        Assert.True(created.Enabled);
+        Assert.False(created.Critical);
+        Assert.Contains(plan.Targets, t => t.Name == "Router"); // untouched
+    }
+
+    [Fact]
+    public void Dockers_resolver_is_named_as_such_and_a_name_collision_gets_a_suffix()
+    {
+        var taken = new TargetDto { Id = Guid.NewGuid(), Name = "Docker's resolver", Address = "203.0.113.5", Profile = "Public" };
+        var plan = SystemResolverReconciler.Reconcile([taken], [Found("127.0.0.11", docker: true)], true, NoneRetired);
+        Assert.Equal("Docker's resolver (2)", Assert.Single(plan.Targets, t => t.SystemManaged).Name);
+    }
+
+    [Fact]
+    public void Nothing_is_created_while_the_watch_is_off()
+    {
+        var plan = SystemResolverReconciler.Reconcile([Router], [Found("10.1.10.1")], watchActive: false, NoneRetired);
+        Assert.False(plan.Changed);
+        Assert.DoesNotContain(plan.Targets, t => t.SystemManaged);
+    }
+
+    [Fact]
+    public void A_vanished_address_is_disabled_and_remembered_never_deleted()
+    {
+        var managed = Managed("10.1.10.1");
+        var plan = SystemResolverReconciler.Reconcile([Router, managed], [], true, NoneRetired);
+
+        Assert.True(plan.Changed);
+        var kept = Assert.Single(plan.Targets, t => t.SystemManaged);
+        Assert.Equal(managed.Id, kept.Id);
+        Assert.False(kept.Enabled);
+        Assert.Contains("10.1.10.1", plan.Retired);
+    }
+
+    [Fact]
+    public void A_returning_address_is_re_enabled_only_when_the_service_retired_it()
+    {
+        var retiredByUs = Managed("10.1.10.1", enabled: false);
+        var byAdmin = Managed("10.1.10.2", enabled: false);
+        var plan = SystemResolverReconciler.Reconcile([retiredByUs, byAdmin],
+            [Found("10.1.10.1"), Found("10.1.10.2")], true, new HashSet<string> { "10.1.10.1" });
+
+        Assert.True(plan.Changed);
+        Assert.True(plan.Targets.Single(t => t.Id == retiredByUs.Id).Enabled);
+        Assert.False(plan.Targets.Single(t => t.Id == byAdmin.Id).Enabled);
+        Assert.DoesNotContain("10.1.10.1", plan.Retired);
+    }
+
+    [Fact]
+    public void Turning_the_watch_off_retires_every_managed_target_and_on_restores_them()
+    {
+        var a = Managed("10.1.10.1");
+        var b = Managed("10.1.10.2");
+        var off = SystemResolverReconciler.Reconcile([a, b], [Found("10.1.10.1"), Found("10.1.10.2")], false, NoneRetired);
+        Assert.All(off.Targets.Where(t => t.SystemManaged), t => Assert.False(t.Enabled));
+        Assert.Equal(new HashSet<string> { "10.1.10.1", "10.1.10.2" }, off.Retired);
+
+        var on = SystemResolverReconciler.Reconcile(off.Targets, [Found("10.1.10.1"), Found("10.1.10.2")], true, off.Retired);
+        Assert.All(on.Targets.Where(t => t.SystemManaged), t => Assert.True(t.Enabled));
+        Assert.Empty(on.Retired);
+    }
+
+    [Fact]
+    public void A_steady_state_is_not_a_change()
+    {
+        var managed = Managed("10.1.10.1");
+        var plan = SystemResolverReconciler.Reconcile([Router, managed], [Found("10.1.10.1")], true, NoneRetired);
+        Assert.False(plan.Changed);
+        Assert.Same(managed, plan.Targets.Single(t => t.SystemManaged));
+    }
+
+    [Fact]
+    public void Addresses_match_case_insensitively_and_retired_entries_for_absent_addresses_are_kept()
+    {
+        var managed = Managed("fe80::1", enabled: false);
+        var plan = SystemResolverReconciler.Reconcile([managed], [Found("FE80::1")], true, new HashSet<string> { "fe80::1", "10.9.9.9" });
+        Assert.True(plan.Targets.Single().Enabled);
+        Assert.Equal(new HashSet<string> { "10.9.9.9" }, plan.Retired); // still gone: still remembered
+    }
+}
