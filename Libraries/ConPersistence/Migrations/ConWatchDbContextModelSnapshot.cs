@@ -341,6 +341,9 @@ namespace ConPersistence.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Verdict");
 
+                    b.Property<bool>("SystemManaged")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")

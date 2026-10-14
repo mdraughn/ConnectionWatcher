@@ -45,6 +45,11 @@ public record TargetDto
     /// <summary>Notify when this is down, even if the internet is fine. A
     /// missing value (older clients/snapshots) means false.</summary>
     public bool Critical { get; init; }
+
+    /// <summary>Created and retired by ConnectionWatcher from the host's OS resolver
+    /// list. Read-only through the targets API: the flag is ignored on create and
+    /// update. A missing value (older clients/snapshots) means false.</summary>
+    public bool SystemManaged { get; init; }
 }
 
 /// <summary>Pool for API/CRUD and export. Members/Parent referenced by name.</summary>

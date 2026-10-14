@@ -24,4 +24,9 @@ public record Target
     /// <summary>Report this target's own failure and recovery even while the
     /// internet is fine (spec 2026-10-09 §4.7). Never affects the verdict.</summary>
     public bool Critical { get; init; }
+
+    /// <summary>Created and retired by ConnectionWatcher itself from the host's
+    /// OS resolver list (spec 2026-10-10 §4.1). The admin may disable it but
+    /// not re-address or delete it. Always a Resolver-scope target.</summary>
+    public bool SystemManaged { get; init; }
 }

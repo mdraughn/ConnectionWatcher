@@ -49,6 +49,9 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
                 if (t.Parent is { Length: > 0 })
                     failures.Add($"Target '{t.Name}' is {t.Scope} and cannot have a parent.");
             }
+
+            if (t.SystemManaged && t.Scope != TargetScope.Resolver)
+                failures.Add($"Target '{t.Name}' is system-managed but not a Resolver.");
         }
 
         var poolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

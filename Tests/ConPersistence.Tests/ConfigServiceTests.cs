@@ -1,4 +1,5 @@
-﻿using ConPersistence.Config;
+﻿using ConCore.Targets;
+using ConPersistence.Config;
 
 namespace ConPersistence.Tests;
 
@@ -457,5 +458,68 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         });
         Assert.False(result.Success);
         Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot have children"));
+    }
+
+    private static TargetDto ManagedResolver(Guid? id = null) => new()
+    {
+        Id = id, Name = "Your resolver 203.0.113.1", Address = "203.0.113.1", Profile = "Resolver",
+        Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true,
+    };
+
+    private async Task<Guid> SeedManagedResolverAsync()
+    {
+        var result = await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(ManagedResolver());
+            return ConfigResult.Ok();
+        });
+        Assert.True(result.Success, string.Join("; ", result.Errors ?? []));
+        return (await _store.ExportAsync()).Targets.Single(t => t.SystemManaged).Id!.Value;
+    }
+
+    [Fact]
+    public async Task A_system_managed_target_cannot_be_deleted()
+    {
+        await _store.SeedAsync(null);
+        var id = await SeedManagedResolverAsync();
+
+        var result = await _service.DeleteTargetAsync(id);
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Conflict, result.Kind);
+        Assert.Single((await _store.ExportAsync()).Targets, t => t.SystemManaged);
+    }
+
+    [Fact]
+    public async Task A_system_managed_target_can_be_disabled_but_not_re_addressed()
+    {
+        await _store.SeedAsync(null);
+        var id = await SeedManagedResolverAsync();
+
+        var disable = await _service.UpsertTargetAsync(ManagedResolver(id) with { Enabled = false });
+        Assert.True(disable.Success, string.Join("; ", disable.Errors ?? []));
+        Assert.False((await _store.ExportAsync()).Targets.Single(t => t.Id == id).Enabled);
+
+        var move = await _service.UpsertTargetAsync(ManagedResolver(id) with { Address = "203.0.113.2" }, "correction");
+        Assert.False(move.Success);
+        Assert.Equal(ConfigErrorKind.Validation, move.Kind);
+
+        var reprobe = await _service.UpsertTargetAsync(ManagedResolver(id) with { Probe = null });
+        Assert.False(reprobe.Success);
+
+        var unmanage = await _service.UpsertTargetAsync(ManagedResolver(id) with { SystemManaged = false });
+        Assert.False(unmanage.Success);
+        Assert.True((await _store.ExportAsync()).Targets.Single(t => t.Id == id).SystemManaged);
+    }
+
+    [Fact]
+    public async Task The_API_path_cannot_create_a_system_managed_target()
+    {
+        await _store.SeedAsync(null);
+
+        var result = await _service.UpsertTargetAsync(ManagedResolver());
+
+        Assert.True(result.Success, string.Join("; ", result.Errors ?? []));
+        Assert.False((await _store.ExportAsync()).Targets.Single().SystemManaged);
     }
 }

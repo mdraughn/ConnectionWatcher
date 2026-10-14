@@ -123,6 +123,25 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                 return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No target with id {id}.");
             row = existing;
 
+            if (existing.SystemManaged)
+            {
+                // The host's OS resolver list owns this row: only name, enabled,
+                // operator and critical are the admin's to change (spec 2026-10-10 §4.1).
+                var frozen = new List<string>();
+                if (!string.Equals(existing.Address, ConfigMapping.NormalizeAddress(dto.Address), StringComparison.OrdinalIgnoreCase))
+                    frozen.Add("address");
+                if (parentId is not null) frozen.Add("parent");
+                if (existing.ProfileId != profile.Id) frozen.Add("profile");
+                if (!string.Equals(existing.Probe, ConfigMapping.NormalizeProbe(dto.Probe), StringComparison.OrdinalIgnoreCase))
+                    frozen.Add("probe");
+                if (existing.Scope != dto.Scope) frozen.Add("scope");
+                if (!dto.SystemManaged) frozen.Add("systemManaged");
+                if (frozen.Count > 0)
+                    return ConfigResult.Fail(ConfigErrorKind.Validation,
+                        $"Target '{existing.Name}' is managed by ConnectionWatcher (a system resolver); " +
+                        $"{string.Join(", ", frozen)} cannot be changed. You can disable or rename it.");
+            }
+
             var oldAddress = row.Address;
             var newAddress = ConfigMapping.NormalizeAddress(dto.Address);
             if (!string.Equals(oldAddress, newAddress, StringComparison.OrdinalIgnoreCase))
@@ -153,6 +172,9 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             db.Targets.Add(row);
         }
         row.CopyFrom(dto, profile.Id, parentId);
+        // The flag is the reconciler's (EditDocumentAsync), never the API's: a
+        // new row is never managed, an existing row keeps what it had.
+        row.SystemManaged = dto.Id is not null && row.SystemManaged;
         if (discovery is not null)
         {
             discovery.Status = DiscoveryStatus.Adopted;
@@ -185,6 +207,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{newTarget.Profile}'.");
 
         var row = new TargetRow { Id = Guid.NewGuid() }.CopyFrom(newTarget, profile.Id, parents[0]);
+        row.SystemManaged = false; // a new row is never managed
         db.Targets.Add(row);
         foreach (var child in children)
             child.ParentId = row.Id;
@@ -196,6 +219,9 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         var row = await db.Targets.FindAsync(id);
         if (row is null)
             return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No target with id {id}.");
+        if (row.SystemManaged)
+            return ConfigResult.Fail(ConfigErrorKind.Conflict,
+                $"Target '{row.Name}' is managed by ConnectionWatcher (a system resolver); disable it instead of deleting it.");
 
         var conflicts = new List<string>();
         conflicts.AddRange(await db.Targets.Where(t => t.ParentId == id)

@@ -34,6 +34,9 @@ public class TargetConfig
 
     /// <summary>Notify when this is down, even if the internet is fine.</summary>
     public bool Critical { get; set; }
+
+    /// <summary>Owned by the engine's system-resolver reconcile (spec 2026-10-10); never set by hand.</summary>
+    public bool SystemManaged { get; set; }
 }
 
 /// <summary>A rotation pool, as authored in configuration.</summary>

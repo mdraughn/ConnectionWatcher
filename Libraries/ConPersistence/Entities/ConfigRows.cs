@@ -42,6 +42,8 @@ public class TargetRow
     public TargetScope Scope { get; set; } = TargetScope.Verdict;
 
     public bool Critical { get; set; }
+
+    public bool SystemManaged { get; set; }
 }
 
 /// <summary>A rotation pool as stored.</summary>

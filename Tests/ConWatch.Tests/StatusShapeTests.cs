@@ -40,7 +40,7 @@ public class StatusShapeTests : IDisposable
             Keys(sample));
         Assert.Equal(new[] { "detail", "operator", "state" }, Keys(status.GetProperty("verdict")));
         Assert.Equal(new[] { "address", "assumed", "avgRtt", "critical", "explainedBy", "id", "name",
-                "operator", "pingCount", "probe", "sampleSize", "scope", "state", "successRate" },
+                "operator", "pingCount", "probe", "sampleSize", "scope", "state", "successRate", "systemManaged" },
             Keys(status.GetProperty("targets")[0]));
         Assert.Equal(new[] { "id", "name", "state" }, Keys(status.GetProperty("pools")[0]));
     }

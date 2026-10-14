@@ -22,12 +22,13 @@ public sealed record StatusSnapshot(bool Enabled, StatusVerdict? Verdict,
 public sealed record StatusVerdict(string State, string? Detail, string? Operator);
 
 /// <param name="Operator">The target's operator/ISP tag, or null.</param>
+/// <param name="SystemManaged">Created from the host's OS resolver list; the admin can only disable it.</param>
 /// <param name="Critical">Notify when this is down, even if the internet is fine (spec §4.7).</param>
 /// <param name="ExplainedBy">The root cause (target id) explaining this target's
 /// Unreachable state, or null.</param>
 public sealed record StatusTarget(Guid Id, string Name, string Address, string? Probe, string State,
     bool Assumed, double SuccessRate, double AvgRtt, int SampleSize, long PingCount, string? Operator,
-    TargetScope Scope, bool Critical, Guid? ExplainedBy);
+    TargetScope Scope, bool Critical, Guid? ExplainedBy, bool SystemManaged);
 
 public sealed record StatusPool(Guid Id, string Name, string State);
 
@@ -61,7 +62,8 @@ public static class StatusSnapshotBuilder
                 m.Target.Operator,
                 m.Target.Scope,
                 m.Target.Critical,
-                m.ExplainedBy))
+                m.ExplainedBy,
+                m.Target.SystemManaged))
             .OrderBy(t => t.Name).ToList();
         var pools = engine.PoolCoordinators
             .Select(p => new StatusPool(p.Pool.Id, p.Pool.Name, p.CurrentState.ToString()))
