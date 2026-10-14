@@ -22,7 +22,7 @@ public sealed class DomainNameResolverDns(CancellationToken cancellationToken) :
         timeoutCts.CancelAfter(timeoutMs);
         try
         {
-            var addresses = await System.Net.Dns.GetHostAddressesAsync(domainName, timeoutCts.Token).ConfigureAwait(false);
+            var addresses = await Dns.GetHostAddressesAsync(domainName, timeoutCts.Token).ConfigureAwait(false);
             return new DomainResolutionResult(domainName, success: true, addresses,
                 status: "Success", resolutionTimeMs: stopwatch.ElapsedMilliseconds);
         }

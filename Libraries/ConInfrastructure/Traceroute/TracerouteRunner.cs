@@ -41,7 +41,7 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
         IPAddress destination;
         if (!IPAddress.TryParse(host, out destination!))
         {
-            var addresses = await System.Net.Dns.GetHostAddressesAsync(host, ct).ConfigureAwait(false);
+            var addresses = await Dns.GetHostAddressesAsync(host, ct).ConfigureAwait(false);
             destination = addresses.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                 ?? throw new ArgumentException($"No IPv4 address for '{host}'.");
         }
@@ -110,7 +110,7 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
     {
         try
         {
-            var lookup = System.Net.Dns.GetHostEntryAsync(address.ToString(), ct);
+            var lookup = Dns.GetHostEntryAsync(address.ToString(), ct);
             var winner = await Task.WhenAny(lookup, Task.Delay(1000, ct)).ConfigureAwait(false);
             return winner == lookup ? (await lookup.ConfigureAwait(false)).HostName : null;
         }

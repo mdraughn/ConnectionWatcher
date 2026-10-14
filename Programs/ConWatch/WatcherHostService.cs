@@ -21,7 +21,7 @@ public class WatcherHostService(
     ConfigService configService,
     SettingsStore settingsStore,
     WarmStartSeeder seeder,
-    ConInfrastructure.Dns.DnsLookupNames lookupNames,
+    ConInfrastructure.NameResolution.DnsLookupNames lookupNames,
     IPingTransceiverFactory pingFactory,
     IDomainNameResolverFactory resolverFactory,
     TimeProvider timeProvider,

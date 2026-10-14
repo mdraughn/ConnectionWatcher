@@ -1,7 +1,7 @@
 using System.Net;
 using ConCore.Dns;
 
-namespace ConInfrastructure.Dns;
+namespace ConInfrastructure.NameResolution;
 
 /// <summary>
 /// The live lookup-name list the DNS transceivers read. The host replaces it

@@ -140,6 +140,7 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
 
         if (values.Keys.Any(k =>
                 k.StartsWith("Verdict.", StringComparison.OrdinalIgnoreCase) ||
+                k.StartsWith("Dns.", StringComparison.OrdinalIgnoreCase) ||
                 k.StartsWith("Engine.", StringComparison.OrdinalIgnoreCase)))
             SettingsChanged?.Invoke(values);
         if (values.Keys.Any(k =>

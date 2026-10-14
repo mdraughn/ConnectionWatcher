@@ -48,8 +48,8 @@ public static class ConWatchServices
     {
         services.AddHttpContextAccessor();
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<ConInfrastructure.Dns.DnsLookupNames>();
-        services.AddSingleton<ConCore.Dns.IDnsLookupNames>(sp => sp.GetRequiredService<ConInfrastructure.Dns.DnsLookupNames>());
+        services.AddSingleton<ConInfrastructure.NameResolution.DnsLookupNames>();
+        services.AddSingleton<ConCore.Dns.IDnsLookupNames>(sp => sp.GetRequiredService<ConInfrastructure.NameResolution.DnsLookupNames>());
         services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
         services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();

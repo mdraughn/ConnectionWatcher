@@ -1,6 +1,6 @@
 using System.Net;
 using ConCore.Dns;
-using ConInfrastructure.Dns;
+using ConInfrastructure.NameResolution;
 
 namespace ConEngine.Tests;
 

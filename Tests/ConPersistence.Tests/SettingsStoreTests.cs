@@ -56,6 +56,22 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Dns_keys_raise_SettingsChanged_and_notifier_keys_alone_do_not()
+    {
+        IReadOnlyDictionary<string, string?>? seen = null;
+        _store.SettingsChanged += v => seen = v;
+
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.MqttHost] = "nas" });
+        Assert.Equal(0, _changeSignals);
+        Assert.Null(seen);
+
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.DnsLookupNames] = "[]" });
+        Assert.Equal(1, _changeSignals);
+        Assert.NotNull(seen);
+        Assert.True(seen!.ContainsKey(SettingKeys.DnsLookupNames));
+    }
+
+    [Fact]
     public async Task Notifier_keys_raise_their_own_signal_only()
     {
         int notifierSignals = 0;
