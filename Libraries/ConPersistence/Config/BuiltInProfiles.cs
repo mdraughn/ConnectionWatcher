@@ -22,5 +22,7 @@ public static class BuiltInProfiles
         new(PingProfile.Public, "Public internet sites. Be polite."),
         new(PingProfile.Local, "LAN devices tracked on the side — cameras, IoT, NAS. Gentle and " +
                                "forgiving; never affects your internet verdict."),
+        new(PingProfile.Resolver, "DNS resolvers watched by the name-resolution check: one query " +
+                                  "every half minute, a burst on the first miss."),
     ];
 }

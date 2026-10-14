@@ -40,8 +40,27 @@ public record PingProfile
         FalteringThreshold = 0.50,
     };
 
+    /// <summary>Preset for DNS resolvers (spec 2026-10-10 §4.1): one query every
+    /// half minute, a 2 s burst for a minute on the first miss, the Local-style
+    /// small forgiving window. A slow query is not a Faltering; a dead resolver
+    /// is Down about a minute after its first miss.</summary>
+    public static PingProfile Resolver { get; } = new()
+    {
+        Name = "Resolver",
+        NormalInterval = TimeSpan.FromSeconds(30),
+        PingTimeout = TimeSpan.FromSeconds(5),
+        BurstInterval = TimeSpan.FromSeconds(2),
+        BurstMaxDuration = TimeSpan.FromSeconds(60),
+        HistorySize = 30,
+        MinUsableSample = 6,
+        RespondingThreshold = 0.80,
+        FalteringThreshold = 0.50,
+        DownThreshold = 0.10,
+        RecoveringThreshold = 0.25,
+    };
+
     /// <summary>The presets every configuration has, in display order.</summary>
-    public static IReadOnlyList<PingProfile> BuiltIns { get; } = [Internal, Path, Public, Local];
+    public static IReadOnlyList<PingProfile> BuiltIns { get; } = [Internal, Path, Public, Local, Resolver];
 
     /// <summary>True for a built-in preset name, ignoring case.</summary>
     public static bool IsBuiltIn(string name) =>
