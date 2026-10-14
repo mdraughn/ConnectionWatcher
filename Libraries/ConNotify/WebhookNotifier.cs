@@ -29,11 +29,11 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
         _subscription = engine.TransitionSource.Subscribe(
             t =>
             {
-                // Local (LAN-device) targets never notify, unless marked critical
-                // (spec §4.7); verdict/pool subjects pass. Criticality is decided
-                // now: the engine that knew it may be gone by delivery.
+                // Side (LAN-device, resolver) targets never notify, unless marked
+                // critical (spec §4.7); verdict/pool subjects pass. Criticality is
+                // decided now: the engine that knew it may be gone by delivery.
                 var critical = engine.IsCriticalSubject(t.TargetId);
-                if (critical || !engine.IsLocalSubject(t.TargetId))
+                if (critical || !engine.IsSideSubject(t.TargetId))
                     _queue.Writer.TryWrite((t, critical));
             },
             ex => log.LogError(ex, "Transition stream error in webhook notifier"));

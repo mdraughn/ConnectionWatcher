@@ -122,6 +122,17 @@ public class WatcherEngine
         && target.Scope == TargetScope.Local;
 
     /// <summary>
+    /// True when <paramref name="subjectId"/> is a target tracked on the side —
+    /// Local (a LAN device) or Resolver (a DNS resolver). The notifiers leave
+    /// side targets out unless they are critical; the verdict carries what
+    /// matters about them. False for pools, the verdict subject, unknown ids
+    /// and before the engine starts.
+    /// </summary>
+    public bool IsSideSubject(Guid subjectId) =>
+        _graph is { } graph && graph.Targets.TryGetValue(subjectId, out var target)
+        && target.Scope != TargetScope.Verdict;
+
+    /// <summary>
     /// True when <paramref name="subjectId"/> is a target marked critical: the
     /// notifiers report its own failure and recovery even while the internet
     /// is fine. False for pools, the verdict subject, unknown ids and before
@@ -266,9 +277,10 @@ public class WatcherEngine
                         _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed",
                             monitor.Target.Name);
                     }
-                    // Local targets are tracked on the side: no suspicion bursts,
-                    // corroboration sweeps or glitch episodes (spec §3 exclusions).
-                    if (monitor.Target.Scope != TargetScope.Local)
+                    // Local and Resolver targets are tracked on the side: no
+                    // suspicion bursts, corroboration sweeps, glitch episodes
+                    // or loss windows (spec 2026-10-02 §3, 2026-10-10 R2).
+                    if (monitor.Target.Scope == TargetScope.Verdict)
                     {
                         Suspicion?.OnPingSample(monitor.Target.Id, result);
                         Loss.Record(monitor.Target.Id, result.Timestamp, result.Success);

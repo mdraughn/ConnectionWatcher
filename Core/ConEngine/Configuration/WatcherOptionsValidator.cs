@@ -14,7 +14,9 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
         // Targets may share an address (each gets its own controller); the
         // same address probed the same way twice is a typo, not a choice.
         var addressProbes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var localNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Side scopes (Local, Resolver) stand outside the tree: no parent, no
+        // children, never in a pool. Name -> scope, for the wording.
+        var sideScopes = new Dictionary<string, TargetScope>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var t in options.Targets)
         {
@@ -40,12 +42,12 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
             if (!Enum.IsDefined(t.Scope))
                 failures.Add($"Target '{t.Name}' has unknown scope '{t.Scope}'.");
 
-            if (t.Scope == TargetScope.Local)
+            if (t.Scope is TargetScope.Local or TargetScope.Resolver)
             {
                 if (!string.IsNullOrWhiteSpace(t.Name))
-                    localNames.Add(t.Name);
+                    sideScopes[t.Name] = t.Scope;
                 if (t.Parent is { Length: > 0 })
-                    failures.Add($"Target '{t.Name}' is Local and cannot have a parent.");
+                    failures.Add($"Target '{t.Name}' is {t.Scope} and cannot have a parent.");
             }
         }
 
@@ -67,14 +69,14 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
                     failures.Add(options.Pools.Any(x => x.Name.Equals(m, StringComparison.OrdinalIgnoreCase))
                         ? $"Pool '{p.Name}' member '{m}' is a pool; pools cannot contain pools."
                         : $"Pool '{p.Name}' references unknown member '{m}'.");
-                else if (localNames.Contains(m))
-                    failures.Add($"Pool '{p.Name}' member '{m}' is a Local target; Local targets cannot be pool members.");
+                else if (sideScopes.TryGetValue(m, out var memberScope))
+                    failures.Add($"Pool '{p.Name}' member '{m}' is a {memberScope} target; {memberScope} targets cannot be pool members.");
             }
 
             if (p.Parent is { Length: > 0 } && !targetNames.Contains(p.Parent))
                 failures.Add($"Pool '{p.Name}' references unknown parent target '{p.Parent}'.");
-            else if (p.Parent is { Length: > 0 } && localNames.Contains(p.Parent))
-                failures.Add($"Pool '{p.Name}' has Local target '{p.Parent}' as parent; Local targets cannot have children.");
+            else if (p.Parent is { Length: > 0 } && sideScopes.TryGetValue(p.Parent, out var poolParentScope))
+                failures.Add($"Pool '{p.Name}' has {poolParentScope} target '{p.Parent}' as parent; {poolParentScope} targets cannot have children.");
         }
 
         foreach (var t in options.Targets)
@@ -85,8 +87,8 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
                 failures.Add($"Target '{t.Name}' has pool '{t.Parent}' as parent; pools cannot be parents.");
             else if (!targetNames.Contains(t.Parent))
                 failures.Add($"Target '{t.Name}' references unknown parent '{t.Parent}'.");
-            else if (localNames.Contains(t.Parent))
-                failures.Add($"Target '{t.Name}' has Local target '{t.Parent}' as parent; Local targets cannot have children.");
+            else if (sideScopes.TryGetValue(t.Parent, out var parentScope))
+                failures.Add($"Target '{t.Name}' has {parentScope} target '{t.Parent}' as parent; {parentScope} targets cannot have children.");
         }
 
         // Cycle detection: walk up from every target.
