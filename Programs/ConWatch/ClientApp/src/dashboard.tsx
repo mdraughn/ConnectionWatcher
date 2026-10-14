@@ -10,7 +10,7 @@ import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
 import { startHub } from "./lib/hub";
-import { isLocal, isResolver } from "./lib/lan";
+import { isInternetTarget } from "./lib/lan";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
 import { fetchStory, type Story } from "./lib/story";
@@ -121,7 +121,7 @@ function App({ store, topology, initial }: {
     <div>
       <VerdictBanner verdict={state.verdict} connected={state.connected} clock={clock} />
       <EventStrip topology={initial} />
-      <Tree topology={topology} targets={state.targets.filter((t) => !isLocal(t) && !isResolver(t))} pools={state.pools}
+      <Tree topology={topology} targets={state.targets.filter(isInternetTarget)} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
       <LanSection targets={state.targets} />
       {initial.admin && (

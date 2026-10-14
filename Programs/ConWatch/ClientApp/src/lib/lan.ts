@@ -7,6 +7,9 @@ export const isLocal = (t: { scope?: string }): boolean => t.scope === "Local";
 /** Resolver targets are DNS resolvers (spec 2026-10-10): never in the tree, never LAN devices. */
 export const isResolver = (t: { scope?: string }): boolean => t.scope === "Resolver";
 
+/** Targets that belong in the internet views (tree, history ribbons): not LAN devices, not resolvers. */
+export const isInternetTarget = (t: { scope?: string }): boolean => !isLocal(t) && !isResolver(t);
+
 export interface LanSummary {
   total: number;
   up: number;

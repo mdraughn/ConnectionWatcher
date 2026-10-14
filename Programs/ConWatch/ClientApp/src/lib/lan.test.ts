@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLocal, isResolver, summarizeLan } from "./lan";
+import { isInternetTarget, isLocal, isResolver, summarizeLan } from "./lan";
 import type { TargetStatus } from "./types";
 
 const t = (over: Partial<TargetStatus>): TargetStatus => ({
@@ -41,5 +41,14 @@ describe("isResolver", () => {
   it("a resolver is not a LAN device", () => {
     expect(isLocal(t({ scope: "Resolver" }))).toBe(false);
     expect(summarizeLan([t({ scope: "Resolver" })]).total).toBe(0);
+  });
+});
+
+describe("isInternetTarget", () => {
+  it("excludes Local and Resolver targets; a missing scope is Verdict", () => {
+    expect(isInternetTarget(t({ scope: "Verdict" }))).toBe(true);
+    expect(isInternetTarget(t({}))).toBe(true);
+    expect(isInternetTarget(t({ scope: "Local" }))).toBe(false);
+    expect(isInternetTarget(t({ scope: "Resolver" }))).toBe(false);
   });
 });
