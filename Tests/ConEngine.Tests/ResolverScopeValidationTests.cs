@@ -26,11 +26,20 @@ public class ResolverScopeValidationTests
     }
 
     [Fact]
-    public void A_Resolver_may_share_the_routers_address_with_a_different_probe()
+    public void Address_plus_probe_is_the_uniqueness_key_for_a_Resolver_too()
     {
-        // The household resolver usually IS the router; "address + probe" is the uniqueness key.
-        var result = Validate(new WatcherOptions { Targets = [Router, Resolver] });
-        Assert.True(result.Succeeded, string.Join("; ", result.Failures ?? []));
+        // The household resolver usually IS the router: a different probe at the same address is fine...
+        var routerPingsOnly = Router;
+        routerPingsOnly.Probe = "icmp";
+        var different = Validate(new WatcherOptions { Targets = [routerPingsOnly, Resolver] });
+        Assert.True(different.Succeeded, string.Join("; ", different.Failures ?? []));
+
+        // ...the same probe at the same address is a duplicate, whatever the scope.
+        var routerDns = Router;
+        routerDns.Probe = "dns";
+        var same = Validate(new WatcherOptions { Targets = [routerDns, Resolver] });
+        Assert.True(same.Failed);
+        Assert.Contains(same.Failures!, f => f.Contains("Duplicate target address '203.0.113.1' with probe 'dns'"));
     }
 
     [Fact]

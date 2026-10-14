@@ -112,6 +112,24 @@ public class SystemResolverServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_config_edit_wakes_the_service_and_the_reconcile_stays_steady()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        _factory.Resolvers.Set("10.0.0.53");
+        await Service.ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () => await ManagedAsync("10.0.0.53") is not null);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/targets",
+            new TargetDto { Name = "Example", Address = "example.org", Parent = "Router", Profile = "Internal" });
+        response.EnsureSuccessStatusCode();
+
+        // The edit's own wake and the background loop may both reconcile; the end state is what counts.
+        await ConfigApiTests.Eventually(async () => !await Service.ReconcileNowAsync(CancellationToken.None));
+        Assert.Single(await TargetsAsync(), t => t.SystemManaged);
+        Assert.Contains(await TargetsAsync(), t => t.Name == "Example");
+    }
+
+    [Fact]
     public async Task Nothing_is_created_when_the_OS_list_is_empty()
     {
         // The factory's default source is empty: the home seed stays exactly what the test wrote.

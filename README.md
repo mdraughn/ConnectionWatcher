@@ -208,10 +208,11 @@ complete list of network traffic the app can generate:
 
 - ICMP pings, TCP connects and DNS lookups for the targets **you** configured
   (that's the product), plus the name-resolution watch's DNS queries: it asks
-  the resolvers your machine is configured with for the lookup names under
-  Config → DNS (seeded with `dns.google`, `one.one.one.one`, `dns.quad9.net`
-  and `dns.opendns.com`; edit or empty the list, or turn the watch off, and
-  those queries stop);
+  the resolvers your machine is configured with for a short list of lookup
+  names (seeded with `dns.google`, `one.one.one.one`, `dns.quad9.net` and
+  `dns.opendns.com`, editable in the `Dns.LookupNames` setting) and for the
+  names of your hostname targets; turn the watch off (`Dns.Enabled`) and those
+  queries stop;
 - only if you enable them, and only to endpoints you typed in: MQTT to your
   broker, webhooks to your URLs, the heartbeat ping;
 - only when you trigger them: the setup wizard's router probe (your own

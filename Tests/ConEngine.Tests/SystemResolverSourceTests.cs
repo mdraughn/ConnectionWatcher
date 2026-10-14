@@ -25,6 +25,14 @@ public class SystemResolverSourceTests
     }
 
     [Fact]
+    public void ParseResolvConf_keeps_a_numeric_IPv6_scope_that_dotnet_accepts()
+    {
+        var parsed = SystemResolverSource.ParseResolvConf(["nameserver fe80::1%3"]).Single();
+        Assert.Equal(3, parsed.ScopeId);
+        Assert.Equal(IPAddress.Parse("fe80::1%3"), parsed);
+    }
+
+    [Fact]
     public void Read_dedupes_puts_IPv4_first_and_flags_dockers_resolver()
     {
         var source = new SystemResolverSource(() =>

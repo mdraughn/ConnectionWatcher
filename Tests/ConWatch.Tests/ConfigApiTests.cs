@@ -197,7 +197,7 @@ public class ConfigApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Fresh_install_has_four_described_builtins()
+    public async Task Fresh_install_has_five_described_builtins()
     {
         var profiles = await _client.GetFromJsonAsync<List<ProfileDto>>("/api/v1/profiles");
         Assert.Equal(["Internal", "Local", "Path", "Public", "Resolver"], profiles!.Select(p => p.Name).OrderBy(n => n));

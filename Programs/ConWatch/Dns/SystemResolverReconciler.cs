@@ -41,6 +41,14 @@ public static class SystemResolverReconciler
             {
                 if (!watchActive)
                     continue;
+                if (result.Any(t => !t.SystemManaged
+                        && string.Equals(t.Probe, "dns", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(t.Address, address, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // The validator rejects two targets with the same address and probe; a hand-made one wins.
+                    log.Add($"skipped {address}: a target with a dns probe already exists at that address");
+                    continue;
+                }
                 var name = UniqueName(NameFor(resolver), result);
                 result.Add(new TargetDto
                 {

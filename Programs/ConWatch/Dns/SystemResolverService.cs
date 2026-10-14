@@ -12,8 +12,8 @@ namespace ConWatch.NameResolution;
 /// <summary>
 /// Keeps one system-managed Resolver target per resolver the host is
 /// configured to use (spec 2026-10-10 §4.3, D7). Reconciles at start, every
-/// <see cref="Interval"/>, when the OS network addresses change and when a
-/// Dns.* setting changes. Every change goes through ConfigService, which
+/// <see cref="Interval"/>, when the OS network addresses change, when the config
+/// changes (a hostname target can activate the watch) and when a Dns.* setting changes. Every change goes through ConfigService, which
 /// rebuilds the engine the way any config edit does. Hosted AFTER
 /// WatcherHostService so the config is seeded and the Resolver profile exists.
 /// </summary>
@@ -31,6 +31,7 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
     {
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         settings.SettingsChanged += OnSettingsChanged;
+        config.ConfigChanged += OnConfigChanged;
         try
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -62,6 +63,7 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
         {
             NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
             settings.SettingsChanged -= OnSettingsChanged;
+            config.ConfigChanged -= OnConfigChanged;
         }
     }
 
@@ -91,6 +93,10 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
     }
 
     private void OnNetworkChanged(object? sender, EventArgs e) => _wake.Writer.TryWrite(true);
+
+    // Any config edit may add a hostname target (which makes the watch active) or a hand-made
+    // dns target; a reconcile that finds nothing to do is a no-op, so this costs one per edit.
+    private void OnConfigChanged() => _wake.Writer.TryWrite(true);
 
     private void OnSettingsChanged(IReadOnlyDictionary<string, string?> written)
     {
@@ -134,7 +140,10 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
 
             var preview = PlanFor(await store.ExportAsync());
             if (!preview.Changed)
+            {
+                LogOnceWhenChanged(preview.Log);
                 return false;
+            }
             if (!preview.Retired.IsSubsetOf(retired))
                 await WriteRetiredAsync(retired.Union(preview.Retired, StringComparer.OrdinalIgnoreCase));
 
@@ -169,6 +178,19 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
         {
             _once.Release();
         }
+    }
+
+    private string _lastSkipLog = "";
+
+    // A skip repeats on every reconcile (5 min, each config edit); say it again only when it changes.
+    private void LogOnceWhenChanged(IReadOnlyList<string> lines)
+    {
+        var text = string.Join("; ", lines);
+        if (text == _lastSkipLog)
+            return;
+        _lastSkipLog = text;
+        foreach (var line in lines)
+            log.LogInformation("System resolvers: {Change}", line);
     }
 
     private Task WriteRetiredAsync(IEnumerable<string> addresses)

@@ -46,6 +46,22 @@ public class SystemResolverReconcilerTests
     }
 
     [Fact]
+    public void A_hand_made_dns_target_at_the_address_is_left_alone_and_logged()
+    {
+        var handMade = new TargetDto
+        {
+            Id = Guid.NewGuid(), Name = "My DNS", Address = "10.1.10.53", Profile = "Resolver",
+            Probe = "dns", Scope = TargetScope.Resolver,
+        };
+
+        var plan = SystemResolverReconciler.Reconcile([handMade], [Found("10.1.10.53")], true, NoneRetired);
+
+        Assert.False(plan.Changed);
+        Assert.Single(plan.Targets);
+        Assert.Equal("skipped 10.1.10.53: a target with a dns probe already exists at that address", Assert.Single(plan.Log));
+    }
+
+    [Fact]
     public void Nothing_is_created_while_the_watch_is_off()
     {
         var plan = SystemResolverReconciler.Reconcile([Router], [Found("10.1.10.1")], watchActive: false, NoneRetired);

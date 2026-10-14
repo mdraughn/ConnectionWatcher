@@ -60,8 +60,11 @@ public sealed class SystemResolverSource(Func<IEnumerable<IPAddress>> raw) : ISy
                 nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
                 continue;
             var properties = nic.GetIPProperties();
-            if (!properties.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork))
-                continue; // only interfaces that carry a default route resolve for the host
+            // Only interfaces that carry a real IPv4 default route resolve for the host; some VPN
+            // adapters list 0.0.0.0 as a gateway.
+            if (!properties.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork &&
+                    !g.Address.Equals(IPAddress.Any)))
+                continue;
             foreach (var address in properties.DnsAddresses)
                 yield return address;
         }
@@ -71,7 +74,7 @@ public sealed class SystemResolverSource(Func<IEnumerable<IPAddress>> raw) : ISy
         ParseResolvConf(File.ReadLines("/etc/resolv.conf"));
 
     /// <summary>"nameserver X" lines, in order; comments, options and unparsable entries are skipped;
-    /// an IPv6 zone suffix ("%eth0") is dropped.</summary>
+    /// an IPv6 zone suffix ("%eth0") is kept when .NET parses it, dropped otherwise.</summary>
     internal static IEnumerable<IPAddress> ParseResolvConf(IEnumerable<string> lines)
     {
         foreach (var raw in lines)
@@ -80,8 +83,10 @@ public sealed class SystemResolverSource(Func<IEnumerable<IPAddress>> raw) : ISy
             var parts = line.Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2 || !parts[0].Equals("nameserver", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var text = parts[1].Split('%', 2)[0];
-            if (IPAddress.TryParse(text, out var address))
+            // Keep the scope when .NET accepts the full token (a link-local resolver needs it to
+            // be reachable); otherwise drop the "%zone" and try the bare address.
+            if (IPAddress.TryParse(parts[1], out var address) ||
+                IPAddress.TryParse(parts[1].Split('%', 2)[0], out address))
                 yield return address;
         }
     }
