@@ -80,6 +80,7 @@ public static class ConWatchServices
         services.AddSingleton<ConInfrastructure.Discovery.IDiscoveryScanner, ConInfrastructure.Discovery.DiscoveryScanner>();
         services.AddSingleton<Discoveries.DiscoverySearchService>();
         services.AddSingleton<SettingsStore>();
+        services.AddSingleton<ConCore.Dns.IDohDetector>(_ => ConInfrastructure.NameResolution.DohConfiguration.ForThisPlatform());
         services.AddSingleton<ConfigHealth>();
         services.AddSingleton<ConPersistence.Report.IspReportBuilder>();
         services.AddSingleton<TransitionRecorder>();

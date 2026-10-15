@@ -51,6 +51,8 @@ public class ConWatchFactory : WebApplicationFactory<Program>
             services.AddSingleton<IPingTransceiverFactory>(Pings);
             services.RemoveAll<ConInfrastructure.NameResolution.ISystemResolverSource>();
             services.AddSingleton<ConInfrastructure.NameResolution.ISystemResolverSource>(Resolvers);
+            services.RemoveAll<ConCore.Dns.IDohDetector>();
+            services.AddSingleton<ConCore.Dns.IDohDetector>(new ConCore.Dns.NullDohDetector());
             TestServices?.Invoke(services);
         });
     }

@@ -192,4 +192,26 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
         Assert.Contains("dns-not-watched", codes);
         Assert.DoesNotContain("no-upstream-resolver", codes);
     }
+
+    [Fact]
+    public async Task A_system_resolver_that_Windows_resolves_over_DoH_gets_a_health_warning()
+    {
+        await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "Your resolver 192.168.1.1", Address = "192.168.1.1", Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true });
+            return ConfigResult.Ok();
+        });
+        await _settings.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.DnsLookupNames] = DnsLookupName.ToJson(DnsLookupName.Seeded) });
+        var health = new ConfigHealth(_factory, _settings, new FakeDoh(["192.168.1.1"]));
+        var warnings = await health.EvaluateAsync();
+        var doh = Assert.Single(warnings, w => w.Code == "dns-over-https");
+        Assert.Equal("Windows resolves through DNS-over-HTTPS for 192.168.1.1; the check measures port 53, so it may not reflect what Windows actually uses.", doh.Message);
+        Assert.DoesNotContain(await Codes(), c => c == "dns-over-https"); // the default evaluator has no detector
+    }
+
+    private sealed class FakeDoh(string[] configured) : ConCore.Dns.IDohDetector
+    {
+        public IReadOnlyList<string> AddressesUsingDoh(IEnumerable<string> resolverAddresses) =>
+            resolverAddresses.Where(a => configured.Contains(a, StringComparer.OrdinalIgnoreCase)).ToList();
+    }
 }

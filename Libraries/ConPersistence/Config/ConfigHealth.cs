@@ -11,7 +11,7 @@ public record HealthWarning(string Code, string Message);
 /// promises — chiefly whether the verdict layer has enough anchors to tell
 /// internet weather from a single site's incident.
 /// </summary>
-public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, SettingsStore settings)
+public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, SettingsStore settings, ConCore.Dns.IDohDetector? doh = null)
 {
     private const int RecommendedAnchors = 3;
 
@@ -78,6 +78,15 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         else if (!await db.Targets.AnyAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && !t.SystemManaged && t.Enabled))
             warnings.Add(new HealthWarning("no-upstream-resolver",
                 "Name a public resolver (1.1.1.1, 8.8.8.8, …) as an upstream Resolver target so ConnectionWatcher can tell your resolver from everyone's."));
+
+        if (doh is not null && dnsEnabled)
+        {
+            var enabledSystem = await db.Targets.Where(t => t.Scope == ConCore.Targets.TargetScope.Resolver && t.SystemManaged && t.Enabled)
+                .Select(t => t.Address).ToListAsync();
+            foreach (var address in doh.AddressesUsingDoh(enabledSystem))
+                warnings.Add(new HealthWarning("dns-over-https",
+                    $"Windows resolves through DNS-over-HTTPS for {address}; the check measures port 53, so it may not reflect what Windows actually uses."));
+        }
     }
 
     /// <summary>Every anchor carries the ISP's operator tag: the verdict then
