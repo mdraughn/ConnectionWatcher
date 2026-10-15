@@ -271,4 +271,21 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.DoesNotContain("NAS", report.Glitches.ChronicTargets);
         Assert.Contains(report.Targets, r => r.Name == "Google"); // verdict targets still reported
     }
+
+    [Fact]
+    public async Task DnsDown_time_is_its_own_figure_and_never_attributed_to_the_ISP()
+    {
+        var t0 = new DateTime(2026, 10, 14, 0, 0, 0, DateTimeKind.Utc);
+        await AddVerdict(t0, "Healthy");
+        await AddVerdict(t0.AddMinutes(10), "DnsDown");
+        await AddVerdict(t0.AddMinutes(25), "Healthy");
+        await AddVerdict(t0.AddMinutes(40), "LinkDown");
+        await AddVerdict(t0.AddMinutes(45), "Healthy");
+
+        var report = await _builder.BuildAsync(t0, t0.AddHours(1));
+
+        Assert.Equal(TimeSpan.FromMinutes(15), report.DnsDownTime);
+        Assert.Equal(TimeSpan.FromMinutes(5), report.LinkDownTime);
+        Assert.DoesNotContain(report.Episodes, e => e.Kind == "DnsDown");
+    }
 }

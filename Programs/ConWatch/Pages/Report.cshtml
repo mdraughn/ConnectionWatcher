@@ -34,6 +34,7 @@
     <li><b>Line down (attributable to the connection):</b> @ReportModel.Duration(r.LinkDownTime)</li>
     <li><b>Line degraded:</b> @ReportModel.Duration(r.LinkDegradedTime)</li>
     <li><b>Widespread internet disturbances ("weather"):</b> @ReportModel.Duration(r.WeatherTime)</li>
+    <li><b>Name-resolution failures (your resolver, not the connection):</b> @ReportModel.Duration(r.DnsDownTime)</li>
     <li><b>Measured anchor uptime:</b> @(r.AnchorUptimePercent is { } up ? $"{up:F3}%" : "no data")</li>
 </ul>
 <p>

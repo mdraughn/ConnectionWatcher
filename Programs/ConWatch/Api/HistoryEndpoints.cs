@@ -23,7 +23,8 @@ public static class HistoryEndpoints
             var rows = await HistoryQueries.TransitionsAsync(db, subjectId,
                 fromUtc, toUtc, limit, before, subjectName, scopeFilter);
             var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
-            var items = rows.Select(r => TransitionDto.From(r, localIds)).ToList();
+            var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
+            var items = rows.Select(r => TransitionDto.From(r, localIds, resolverIds)).ToList();
             long? nextBefore = rows.Count == Math.Clamp(limit, 1, 1000) ? rows.Last().Id : null;
             return Results.Ok(new { Items = items, NextBefore = nextBefore });
         });

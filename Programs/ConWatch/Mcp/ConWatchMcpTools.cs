@@ -102,7 +102,8 @@ public class ConWatchMcpTools(WatcherHostService host,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
             Math.Clamp(limit, 1, 500), before: null, subjectName, scopeFilter);
         var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
-        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, localIds)), Json);
+        var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
+        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, localIds, resolverIds)), Json);
     }
 
     [McpServerTool(Name = "get_glitches", ReadOnly = true)]

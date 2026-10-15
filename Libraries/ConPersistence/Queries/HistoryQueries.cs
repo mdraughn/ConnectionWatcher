@@ -75,6 +75,11 @@ public static class HistoryQueries
         (await db.Targets.AsNoTracking().Where(t => t.Scope == TargetScope.Local)
             .Select(t => t.Id).ToListAsync()).ToHashSet();
 
+    /// <summary>The ids of the current Resolver-scope targets, for tagging history rows with a scope.</summary>
+    public static async Task<HashSet<Guid>> ResolverTargetIdsAsync(ConWatchDbContext db) =>
+        (await db.Targets.AsNoTracking().Where(t => t.Scope == TargetScope.Resolver)
+            .Select(t => t.Id).ToListAsync()).ToHashSet();
+
     /// <summary>Glitches newest-first (by start, then id), optionally for one target and window.</summary>
     public static Task<List<GlitchRow>> GlitchesAsync(ConWatchDbContext db,
         Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit,

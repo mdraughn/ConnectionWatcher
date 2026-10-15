@@ -26,7 +26,7 @@ public record IspReport(DateTime FromUtc, DateTime ToUtc,
     List<string> PathNames, List<string> AnchorNames,
     TimeSpan LinkDownTime, TimeSpan LinkDegradedTime, TimeSpan WeatherTime,
     double? AnchorUptimePercent, List<ReportEpisode> Episodes, List<TargetReportRow> Targets,
-    GlitchSummary Glitches, string? OperatorName = null);
+    GlitchSummary Glitches, string? OperatorName = null, TimeSpan DnsDownTime = default);
 
 /// <summary>
 /// Builds the ISP evidence report. Attribution comes from the verdict history:
@@ -50,7 +50,8 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         return new IspReport(fromUtc, toUtc, pathNames, anchorNames,
             totals.GetValueOrDefault("LinkDown"), totals.GetValueOrDefault("LinkDegraded"),
             totals.GetValueOrDefault("InternetWeather"), anchorUptime, episodes, targets,
-            await BuildGlitchSummaryAsync(db, fromUtc, toUtc), operatorName);
+            await BuildGlitchSummaryAsync(db, fromUtc, toUtc), operatorName,
+            DnsDownTime: totals.GetValueOrDefault("DnsDown"));
     }
 
     private static async Task<GlitchSummary> BuildGlitchSummaryAsync(
@@ -109,6 +110,11 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
             {
                 episodes.Add(new ReportEpisode(state, cursor, end, evidence));
                 totals[state] = totals.GetValueOrDefault(state) + (end - cursor);
+            }
+            else if (end > cursor && state == "DnsDown")
+            {
+                // The user's resolver, not the connection: its own total, no episode.
+                totals["DnsDown"] = totals.GetValueOrDefault("DnsDown") + (end - cursor);
             }
         }
         foreach (var row in inRange)

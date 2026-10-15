@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConCore.Targets;
 using ConEngine.Events;
 using ConEngine.Tracking;
 using ConPersistence.Entities;
@@ -77,5 +78,22 @@ public class TransitionDtoTests
         Assert.Equal("Starting", json.GetProperty("from").GetString());
         Assert.Equal("Responding", json.GetProperty("to").GetString());
         Assert.Equal("2026-09-18T10:00:00.5+00:00", json.GetProperty("timestamp").GetString());
+    }
+
+    [Fact]
+    public void Row_whose_subject_is_a_resolver_target_reads_as_Resolver_scope()
+    {
+        var row = new TransitionRow
+        {
+            Id = 6, SubjectId = Subject, SubjectName = "1.1.1.1", SubjectKind = "Target",
+            FromState = "Responding", ToState = "Down", Trigger = "ThresholdCrossed",
+            TimestampUtc = new DateTime(2026, 10, 14, 10, 0, 0, DateTimeKind.Utc),
+        };
+        var none = new HashSet<Guid>();
+
+        Assert.Equal(TargetScope.Resolver, TransitionDto.From(row, none, new HashSet<Guid> { Subject }).Scope);
+        Assert.Equal(TargetScope.Local, TransitionDto.From(row, new HashSet<Guid> { Subject }, none).Scope);
+        Assert.Equal(TargetScope.Verdict, TransitionDto.From(row, none, none).Scope);
+        Assert.Equal(TargetScope.Verdict, TransitionDto.From(row, none).Scope);
     }
 }

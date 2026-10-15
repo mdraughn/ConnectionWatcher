@@ -110,4 +110,36 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
     [Fact]
     public void TryParse_rejects_anything_else()
         => Assert.False(ScopeFilters.TryParse("bogus", out _));
+
+    [Fact]
+    public async Task Resolver_target_transitions_stay_on_the_internet_side_and_are_tagged_Resolver()
+    {
+        var store = new ConfigStore(_factory);
+        await store.SeedAsync(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "203.0.113.1", Profile = "Internal" },
+                new TargetConfig { Name = "NAS", Address = "203.0.113.9", Profile = "Local", Scope = TargetScope.Local },
+                new TargetConfig { Name = "Resolver", Address = "203.0.113.53", Profile = "Internal", Scope = TargetScope.Resolver },
+            ],
+        });
+        var resolverId = (await store.LoadWatcherOptionsAsync()).Targets.Single(t => t.Name == "Resolver").Id!.Value;
+        await using (var seed = _factory.CreateDbContext())
+        {
+            seed.Transitions.Add(Row(resolverId, "Resolver", "Target", new DateTime(2026, 10, 1, 13, 0, 0, DateTimeKind.Utc)));
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = _factory.CreateDbContext();
+        var internet = await HistoryQueries.TransitionsAsync(db, null, null, null, 100, null, null, ScopeFilter.Internet);
+        var local = await HistoryQueries.TransitionsAsync(db, null, null, null, 100, null, null, ScopeFilter.Local);
+        var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
+        var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
+
+        var tagged = internet.Select(r => TransitionDto.From(r, localIds, resolverIds))
+            .Single(d => d.SubjectName == "Resolver");
+        Assert.Equal(TargetScope.Resolver, tagged.Scope);
+        Assert.DoesNotContain(local, r => r.SubjectName == "Resolver");
+    }
 }
