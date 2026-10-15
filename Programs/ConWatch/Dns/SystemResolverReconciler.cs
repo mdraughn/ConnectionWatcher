@@ -10,7 +10,9 @@ namespace ConWatch.NameResolution;
 /// result. A system-managed target is created when its address appears,
 /// deleted when it disappears (D10), disabled and remembered while the watch
 /// is off, and re-enabled when the watch returns only if this reconciler
-/// disabled it; a target the admin disabled stays disabled.
+/// disabled it; a target the admin disabled stays disabled. An empty OS list
+/// is no information (a link flap, sleep/resume or a failed read): nothing
+/// changes.
 /// </summary>
 public static class SystemResolverReconciler
 {
@@ -24,6 +26,9 @@ public static class SystemResolverReconciler
     public static Plan Reconcile(IReadOnlyList<TargetDto> targets, IReadOnlyList<SystemResolver> found,
         bool watchActive, IReadOnlySet<string> retired)
     {
+        if (found.Count == 0)
+            return new Plan(targets, retired, false, ["no resolvers found: keeping targets as they are"]);
+
         var retiredNow = new HashSet<string>(retired, StringComparer.OrdinalIgnoreCase);
         var result = targets.ToList();
         var log = new List<string>();

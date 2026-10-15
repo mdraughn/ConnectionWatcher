@@ -73,10 +73,10 @@ public class SystemResolverReconcilerTests
     public void A_vanished_address_deletes_the_managed_target_and_remembers_nothing()
     {
         var managed = Managed("10.1.10.1");
-        var plan = SystemResolverReconciler.Reconcile([Router, managed], [], true, NoneRetired);
+        var plan = SystemResolverReconciler.Reconcile([Router, managed], [Found("10.1.10.2")], true, NoneRetired);
 
         Assert.True(plan.Changed);
-        Assert.DoesNotContain(plan.Targets, t => t.SystemManaged);
+        Assert.Equal("10.1.10.2", Assert.Single(plan.Targets, t => t.SystemManaged).Address);
         Assert.Contains(plan.Targets, t => t.Name == "Router");
         Assert.Empty(plan.Retired);
         Assert.Contains("deleted Your resolver 10.1.10.1", plan.Log);
@@ -87,10 +87,10 @@ public class SystemResolverReconcilerTests
     {
         var retiredByUs = Managed("10.1.10.1", enabled: false);
         var byAdmin = Managed("10.1.10.2", enabled: false);
-        var plan = SystemResolverReconciler.Reconcile([retiredByUs, byAdmin], [], true, new HashSet<string> { "10.1.10.1" });
+        var plan = SystemResolverReconciler.Reconcile([retiredByUs, byAdmin], [Found("10.1.10.3")], true, new HashSet<string> { "10.1.10.1" });
 
         Assert.True(plan.Changed);
-        Assert.Empty(plan.Targets);
+        Assert.Equal("10.1.10.3", Assert.Single(plan.Targets).Address);
         Assert.Empty(plan.Retired); // the entry goes with the target
     }
 
@@ -98,9 +98,30 @@ public class SystemResolverReconcilerTests
     public void A_vanished_address_is_deleted_even_while_the_watch_is_off()
     {
         var managed = Managed("10.1.10.1");
-        var plan = SystemResolverReconciler.Reconcile([managed], [], false, NoneRetired);
-        Assert.Empty(plan.Targets);
+        var plan = SystemResolverReconciler.Reconcile([managed], [Found("10.1.10.2")], false, NoneRetired);
+        Assert.Empty(plan.Targets); // nothing is created while the watch is off
         Assert.Empty(plan.Retired);
+    }
+
+    /// <summary>Final review I1: a link flap, sleep/resume or a throwing read can report
+    /// no resolvers for a moment; that is no information, not "every resolver is gone".</summary>
+    [Fact]
+    public void An_empty_OS_list_is_no_information_and_changes_nothing()
+    {
+        var enabled = Managed("10.1.10.1");
+        var byAdmin = Managed("10.1.10.2", enabled: false);
+        var retiredByUs = Managed("10.1.10.3", enabled: false);
+        var retired = new HashSet<string> { "10.1.10.3" };
+
+        foreach (var watchActive in new[] { true, false })
+        {
+            var plan = SystemResolverReconciler.Reconcile([Router, enabled, byAdmin, retiredByUs], [], watchActive, retired);
+
+            Assert.False(plan.Changed);
+            Assert.Equal([Router, enabled, byAdmin, retiredByUs], plan.Targets);
+            Assert.Equal(retired, plan.Retired);
+            Assert.Equal(["no resolvers found: keeping targets as they are"], plan.Log);
+        }
     }
 
     [Fact]
