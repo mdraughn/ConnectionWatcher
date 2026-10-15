@@ -98,7 +98,7 @@ The coordinator today: `Classify` decides reachability first (one counted anchor
   2. `Dns.Enabled` and the combined lookup list is non-empty;
   3. at least one enabled system resolver is determined;
   4. **every** enabled system resolver is `Down`.
-  `Starting`, `Faltering` and `Recovering` resolvers do not count as Down. While some system resolvers are undetermined and the rest are Down, the coordinator waits under the same `StillWaiting`/`AnchorWaitCap` machinery as the anchor wait (the two waits cannot coexist: the anchor wait only runs when no anchor answers), returning `Unknown` ("Waiting for resolvers to report") for at most 30 s.
+  `Starting`, `Faltering` and `Recovering` resolvers do not count as Down. While some system resolvers are undetermined and the rest are Down, the coordinator waits under the same `AnchorWaitCap` (30 s) before concluding, but the verdict stays whatever the anchors prove (`Healthy`, `SiteIncident`, …) during that wait: a resolver wait only delays `DnsDown`, it never turns a reachable internet into `Unknown` (ruling 2026-10-15). The anchor wait and the resolver wait keep separate clocks.
 - **Construction.** The coordinator receives the Resolver-scope monitors (system-managed and upstream, from the monitors dictionary it already gets) and a `DnsWatchEnabled` flag. Resolver transitions already trigger `Recalculate`, because `Start()` subscribes to every monitor.
 - **`VerdictSnapshot` gains `Dns`** (a `DnsBlame?` record: `Kind`, `Message`, `Resolvers[]` with address and last `Message`). `Operator` is null for `DnsDown`. `Map(DnsDown)` is `HostState.Down`, so the verdict transition reads as an outage to anything that keys on the mapped state.
 - **Blame**, decided from the upstream resolvers:
