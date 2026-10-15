@@ -128,4 +128,18 @@ public class TrayStatusTests
         Assert.Equal(TrayState.Healthy, info.State);
         Assert.Equal("Router", Assert.Single(info.Critical).Name);
     }
+
+    [Theory]
+    [InlineData("ResolverPartial", "Your resolver 10.0.0.2", "Your resolver 10.0.0.2 isn't answering (another resolver is)")]
+    [InlineData("ResolverLying", "Your resolver 10.0.0.1", "Your resolver 10.0.0.1 answers with the wrong addresses")]
+    [InlineData("ResolverFiltered", "Your resolver 10.0.0.1", "Your resolver 10.0.0.1 blocks the lookup names")]
+    [InlineData("UpstreamResolverDown", "1.1.1.1 directly", "1.1.1.1 directly isn't answering")]
+    [InlineData("NameUnresolvable", null, "A lookup name isn't resolving anywhere")]
+    public void Resolver_notes_have_short_labels(string kind, string? target, string expected)
+    {
+        var name = target is null ? "null" : $"\"{target}\"";
+        var info = TrayStatus.FromStatusJson(With(
+            $"[{{\"key\":\"k\",\"kind\":\"{kind}\",\"targetName\":{name},\"message\":\"m\",\"since\":\"x\",\"acknowledged\":false}}]"));
+        Assert.Equal([expected], info.Notes);
+    }
 }

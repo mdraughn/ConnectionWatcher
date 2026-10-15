@@ -39,7 +39,7 @@ export interface VerdictStatus {
  *  with what the probes prove. Never part of the verdict. */
 export interface ModelWarning {
   key: string;
-  kind: "HopBypassed" | "NeverAnswered" | "UnprovableUp" | "ProbeOnlyLoss" | string;
+  kind: "HopBypassed" | "NeverAnswered" | "UnprovableUp" | "ProbeOnlyLoss" | "ResolverPartial" | "ResolverLying" | "ResolverFiltered" | "UpstreamResolverDown" | "NameUnresolvable" | string;
   targetId?: string | null;
   targetName?: string | null;
   message: string;

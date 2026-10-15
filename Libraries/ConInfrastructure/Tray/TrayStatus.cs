@@ -134,6 +134,11 @@ public static class TrayStatus
             "NeverAnswered" when target is not null => $"{target} never answers its probe",
             "UnprovableUp" => "Can't prove the internet is up beyond your ISP",
             "ProbeOnlyLoss" when target is not null => $"{target} drops its own pings (forwards fine)",
+            "ResolverPartial" when target is not null => $"{target} isn't answering (another resolver is)",
+            "ResolverLying" when target is not null => $"{target} answers with the wrong addresses",
+            "ResolverFiltered" when target is not null => $"{target} blocks the lookup names",
+            "UpstreamResolverDown" when target is not null => $"{target} isn't answering",
+            "NameUnresolvable" => "A lookup name isn't resolving anywhere",
             _ => "ConnectionWatcher note",
         };
     }

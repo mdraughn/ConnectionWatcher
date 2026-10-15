@@ -19,6 +19,16 @@ public enum ModelWarningKind
     UnprovableUp,
     /// <summary>A hop keeps dropping its own probes while forwarding fine (spec §4.5, §4.6).</summary>
     ProbeOnlyLoss,
+    /// <summary>Some, not all, system resolvers are Down while another answers.</summary>
+    ResolverPartial,
+    /// <summary>A resolver keeps returning wrong addresses for a seeded name.</summary>
+    ResolverLying,
+    /// <summary>A resolver blocks the seeded lookup names (a blocklist), so they can't prove resolution.</summary>
+    ResolverFiltered,
+    /// <summary>An upstream resolver is Down while a system resolver answers.</summary>
+    UpstreamResolverDown,
+    /// <summary>One lookup name misses on every answering resolver while other names hit.</summary>
+    NameUnresolvable,
 }
 
 /// <summary>One condition that holds right now. Keyed so the same condition
@@ -34,6 +44,11 @@ public sealed record ModelCondition(string Key, ModelWarningKind Kind, Guid? Tar
             ModelWarningKind.NeverAnswered => "never-answered",
             ModelWarningKind.UnprovableUp => "unprovable-up",
             ModelWarningKind.ProbeOnlyLoss => "probe-only-loss",
+            ModelWarningKind.ResolverPartial => "resolver-partial",
+            ModelWarningKind.ResolverLying => "resolver-lying",
+            ModelWarningKind.ResolverFiltered => "resolver-filtered",
+            ModelWarningKind.UpstreamResolverDown => "upstream-resolver-down",
+            ModelWarningKind.NameUnresolvable => "name-unresolvable",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
         return targetId is { } id ? $"{kindKey}:{id:D}" : kindKey;
@@ -86,6 +101,8 @@ public class ModelCheckCoordinator : IDisposable
     private readonly TimeProvider _time;
     private readonly ILogger<ModelCheckCoordinator> _log;
     private readonly LossWindows? _loss;
+    private readonly ConEngine.Dns.DnsWatch _dns;
+    private readonly ConEngine.Dns.DnsResultLog? _dnsResults;
     private readonly Lock _lock = new();
     private readonly Lock _publishLock = new();
     private readonly ConcurrentQueue<ModelConditionChange> _outbox = new();
@@ -101,13 +118,16 @@ public class ModelCheckCoordinator : IDisposable
 
     public ModelCheckCoordinator(TargetGraph graph, IReadOnlyDictionary<Guid, TargetMonitor> monitors,
         bool unprovableUp, TimeProvider timeProvider, ILogger<ModelCheckCoordinator> log,
-        LossWindows? loss = null)
+        LossWindows? loss = null, ConEngine.Dns.DnsWatch? dnsWatch = null,
+        ConEngine.Dns.DnsResultLog? dnsResults = null)
     {
         _monitors = monitors;
         _unprovableUp = unprovableUp;
         _time = timeProvider;
         _log = log;
         _loss = loss;
+        _dns = dnsWatch ?? ConEngine.Dns.DnsWatch.Off;
+        _dnsResults = dnsResults;
         foreach (var id in monitors.Keys)
         {
             // GetDescendants is breadth-first: the first answering one is the nearest witness.
@@ -215,6 +235,8 @@ public class ModelCheckCoordinator : IDisposable
                 }
             }
 
+            CheckResolvers(found, states);
+
             foreach (var key in _active.Keys.Where(k => !found.ContainsKey(k)).ToList())
             {
                 _outbox.Enqueue(new ModelConditionChange(_active[key], false, now));
@@ -257,6 +279,85 @@ public class ModelCheckCoordinator : IDisposable
     }
 
     private static string Pct(double value) => value.ToString("P0", CultureInfo.InvariantCulture);
+
+    public const int ResolverWindow = 10;
+    public const int ResolverRaise = 3;
+    public const int NameMisses = 3;
+
+    private void CheckResolvers(Dictionary<string, ModelCondition> found, IReadOnlyDictionary<Guid, HostState> states)
+    {
+        if (!_dns.Enabled || _dnsResults is null || _dns.System.Count == 0)
+            return;
+        var system = _dns.System.Where(m => states.ContainsKey(m.Target.Id))
+            .Select(m => (Monitor: m, State: states[m.Target.Id])).ToList();
+        var upstream = _dns.Upstream.Where(m => states.ContainsKey(m.Target.Id)).ToList();
+        var answering = system.Where(s => TopologyCoordinator.Answering(s.State)).ToList();
+        var down = system.Where(s => s.State is HostState.Down or HostState.Unreachable).ToList();
+
+        // ResolverPartial: some, not all, system resolvers Down.
+        if (answering.Count > 0 && down.Count > 0)
+            foreach (var (monitor, _) in down)
+                Add(found, ModelWarningKind.ResolverPartial, monitor.Target,
+                    $"Your secondary resolver {monitor.Target.Address} isn't answering; {answering[0].Monitor.Target.Address} is.");
+
+        // UpstreamResolverDown: a system resolver answers but an upstream one is Down.
+        if (answering.Count > 0)
+            foreach (var up in upstream.Where(m => states[m.Target.Id] is HostState.Down or HostState.Unreachable))
+                Add(found, ModelWarningKind.UpstreamResolverDown, up.Target,
+                    $"{up.Target.Address} isn't answering direct queries; your resolver is fine.");
+
+        // ResolverLying / ResolverFiltered, per resolver, from the result log.
+        foreach (var monitor in system.Select(s => s.Monitor).Concat(upstream))
+        {
+            var recent = _dnsResults.Recent(monitor.Target.Id);
+            var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Answered").TakeLast(ResolverWindow).ToList();
+            var lies = judged.Where(r => r.Outcome == "WrongAnswer").ToList();
+            if (lies.Count >= ResolverRaise)
+            {
+                var last = lies[^1];
+                var detail = last.Message[(last.Message.IndexOf(':') + 1)..].Trim();
+                detail = detail[..detail.LastIndexOf(" (", StringComparison.Ordinal)];
+                Add(found, ModelWarningKind.ResolverLying, monitor.Target,
+                    $"{monitor.Target.Name} answered {last.Name} with {detail} — a captive portal or interception?");
+            }
+            else if (ConEngine.Dns.DnsSummary.IsFiltered(recent))
+            {
+                var last = judged.Last(r => r.Outcome == "Filtered");
+                var detail = last.Message[(last.Message.IndexOf(':') + 1)..].Trim();
+                detail = detail[..detail.LastIndexOf(" (", StringComparison.Ordinal)];
+                Add(found, ModelWarningKind.ResolverFiltered, monitor.Target,
+                    $"{monitor.Target.Name} blocks {last.Name} (answered {detail}) — a Pi-hole or AdGuard blocklist? " +
+                    "Name resolution still works; the seeded lookup names can't prove it. Add a lookup name your resolver allows.");
+            }
+        }
+
+        // NameUnresolvable: one name missed its last NameMisses asks on every answering
+        // resolver that asked it, while some other name hit on each of them.
+        var answeringResolvers = system.Select(s => s.Monitor).Concat(upstream)
+            .Where(m => TopologyCoordinator.Answering(states[m.Target.Id])).ToList();
+        if (answeringResolvers.Count == 0)
+            return;
+        var byName = new Dictionary<string, (int Resolvers, int Failing)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var monitor in answeringResolvers)
+        {
+            var recent = _dnsResults.Recent(monitor.Target.Id);
+            if (!recent.Any(r => r.Success && r.Name is not null))
+                continue; // nothing hit here: no basis to single out a name
+            foreach (var group in recent.Where(r => r.Name is not null).GroupBy(r => r.Name!, StringComparer.OrdinalIgnoreCase))
+            {
+                var lastAsks = group.TakeLast(NameMisses).ToList();
+                var failing = lastAsks.Count == NameMisses && lastAsks.All(r => !r.Success);
+                var entry = byName.GetValueOrDefault(group.Key);
+                byName[group.Key] = (entry.Resolvers + 1, entry.Failing + (failing ? 1 : 0));
+            }
+        }
+        foreach (var (name, (resolvers, failing)) in byName)
+            if (resolvers == answeringResolvers.Count && failing == resolvers)
+            {
+                Add(found, ModelWarningKind.NameUnresolvable, null, $"{name} isn't resolving anywhere.");
+                break; // one note; the key has no target
+            }
+    }
 
     private static void Add(Dictionary<string, ModelCondition> found, ModelWarningKind kind,
         Target? target, string message)
