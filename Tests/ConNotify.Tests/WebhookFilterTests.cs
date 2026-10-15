@@ -146,4 +146,16 @@ public class WebhookFilterTests
         Assert.False(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Down), true, true));
         Assert.True(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Down), false, true));
     }
+
+    [Fact]
+    public void A_DnsDown_verdict_passes_verdict_only_and_a_resolver_target_flap_is_a_target_like_any_other()
+    {
+        var verdict = T(HostState.Responding, HostState.Down, TransitionSubjectKind.Verdict, TransitionTrigger.VerdictChanged) with
+        {
+            Reason = new TransitionReason { Trigger = TransitionTrigger.VerdictChanged, Verdict = "DnsDown" },
+        };
+        Assert.True(WebhookFilter.ShouldDeliver(verdict, verdictOnly: true, skipExplained: true));
+        // The scope filter lives in WebhookNotifier.Attach (IsSideSubject); the pure filter only sees kinds.
+        Assert.False(WebhookFilter.ShouldDeliver(T(HostState.Responding, HostState.Down), verdictOnly: true, skipExplained: true));
+    }
 }

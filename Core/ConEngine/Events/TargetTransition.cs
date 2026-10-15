@@ -28,6 +28,9 @@ public record TransitionReason
     public string? Detail { get; init; }
     /// <summary>Verdict label (e.g. "InternetWeather") when Trigger is VerdictChanged.</summary>
     public string? Verdict { get; init; }
+    /// <summary>The name-resolution blame when Verdict is DnsDown (spec 2026-10-10 §5.4):
+    /// who isn't answering and whether a public resolver still does. Null for every other verdict.</summary>
+    public ConEngine.Topology.DnsBlame? Dns { get; init; }
 
     public override string ToString()
     {

@@ -172,4 +172,30 @@ public class WebhookPayloadTests
         Assert.Equal(JsonValueKind.Null, json.GetProperty("ancestorId").ValueKind);
         Assert.Equal("Down", json.GetProperty("to").GetString());
     }
+
+    [Fact]
+    public void A_DnsDown_verdict_carries_the_blame_as_dns_and_other_verdicts_omit_it()
+    {
+        var blame = new ConEngine.Topology.DnsBlame(ConEngine.Topology.DnsBlameKind.YourResolver,
+            "Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly.", ["10.1.10.1"]);
+        var dnsDown = new TargetTransition
+        {
+            Kind = TransitionSubjectKind.Verdict, TargetId = Guid.NewGuid(), TargetName = "Internet",
+            From = HostState.Responding, To = HostState.Down, Timestamp = DateTimeOffset.Parse("2026-10-15T12:00:00Z"),
+            Reason = new TransitionReason
+            {
+                Trigger = TransitionTrigger.VerdictChanged, Verdict = "DnsDown",
+                Detail = "DnsDown: Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly.", Dns = blame,
+            },
+        };
+        var json = JsonSerializer.Deserialize<JsonElement>(WebhookPayload.ToJson(dnsDown));
+        var dns = json.GetProperty("dns");
+        Assert.Equal("YourResolver", dns.GetProperty("kind").GetString());
+        Assert.Contains("10.1.10.1", dns.GetProperty("message").GetString());
+        Assert.Equal(["10.1.10.1"], dns.GetProperty("resolvers").EnumerateArray().Select(e => e.GetString()!).ToArray());
+
+        var linkDown = dnsDown with { Reason = new TransitionReason { Trigger = TransitionTrigger.VerdictChanged, Verdict = "LinkDown", Detail = "LinkDown: Modem is Down" } };
+        var other = JsonSerializer.Deserialize<JsonElement>(WebhookPayload.ToJson(linkDown));
+        Assert.False(other.TryGetProperty("dns", out _)); // omitted, never null (Review Focus 1)
+    }
 }

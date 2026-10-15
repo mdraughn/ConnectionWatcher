@@ -114,7 +114,10 @@ public class VerdictDnsDownTests
         Assert.Equal(DnsBlameKind.YourResolver, blame.Kind);
         Assert.Equal("Your resolver 192.168.1.1 isn't answering, but 9.9.9.9 answers directly.", blame.Message);
         Assert.Equal(["192.168.1.1", "192.168.1.2"], blame.Resolvers);
-        Assert.Contains(_transitions, t => t.To == HostState.Down && t.Reason.Verdict == "DnsDown");
+        var transition = Assert.Single(_transitions, t => t.To == HostState.Down && t.Reason.Verdict == "DnsDown");
+        Assert.NotNull(transition.Reason.Dns);
+        Assert.Equal(DnsBlameKind.YourResolver, transition.Reason.Dns!.Kind);
+        Assert.Contains("192.168.1.1", transition.Reason.Dns.Resolvers);
         Assert.Null(_verdict.CurrentOperator);
     }
 

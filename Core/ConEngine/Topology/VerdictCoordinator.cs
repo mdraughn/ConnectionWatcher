@@ -278,6 +278,7 @@ public class VerdictCoordinator : IDisposable
                     Trigger = TransitionTrigger.VerdictChanged,
                     Verdict = verdict.ToString(),
                     Detail = detail,
+                    Dns = dns,
                 },
             };
             // Queued under the lock (queue order is state order), published after it.

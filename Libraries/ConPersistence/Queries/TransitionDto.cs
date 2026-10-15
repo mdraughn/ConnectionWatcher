@@ -5,6 +5,13 @@ using ConPersistence.Entities;
 
 namespace ConPersistence.Queries;
 
+/// <summary>The DnsDown blame on a verdict transition, as webhooks and MQTT publish it.</summary>
+public sealed record TransitionDnsBlame(string Kind, string Message, IReadOnlyList<string> Resolvers)
+{
+    public static TransitionDnsBlame? From(ConEngine.Topology.DnsBlame? b) =>
+        b is null ? null : new(b.Kind.ToString(), b.Message, b.Resolvers);
+}
+
 /// <summary>
 /// The one wire shape of a state transition, whether read back from the log
 /// (GET /api/v1/transitions, the MCP get_transitions tool) or pushed live
@@ -38,6 +45,9 @@ public sealed record TransitionDto
     /// omitted on live messages, whose subscribers know their targets.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TargetScope? Scope { get; init; }
+    /// <summary>Present only on a DnsDown verdict transition (live messages); history rows do not keep it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TransitionDnsBlame? Dns { get; init; }
 
     public static TransitionDto From(TargetTransition t) => new()
     {
@@ -55,6 +65,7 @@ public sealed record TransitionDto
         Detail = t.Reason.Detail,
         Verdict = t.Reason.Verdict,
         AvgRtt = t.AverageRoundtripTime,
+        Dns = TransitionDnsBlame.From(t.Reason.Dns),
     };
 
     public static TransitionDto From(TransitionRow r) => new()
