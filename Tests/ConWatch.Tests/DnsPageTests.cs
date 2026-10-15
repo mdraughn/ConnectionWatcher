@@ -37,4 +37,49 @@ public class DnsPageTests : IDisposable
         Assert.True(fallback.IndexOf("Your resolver 10.0.0.53", StringComparison.Ordinal) > heading,
             "the resolver is listed under the heading, never as a tree root");
     }
+
+    [Fact]
+    public async Task The_DNS_page_lists_system_resolvers_including_disabled_ones_and_the_seeded_names()
+    {
+        await SeedWithResolverAsync();
+        var targets = await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets");
+        var managed = targets!.Single(t => t.SystemManaged);
+        (await _client.PutAsJsonAsync($"/api/v1/targets/{managed.Id}", managed with { Enabled = false })).EnsureSuccessStatusCode();
+
+        var html = await _client.GetStringAsync("/Config/Dns");
+        Assert.Contains("found from your network settings", html);
+        Assert.Contains("Your resolver 10.0.0.53", html);
+        Assert.Contains("data-resolver-enabled=\"false\"", html);      // the disabled one is still listed
+        Assert.Contains("dns.google", html);
+        Assert.Contains("Seeded names are checked against their known answers", html);
+        Assert.Contains("href=\"/Config/Dns\"", await _client.GetStringAsync("/Config/Targets")); // the tab
+    }
+
+    [Fact]
+    public async Task Adding_and_removing_an_upstream_resolver_and_a_lookup_name_round_trips_through_the_endpoints_the_page_uses()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        // Upstream resolver, as the page posts it.
+        var created = await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "1.1.1.1 directly", address = "1.1.1.1", profile = "Resolver", probe = "dns", scope = "Resolver",
+        });
+        created.EnsureSuccessStatusCode();
+        var html = await _client.GetStringAsync("/Config/Dns");
+        Assert.Contains("1.1.1.1 directly", html);
+
+        // Lookup names: the page keeps seeded entries' expected addresses and appends plain names.
+        var seeded = ConCore.Dns.DnsLookupName.Seeded;
+        var kept = seeded.Where(n => n.Name != "dns.opendns.com").ToList();
+        var json = ConCore.Dns.DnsLookupName.ToJson(kept.Append(new ConCore.Dns.DnsLookupName("router.lan", [])));
+        (await _client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?> { ["Dns.LookupNames"] = json }))
+            .EnsureSuccessStatusCode();
+        html = await _client.GetStringAsync("/Config/Dns");
+        Assert.DoesNotContain("dns.opendns.com", html);
+        Assert.Contains("router.lan", html);
+        var stored = ConCore.Dns.DnsLookupName.FromJson(
+            (await _client.GetFromJsonAsync<Dictionary<string, string>>("/api/v1/settings"))!["Dns.LookupNames"]);
+        Assert.Equal(["8.8.8.8", "8.8.4.4"], stored.Single(n => n.Name == "dns.google").Expected); // untouched
+        Assert.Empty(stored.Single(n => n.Name == "router.lan").Expected);
+    }
 }

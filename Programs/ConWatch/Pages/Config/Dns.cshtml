@@ -1,0 +1,88 @@
+@page
+@using System.Text.Json
+@using ConPersistence.Settings
+@model ConWatch.Pages.Config.DnsModel
+@{
+    ViewData["Title"] = "DNS — ConnectionWatcher";
+    var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+}
+
+<div class="cw-pageband">
+    <div class="titles">
+        <h2>DNS</h2>
+        <p>The name-resolution watch: the resolvers this machine uses, the public resolver you named, and the names they are asked for.</p>
+    </div>
+</div>
+<partial name="_ConfigTabs" model="@("dns")" />
+<partial name="_HealthBanner" model="Model.Warnings" />
+
+<h3>Watch</h3>
+<ul class="form-errors" id="watch-errors"></ul>
+<form id="watch-form">
+    <label>
+        <input type="checkbox" role="switch" id="dns-enabled" @(Model.Enabled ? "checked" : "") />
+        Watch name resolution
+    </label>
+    <input type="hidden" name="@SettingKeys.DnsEnabled" value="@(Model.Enabled ? "true" : "false")" />
+    <p><small>Off: the resolvers below are kept but not probed, and the verdict never says name lookups are failing.</small></p>
+    <button type="submit">Save</button>
+</form>
+
+<h3>Your resolvers <small>found from your network settings</small></h3>
+<table>
+    <thead><tr><th>Name</th><th>Address</th><th>Enabled</th></tr></thead>
+    <tbody>
+    @foreach (var r in Model.SystemResolvers)
+    {
+        <tr data-resolver-id="@r.Id" data-resolver-enabled="@(r.Enabled ? "true" : "false")" data-json="@json(r)">
+            <td>@r.Name</td><td>@r.Address</td>
+            <td><input type="checkbox" role="switch" data-toggle-resolver @(r.Enabled ? "checked" : "") aria-label="Enabled" /></td>
+        </tr>
+    }
+    @if (Model.SystemResolvers.Count == 0)
+    {
+        <tr><td colspan="3"><i>None found yet — they appear within a minute of the first start.</i></td></tr>
+    }
+    </tbody>
+</table>
+
+<h3>Public resolver <small>asked directly, to tell your resolver from everyone's</small></h3>
+<table>
+    <thead><tr><th>Name</th><th>Address</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var r in Model.UpstreamResolvers)
+    {
+        <tr>
+            <td>@r.Name</td><td>@r.Address</td>
+            <td><button class="outline" data-delete-resolver="@r.Id" data-name="@r.Name">Remove</button></td>
+        </tr>
+    }
+    </tbody>
+</table>
+<form id="upstream-form" class="grid">
+    <label>Address <input name="address" placeholder="1.1.1.1" required /></label>
+    <label>Name <input name="name" placeholder="1.1.1.1 directly" /></label>
+    <div style="align-self: end"><button type="submit">Add resolver</button></div>
+</form>
+<ul class="form-errors" id="upstream-errors"></ul>
+
+<h3>Lookup names</h3>
+<p><small>Seeded names are checked against their known answers; a name you add counts as resolved whenever the resolver answers it.</small></p>
+<ul id="name-list">
+    @foreach (var n in Model.LookupNames)
+    {
+        <li data-name="@n.Name">@n.Name @if (n.HasExpected) { <span class="cw-chip">seeded</span> }
+            <button class="outline" type="button" data-remove-name="@n.Name">Remove</button></li>
+    }
+</ul>
+<form id="name-form" class="grid">
+    <label>Add a name <input name="name" placeholder="router.lan" required /></label>
+    <div style="align-self: end"><button type="submit">Add name</button></div>
+</form>
+<ul class="form-errors" id="name-errors"></ul>
+
+@section Scripts {
+    <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script>window.dnsLookupNames = @Html.Raw(Model.LookupNamesJson);</script>
+    <script src="~/lib/site-dns.js" asp-append-version="true"></script>
+}
