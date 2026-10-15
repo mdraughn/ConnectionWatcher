@@ -3,11 +3,10 @@
 [![ci](https://github.com/mdraughn/ConnectionWatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mdraughn/ConnectionWatcher/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A home internet connectivity monitor. It pings a hierarchy of targets — LAN
-devices, the router, the cable modem, upstream ISP hops, and external anchors
-like Google and Cloudflare — and answers the question *"is my internet down,
-and what kind of down is it?"*: a single site's incident, general internet
-weather, or your own link.
+A home internet connectivity monitor that answers the question *"is my internet down,
+and what kind of down is it?"*
+
+ConnectionWatcher monitors your path to the internet and periodically checks a few key websites, giving it the ability to pretty accurately tell the difference between problems out on the internet and problems with your connection to it.
 
 ![The dashboard: verdict, uptime clock, and the path to the internet](docs/images/dashboard.png)
 
@@ -32,112 +31,90 @@ is multi-arch (amd64 + arm64: Intel/ARM Synology, Raspberry Pi, any Linux);
 
 Image tags: `latest` is the newest stable release (also `1.2.3`, `1.2`, `1`
 to pin a line); `edge` is the newest build from `master`, for people who
-like to live there. Every build also carries a `sha-<commit>` tag. Windows
-installers ship with each release on the
-[Releases page](https://github.com/mdraughn/ConnectionWatcher/releases): a
+like to live there.
+
+Windows installers ship with each release on the [Releases page](https://github.com/mdraughn/ConnectionWatcher/releases): a
 Setup wizard and a zip. Either way the result is one folder with the
 `conwatch` command — see [Running unattended](#running-unattended).
-
-## Running from source
-
-```powershell
-dotnet run --project Programs/ConWatch
-```
-
-- The SQLite database lives at `data/conwatch.db` (relative to the working
-  directory; configurable via `Persistence:DbPath`). Schema migrations apply
-  automatically at startup.
-- Configuration (targets, profiles, pools) lives **in the database** and is
-  edited through the REST API under `/api/v1` — Swagger UI at `/swagger` in
-  Development. On first boot, a `Watcher` section in appsettings.json (if
-  present) seeds the config; after that the DB is the source of truth.
-  Timestamps in query strings (`from`, `to`) are ISO-8601; an explicit offset
-  is honored and **no offset means UTC**, never the server's local zone.
-- The verdict layer (`Verdict:AnchorPool`) names the pool whose members act as
-  internet anchors; with intermediates healthy, one degraded anchor is a
-  SiteIncident, two or more (configurable) is InternetWeather.
 
 ## First run
 
 With an empty configuration, ConWatch opens the **quick-setup wizard**: it
-detects your router (confirm it — inside a container the detected gateway may
-be the container bridge), offers four public anycast DNS anchors, optionally
+detects your router, offers four public anycast DNS anchors, optionally
 discovers your router's WAN address via UPnP, and starts monitoring with one
-click. It also asks which public resolver you use, so ConnectionWatcher can tell your
-resolver from everyone's. The **Admin** page holds database stats, retention/verdict settings,
-and the danger zone (clear history / factory reset, type-to-confirm).
+click. It also asks which public resolver you use, so
+ConnectionWatcher can tell your resolver from everyone's.
 
-Restarts are warm: after an update, reboot, or config change, ConWatch resumes
-its last known states immediately (shown as *assumed* and burst-confirmed by
-fresh pings within seconds) instead of re-measuring the world from scratch —
-the timelines stay continuous and no restart noise is recorded. Seeding from
-the database applies only when the watcher was down briefly (the
-`Engine.WarmRestartMaxGapMinutes` setting, default 10 minutes; 0 disables).
+**Note:** When running inside a container, router autodetect may find the container bridge
+rather than your home router.
 
-Hostname targets follow DNS: the name is re-resolved every five minutes and
-immediately when the target goes Down, and an address that has left the
-answer set is replaced without resetting the target's history. Two targets
-may share an address (say, the router by ICMP and by `tcp:443`); each is
-probed and tracked on its own.
+For better results, you can add the IP addresses of some of your Internet Service Provider's networking equipment to the path to the internet listed on the **Targets** page. This will allow ConnectionWatcher to detect and show your path to the internet. You can find the IP addresses of some of these nodes on the Traceroute page, but be aware that ISPs change their network around from time to time, so those addresses may be reassigned to other purposes.
 
 ## Web UI
 
 ConWatch serves its UI at the root:
 
-- **Dashboard** (`/`) — verdict banner, live reachability tree (SignalR)
-  with per-target success rate and latency at a glance. Bottom status bar
-  shows the latest event.
-- **Dashboard story** — around the live tree: the **event strip** (the last
-  N minutes as one row of minute bins right under the verdict banner), the
-  **incident ledger** (the 10 most recent events, each as one plain-English
-  sentence — "Your link went down for 4 min. LinkDown: Comcast — Comcast
-  Edge is Down"), and the recent-glitch list. All displays share one
-  encoding: shape = scope (bar = shared path, dot = one site), hue = whose
-  gear (warm = out there, grey = yours), depth = severity (glitch →
-  degraded → out).
-- **History** (`/History`) — the evidence: uptime stats, latency band, loss
-  chart, per-subject state ribbon, the **recurrence punchcard** (hours ×
-  days over 30 days; a nightly gremlin reads as a horizontal run), the
-  **cause-aligned ribbon board** — every target on one shared axis, trunk
-  rows in grey, hatching for "unreachable behind a down parent", so one
-  incident reads as a vertical stripe across exactly the rows it touched —
-  and a 90-day incident ledger. Detection is aggressive: the first lost
-  ping starts a 1-second-interval burst on that target AND a corroboration
-  sweep across all anchors and the trunk, so even a few-second wobble yields
-  enough evidence to classify.
-- **Data** (`/Data`) — the record: database statistics, all exports
-  (transitions/rollups/glitches as CSV or JSON, the sanitized snapshot
-  document), the ISP report link, and the retention settings that keep the
-  database from growing forever (minute rollups → hourly → daily).
-- **Targets** (`/Config/Targets`, `/Config/Profiles`, `/Config/Pools`) — CRUD
-  with inline validation errors, plus whole-config export/import. Targets can
-  carry an optional **ISP/operator name** ("Comcast"): link verdicts then say
-  "LinkDown: Comcast — External Router is Down", the ISP report titles itself
-  with the provider, and the MQTT verdict attributes carry it. The setup
-  wizard asks once ("Who is your internet provider?") and tags the WAN hop,
-  and tags its anchors with their providers. The verdict counts degraded
-  **operators**, not targets: four addresses of one provider failing together
-  are one piece of evidence and stay a site incident, never internet weather.
-  Untagged anchors each count as their own operator.
-- **Config → DNS**: the resolvers your machine uses (switch any off), the public
-  resolver asked directly, and the names they are asked for.
-- **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
-  monitored targets with the right parent pre-filled.
+- **Dashboard** (`/`)
 
-Each target probes over **ICMP ping** by default, or a **TCP connect** to a
-chosen port for devices that firewall ping but still run a service — a
-refused connection still counts as a reply, since an RST proves the host's
-stack answered. Private addresses (RFC1918, loopback, link-local) allow any
-port; public addresses are restricted to 80, 443, 53, where a bare
-connect-and-close looks like ordinary client traffic. The Targets form's
-**Test** button tries ICMP and the policy-allowed TCP ports for the typed
-address in one click and preselects whichever answered; for a hostname it
-also lists every address in the DNS answer set, so you can see what is being
-pinned.
+  - Live status banner, showing the current state of your internet connection.
+  - Live status timeline, showing color-coded status history, one dot per minute.
+  - Live reachability tree with per-target success rate and latency at a glance.
+  - Incident ledger, showing recent important status events. ("Your link went down for 4 min")
+  - List of recent minor glitches.
+
+  Events are indicated with small coded spots:
+
+  - Events affecting the internet are shown as either dots, indicating a single site is down, or bars, indicating multiple sites are down.
+  - Warm colors indicate problems with your path to the internet, monochrome colors indicate problems out on the internet itself.
+  - The more intense the spot, the more serious the incident.
+
+- **History** (`/History`)
+
+  - Selectable device uptime stats, per-device state timeline, latency band, and loss chart.
+  - **Recurrence punchcard,** 24 hours high by 30 days wide. Recurring problems will show up as a horizontal strip.
+  - **Cause-aligned ribbon board** — every target on one shared axis, trunk
+    rows in grey, hatching for "unreachable behind a down parent", so one
+    incident reads as a vertical stripe across exactly the rows it touched —
+    and a 90-day incident ledger. 
+
+- **Data** (`/Data`)
+
+  - Database statistics
+  - Exports, including
+    - Transitions, rollups, and glitches as CSV or JSON
+    - Snapshot JSON document with all settings and data, except passwords.
+    - ISP report link
+  - Retention settings that keep the database from growing forever
+
+- **Config** (`/Config/Targets`, `/Config/Pools`, `/Config/Dns`, `/Config/Profiles`)
+
+  - Targets: the path to the internet and the sites watched beyond it. Each has a
+    profile, an optional parent, and an optional **ISP/operator name** ("Comcast"):
+    link verdicts then say "Comcast is down" rather than naming a hop, and the
+    verdict counts anchors by operator, so four addresses of one provider failing
+    together stay a site incident, never internet weather.
+  - Pools: rotation groups that share the pinging load; the one chosen as the
+    **verdict anchor** supplies the internet anchors the verdict reads.
+  - Profiles: ping cadence bundles. Three are built in — **Internal** for your own
+    LAN, **Path** for hops to the internet you don't own, **Public** for sites
+    where you should be polite — and each carries a description you can edit.
+  - DNS: the resolvers your machine uses (switch any off), the public resolver
+    asked directly, and the names they are asked for.
+  - Whole-config export and import. A config export is tied to the version that wrote it; export again after upgrading.
+
+- **Traceroute** (`/Traceroute`)
+
+  - Discover the hops between you and a destination, labelled Internal, Path, or
+    Destination, and add any of them as a monitored target with parent and profile
+    pre-filled.
+  - Optionally (Settings → Traceroute) look up each public hop's operator through
+    Team Cymru's IP-to-ASN service, so the operator name is pre-filled too.
+
+
 
 ## Notifications (Home Assistant MQTT + webhooks)
 
-Configured on the **Admin** page under *Notifications*; both are off by
+Configured on the **Settings** page under *Notifications*; both are off by
 default and reconfigure live — no restart needed.
 
 **MQTT / Home Assistant** — enter your broker (host, port, optional
@@ -170,8 +147,8 @@ fields). `timestamp` is ISO-8601 with an explicit `+00:00` offset. Set
 *Verdict changes only* to be notified just when your internet weather changes
 rather than on every target flap.
 
-**Admin password** (optional) — set one on the Admin page to lock Config,
-Admin, Traceroute, and Setup (pages and APIs) behind a single site password.
+**Admin password** (optional) — set one on the Settings page to lock Config,
+Settings, Traceroute, and Setup (pages and APIs) behind a single site password.
 Watching stays open. A 🔒 button on the dashboard enters admin mode for the
 browser session. It stops casual tinkering, not attackers: forgot the
 password? Delete `admin-password.txt` next to the database
@@ -189,7 +166,7 @@ ConnectionWatcher"**: enter the old node's URL (and its admin password, if
 set) and the new node arrives with the full configuration, history, and —
 over the authenticated channel — the notification secrets. It starts as a
 **disabled read-only archive** while the old node keeps monitoring; verify it
-looks right, then press **Take over** on its Admin page: the old node is
+looks right, then press **Take over** on its Settings page: the old node is
 disabled, one final snapshot closes the data gap to seconds, and the new node
 goes live (warm-started, so the timeline stays continuous). The old node
 remains a browsable archive until you decommission it.
@@ -197,7 +174,7 @@ remains a browsable archive until you decommission it.
 Transport honesty: cloning over plain HTTP to a non-local address sends the
 password and receives secrets unencrypted — the wizard stops and offers the
 HTTPS address, an explicit "send it anyway", or a secret-less clone. The
-master switch behind all this is the **Monitoring** toggle on the Admin page
+master switch behind all this is the **Monitoring** toggle on the Settings page
 (`Engine.Enabled`): off = archive mode — history, reports, and exports keep
 serving; pinging and notifications stop, and MQTT reads offline in Home
 Assistant.
@@ -335,7 +312,7 @@ rule and shortcut and restarts the service.
 
 **Tray companion** — `conwatch-tray.exe`: green/orange/red/gray at a glance;
 double-click opens the dashboard; a single click (either button) opens the
-menu: History, the ISP report, Admin, and **Settings** (server URL with
+menu: History, the ISP report, Server settings, and **Tray settings** (server URL with
 test-before-save, back to the installed default, toast notifications). It runs on machines that are not
 running the server too: point it at the NAS with `conwatch tray install --url http://nas:8080`.
 
@@ -366,6 +343,67 @@ Synology Container Manager. `Build-Images.ps1` builds the same image
 locally (amd64 + arm64 via cross-compilation) when you want to. The compose
 file sets `stop_grace_period: 30s` so the last minute of rollups is written
 on stop; if you run the image with `docker run`, add `--stop-timeout 30`.
+
+
+
+# Scraps
+
+Each target probes over **ICMP ping** by default, or a **TCP connect** to a
+chosen port for devices that firewall ping but still run a service — a
+refused connection still counts as a reply, since an RST proves the host's
+stack answered. Private addresses (RFC1918, loopback, link-local) allow any
+port; public addresses are restricted to 80, 443, 53, where a bare
+connect-and-close looks like ordinary client traffic. The Targets form's
+**Test** button tries ICMP and the policy-allowed TCP ports for the typed
+address in one click and preselects whichever answered; for a hostname it
+also lists every address in the DNS answer set, so you can see what is being
+pinned.
+
+Detection is aggressive: the first lost
+ping starts a 1-second-interval burst on that target AND a corroboration
+sweep across all anchors and the trunk, so even a few-second wobble yields
+enough evidence to classify.
+
+
+
+
+
+The **Admin** page holds database stats, retention/verdict settings,
+and the danger zone (clear history / factory reset, type-to-confirm).
+
+Restarts are warm: after an update, reboot, or config change, ConWatch resumes
+its last known states immediately (shown as *assumed* and burst-confirmed by
+fresh pings within seconds) instead of re-measuring the world from scratch —
+the timelines stay continuous and no restart noise is recorded. Seeding from
+the database applies only when the watcher was down briefly (the
+`Engine.WarmRestartMaxGapMinutes` setting, default 10 minutes; 0 disables).
+
+Hostname targets follow DNS: the name is re-resolved every five minutes and
+immediately when the target goes Down, and an address that has left the
+answer set is replaced without resetting the target's history. Two targets
+may share an address (say, the router by ICMP and by `tcp:443`); each is
+probed and tracked on its own.
+
+## 
+
+## Running from source
+
+```powershell
+dotnet run --project Programs/ConWatch
+```
+
+- The SQLite database lives at `data/conwatch.db` (relative to the working
+  directory; configurable via `Persistence:DbPath`). Schema migrations apply
+  automatically at startup.
+- Configuration (targets, profiles, pools) lives **in the database** and is
+  edited through the REST API under `/api/v1` — Swagger UI at `/swagger` in
+  Development. On first boot, a `Watcher` section in appsettings.json (if
+  present) seeds the config; after that the DB is the source of truth.
+  Timestamps in query strings (`from`, `to`) are ISO-8601; an explicit offset
+  is honored and **no offset means UTC**, never the server's local zone.
+- The verdict layer (`Verdict:AnchorPool`) names the pool whose members act as
+  internet anchors; with intermediates healthy, one degraded anchor is a
+  SiteIncident, two or more (configurable) is InternetWeather.
 
 ## Development
 
