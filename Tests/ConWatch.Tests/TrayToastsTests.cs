@@ -63,4 +63,53 @@ public class TrayToastsTests
         Assert.Contains("Router is answering again", t2.Body);
         Assert.False(t2.OpenNotes);
     }
+
+    private static TrayInfo Info(TrayState state, string? verdict = null, string? detail = null) =>
+        new(state, detail, []) { Verdict = verdict };
+
+    [Fact]
+    public void Entering_DnsDown_says_name_lookups_are_failing_with_the_blame()
+    {
+        var toast = TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"),
+            Info(TrayState.Down, "DnsDown", "DnsDown: Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly."), "http://localhost:8080")!;
+        Assert.Equal("Name lookups are failing", toast.Title);
+        Assert.Equal("Your internet is up, but name lookups are failing — Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly.", toast.Body);
+        Assert.Equal(ToastLevel.Error, toast.Level);
+    }
+
+    [Fact]
+    public void DnsDown_and_LinkDown_toast_each_other_even_though_both_are_Down() // Review Focus 4
+    {
+        var dns = Info(TrayState.Down, "DnsDown", "DnsDown: No resolver is answering, though the internet is reachable.");
+        var link = Info(TrayState.Down, "LinkDown", "LinkDown: Modem is Down");
+        Assert.Equal("Internet DOWN", TrayToasts.Internet(dns, link, "u")!.Title);
+        Assert.Equal("LinkDown: Modem is Down", TrayToasts.Internet(dns, link, "u")!.Body);
+        Assert.Equal("Name lookups are failing", TrayToasts.Internet(link, dns, "u")!.Title);
+        Assert.Null(TrayToasts.Internet(dns, dns with { Detail = "DnsDown: changed wording" }, "u")); // same verdict: no toast
+    }
+
+    [Fact]
+    public void Leaving_DnsDown_for_healthy_toasts_the_recovery()
+    {
+        var toast = TrayToasts.Internet(Info(TrayState.Down, "DnsDown", "d"), Info(TrayState.Healthy, "Healthy", "Healthy: 2 anchors responding"), "u")!;
+        Assert.Equal("Internet healthy again", toast.Title);
+        Assert.Equal("Name lookups are working again.", toast.Body);
+        Assert.Equal(ToastLevel.Info, toast.Level);
+    }
+
+    [Fact]
+    public void The_old_toasts_are_unchanged_and_measuring_never_toasts()
+    {
+        Assert.Equal(("Internet DOWN", ToastLevel.Error), Pick(TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"), Info(TrayState.Down, "LinkDown", "LinkDown: Modem is Down"), "u")));
+        Assert.Equal(("Internet degraded", ToastLevel.Warning), Pick(TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"), Info(TrayState.Degraded, "LinkDegraded", "d"), "u")));
+        Assert.Equal(("Internet healthy again", ToastLevel.Info), Pick(TrayToasts.Internet(Info(TrayState.Down, "LinkDown"), Info(TrayState.Healthy, "Healthy", "h"), "u")));
+        var unreachable = TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"), Info(TrayState.Unreachable), "http://nas:8080")!;
+        Assert.Equal("ConnectionWatcher unreachable", unreachable.Title);
+        Assert.Equal("The monitor at http://nas:8080 is not answering.", unreachable.Body);
+        Assert.Null(TrayToasts.Internet(Info(TrayState.Measuring), Info(TrayState.Healthy, "Healthy"), "u"));
+        Assert.Null(TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"), Info(TrayState.Measuring), "u"));
+        Assert.Null(TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"), Info(TrayState.Healthy, "SiteIncident", "s"), "u")); // still healthy: no toast
+    }
+
+    private static (string, ToastLevel) Pick(TrayToast? t) => (t!.Title, t.Level);
 }

@@ -36,7 +36,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly HttpClient _http = new(ConConfig.LocalServerHttp.CreateHandler()) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly TraySettings _settings = new();
     private readonly Dictionary<(TrayState, bool), Icon> _icons = new();
-    private TrayState _state = TrayState.Unreachable;
+    private TrayInfo _last = new(TrayState.Unreachable, null, []);
     private bool _firstPoll = true;
     private readonly CriticalWatch _critical = new();
     private IReadOnlyList<TrayCritical> _criticalShown = [];
@@ -129,13 +129,13 @@ internal sealed class TrayContext : ApplicationContext
         }
 
         TrayToast? internetToast = null;
-        bool stateChanged = next.State != _state;
+        bool stateChanged = next.State != _last.State || next.NamesFailing != _last.NamesFailing;
         bool notesChanged = !next.Notes.SequenceEqual(_notes);
         bool criticalChanged = !next.Critical.SequenceEqual(_criticalShown);
         if (stateChanged || notesChanged || criticalChanged)
         {
-            var previous = _state;
-            _state = next.State;
+            var previous = _last;
+            _last = next;
             _notes = next.Notes;
             _criticalShown = next.Critical;
             _icon.Icon = IconFor(next.State, badge: next.Notes.Count > 0);
@@ -163,31 +163,14 @@ internal sealed class TrayContext : ApplicationContext
     }
 
     /// <summary>
-    /// Toast on changes a person would act on: down, degraded, recovered,
-    /// monitor lost/back. Never on startup, never for measuring churn.
+    /// Toast on changes a person would act on: down (link or name lookups), degraded,
+    /// recovered, monitor lost/back. Never on startup, never for measuring churn.
     /// </summary>
-    private TrayToast? MaybeToast(TrayState previous, TrayInfo next)
+    private TrayToast? MaybeToast(TrayInfo previous, TrayInfo next)
     {
         if (_firstPoll || !_settings.NotificationsEnabled)
             return null;
-        if (next.State == TrayState.Measuring || previous == TrayState.Measuring)
-            return null;
-
-        (string? title, ToastLevel level) = next.State switch
-        {
-            TrayState.Down => ("Internet DOWN", ToastLevel.Error),
-            TrayState.Degraded => ("Internet degraded", ToastLevel.Warning),
-            TrayState.Healthy => ("Internet healthy again", ToastLevel.Info),
-            TrayState.Unreachable => ("ConnectionWatcher unreachable", ToastLevel.Warning),
-            _ => (null, ToastLevel.Info),
-        };
-        if (title is null)
-            return null;
-
-        var body = next.State == TrayState.Unreachable
-            ? $"The monitor at {_settings.EffectiveUrl} is not answering."
-            : next.Detail is { Length: > 0 } ? next.Detail : TrayStatus.Describe(next.State);
-        return new TrayToast(title, body, level);
+        return TrayToasts.Internet(previous, next, _settings.EffectiveUrl);
     }
 
     /// <summary>

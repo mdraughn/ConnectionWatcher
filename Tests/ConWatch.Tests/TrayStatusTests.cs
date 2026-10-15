@@ -151,4 +151,28 @@ public class TrayStatusTests
             $"[{{\"key\":\"k\",\"kind\":\"{kind}\",\"targetName\":{name},\"message\":\"m\",\"since\":\"x\",\"acknowledged\":false}}]"));
         Assert.Equal([expected], info.Notes);
     }
+
+    [Fact]
+    public void The_verdict_name_is_kept_and_DnsDown_reads_as_name_lookups_failing_in_the_tooltip()
+    {
+        var info = TrayStatus.FromStatusJson(Status("Responding", verdict: "DnsDown"));
+        Assert.Equal("DnsDown", info.Verdict);
+        Assert.True(info.NamesFailing);
+        Assert.Equal(TrayState.Down, info.State);
+        Assert.StartsWith("Internet: name lookups are failing\n", TrayStatus.Tooltip(info));
+
+        var link = TrayStatus.FromStatusJson(Status("Responding", verdict: "LinkDown"));
+        Assert.False(link.NamesFailing);
+        Assert.StartsWith("Internet: DOWN\n", TrayStatus.Tooltip(link));
+    }
+
+    [Fact]
+    public void A_status_without_a_verdict_has_no_verdict_name() // Review Focus 5
+    {
+        var info = TrayStatus.FromStatusJson("""{"enabled":true,"verdict":null,"targets":[{"id":"a","name":"Router","state":"Down","scope":"Verdict","critical":false}],"pools":[]}""");
+        Assert.Null(info.Verdict);
+        Assert.False(info.NamesFailing);
+        Assert.Equal(TrayState.Down, info.State);
+        Assert.StartsWith("Internet: DOWN", TrayStatus.Tooltip(info));
+    }
 }

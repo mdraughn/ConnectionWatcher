@@ -24,6 +24,10 @@ public record TrayInfo(TrayState State, string? Detail, IReadOnlyList<string> No
 {
     /// <summary>Targets marked critical (spec §4.7), any state.</summary>
     public IReadOnlyList<TrayCritical> Critical { get; init; } = [];
+    /// <summary>The verdict's state name ("Healthy", "DnsDown", …), null without a verdict.</summary>
+    public string? Verdict { get; init; }
+    /// <summary>DnsDown: the link is up, the resolvers are not (spec 2026-10-10 §5.4).</summary>
+    public bool NamesFailing => Verdict == "DnsDown";
 }
 
 /// <summary>
@@ -66,7 +70,8 @@ public static class TrayStatus
                 verdict.ValueKind == JsonValueKind.Object)
             {
                 var detail = verdict.TryGetProperty("detail", out var d) ? d.GetString() : null;
-                var state = verdict.GetProperty("state").GetString() switch
+                var verdictName = verdict.GetProperty("state").GetString();
+                var state = verdictName switch
                 {
                     // Same answer the web slab gives: weather and site incidents
                     // mean YOUR internet is up — no amber, no toast.
@@ -75,7 +80,7 @@ public static class TrayStatus
                     "LinkDown" or "DnsDown" => TrayState.Down,
                     _ => TrayState.Measuring,
                 };
-                return new TrayInfo(state, detail, notes) { Critical = critical };
+                return new TrayInfo(state, detail, notes) { Critical = critical, Verdict = verdictName };
             }
 
             // No verdict configured: derive from target states.
@@ -122,6 +127,9 @@ public static class TrayStatus
         _ => "ConnectionWatcher",
     };
 
+    public static string Describe(TrayInfo info) =>
+        info.State == TrayState.Down && info.NamesFailing ? "Internet: name lookups are failing" : Describe(info.State);
+
     /// <summary>A tooltip-sized label for one note.</summary>
     public static string NoteLabel(JsonElement warning)
     {
@@ -147,7 +155,7 @@ public static class TrayStatus
     /// truncated to the 127-character limit.</summary>
     public static string Tooltip(TrayInfo info)
     {
-        var text = Describe(info.State);
+        var text = Describe(info);
         // Devices before the verdict detail: truncation cuts the detail first.
         foreach (var c in info.Critical.Where(c => c.IsDown))
             text += $"\n⚠ {c.Name} is {c.State}";
