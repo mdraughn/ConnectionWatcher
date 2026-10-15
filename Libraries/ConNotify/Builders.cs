@@ -89,9 +89,10 @@ public class MqttTopics(string baseTopic, string discoveryPrefix)
     public string TargetState(string slug) => $"{Base}/target/{slug}/state";
     public string TargetAttributes(string slug) => $"{Base}/target/{slug}/attributes";
 
-    /// <summary>Slugs the fixed entities' discovery topics use ({prefix}/binary_sensor/{base}_{slug}/config);
-    /// a target must never take one, or its retained config would overwrite that entity's.</summary>
-    public static readonly IReadOnlyList<string> ReservedSlugs = ["verdict", "internet", "dns"];
+    /// <summary>Slugs the fixed binary sensors' discovery topics use ({prefix}/binary_sensor/{base}_{slug}/config);
+    /// a target must never take one, or its retained config would overwrite that entity's. The verdict is a
+    /// sensor with its own topics, so it does not collide and is deliberately not reserved.</summary>
+    public static readonly IReadOnlyList<string> ReservedSlugs = ["internet", "dns"];
 
     private string Prefix { get; } = discoveryPrefix.Trim('/');
     public string VerdictDiscovery => $"{Prefix}/sensor/{Base}_verdict/config";

@@ -223,8 +223,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         var current = engine.Verdict?.Current;
         var verdict = current?.State.ToString() ?? "Unknown";
         await PublishAsync(client, _topics.VerdictState, verdict, retain: true, ct);
-        await PublishAsync(client, _topics.VerdictAttributes,
-            HaDiscovery.VerdictAttributes(current?.Detail, current?.Operator, current?.Dns), retain: true, ct);
+        await PublishVerdictAttributesAsync(client, engine, ct);
         await PublishAsync(client, _topics.InternetState, StateMapping.InternetPayload(verdict), retain: true, ct);
         await PublishDnsAsync(client, engine, ct);
 
@@ -258,7 +257,11 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 WatcherEngine? engineForDns;
                 lock (_lock) { engineForDns = _engine; }
                 if (engineForDns is not null && IsResolver(engineForDns, t.TargetId))
+                {
                     await PublishDnsAsync(client, engineForDns, ct);
+                    // The blame can change inside DnsDown without a verdict transition; keep the verdict's dnsBlame in step.
+                    await PublishVerdictAttributesAsync(client, engineForDns, ct);
+                }
                 break;
 
             case TransitionSubjectKind.Verdict:
@@ -275,16 +278,18 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         }
     }
 
-    private static bool IsResolver(WatcherEngine engine, Guid targetId)
+    // DnsWatch lists every enabled resolver monitor (a disabled one has no monitor and emits no transitions).
+    private static bool IsResolver(WatcherEngine engine, Guid targetId) =>
+        engine.DnsWatch.System.Any(m => m.Target.Id == targetId) || engine.DnsWatch.Upstream.Any(m => m.Target.Id == targetId);
+
+    /// <summary>The verdict attributes from the live snapshot (Detail, Operator and Dns).</summary>
+    private async Task PublishVerdictAttributesAsync(IMqttClient client, WatcherEngine engine, CancellationToken ct)
     {
-        try
-        {
-            return engine.Graph.Targets.TryGetValue(targetId, out var target) && target.Scope == TargetScope.Resolver;
-        }
-        catch (InvalidOperationException)
-        {
-            return false; // engine stopped between the transition and its publish
-        }
+        if (_topics is null)
+            return;
+        var current = engine.Verdict?.Current;
+        await PublishAsync(client, _topics.VerdictAttributes,
+            HaDiscovery.VerdictAttributes(current?.Detail, current?.Operator, current?.Dns), retain: true, ct);
     }
 
     /// <summary>The name-resolution entity: its own availability says whether the watch is on

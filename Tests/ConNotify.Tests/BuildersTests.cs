@@ -39,7 +39,7 @@ public class ReservedSlugTests
         var slugger = new Slugger(MqttTopics.ReservedSlugs);
         Assert.Equal("dns_2", slugger.Slug("DNS"));
         Assert.Equal("internet_2", slugger.Slug("Internet"));
-        Assert.Equal("verdict_2", slugger.Slug("Verdict"));
+        Assert.Equal("verdict", slugger.Slug("Verdict"));
         Assert.Equal("router", slugger.Slug("Router"));
     }
 }
