@@ -1,13 +1,7 @@
 // DNS config page (spec 2026-10-10 §5.3): writes through the existing
 // admin-locked settings and targets endpoints. `window.dnsLookupNames` is the
-// stored list (seeded entries carry their expected addresses).
-
-/** Keeps every existing entry still named (so a seeded name keeps its expected
- *  addresses), appends plain entries for new names, in the given order. */
-function buildLookupNamesJson(existing, names) {
-    const byName = new Map(existing.map((e) => [e.name.toLowerCase(), e]));
-    return JSON.stringify(names.map((n) => byName.get(n.toLowerCase()) ?? { name: n }));
-}
+// parsed stored list (seeded entries carry their expected addresses);
+// buildLookupNamesJson comes from dns-lookup-names.js.
 
 async function saveLookupNames(names) {
     const errors = document.getElementById("name-errors");

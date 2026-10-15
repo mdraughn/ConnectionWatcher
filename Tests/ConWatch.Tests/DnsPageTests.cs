@@ -82,4 +82,31 @@ public class DnsPageTests : IDisposable
         Assert.Equal(["8.8.8.8", "8.8.4.4"], stored.Single(n => n.Name == "dns.google").Expected); // untouched
         Assert.Empty(stored.Single(n => n.Name == "router.lan").Expected);
     }
+
+    [Fact]
+    public async Task The_DNS_page_emits_the_parsed_lookup_name_list_never_the_raw_stored_setting()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        // Stored the way a snapshot import would: no validation on the way in.
+        const string stored = """
+            [{"name":"  dns.google  ","expected":["8.8.8.8","8.8.4.4","</script><script>alert(1)</script>"],
+              "x":"</script><script>alert(2)</script>"},
+             null,
+             {"name":"router.lan"}]
+            """;
+        await _factory.Services.GetRequiredService<ConPersistence.Settings.SettingsStore>()
+            .SetManyAsync(new Dictionary<string, string?> { ["Dns.LookupNames"] = stored });
+
+        var html = await _client.GetStringAsync("/Config/Dns");
+        const string prefix = "window.dnsLookupNames = ";
+        var start = html.IndexOf(prefix, StringComparison.Ordinal);
+        Assert.True(start >= 0, "the page emits the list");
+        start += prefix.Length;
+        var emitted = html[start..html.IndexOf(";</script>", start, StringComparison.Ordinal)];
+
+        var expected = ConCore.Dns.DnsLookupName.ToJson(ConCore.Dns.DnsLookupName.FromJson(stored));
+        Assert.Equal(expected, emitted);
+        Assert.Equal("""[{"name":"dns.google","expected":["8.8.8.8","8.8.4.4"]},{"name":"router.lan"}]""", emitted);
+        Assert.DoesNotContain("alert(", html);
+    }
 }

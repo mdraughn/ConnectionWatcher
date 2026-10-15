@@ -83,6 +83,8 @@
 
 @section Scripts {
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
-    <script>window.dnsLookupNames = @Html.Raw(Model.LookupNamesJson);</script>
+    @* The parsed, trimmed list re-serialised: never the raw stored setting (System.Text.Json escapes <, > and &). *@
+    <script>window.dnsLookupNames = @Html.Raw(ConCore.Dns.DnsLookupName.ToJson(Model.LookupNames));</script>
+    <script src="~/lib/dns-lookup-names.js" asp-append-version="true"></script>
     <script src="~/lib/site-dns.js" asp-append-version="true"></script>
 }

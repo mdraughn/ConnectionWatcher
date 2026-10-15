@@ -12,7 +12,6 @@ namespace ConWatch.Pages.Config;
 public class DnsModel(ConfigStore store, ConfigHealth health, SettingsStore settings) : PageModel
 {
     public bool Enabled { get; private set; } = true;
-    public string LookupNamesJson { get; private set; } = "[]";
     public IReadOnlyList<DnsLookupName> LookupNames { get; private set; } = [];
     public IReadOnlyList<TargetDto> SystemResolvers { get; private set; } = [];
     public IReadOnlyList<TargetDto> UpstreamResolvers { get; private set; } = [];
@@ -21,8 +20,7 @@ public class DnsModel(ConfigStore store, ConfigHealth health, SettingsStore sett
     public async Task OnGetAsync()
     {
         Enabled = await settings.GetAsync(SettingKeys.DnsEnabled) != "false";
-        LookupNamesJson = await settings.GetAsync(SettingKeys.DnsLookupNames) ?? "[]";
-        LookupNames = DnsLookupName.FromJson(LookupNamesJson);
+        LookupNames = DnsLookupName.FromJson(await settings.GetAsync(SettingKeys.DnsLookupNames));
         var config = await store.ExportAsync();
         var resolvers = config.Targets.Where(t => t.Scope == TargetScope.Resolver).OrderBy(t => t.Name).ToList();
         SystemResolvers = resolvers.Where(t => t.SystemManaged).ToList();
