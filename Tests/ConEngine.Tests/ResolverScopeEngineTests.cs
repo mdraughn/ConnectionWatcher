@@ -3,6 +3,7 @@ using ConCore.Targets;
 using ConEngine.Configuration;
 using ConEngine.Tests.Fakes;
 using ConEngine.Topology;
+using ConEngine.Tracking;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConEngine.Tests;
@@ -60,6 +61,78 @@ public class ResolverScopeEngineTests
                 await Task.Delay(25);
             Assert.True(engine.Loss.Open(routerId) is { Samples: > 0 });
             Assert.Null(engine.Loss.Open(resolverId));
+        }
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
+    }
+
+    /// <summary>Final review C1(b): when the link returns, the system resolvers burst so
+    /// they re-prove themselves within the verdict's resolver wait.</summary>
+    [Fact]
+    public async Task A_LinkDown_to_reachable_verdict_transition_bursts_the_resolvers()
+    {
+        var options = new WatcherOptions
+        {
+            Profiles =
+            {
+                ["Fast"] = new PingProfileConfig
+                {
+                    NormalIntervalSeconds = 0.02, BurstIntervalSeconds = 0.01, BurstMaxDurationSeconds = 5,
+                    HistorySize = 20, MinUsableSample = 5,
+                },
+                ["SlowResolver"] = new PingProfileConfig
+                {
+                    NormalIntervalSeconds = 0.05, BurstIntervalSeconds = 0.05, BurstMaxDurationSeconds = 60,
+                    HistorySize = 20, MinUsableSample = 5,
+                },
+            },
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "203.0.113.1", Profile = "Fast" },
+                new TargetConfig { Name = "Google", Address = "198.51.100.8", Parent = "Router", Profile = "Fast" },
+                new TargetConfig { Name = "Cloudflare", Address = "198.51.100.9", Parent = "Router", Profile = "Fast" },
+                new TargetConfig
+                {
+                    Name = "Your resolver 203.0.113.53", Address = "203.0.113.53", Profile = "SlowResolver",
+                    Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true,
+                },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        };
+        var pings = new FakePingTransceiverFactory();
+        var engine = new WatcherEngine(TimeProvider.System, pings,
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(options),
+            Microsoft.Extensions.Options.Options.Create(new VerdictOptions { AnchorPool = "Internet" }));
+        using var cts = new CancellationTokenSource();
+        await engine.StartAsync(cts.Token);
+        try
+        {
+            var resolver = engine.Monitors[engine.Graph.GetByName("Your resolver 203.0.113.53").Id];
+            async Task Until(Func<bool> condition)
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(15);
+                while (!condition() && DateTime.UtcNow < deadline)
+                    await Task.Delay(25);
+                Assert.True(condition());
+            }
+
+            await Until(() => engine.Verdict!.CurrentVerdict == VerdictState.Healthy
+                && resolver.CurrentState == HostState.Responding && !resolver.Discipline.IsBurstActive);
+
+            // The anchors drop (the resolver keeps answering: nothing else bursts it).
+            pings.SetUp(System.Net.IPAddress.Parse("198.51.100.8"), false);
+            pings.SetUp(System.Net.IPAddress.Parse("198.51.100.9"), false);
+            await Until(() => engine.Verdict!.CurrentVerdict == VerdictState.LinkDown);
+            Assert.False(resolver.Discipline.IsBurstActive);
+
+            pings.SetUp(System.Net.IPAddress.Parse("198.51.100.8"), true);
+            pings.SetUp(System.Net.IPAddress.Parse("198.51.100.9"), true);
+            await Until(() => engine.Verdict!.CurrentVerdict != VerdictState.LinkDown);
+            await Until(() => resolver.Discipline.IsBurstActive);
         }
         finally
         {

@@ -22,6 +22,7 @@ public class VerdictDnsDownTests
     private readonly TargetGraph _graph;
     private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
     private readonly List<TargetTransition> _transitions = new();
+    private readonly DnsResultLog _dnsResults = new();
     private VerdictCoordinator _verdict = null!;
 
     public VerdictDnsDownTests()
@@ -56,7 +57,7 @@ public class VerdictDnsDownTests
             [M("Your resolver 192.168.1.1"), M("Your resolver 192.168.1.2")],
             withUpstream ? [M("9.9.9.9 directly")] : []);
         _verdict = new VerdictCoordinator(_graph, _graph.GetPoolByName("Internet"), _monitors,
-            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance, dns);
+            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance, dns, _dnsResults);
         _verdict.TransitionSource.Subscribe(_transitions.Add);
         _verdict.Start();
     }
@@ -67,8 +68,28 @@ public class VerdictDnsDownTests
         for (var i = 0; i < count; i++)
         {
             _time.Advance(TimeSpan.FromSeconds(1));
-            monitor.RecordPingResult(new PingResult(monitor.ResolvedAddress!, success, success ? 5 : 0,
-                success ? "Answered (dns.google)" : "TimedOut (dns.google)", _time.GetUtcNow()));
+            Record(monitor, success);
+        }
+    }
+
+    /// <summary>Like the engine: a Resolver-scope result lands in the log before the monitor sees it.</summary>
+    private void Record(TargetMonitor monitor, bool success)
+    {
+        var result = new PingResult(monitor.ResolvedAddress!, success, success ? 5 : 0,
+            success ? "Verified (dns.google)" : "TimedOut (dns.google)", _time.GetUtcNow());
+        if (monitor.Target.Scope == TargetScope.Resolver)
+            _dnsResults.Record(monitor.Target.Id, result);
+        monitor.RecordPingResult(result);
+    }
+
+    /// <summary>One sample per round to each named monitor, one second per round.</summary>
+    private void FeedTogether(int rounds, bool success, params string[] names)
+    {
+        for (var i = 0; i < rounds; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            foreach (var name in names)
+                Record(M(name), success);
         }
     }
 
@@ -232,6 +253,83 @@ public class VerdictDnsDownTests
         AnchorsUp();
         ResolversDown();
         Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+    }
+
+    /// <summary>Final review C1: the link was down, so the resolvers' windows are full of
+    /// the outage's failures. Anchors and resolvers start in sync, then the link goes.</summary>
+    private void OutageWithEverythingDown()
+    {
+        AnchorsUp();
+        Feed("Your resolver 192.168.1.1", 10, true);
+        Feed("Your resolver 192.168.1.2", 10, true);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        FeedTogether(20, false, "Google", "Cloudflare", "Your resolver 192.168.1.1", "Your resolver 192.168.1.2");
+        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+        Assert.Equal(HostState.Down, M("Your resolver 192.168.1.1").CurrentState);
+        Assert.Equal(HostState.Down, M("Your resolver 192.168.1.2").CurrentState);
+    }
+
+    [Fact]
+    public void Anchors_recovering_while_the_resolvers_are_still_down_never_passes_through_DnsDown()
+    {
+        Start();
+        OutageWithEverythingDown();
+
+        FeedTogether(20, true, "Google", "Cloudflare");
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.DoesNotContain(_transitions, t => t.Reason.Verdict == "DnsDown");
+
+        Feed("Your resolver 192.168.1.1", 10, true);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.DoesNotContain(_transitions, t => t.Reason.Verdict == "DnsDown");
+    }
+
+    [Fact]
+    public void Fresh_answers_from_a_resolver_still_marked_Down_are_not_evidence_of_DnsDown()
+    {
+        Start();
+        OutageWithEverythingDown();
+
+        // The anchors come back first; both resolvers answer their first burst probes
+        // but are still Down when another monitor's transition (the upstream resolver
+        // proving itself) reclassifies.
+        FeedTogether(20, true, "Google", "Cloudflare");
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        FeedTogether(1, true, "Your resolver 192.168.1.1", "Your resolver 192.168.1.2");
+        Assert.Equal(HostState.Down, M("Your resolver 192.168.1.1").CurrentState);
+        Assert.Equal(HostState.Down, M("Your resolver 192.168.1.2").CurrentState);
+        Feed("9.9.9.9 directly", 6, true);
+        Assert.Equal(HostState.Responding, M("9.9.9.9 directly").CurrentState);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.DoesNotContain(_transitions, t => t.Reason.Verdict == "DnsDown");
+    }
+
+    [Fact]
+    public void A_resolver_that_stays_dead_after_the_link_returns_is_DnsDown_after_the_cap()
+    {
+        Start();
+        OutageWithEverythingDown();
+
+        FeedTogether(20, true, "Google", "Cloudflare");
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        FeedTogether(5, false, "Your resolver 192.168.1.1", "Your resolver 192.168.1.2"); // fresh failures
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.StartsWith("No resolver is answering", _verdict.Current.Dns!.Message);
+    }
+
+    [Fact]
+    public void A_resolver_with_no_fresh_evidence_is_still_concluded_DnsDown_at_the_cap()
+    {
+        Start();
+        OutageWithEverythingDown();
+
+        FeedTogether(20, true, "Google", "Cloudflare");
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
     }
 
     [Fact]

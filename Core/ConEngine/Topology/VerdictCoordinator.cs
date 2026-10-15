@@ -62,6 +62,7 @@ public class VerdictCoordinator : IDisposable
     private readonly List<TargetMonitor> _counted;
     private readonly int _weatherThreshold;
     private readonly ConEngine.Dns.DnsWatch _dns;
+    private readonly ConEngine.Dns.DnsResultLog? _dnsResults;
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
     private readonly Lock _lock = new();
@@ -101,13 +102,22 @@ public class VerdictCoordinator : IDisposable
     private bool _waitingThisPass;
     private bool _disposed;
 
+    // Guarded by _lock. When the internet last became reachable (a counted
+    // anchor answering after a pass in which none did, the first such pass
+    // included), and whether the previous pass found it reachable. A system
+    // resolver judged Down before that moment has no evidence of its own since
+    // the internet came back (its window filled during the outage).
+    private DateTimeOffset? _reachableSince;
+    private bool _wasReachable;
+
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
         IReadOnlyDictionary<Guid, TargetMonitor> monitors, int weatherThreshold,
         TimeProvider timeProvider, ILogger<VerdictCoordinator> log,
-        ConEngine.Dns.DnsWatch? dnsWatch = null)
+        ConEngine.Dns.DnsWatch? dnsWatch = null, ConEngine.Dns.DnsResultLog? dnsResults = null)
     {
         _graph = graph;
         _dns = dnsWatch ?? ConEngine.Dns.DnsWatch.Off;
+        _dnsResults = dnsResults;
         _weatherThreshold = weatherThreshold;
         _time = timeProvider;
         _log = log;
@@ -373,14 +383,19 @@ public class VerdictCoordinator : IDisposable
     private (VerdictState, string, string? Operator, DnsBlame? Dns) Classify(IReadOnlyDictionary<Guid, HostState> states)
     {
         var anchors = _anchors.Select(a => (Monitor: a, State: states[a.Target.Id])).ToList();
+        var counted = anchors.Where(a => _counted.Contains(a.Monitor)).ToList();
+        var reachable = counted.Any(a => Answering(a.State));
+        if (reachable && !_wasReachable)
+            _reachableSince = _time.GetUtcNow();
+        _wasReachable = reachable;
+
         var determined = anchors.Where(a => !Undetermined(a.State)).ToList();
         if (determined.Count == 0)
             return (VerdictState.Unknown, "No anchors determined yet", null, null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
         // One answering counted anchor is enough (Mark's rule 2026-10-09).
-        var counted = anchors.Where(a => _counted.Contains(a.Monitor)).ToList();
-        if (counted.Any(a => Answering(a.State)))
+        if (reachable)
         {
             // Reachable. Name resolution next (spec 2026-10-10 §4.4): it outranks quality.
             var dns = CheckDns(states);
@@ -412,22 +427,26 @@ public class VerdictCoordinator : IDisposable
     /// <summary>DnsDown when every determined system resolver is Down (and none is still
     /// undetermined past the wait cap); null otherwise, including while an undetermined
     /// resolver is still within the cap (the quality verdict stands meanwhile, the timer
-    /// stays armed and the cap concludes DnsDown). Upstream resolvers decide the blame.</summary>
+    /// stays armed and the cap concludes DnsDown). Upstream resolvers decide the blame.
+    /// A Down resolver without fresh evidence (<see cref="WithoutFreshFailure"/>) counts
+    /// as undetermined: after an outage its window is full of the outage's failures.</summary>
     private (VerdictState, string, string?, DnsBlame?)? CheckDns(IReadOnlyDictionary<Guid, HostState> states)
     {
         if (!_dns.Enabled || _dns.System.Count == 0)
             return null;
         var system = _dns.System.Select(m => (Monitor: m, State: states[m.Target.Id])).ToList();
-        var determined = system.Where(s => !Undetermined(s.State)).ToList();
-        if (determined.Count == 0)
+        var down = system.Where(s => s.State is HostState.Down or HostState.Unreachable).ToList();
+        var stale = down.Where(s => WithoutFreshFailure(s.Monitor)).ToList();
+        var determined = system.Where(s => !Undetermined(s.State) && !stale.Contains(s)).ToList();
+        if (determined.Count == 0 && stale.Count == 0)
             return null;
         if (!determined.All(s => s.State is HostState.Down or HostState.Unreachable))
             return null;
-        if (system.Any(s => Undetermined(s.State)) && StillWaiting(WaitKind.Resolvers))
+        if ((stale.Count > 0 || system.Any(s => Undetermined(s.State))) && StillWaiting(WaitKind.Resolvers))
             return null; // keep waiting (timer armed) but never hide a reachable internet's quality verdict
 
         var resolvers = system.Select(s => s.Monitor.Target.Address).ToList();
-        var firstDown = determined[0].Monitor.Target.Address;
+        var firstDown = down[0].Monitor.Target.Address;
         var upstream = _dns.Upstream.FirstOrDefault(m => Answering(states[m.Target.Id]));
         DnsBlame blame = upstream is not null
             ? new DnsBlame(DnsBlameKind.YourResolver,
@@ -437,6 +456,18 @@ public class VerdictCoordinator : IDisposable
                 (_dns.Upstream.Count == 0 ? " Name a public resolver in Config → DNS so ConnectionWatcher can tell your resolver from everyone's." : ""),
                 resolvers);
         return (VerdictState.DnsDown, $"DnsDown: {blame.Message}", null, blame);
+    }
+
+    /// <summary>Under _lock: a Down system resolver whose latest DNS result is not a
+    /// failure later than <see cref="_reachableSince"/> — none at all, one from before
+    /// the internet came back, or a fresh answer that has not yet lifted it out of
+    /// Down (its burst is re-proving it). False when no result log was given.</summary>
+    private bool WithoutFreshFailure(TargetMonitor resolver)
+    {
+        if (_dnsResults is null || _reachableSince is not { } since)
+            return false;
+        var recent = _dnsResults.Recent(resolver.Target.Id);
+        return recent.Count == 0 || recent[^1].At <= since || recent[^1].Success;
     }
 
     /// <summary>The internet is reachable: how good is it? Anchor evidence decides

@@ -149,6 +149,8 @@ public class WatcherEngine
         _graph is { } graph && graph.Targets.TryGetValue(subjectId, out var target) && target.Critical;
 
     private bool _warmStart;
+    // The verdict's last transition target (Reason.Verdict), for the link-return resolver burst.
+    private string? _lastVerdict;
 
     /// <summary>
     /// Starts the engine, optionally warm: <paramref name="seed"/> carries
@@ -245,10 +247,22 @@ public class WatcherEngine
         {
             Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
                 _verdictOptions.WeatherThreshold, _timeProvider,
-                _loggerFactory.CreateLogger<VerdictCoordinator>(), DnsWatch);
+                _loggerFactory.CreateLogger<VerdictCoordinator>(), DnsWatch, DnsResults);
             if (seed?.Verdict is { } verdictSeed)
+            {
                 Verdict.Seed(verdictSeed);
+                _lastVerdict = verdictSeed.ToString();
+            }
             _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
+            // The link is back: the resolvers' windows are full of the outage's failures and
+            // they probe slowly, so burst them to re-prove within the verdict's resolver wait.
+            _subscriptions.Add(Verdict.TransitionSource.Subscribe(t =>
+            {
+                var previous = Interlocked.Exchange(ref _lastVerdict, t.Reason.Verdict);
+                if (previous == nameof(VerdictState.LinkDown) && t.Reason.Verdict != nameof(VerdictState.LinkDown))
+                    foreach (var monitor in _monitors.Values.Where(m => m.Target.Scope == TargetScope.Resolver))
+                        monitor.Discipline.ForceBurst();
+            }));
             Verdict.Start();
         }
 
@@ -277,6 +291,10 @@ public class WatcherEngine
                 {
                     var result = routed.Result;
                     monitor.Discipline.OnPingResult(result.Success);
+                    // Before the monitor sees it: the transition it may cause reclassifies
+                    // the verdict, which reads the log for fresh resolver evidence.
+                    if (monitor.Target.Scope == TargetScope.Resolver)
+                        DnsResults.Record(monitor.Target.Id, result);
                     monitor.RecordPingResult(result);
                     try
                     {
@@ -299,8 +317,6 @@ public class WatcherEngine
                         Suspicion?.OnPingSample(monitor.Target.Id, result);
                         Loss.Record(monitor.Target.Id, result.Timestamp, result.Success);
                     }
-                    else if (monitor.Target.Scope == TargetScope.Resolver)
-                        DnsResults.Record(monitor.Target.Id, result);
                 }
             },
             ex => _log.LogError(ex, "Error in ping result stream"),
