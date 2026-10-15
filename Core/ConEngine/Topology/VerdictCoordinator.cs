@@ -303,9 +303,12 @@ public class VerdictCoordinator : IDisposable
     private enum WaitKind { Anchors, Resolvers }
     private WaitKind _waitKind;
 
-    /// <summary>Under _lock, from Classify: no counted anchor answers, but
-    /// undetermined ones could still. True while the wait
-    /// is within its cap. The first call of a wait starts the clock and arms a
+    /// <summary>Under _lock, from Classify. Two waits share one clock and timer, told apart
+    /// by <paramref name="kind"/>: Anchors (no counted anchor answers, but undetermined
+    /// ones could still) and Resolvers (every determined system resolver is Down, but an
+    /// undetermined one could still answer). Starting a wait of one kind while the other
+    /// is in progress ends the other first, so neither inherits the other's clock or
+    /// expiry. True while the wait is within its cap. The first call of a wait starts the clock and arms a
     /// one-shot timer that reclassifies at the cap (Classify otherwise runs
     /// only on monitor transitions, and a stuck anchor emits none).</summary>
     private bool StillWaiting(WaitKind kind)

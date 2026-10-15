@@ -160,11 +160,42 @@ public class VerdictDnsDownTests
         _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
         Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
 
+        // Resolver A goes Down while the verdict is LinkDown (B stays Starting); then Google's
+        // recovery pass goes straight from the expired anchor wait into the resolver wait.
+        Feed("Your resolver 192.168.1.1", 20, false);
         Feed("Google", 20, true);
-        Feed("Your resolver 192.168.1.1", 20, false); // the other stays Starting
-        Assert.NotEqual(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
         _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
         Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+    }
+
+    [Fact]
+    public void An_expired_resolver_wait_does_not_shorten_a_later_anchor_wait()
+    {
+        Start();
+        Feed("Router", 10, true);
+        Feed("Google", 10, true); // Cloudflare is never fed: it stays Starting
+        Feed("Your resolver 192.168.1.1", 20, false); // B stays Starting
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+
+        Feed("Google", 20, false);
+        Assert.Equal(VerdictState.Unknown, _verdict.CurrentVerdict);
+        Assert.Equal("Waiting for anchors to report", _verdict.CurrentDetail);
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+    }
+
+    [Fact]
+    public void The_blame_names_the_first_resolver_that_is_Down_not_the_first_in_the_list()
+    {
+        Start();
+        AnchorsUp();
+        Feed("9.9.9.9 directly", 10, true);
+        Feed("Your resolver 192.168.1.2", 20, false); // .1 stays Starting
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Equal("Your resolver 192.168.1.2 isn't answering, but 9.9.9.9 answers directly.", _verdict.Current.Dns!.Message);
     }
 
     [Fact]
