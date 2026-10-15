@@ -74,26 +74,28 @@ public class SystemResolverServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task A_vanished_resolver_is_retired_and_restored_when_it_returns()
+    public async Task A_vanished_resolver_is_deleted_and_recreated_when_it_returns()
     {
         await ConfigApiTests.SeedHomeAsync(_client);
         _factory.Resolvers.Set("10.0.0.53", "10.0.0.54");
         await Service.ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () => await ManagedAsync("10.0.0.54") is not null);
+        var firstId = (await ManagedAsync("10.0.0.54"))!.Id;
 
         _factory.Resolvers.Set("10.0.0.53");
         await Service.ReconcileNowAsync(CancellationToken.None);
-        await ConfigApiTests.Eventually(async () => (await ManagedAsync("10.0.0.54"))?.Enabled == false);
+        await ConfigApiTests.Eventually(async () => await ManagedAsync("10.0.0.54") is null);
         Assert.True((await ManagedAsync("10.0.0.53"))!.Enabled);
         var settings = _factory.Services.GetRequiredService<SettingsStore>();
-        // Ordering guarantee: the retired set is written before the config commit
-        // (as a superset), so once the target is disabled its address is in the set.
-        Assert.Contains("10.0.0.54", await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "");
+        await ConfigApiTests.Eventually(async () =>
+            !(await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "").Contains("10.0.0.54"));
 
         _factory.Resolvers.Set("10.0.0.53", "10.0.0.54");
         await Service.ReconcileNowAsync(CancellationToken.None);
-        await ConfigApiTests.Eventually(async () => (await ManagedAsync("10.0.0.54"))?.Enabled == true);
-        await ConfigApiTests.Eventually(async () =>
-            !(await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "").Contains("10.0.0.54"));
+        await ConfigApiTests.Eventually(async () => await ManagedAsync("10.0.0.54") is not null);
+        var again = (await ManagedAsync("10.0.0.54"))!;
+        Assert.NotEqual(firstId, again.Id);
+        Assert.True(again.Enabled);
         Assert.DoesNotContain("10.0.0.54", await settings.GetAsync(SettingKeys.DnsRetiredResolvers) ?? "");
     }
 

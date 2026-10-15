@@ -8,9 +8,9 @@ namespace ConWatch.NameResolution;
 /// Decides what the stored targets should look like given the host's OS
 /// resolver list (spec 2026-10-10 §4.3, D7). Pure: the service applies the
 /// result. A system-managed target is created when its address appears,
-/// disabled (never deleted — history stays) when it disappears or the watch
-/// is off, and re-enabled when it returns only if this reconciler disabled it;
-/// a target the admin disabled stays disabled.
+/// deleted when it disappears (D10), disabled and remembered while the watch
+/// is off, and re-enabled when the watch returns only if this reconciler
+/// disabled it; a target the admin disabled stays disabled.
 /// </summary>
 public static class SystemResolverReconciler
 {
@@ -72,19 +72,33 @@ public static class SystemResolverReconciler
             }
         }
 
-        // Managed targets whose address is gone, or the watch is off: retire.
-        for (var i = 0; i < result.Count; i++)
+        // Managed targets whose address is gone are deleted (D10: history rows
+        // stay under the old id; a roaming laptop does not pile up resolvers).
+        // Present ones are retired (disabled, remembered) only while the watch is off.
+        for (var i = result.Count - 1; i >= 0; i--)
         {
             var t = result[i];
-            if (!t.SystemManaged || !t.Enabled)
+            if (!t.SystemManaged)
                 continue;
-            if (watchActive && foundByAddress.ContainsKey(t.Address))
+            if (!foundByAddress.ContainsKey(t.Address))
+            {
+                result.RemoveAt(i);
+                retiredNow.Remove(t.Address);
+                log.Add($"deleted {t.Name}");
+                changed = true;
                 continue;
-            result[i] = t with { Enabled = false };
-            retiredNow.Add(t.Address);
-            log.Add($"retired {t.Name}");
-            changed = true;
+            }
+            if (t.Enabled && !watchActive)
+            {
+                result[i] = t with { Enabled = false };
+                retiredNow.Add(t.Address);
+                log.Add($"retired {t.Name}");
+                changed = true;
+            }
         }
+        // A retired entry with no managed target behind it is stale: drop it.
+        if (retiredNow.RemoveWhere(a => !result.Any(t => t.SystemManaged && string.Equals(t.Address, a, StringComparison.OrdinalIgnoreCase))) > 0)
+            changed = true;
 
         return new Plan(result, retiredNow, changed, log);
     }

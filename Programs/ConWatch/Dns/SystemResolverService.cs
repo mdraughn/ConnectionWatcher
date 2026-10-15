@@ -11,7 +11,9 @@ namespace ConWatch.NameResolution;
 
 /// <summary>
 /// Keeps one system-managed Resolver target per resolver the host is
-/// configured to use (spec 2026-10-10 §4.3, D7). Reconciles at start, every
+/// configured to use (spec 2026-10-10 §4.3, D7). A resolver whose address is
+/// gone is deleted (D10; its history rows remain under its id); "retired" means
+/// disabled because the watch is off. Reconciles at start, every
 /// <see cref="Interval"/>, when the OS network addresses change, when the config
 /// changes (a hostname target can activate the watch) and when a Dns.* setting changes. Every change goes through ConfigService, which
 /// rebuilds the engine the way any config edit does. Hosted AFTER
@@ -106,6 +108,8 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
 
     /// <summary>
     /// One reconcile, serialized. True when the stored config changed.
+    /// "Retired" = disabled by the reconciler because the watch is off; a gone
+    /// resolver is deleted instead, and its history rows remain under its id.
     /// The config commit and the Dns.RetiredResolvers write are two separate
     /// transactions, so the order keeps the retired set a SUPERSET at every
     /// failure point: (1) plan on a snapshot; (2) before committing, write the

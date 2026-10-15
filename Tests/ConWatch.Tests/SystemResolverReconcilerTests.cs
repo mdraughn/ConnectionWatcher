@@ -70,16 +70,37 @@ public class SystemResolverReconcilerTests
     }
 
     [Fact]
-    public void A_vanished_address_is_disabled_and_remembered_never_deleted()
+    public void A_vanished_address_deletes_the_managed_target_and_remembers_nothing()
     {
         var managed = Managed("10.1.10.1");
         var plan = SystemResolverReconciler.Reconcile([Router, managed], [], true, NoneRetired);
 
         Assert.True(plan.Changed);
-        var kept = Assert.Single(plan.Targets, t => t.SystemManaged);
-        Assert.Equal(managed.Id, kept.Id);
-        Assert.False(kept.Enabled);
-        Assert.Contains("10.1.10.1", plan.Retired);
+        Assert.DoesNotContain(plan.Targets, t => t.SystemManaged);
+        Assert.Contains(plan.Targets, t => t.Name == "Router");
+        Assert.Empty(plan.Retired);
+        Assert.Contains("deleted Your resolver 10.1.10.1", plan.Log);
+    }
+
+    [Fact]
+    public void A_disabled_managed_target_whose_address_is_gone_is_deleted_too()
+    {
+        var retiredByUs = Managed("10.1.10.1", enabled: false);
+        var byAdmin = Managed("10.1.10.2", enabled: false);
+        var plan = SystemResolverReconciler.Reconcile([retiredByUs, byAdmin], [], true, new HashSet<string> { "10.1.10.1" });
+
+        Assert.True(plan.Changed);
+        Assert.Empty(plan.Targets);
+        Assert.Empty(plan.Retired); // the entry goes with the target
+    }
+
+    [Fact]
+    public void A_vanished_address_is_deleted_even_while_the_watch_is_off()
+    {
+        var managed = Managed("10.1.10.1");
+        var plan = SystemResolverReconciler.Reconcile([managed], [], false, NoneRetired);
+        Assert.Empty(plan.Targets);
+        Assert.Empty(plan.Retired);
     }
 
     [Fact]
@@ -131,11 +152,11 @@ public class SystemResolverReconcilerTests
     }
 
     [Fact]
-    public void Addresses_match_case_insensitively_and_retired_entries_for_absent_addresses_are_kept()
+    public void Addresses_match_case_insensitively_and_a_retired_entry_with_no_target_is_dropped()
     {
         var managed = Managed("fe80::1", enabled: false);
         var plan = SystemResolverReconciler.Reconcile([managed], [Found("FE80::1")], true, new HashSet<string> { "FE80::1", "10.9.9.9" });
         Assert.True(plan.Targets.Single().Enabled);
-        Assert.Equal(new HashSet<string> { "10.9.9.9" }, plan.Retired); // still gone: still remembered
+        Assert.Empty(plan.Retired);
     }
 }
