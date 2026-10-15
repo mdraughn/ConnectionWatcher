@@ -31,6 +31,19 @@ public class SluggerTests
     }
 }
 
+public class ReservedSlugTests
+{
+    [Fact]
+    public void Targets_cannot_take_the_slug_of_a_fixed_entity()
+    {
+        var slugger = new Slugger(MqttTopics.ReservedSlugs);
+        Assert.Equal("dns_2", slugger.Slug("DNS"));
+        Assert.Equal("internet_2", slugger.Slug("Internet"));
+        Assert.Equal("verdict_2", slugger.Slug("Verdict"));
+        Assert.Equal("router", slugger.Slug("Router"));
+    }
+}
+
 public class StateMappingTests
 {
     [Theory]

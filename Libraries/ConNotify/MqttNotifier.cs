@@ -191,7 +191,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             return;
 
         // Deterministic slugs: iterate by name.
-        var slugger = new Slugger();
+        var slugger = new Slugger(MqttTopics.ReservedSlugs);
         var slugs = new Dictionary<Guid, string>();
         var monitors = engine.Monitors.Values
             .OrderBy(m => m.Target.Name).ToList();

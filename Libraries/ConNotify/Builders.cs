@@ -14,6 +14,13 @@ public class Slugger
 {
     private readonly HashSet<string> _used = new(StringComparer.Ordinal);
 
+    public Slugger()
+    {
+    }
+
+    /// <summary>Slugs that are taken before the first name is seen.</summary>
+    public Slugger(IEnumerable<string> reserved) => _used.UnionWith(reserved);
+
     public string Slug(string name)
     {
         var sb = new StringBuilder();
@@ -81,6 +88,10 @@ public class MqttTopics(string baseTopic, string discoveryPrefix)
     public string Transitions => $"{Base}/transitions";
     public string TargetState(string slug) => $"{Base}/target/{slug}/state";
     public string TargetAttributes(string slug) => $"{Base}/target/{slug}/attributes";
+
+    /// <summary>Slugs the fixed entities' discovery topics use ({prefix}/binary_sensor/{base}_{slug}/config);
+    /// a target must never take one, or its retained config would overwrite that entity's.</summary>
+    public static readonly IReadOnlyList<string> ReservedSlugs = ["verdict", "internet", "dns"];
 
     private string Prefix { get; } = discoveryPrefix.Trim('/');
     public string VerdictDiscovery => $"{Prefix}/sensor/{Base}_verdict/config";
