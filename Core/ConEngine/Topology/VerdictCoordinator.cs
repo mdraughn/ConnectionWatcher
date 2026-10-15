@@ -220,6 +220,10 @@ public class VerdictCoordinator : IDisposable
                 return;
             Current = new VerdictSnapshot(verdict, null, null);
             _seeded = true;
+            // A presumed-reachable verdict means the internet was already up: the first
+            // pass is not a return, so no resolver is judged stale for lack of results
+            // (the result log is fresh per engine).
+            _wasReachable = verdict is not (VerdictState.LinkDown or VerdictState.Unknown);
         }
     }
 
@@ -461,13 +465,18 @@ public class VerdictCoordinator : IDisposable
     /// <summary>Under _lock: a Down system resolver whose latest DNS result is not a
     /// failure later than <see cref="_reachableSince"/> — none at all, one from before
     /// the internet came back, or a fresh answer that has not yet lifted it out of
-    /// Down (its burst is re-proving it). False when no result log was given.</summary>
+    /// Down (its burst is re-proving it) — that last only within the climb window,
+    /// <see cref="AnchorWaitCap"/> after the return, so a mostly-dead resolver that
+    /// answers now and then cannot flap a steady DnsDown. False when no result log was
+    /// given or the internet has not returned (a seeded reachable verdict).</summary>
     private bool WithoutFreshFailure(TargetMonitor resolver)
     {
         if (_dnsResults is null || _reachableSince is not { } since)
             return false;
         var recent = _dnsResults.Recent(resolver.Target.Id);
-        return recent.Count == 0 || recent[^1].At <= since || recent[^1].Success;
+        if (recent.Count == 0 || recent[^1].At <= since)
+            return true;
+        return recent[^1].Success && _time.GetUtcNow() - since <= AnchorWaitCap;
     }
 
     /// <summary>The internet is reachable: how good is it? Anchor evidence decides

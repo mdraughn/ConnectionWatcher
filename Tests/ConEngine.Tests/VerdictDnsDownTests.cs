@@ -42,22 +42,27 @@ public class VerdictDnsDownTests
         });
         foreach (var target in _graph.Targets.Values)
         {
-            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time), _time, NullLoggerFactory.Instance);
-            monitor.StartTracking(IPAddress.Parse(target.Address));
-            _monitors[target.Id] = monitor;
+            _monitors[target.Id] = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time), _time, NullLoggerFactory.Instance);
         }
-        new TopologyCoordinator(_graph, _monitors, NullLogger<TopologyCoordinator>.Instance).Start();
     }
 
     private TargetMonitor M(string name) => _monitors[_graph.GetByName(name).Id];
 
-    private void Start(bool watch = true, bool withUpstream = true)
+    /// <summary>Tracking and topology start here, not in the constructor, so a test can
+    /// warm-seed monitors first (TargetMonitor.Seed only works before tracking).</summary>
+    private void Start(bool watch = true, bool withUpstream = true, VerdictState? seed = null)
     {
+        foreach (var monitor in _monitors.Values)
+            monitor.StartTracking(IPAddress.Parse(monitor.Target.Address));
+        new TopologyCoordinator(_graph, _monitors, NullLogger<TopologyCoordinator>.Instance).Start();
+
         var dns = new DnsWatch(watch,
             [M("Your resolver 192.168.1.1"), M("Your resolver 192.168.1.2")],
             withUpstream ? [M("9.9.9.9 directly")] : []);
         _verdict = new VerdictCoordinator(_graph, _graph.GetPoolByName("Internet"), _monitors,
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance, dns, _dnsResults);
+        if (seed is { } verdict)
+            _verdict.Seed(verdict);
         _verdict.TransitionSource.Subscribe(_transitions.Add);
         _verdict.Start();
     }
@@ -330,6 +335,50 @@ public class VerdictDnsDownTests
         Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
         _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
         Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+    }
+
+    /// <summary>Re-review: a warm start or rebuild during DnsDown has a fresh result log; a
+    /// presumed-reachable verdict is not the internet returning, so nothing is stale.</summary>
+    [Fact]
+    public void A_warm_start_seeded_DnsDown_holds_without_a_false_recovery()
+    {
+        foreach (var name in new[] { "Router", "Google", "Cloudflare" })
+            M(name).Seed(HostState.Responding);
+        M("Your resolver 192.168.1.1").Seed(HostState.Down);
+        M("Your resolver 192.168.1.2").Seed(HostState.Down);
+
+        Start(seed: VerdictState.DnsDown);
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Empty(_transitions);
+
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Empty(_transitions);
+
+        Feed("Your resolver 192.168.1.1", 20, true);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        var only = Assert.Single(_transitions);
+        Assert.Equal("Healthy", only.Reason.Verdict);
+    }
+
+    /// <summary>Re-review: the fresh-success clause holds only in the climb window after the
+    /// link returns; in a steady DnsDown a stray answer is not a reason to leave it.</summary>
+    [Fact]
+    public void A_resolver_that_answers_now_and_then_during_a_steady_DnsDown_does_not_flap()
+    {
+        Start();
+        AnchorsUp();
+        ResolversDown();
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        var count = _transitions.Count;
+
+        _time.Advance(TimeSpan.FromMinutes(2));
+        Feed("Your resolver 192.168.1.1", 1, true); // a stray answer: still Down, latest result a success
+        Assert.Equal(HostState.Down, M("Your resolver 192.168.1.1").CurrentState);
+        Feed("9.9.9.9 directly", 6, true); // an unrelated transition (Starting -> Responding) reclassifies
+        Assert.Equal(HostState.Responding, M("9.9.9.9 directly").CurrentState);
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Equal(count, _transitions.Count);
     }
 
     [Fact]

@@ -106,7 +106,7 @@ The coordinator today: `Classify` decides reachability first (one counted anchor
   - every upstream resolver Down, or none configured → kind `NoResolver`: "No resolver is answering, though the internet is reachable." When none is configured the detail adds "Name a public resolver in Config → DNS so ConnectionWatcher can tell your resolver from everyone's."
 - **Interaction with the path (R1).** Resolvers have no path, so they are never a frontier witness, never `Unreachable`, never blamed by `Quality`'s shallowest-losing-hop rule, and never subject to the probe-only veto. Router dead: anchors Down within the burst, `LinkDown` blamed on the router, the resolver's own Down is just one more Down target.
 - **Degraded, not down.** The `dns` summary state (§5.1) is `Degraded` when some system resolver is `Faltering`/`Recovering`, or some but not all are Down. The verdict is unchanged by `Degraded`.
-- **Filtered, not down (D11).** The `dns` summary state is `Filtered` when every answering system resolver's recent results for the seeded names are `Filtered: …` (at least 3 of the last 10 seeded-name asks per resolver, none `Answered`). The verdict is unchanged by `Filtered`; the `ResolverFiltered` note explains it.
+- **Filtered, not down (D11).** The `dns` summary state is `Filtered` when every answering system resolver's recent results for the seeded names are `Filtered: …` (at least 3 of the last 10 seeded-name asks per resolver, none `Verified` for a blocked name: a name seen Filtered must still be Filtered at its latest ask). The verdict is unchanged by `Filtered`; the `ResolverFiltered` note explains it.
 
 ### 4.5 Notes (admin-facing, never verdict)
 
@@ -116,7 +116,7 @@ Added to `ModelCheckCoordinator` as `ModelWarningKind` values with `ModelConditi
 |---|---|---|---|
 | `ResolverPartial` | `resolver-partial:{id}` | Some but not all enabled system resolvers are Down | "Your secondary resolver 10.1.10.2 isn't answering; 10.1.10.1 is." |
 | `ResolverLying` | `resolver-lying:{id}` | In the `DnsResultLog`, 3 of the last 10 results for this resolver are `WrongAnswer: …` | "Your resolver answered dns.google with 10.0.0.1 — a captive portal or interception?" |
-| `ResolverFiltered` | `resolver-filtered:{id}` | In the `DnsResultLog`, 3 of the last 10 seeded-name results for this resolver are `Filtered: …` and none is `Answered` | "Your resolver blocks dns.google (answered 0.0.0.0) — a Pi-hole or AdGuard blocklist? Name resolution still works; the seeded lookup names can't prove it. Add a lookup name your resolver allows." |
+| `ResolverFiltered` | `resolver-filtered:{id}` | In the `DnsResultLog`, 3 of the last 10 seeded-name results for this resolver are `Filtered: …` and none is `Verified` for a blocked name (a name seen Filtered must still be Filtered at its latest ask) | "Your resolver blocks dns.google (answered 0.0.0.0) — a Pi-hole or AdGuard blocklist? Name resolution still works; the seeded lookup names can't prove it. Add a lookup name your resolver allows." |
 | `UpstreamResolverDown` | `upstream-resolver-down:{id}` | A system resolver answers but this upstream resolver is Down | "1.1.1.1 isn't answering direct queries; your resolver is fine." |
 | `NameUnresolvable` | `name-unresolvable` (no target) | One lookup name missed its last 3 asks on every answering resolver while other names hit | "example.com isn't resolving anywhere." |
 

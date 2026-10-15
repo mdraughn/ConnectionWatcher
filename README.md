@@ -143,7 +143,7 @@ Assistant discovery documents, so entities appear automatically under one
 "ConnectionWatcher" device:
 
 - a **verdict sensor** (`Healthy` / `SiteIncident` / `InternetWeather` /
-  `LinkDown`, with the detail text as an attribute),
+  `LinkDegraded` / `DnsDown` / `LinkDown`, with the detail text as an attribute),
 - an **internet up/down binary sensor** (OFF only when the verdict is
   LinkDown or DnsDown — the simplest summary),
 - a **connectivity binary sensor per target** (ON while Responding, Faltering,
