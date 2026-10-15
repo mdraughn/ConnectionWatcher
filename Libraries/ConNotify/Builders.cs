@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using ConCore.Targets;
+using ConEngine.Dns;
 using ConEngine.Events;
+using ConEngine.Topology;
 using ConEngine.Tracking;
 using ConPersistence.Queries;
 
@@ -50,6 +52,19 @@ public static class StateMapping
     /// <summary>The headline binary: ON unless the verdict says the LINK is down or name lookups are failing (spec 2026-10-10 D9).</summary>
     public static string InternetPayload(string verdict) =>
         verdict is "LinkDown" or "DnsDown" ? "OFF" : "ON";
+
+    /// <summary>The name-resolution binary (spec 2026-10-10 §5.4): OFF only when every
+    /// resolver is down; Degraded/Filtered/Unknown still read ON. Not-watched is handled by
+    /// availability, never by OFF — an automation must not fire because the watch was switched off.</summary>
+    public static string DnsPayload(DnsSummaryState state) => state == DnsSummaryState.Down ? "OFF" : "ON";
+
+    public static string DnsAvailabilityPayload(bool watched) => watched ? "online" : "offline";
+}
+
+/// <summary>A resolver as the dns sensor's attributes list it.</summary>
+public sealed record DnsResolverEntry(string Name, string Address, string State)
+{
+    public static DnsResolverEntry From(TargetMonitor m) => new(m.Target.Name, m.Target.Address, m.CurrentState.ToString());
 }
 
 /// <summary>All topic strings derive from here — one source of truth.</summary>
@@ -60,6 +75,9 @@ public class MqttTopics(string baseTopic, string discoveryPrefix)
     public string VerdictState => $"{Base}/verdict/state";
     public string VerdictAttributes => $"{Base}/verdict/attributes";
     public string InternetState => $"{Base}/internet/state";
+    public string DnsState => $"{Base}/dns/state";
+    public string DnsAttributes => $"{Base}/dns/attributes";
+    public string DnsAvailability => $"{Base}/dns/availability";
     public string Transitions => $"{Base}/transitions";
     public string TargetState(string slug) => $"{Base}/target/{slug}/state";
     public string TargetAttributes(string slug) => $"{Base}/target/{slug}/attributes";
@@ -67,6 +85,7 @@ public class MqttTopics(string baseTopic, string discoveryPrefix)
     private string Prefix { get; } = discoveryPrefix.Trim('/');
     public string VerdictDiscovery => $"{Prefix}/sensor/{Base}_verdict/config";
     public string InternetDiscovery => $"{Prefix}/binary_sensor/{Base}_internet/config";
+    public string DnsDiscovery => $"{Prefix}/binary_sensor/{Base}_dns/config";
     public string TargetDiscovery(string slug) => $"{Prefix}/binary_sensor/{Base}_{slug}/config";
 }
 
@@ -121,6 +140,37 @@ public static class HaDiscovery
             availability_topic = topics.Availability,
             device = Device(topics),
         }, Options);
+
+    /// <summary>Unavailable when either the node or the watch is off (availability_mode "all").</summary>
+    public static string DnsConfig(MqttTopics topics) =>
+        JsonSerializer.Serialize(new
+        {
+            name = "Name resolution",
+            unique_id = $"{topics.Base}_dns",
+            state_topic = topics.DnsState,
+            json_attributes_topic = topics.DnsAttributes,
+            device_class = "connectivity",
+            availability = new[] { new { topic = topics.Availability }, new { topic = topics.DnsAvailability } },
+            availability_mode = "all",
+            device = Device(topics),
+        }, Options);
+
+    private static object? Blame(DnsBlame? b) => b is null ? null : new { kind = b.Kind.ToString(), message = b.Message, resolvers = b.Resolvers };
+
+    /// <summary>Keys are always present (attribute templates need them): state, blame (null when none),
+    /// systemResolvers, upstreamResolvers.</summary>
+    public static string DnsAttributes(DnsSummary summary, DnsBlame? blame,
+        IReadOnlyList<DnsResolverEntry> system, IReadOnlyList<DnsResolverEntry> upstream) =>
+        JsonSerializer.Serialize(new
+        {
+            state = summary.State.ToString(),
+            blame = Blame(blame),
+            systemResolvers = system.Select(r => new { name = r.Name, address = r.Address, state = r.State }),
+            upstreamResolvers = upstream.Select(r => new { name = r.Name, address = r.Address, state = r.State }),
+        }, Options);
+
+    public static string VerdictAttributes(string? detail, string? @operator, DnsBlame? dnsBlame) =>
+        JsonSerializer.Serialize(new { detail, @operator, dnsBlame = Blame(dnsBlame) }, Options);
 }
 
 /// <summary>Webhook + MQTT transition-event body: the shared transition DTO.</summary>

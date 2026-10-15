@@ -1,5 +1,7 @@
 using System.Text.Json;
+using ConEngine.Dns;
 using ConEngine.Events;
+using ConEngine.Topology;
 using ConEngine.Tracking;
 using ConNotify;
 
@@ -55,6 +57,22 @@ public class StateMappingTests
     {
         Assert.Equal(expected, StateMapping.InternetPayload(verdict));
     }
+
+    [Theory]
+    [InlineData(DnsSummaryState.Ok, "ON")]
+    [InlineData(DnsSummaryState.Degraded, "ON")]
+    [InlineData(DnsSummaryState.Filtered, "ON")]
+    [InlineData(DnsSummaryState.Unknown, "ON")]
+    [InlineData(DnsSummaryState.Down, "OFF")]
+    public void Dns_binary_is_off_only_when_every_resolver_is_down(DnsSummaryState state, string expected) =>
+        Assert.Equal(expected, StateMapping.DnsPayload(state));
+
+    [Fact]
+    public void Dns_sensor_is_unavailable_not_off_when_the_watch_is_off() // Review Focus 2
+    {
+        Assert.Equal("offline", StateMapping.DnsAvailabilityPayload(watched: false));
+        Assert.Equal("online", StateMapping.DnsAvailabilityPayload(watched: true));
+    }
 }
 
 public class MqttTopicsTests
@@ -73,6 +91,15 @@ public class MqttTopicsTests
         Assert.Equal("homeassistant/sensor/conwatch_verdict/config", _topics.VerdictDiscovery);
         Assert.Equal("homeassistant/binary_sensor/conwatch_internet/config", _topics.InternetDiscovery);
         Assert.Equal("homeassistant/binary_sensor/conwatch_router/config", _topics.TargetDiscovery("router"));
+    }
+
+    [Fact]
+    public void Dns_topics_hang_off_the_base()
+    {
+        Assert.Equal("conwatch/dns/state", _topics.DnsState);
+        Assert.Equal("conwatch/dns/attributes", _topics.DnsAttributes);
+        Assert.Equal("conwatch/dns/availability", _topics.DnsAvailability);
+        Assert.Equal("homeassistant/binary_sensor/conwatch_dns/config", _topics.DnsDiscovery);
     }
 }
 
@@ -117,6 +144,53 @@ public class HaDiscoveryTests
         var internet = JsonSerializer.Deserialize<JsonElement>(HaDiscovery.InternetConfig(Topics));
         Assert.Equal("conwatch/internet/state", internet.GetProperty("state_topic").GetString());
         Assert.Equal("connectivity", internet.GetProperty("device_class").GetString());
+    }
+
+    [Fact]
+    public void Dns_discovery_document_needs_both_availabilities()
+    {
+        var json = JsonSerializer.Deserialize<JsonElement>(HaDiscovery.DnsConfig(Topics));
+        Assert.Equal("Name resolution", json.GetProperty("name").GetString());
+        Assert.Equal("conwatch_dns", json.GetProperty("unique_id").GetString());
+        Assert.Equal("conwatch/dns/state", json.GetProperty("state_topic").GetString());
+        Assert.Equal("conwatch/dns/attributes", json.GetProperty("json_attributes_topic").GetString());
+        Assert.Equal("connectivity", json.GetProperty("device_class").GetString());
+        Assert.Equal("all", json.GetProperty("availability_mode").GetString());
+        Assert.Equal(["conwatch/availability", "conwatch/dns/availability"],
+            json.GetProperty("availability").EnumerateArray().Select(a => a.GetProperty("topic").GetString()!).ToArray());
+        Assert.Equal("conwatch", json.GetProperty("device").GetProperty("identifiers")[0].GetString());
+    }
+
+    [Fact]
+    public void Dns_attributes_carry_stable_keys_even_when_empty() // Review Focus 3
+    {
+        var empty = JsonSerializer.Deserialize<JsonElement>(HaDiscovery.DnsAttributes(
+            new DnsSummary(true, DnsSummaryState.Ok), null,
+            [new DnsResolverEntry("Your resolver 10.1.10.1", "10.1.10.1", "Responding")], []));
+        Assert.Equal("Ok", empty.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, empty.GetProperty("blame").ValueKind);
+        Assert.Equal(0, empty.GetProperty("upstreamResolvers").GetArrayLength());
+        var sys = Assert.Single(empty.GetProperty("systemResolvers").EnumerateArray());
+        Assert.Equal("10.1.10.1", sys.GetProperty("address").GetString());
+        Assert.Equal("Responding", sys.GetProperty("state").GetString());
+
+        var blame = new DnsBlame(DnsBlameKind.NoResolver, "No resolver is answering, though the internet is reachable.", ["10.1.10.1"]);
+        var down = JsonSerializer.Deserialize<JsonElement>(HaDiscovery.DnsAttributes(
+            new DnsSummary(true, DnsSummaryState.Down), blame, [], [new DnsResolverEntry("1.1.1.1 directly", "1.1.1.1", "Down")]));
+        Assert.Equal("NoResolver", down.GetProperty("blame").GetProperty("kind").GetString());
+        Assert.Equal("1.1.1.1", down.GetProperty("upstreamResolvers")[0].GetProperty("address").GetString());
+    }
+
+    [Fact]
+    public void Verdict_attributes_gain_the_dns_blame()
+    {
+        var none = JsonSerializer.Deserialize<JsonElement>(HaDiscovery.VerdictAttributes("Healthy: 2 anchors responding", null, null));
+        Assert.Equal(JsonValueKind.Null, none.GetProperty("dnsBlame").ValueKind);
+        Assert.Equal(JsonValueKind.Null, none.GetProperty("operator").ValueKind);
+        var blame = new DnsBlame(DnsBlameKind.YourResolver, "Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly.", ["10.1.10.1"]);
+        var some = JsonSerializer.Deserialize<JsonElement>(HaDiscovery.VerdictAttributes("DnsDown: …", null, blame));
+        Assert.Equal("YourResolver", some.GetProperty("dnsBlame").GetProperty("kind").GetString());
+        Assert.Equal("Comcast", JsonSerializer.Deserialize<JsonElement>(HaDiscovery.VerdictAttributes("d", "Comcast", null)).GetProperty("operator").GetString());
     }
 }
 

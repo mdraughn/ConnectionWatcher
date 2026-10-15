@@ -1,5 +1,7 @@
 using System.Threading.Channels;
+using ConCore.Targets;
 using ConEngine;
+using ConEngine.Dns;
 using ConEngine.Events;
 using ConPersistence;
 using ConPersistence.Settings;
@@ -206,6 +208,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
         await PublishAsync(client, _topics.VerdictDiscovery, HaDiscovery.VerdictConfig(_topics), retain: true, ct);
         await PublishAsync(client, _topics.InternetDiscovery, HaDiscovery.InternetConfig(_topics), retain: true, ct);
+        await PublishAsync(client, _topics.DnsDiscovery, HaDiscovery.DnsConfig(_topics), retain: true, ct);
         foreach (var monitor in monitors)
         {
             var slug = slugs[monitor.Target.Id];
@@ -221,12 +224,9 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         var verdict = current?.State.ToString() ?? "Unknown";
         await PublishAsync(client, _topics.VerdictState, verdict, retain: true, ct);
         await PublishAsync(client, _topics.VerdictAttributes,
-            System.Text.Json.JsonSerializer.Serialize(new
-            {
-                detail = current?.Detail,
-                @operator = current?.Operator,
-            }), retain: true, ct);
+            HaDiscovery.VerdictAttributes(current?.Detail, current?.Operator, current?.Dns), retain: true, ct);
         await PublishAsync(client, _topics.InternetState, StateMapping.InternetPayload(verdict), retain: true, ct);
+        await PublishDnsAsync(client, engine, ct);
 
         lock (_lock)
         {
@@ -254,6 +254,11 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 }
                 await PublishAsync(client, _topics.TargetState(slug),
                     StateMapping.TargetPayload(t.To), retain: true, ct);
+                // A resolver's own change moves the dns summary; nothing else does between verdicts.
+                WatcherEngine? engineForDns;
+                lock (_lock) { engineForDns = _engine; }
+                if (engineForDns is not null && IsResolver(engineForDns, t.TargetId))
+                    await PublishDnsAsync(client, engineForDns, ct);
                 break;
 
             case TransitionSubjectKind.Verdict:
@@ -262,14 +267,38 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                 lock (_lock) { engineForOperator = _engine; }
                 await PublishAsync(client, _topics.VerdictState, verdict, retain: true, ct);
                 await PublishAsync(client, _topics.VerdictAttributes,
-                    System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        detail = t.Reason.Detail,
-                        @operator = engineForOperator?.Verdict?.CurrentOperator,
-                    }), retain: true, ct);
+                    HaDiscovery.VerdictAttributes(t.Reason.Detail, engineForOperator?.Verdict?.CurrentOperator, t.Reason.Dns), retain: true, ct);
                 await PublishAsync(client, _topics.InternetState, StateMapping.InternetPayload(verdict), retain: true, ct);
+                if (engineForOperator is not null)
+                    await PublishDnsAsync(client, engineForOperator, ct);
                 break;
         }
+    }
+
+    private static bool IsResolver(WatcherEngine engine, Guid targetId)
+    {
+        try
+        {
+            return engine.Graph.Targets.TryGetValue(targetId, out var target) && target.Scope == TargetScope.Resolver;
+        }
+        catch (InvalidOperationException)
+        {
+            return false; // engine stopped between the transition and its publish
+        }
+    }
+
+    /// <summary>The name-resolution entity: its own availability says whether the watch is on
+    /// (spec 2026-10-10 §5.4); state and attributes come from the same summary the status block uses.</summary>
+    private async Task PublishDnsAsync(IMqttClient client, WatcherEngine engine, CancellationToken ct)
+    {
+        if (_topics is null)
+            return;
+        var watch = engine.DnsWatch;
+        var summary = DnsSummary.Compute(watch, engine.DnsResults);
+        await PublishAsync(client, _topics.DnsAvailability, StateMapping.DnsAvailabilityPayload(summary.Watched), retain: true, ct);
+        await PublishAsync(client, _topics.DnsState, StateMapping.DnsPayload(summary.State), retain: true, ct);
+        await PublishAsync(client, _topics.DnsAttributes, HaDiscovery.DnsAttributes(summary, engine.Verdict?.Current.Dns,
+            watch.System.Select(DnsResolverEntry.From).ToList(), watch.Upstream.Select(DnsResolverEntry.From).ToList()), retain: true, ct);
     }
 
     private static Task PublishAsync(IMqttClient client, string topic, string payload, bool retain, CancellationToken ct) =>

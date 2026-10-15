@@ -123,9 +123,13 @@ Assistant discovery documents, so entities appear automatically under one
 "ConnectionWatcher" device:
 
 - a **verdict sensor** (`Healthy` / `SiteIncident` / `InternetWeather` /
-  `LinkDegraded` / `DnsDown` / `LinkDown`, with the detail text as an attribute),
+  `LinkDegraded` / `DnsDown` / `LinkDown`, with the detail text and, on `DnsDown`,
+  the blame as attributes),
 - an **internet up/down binary sensor** (OFF only when the verdict is
   LinkDown or DnsDown — the simplest summary),
+- a **name-resolution binary sensor** (ON while your resolvers answer, OFF when
+  none does; *unavailable* while the watch is off; attributes carry the resolver
+  lists and the blame),
 - a **connectivity binary sensor per target** (ON while Responding, Faltering,
   or Recovering; OFF when Down or Unreachable).
 
@@ -143,7 +147,8 @@ watchman.
 
 **Webhooks** — one URL per line; each transition is POSTed as JSON
 (`subjectKind`, `subjectName`, `from`, `to`, `trigger`, verdict/evidence
-fields). `timestamp` is ISO-8601 with an explicit `+00:00` offset. Set
+fields); a `DnsDown` verdict change also carries a `dns` block naming the
+resolver that stopped answering. `timestamp` is ISO-8601 with an explicit `+00:00` offset. Set
 *Verdict changes only* to be notified just when your internet weather changes
 rather than on every target flap.
 
