@@ -145,7 +145,7 @@ Assistant discovery documents, so entities appear automatically under one
 - a **verdict sensor** (`Healthy` / `SiteIncident` / `InternetWeather` /
   `LinkDown`, with the detail text as an attribute),
 - an **internet up/down binary sensor** (OFF only when the verdict is
-  LinkDown — the simplest summary),
+  LinkDown or DnsDown — the simplest summary),
 - a **connectivity binary sensor per target** (ON while Responding, Faltering,
   or Recovering; OFF when Down or Unreachable).
 
@@ -237,7 +237,8 @@ The resolvers your machine uses are asked for a few well-known names. When the
 anchors answer but every one of those resolvers is down, the verdict is "UP, but
 name lookups are failing", and the banner says whether it is your resolver or
 every resolver. A resolver that blocks the seeded names (a Pi-hole, say) is
-shown as filtered, not down.
+shown as filtered, not down. The Home Assistant internet binary sensor now reads
+OFF during a name-resolution failure as well as during a link outage.
 
 ## Ask Claude about your internet (MCP)
 

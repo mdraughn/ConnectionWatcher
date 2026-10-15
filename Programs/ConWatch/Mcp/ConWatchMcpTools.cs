@@ -33,13 +33,15 @@ public class ConWatchMcpTools(WatcherHostService host,
 
     [McpServerTool(Name = "get_current_status", ReadOnly = true)]
     [Description("Live status right now: the overall internet verdict (Healthy, " +
-        "SiteIncident, InternetWeather, LinkDegraded, LinkDown) with its evidence and " +
+        "SiteIncident, InternetWeather, LinkDegraded, DnsDown, LinkDown) with its evidence and " +
         "blamed ISP when applicable, every monitored target's state, and whether " +
         "monitoring is enabled (a disabled node is a read-only archive). " +
         "Answering 'is my internet up?': Healthy, SiteIncident and InternetWeather all " +
         "mean YES, the user's own connection is up (SiteIncident = one remote site is " +
         "having trouble; InternetWeather = widespread trouble out on the internet, not " +
         "the user's line); LinkDegraded means their connection is losing traffic; " +
+        "DnsDown means the connection is up but name lookups are failing: the user's resolver, " +
+        "or every resolver, is not answering — read dns.blame; " +
         "LinkDown means it is down. " +
         "All timestamps in this server are ISO-8601 UTC; convert to the user's zone when answering. " +
         "Targets with scope 'Local' are LAN devices (cameras, NAS, IoT) tracked on the side; they say " +
@@ -66,6 +68,7 @@ public class ConWatchMcpTools(WatcherHostService host,
     [Description("The ISP evidence report for a period, as data: attributable incidents " +
         "(LinkDown = the user's line, LinkDegraded, InternetWeather = widespread trouble " +
         "that is NOT the user's line) with recorded evidence, total downtime figures, " +
+        "dnsDownTime (name-resolution failures, the user's resolver, never attributed to the ISP), " +
         "measured anchor uptime, and a summary of sub-outage glitches. " +
         "Single-site incidents are excluded by design — they are not attributable to the " +
         "connection. Use this first for questions like 'how was my internet last night?'. " +
@@ -86,7 +89,9 @@ public class ConWatchMcpTools(WatcherHostService host,
         "Rows have the REST /api/v1/transitions shape; times are ISO-8601 UTC (+00:00). " +
         "Each row has a scope: 'Local' rows are LAN devices (cameras, NAS, IoT) tracked on " +
         "the side — they are NOT evidence about the internet connection and never affect " +
-        "the verdict; 'Verdict' rows are the path to the internet, its anchors and the verdict.")]
+        "the verdict; 'Resolver' rows are DNS resolvers (the user's own and any upstream ones) " +
+        "watched on the side — they reach the verdict only as DnsDown; " +
+        "'Verdict' rows are the path to the internet, its anchors and the verdict.")]
     public async Task<string> GetTransitions(
         [Description("Only transitions at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only transitions at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,
