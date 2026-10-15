@@ -4,7 +4,7 @@
 // probe counts — wearing the shared encoding's mark so it rhymes with the
 // ledger. The technical detail survives as a hover tooltip.
 import type { Mark } from "../lib/encoding";
-import type { VerdictStatus } from "../lib/types";
+import type { DnsStatus, VerdictStatus } from "../lib/types";
 import { formatDuration, type AnswerClock } from "../lib/verdictClock";
 import { MarkSwatch } from "./marks";
 
@@ -13,6 +13,7 @@ interface Slab {
   icon: "up" | "struggling" | "down" | "checking";
   headline: string;
   caveat: string | null;
+  caveat2: string | null; // a second small line, no mark
   mark: Mark | null;    // whose-gear chip beside the caveat
 }
 
@@ -47,29 +48,32 @@ function SignalIcon({ state, size = 26 }: { state: Slab["icon"]; size?: number }
   );
 }
 
-export function slabFor(verdict: VerdictStatus): Slab {
+export function slabFor(verdict: VerdictStatus, dns?: DnsStatus | null): Slab {
   switch (verdict.state) {
     case "Healthy":
       return {
         cls: "healthy", icon: "up", headline: "Your internet is UP",
-        caveat: "no trouble in sight", mark: null,
+        caveat: "no trouble in sight", caveat2: null, mark: null,
       };
     case "SiteIncident":
       return {
         cls: "healthy", icon: "up", headline: "Your internet is UP",
         caveat: "one site out there is having trouble — not your connection",
+        caveat2: null,
         mark: { shape: "dot", hue: "warm", depth: "glitch" },
       };
     case "InternetWeather":
       return {
         cls: "healthy", icon: "up", headline: "Your internet is UP",
         caveat: "but parts of the internet look unreachable right now — the trouble isn't on your end",
+        caveat2: null,
         mark: { shape: "bar", hue: "warm", depth: "degraded" },
       };
     case "LinkDegraded":
       return {
         cls: "linkdegraded", icon: "struggling", headline: "Your internet is STRUGGLING",
         caveat: "your connection is losing some traffic — pages may stall or feel slow",
+        caveat2: null,
         mark: { shape: "bar", hue: "grey", depth: "degraded" },
       };
     case "LinkDown":
@@ -78,18 +82,20 @@ export function slabFor(verdict: VerdictStatus): Slab {
         caveat: verdict.operator
           ? `${verdict.operator} is not carrying your traffic`
           : "your connection to the internet is not carrying traffic",
+        caveat2: dns?.state === "Down" ? "Name lookups are failing too" : null,
         mark: { shape: "bar", hue: "grey", depth: "out" },
       };
     case "DnsDown":
       return {
         cls: "linkdown", icon: "down", headline: "Your internet is UP, but name lookups are failing",
         caveat: (verdict.detail ?? "").replace(/^DnsDown:\s*/, "") || "your resolver isn't answering",
+        caveat2: null,
         mark: { shape: "bar", hue: "grey", depth: "out" },
       };
     default:
       return {
         cls: "unknown", icon: "checking", headline: "Checking your internet…",
-        caveat: "measuring — an answer arrives within a minute or two", mark: null,
+        caveat: "measuring — an answer arrives within a minute or two", caveat2: null, mark: null,
       };
   }
 }
@@ -121,8 +127,9 @@ function Clock({ clock }: { clock: AnswerClock }) {
   );
 }
 
-export function VerdictBanner({ verdict, connected, clock }: {
+export function VerdictBanner({ verdict, dns, connected, clock }: {
   verdict: VerdictStatus | null;
+  dns?: DnsStatus | null;
   connected: boolean;
   clock?: AnswerClock | null;
 }) {
@@ -134,7 +141,7 @@ export function VerdictBanner({ verdict, connected, clock }: {
       </div>
     );
   }
-  const slab = slabFor(verdict);
+  const slab = slabFor(verdict, dns);
   // The icon sits in its own left column so the headline and the caveat
   // share one text edge: icon, "Your internet is UP", and directly under
   // the Y, "no trouble in sight".
@@ -152,6 +159,11 @@ export function VerdictBanner({ verdict, connected, clock }: {
                 <MarkSwatch mark={slab.mark} barWidth={13} size={8} />
               </span>}
               {slab.caveat}
+            </div>
+          )}
+          {slab.caveat2 && (
+            <div style={{ fontSize: "0.8rem", fontWeight: 400, opacity: 0.92, marginTop: 2 }}>
+              {slab.caveat2}
             </div>
           )}
         </div>

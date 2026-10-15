@@ -119,7 +119,7 @@ function App({ store, topology, initial }: {
 
   return (
     <div>
-      <VerdictBanner verdict={state.verdict} connected={state.connected} clock={clock} />
+      <VerdictBanner verdict={state.verdict} dns={state.dns} connected={state.connected} clock={clock} />
       <EventStrip topology={initial} />
       <Tree topology={topology} targets={state.targets.filter(isInternetTarget)} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />

@@ -53,4 +53,13 @@ describe("slabFor", () => {
   it("DnsDown's clock reads 'down for', like the red slab it sits on", () => {
     expect(answerClassOf("DnsDown")).toBe("down");
   });
+
+  it("LinkDown says name lookups are failing too only when dns is Down", () => {
+    const dnsDown = { watched: true, state: "Down", systemResolvers: [], upstreamResolvers: [], blame: null, lookupNames: [] };
+    const dnsOk = { ...dnsDown, state: "Ok" };
+    expect(slabFor(v("LinkDown"), dnsDown).caveat2).toBe("Name lookups are failing too");
+    expect(slabFor(v("LinkDown"), dnsOk).caveat2).toBeNull();
+    expect(slabFor(v("LinkDown")).caveat2).toBeNull();
+    expect(slabFor(v("Healthy"), dnsDown).caveat2).toBeNull(); // only the LinkDown slab carries it
+  });
 });

@@ -1,5 +1,5 @@
 // Tiny external store for the dashboard island (React useSyncExternalStore).
-import type { ModelWarning, Snapshot, TransitionEvent } from "./types";
+import type { DnsStatus, ModelWarning, Snapshot, TransitionEvent } from "./types";
 
 const MAX_RECENT = 50;
 
@@ -12,13 +12,14 @@ export interface StoreState {
   connected: boolean;
   disabled: boolean;
   warnings: ModelWarning[];
+  dns: DnsStatus | null;
 }
 
 export function createStatusStore() {
   let state: StoreState = {
     verdict: null, targets: [], pools: [],
     recentTransitions: [], latestTransition: null, connected: false,
-    disabled: false, warnings: [],
+    disabled: false, warnings: [], dns: null,
   };
   const listeners = new Set<() => void>();
 
@@ -41,6 +42,7 @@ export function createStatusStore() {
       state.pools = snap.pools;
       state.disabled = snap.enabled === false;
       state.warnings = snap.warnings ?? [];
+      state.dns = snap.dns ?? null;
       notify();
     },
     applyTransition(t: TransitionEvent): void {

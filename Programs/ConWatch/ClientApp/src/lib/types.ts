@@ -47,12 +47,22 @@ export interface ModelWarning {
   acknowledged: boolean;
 }
 
+export interface DnsResolverStatus { id: string; address: string; label: string; state: string; detail: string | null; enabled: boolean; }
+export interface DnsLookupNameStatus { name: string; lastResult: "ok" | "miss" | "filtered" | "none" | string; detail: string | null; }
+export interface DnsBlame { kind: "YourResolver" | "NoResolver" | string; message: string; resolvers: string[]; }
+export interface DnsStatus {
+  watched: boolean; state: "Unknown" | "Ok" | "Degraded" | "Filtered" | "Down" | string;
+  systemResolvers: DnsResolverStatus[]; upstreamResolvers: DnsResolverStatus[];
+  blame: DnsBlame | null; lookupNames: DnsLookupNameStatus[];
+}
+
 export interface Snapshot {
   enabled?: boolean;
   verdict: VerdictStatus | null;
   targets: TargetStatus[];
   pools: PoolStatus[];
   warnings?: ModelWarning[];
+  dns?: DnsStatus | null;
 }
 
 export interface TransitionEvent {

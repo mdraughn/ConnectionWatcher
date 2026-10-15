@@ -90,4 +90,16 @@ describe("statusStore", () => {
     store.applySnapshot({ ...snapshot, warnings: undefined });
     expect(store.getState().warnings).toEqual([]);
   });
+
+  it("keeps the dns block from a snapshot and tolerates its absence", () => {
+    const store = createStatusStore();
+    store.applySnapshot({ verdict: null, targets: [], pools: [] });
+    expect(store.getState().dns).toBeNull();
+    store.applySnapshot({ verdict: null, targets: [], pools: [], dns: {
+      watched: true, state: "Ok", systemResolvers: [], upstreamResolvers: [], blame: null, lookupNames: [],
+    } });
+    expect(store.getState().dns?.state).toBe("Ok");
+    store.applySnapshot({ verdict: null, targets: [], pools: [], dns: null });
+    expect(store.getState().dns).toBeNull();
+  });
 });
