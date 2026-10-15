@@ -72,18 +72,18 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
 
     private static readonly string[] BlockedAddresses = ["0.0.0.0", "::", "127.0.0.1"];
 
-    /// <summary>Spec §4.2 / D11. A seeded name must come back with an expected address.
-    /// A blocked answer (every address is 0.0.0.0, :: or 127.0.0.1; NXDOMAIN; or an
+    /// <summary>Spec §4.2 / D11. A seeded name must come back with an expected address:
+    /// "Verified", a judged hit. A blocked answer (every address is 0.0.0.0, :: or 127.0.0.1; NXDOMAIN; or an
     /// empty answer) is a working resolver that filters: a hit, "Filtered". Any other
     /// address outside the expected set is interception: a miss, "WrongAnswer".
-    /// An admin name has no expected set, so any real answer is a hit.</summary>
+    /// An admin name has no expected set, so any real answer is a hit, "Answered" (unjudged).</summary>
     internal static PingResult Classify(IPAddress resolver, DnsLookupName lookup, DnsAnswer answer, long elapsedMs)
     {
         var suffix = $" ({lookup.Name})";
         if (lookup.HasExpected)
         {
             if (answer.Rcode == DnsRcode.NoError && answer.Addresses.Any(a => lookup.Expected.Contains(a.ToString())))
-                return new PingResult(resolver, true, elapsedMs, "Answered" + suffix);
+                return new PingResult(resolver, true, elapsedMs, "Verified" + suffix);
             var detail = answer.Rcode switch
             {
                 DnsRcode.NoError when answer.Addresses.Count > 0 => string.Join(", ", answer.Addresses),

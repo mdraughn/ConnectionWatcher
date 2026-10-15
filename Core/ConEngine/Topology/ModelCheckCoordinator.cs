@@ -103,6 +103,9 @@ public class ModelCheckCoordinator : IDisposable
     private readonly LossWindows? _loss;
     private readonly ConEngine.Dns.DnsWatch _dns;
     private readonly ConEngine.Dns.DnsResultLog? _dnsResults;
+    // Null: always. False during an outage, when a resolver Down for lack of a link
+    // says nothing about the resolver (ResolverPartial and UpstreamResolverDown wait).
+    private readonly Func<bool>? _internetReachable;
     private readonly Lock _lock = new();
     private readonly Lock _publishLock = new();
     private readonly ConcurrentQueue<ModelConditionChange> _outbox = new();
@@ -119,8 +122,9 @@ public class ModelCheckCoordinator : IDisposable
     public ModelCheckCoordinator(TargetGraph graph, IReadOnlyDictionary<Guid, TargetMonitor> monitors,
         bool unprovableUp, TimeProvider timeProvider, ILogger<ModelCheckCoordinator> log,
         LossWindows? loss = null, ConEngine.Dns.DnsWatch? dnsWatch = null,
-        ConEngine.Dns.DnsResultLog? dnsResults = null)
+        ConEngine.Dns.DnsResultLog? dnsResults = null, Func<bool>? internetReachable = null)
     {
+        _internetReachable = internetReachable;
         _monitors = monitors;
         _unprovableUp = unprovableUp;
         _time = timeProvider;
@@ -280,6 +284,20 @@ public class ModelCheckCoordinator : IDisposable
 
     private static string Pct(double value) => value.ToString("P0", CultureInfo.InvariantCulture);
 
+    /// <summary>A DNS result's detail: "Filtered: NXDOMAIN (dns.google)" → "NXDOMAIN", the
+    /// text between the first ": " and the last " (" — or, with no name suffix, the rest
+    /// after the first ": " (or after the outcome token). Never throws on an odd message.</summary>
+    public static string DetailOf(ConEngine.Dns.DnsResult result)
+    {
+        var message = result.Message.Trim();
+        var colon = message.IndexOf(": ", StringComparison.Ordinal);
+        var start = colon >= 0 ? colon + 2 : Math.Min(result.Outcome.Length, message.Length);
+        var end = message.LastIndexOf(" (", StringComparison.Ordinal);
+        if (end < start)
+            end = message.Length;
+        return message[start..end].Trim();
+    }
+
     public const int ResolverWindow = 10;
     public const int ResolverRaise = 3;
     public const int NameMisses = 3;
@@ -293,15 +311,18 @@ public class ModelCheckCoordinator : IDisposable
         var upstream = _dns.Upstream.Where(m => states.ContainsKey(m.Target.Id)).ToList();
         var answering = system.Where(s => TopologyCoordinator.Answering(s.State)).ToList();
         var down = system.Where(s => s.State is HostState.Down or HostState.Unreachable).ToList();
+        // The Down-based notes need a reachable internet: during an outage the resolvers
+        // fall in whatever order their windows fill, which proves nothing about them.
+        var reachable = _internetReachable?.Invoke() ?? true;
 
         // ResolverPartial: some, not all, system resolvers Down.
-        if (answering.Count > 0 && down.Count > 0)
+        if (reachable && answering.Count > 0 && down.Count > 0)
             foreach (var (monitor, _) in down)
                 Add(found, ModelWarningKind.ResolverPartial, monitor.Target,
-                    $"Your secondary resolver {monitor.Target.Address} isn't answering; {answering[0].Monitor.Target.Address} is.");
+                    $"Your resolver {monitor.Target.Address} isn't answering; {answering[0].Monitor.Target.Address} is.");
 
         // UpstreamResolverDown: a system resolver answers but an upstream one is Down.
-        if (answering.Count > 0)
+        if (reachable && answering.Count > 0)
             foreach (var up in upstream.Where(m => states[m.Target.Id] is HostState.Down or HostState.Unreachable))
                 Add(found, ModelWarningKind.UpstreamResolverDown, up.Target,
                     $"{up.Target.Address} isn't answering direct queries; your resolver is fine.");
@@ -310,23 +331,19 @@ public class ModelCheckCoordinator : IDisposable
         foreach (var monitor in system.Select(s => s.Monitor).Concat(upstream))
         {
             var recent = _dnsResults.Recent(monitor.Target.Id);
-            var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Answered").TakeLast(ResolverWindow).ToList();
+            var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Verified").TakeLast(ResolverWindow).ToList();
             var lies = judged.Where(r => r.Outcome == "WrongAnswer").ToList();
             if (lies.Count >= ResolverRaise)
             {
                 var last = lies[^1];
-                var detail = last.Message[(last.Message.IndexOf(':') + 1)..].Trim();
-                detail = detail[..detail.LastIndexOf(" (", StringComparison.Ordinal)];
                 Add(found, ModelWarningKind.ResolverLying, monitor.Target,
-                    $"{monitor.Target.Name} answered {last.Name} with {detail} — a captive portal or interception?");
+                    $"{monitor.Target.Name} answered {last.Name ?? "a lookup name"} with {DetailOf(last)} — a captive portal or interception?");
             }
             else if (ConEngine.Dns.DnsSummary.IsFiltered(recent))
             {
                 var last = judged.Last(r => r.Outcome == "Filtered");
-                var detail = last.Message[(last.Message.IndexOf(':') + 1)..].Trim();
-                detail = detail[..detail.LastIndexOf(" (", StringComparison.Ordinal)];
                 Add(found, ModelWarningKind.ResolverFiltered, monitor.Target,
-                    $"{monitor.Target.Name} blocks {last.Name} (answered {detail}) — a Pi-hole or AdGuard blocklist? " +
+                    $"{monitor.Target.Name} blocks {last.Name ?? "a lookup name"} (answered {DetailOf(last)}) — a Pi-hole or AdGuard blocklist? " +
                     "Name resolution still works; the seeded lookup names can't prove it. Add a lookup name your resolver allows.");
             }
         }

@@ -27,7 +27,7 @@ public sealed record StatusResolver(Guid Id, string Address, string Label, strin
 /// <param name="Kind">"YourResolver" or "NoResolver".</param>
 public sealed record StatusDnsBlame(string Kind, string Message, IReadOnlyList<string> Resolvers);
 
-/// <param name="LastResult">"ok", "miss", "filtered" or "none".</param>
+/// <param name="LastResult">"ok" (Verified for a seeded name, Answered for any other), "miss", "filtered" or "none".</param>
 public sealed record StatusLookupName(string Name, string LastResult, string? Detail);
 
 /// <summary>The name-resolution watch (spec 2026-10-10): the summary state, the host's

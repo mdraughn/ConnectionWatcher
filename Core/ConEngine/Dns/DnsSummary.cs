@@ -34,12 +34,13 @@ public sealed record DnsSummary(bool Watched, DnsSummaryState State)
         return new DnsSummary(true, DnsSummaryState.Ok);
     }
 
-    /// <summary>Over the last <see cref="FilteredWindow"/> judged results (Filtered,
-    /// WrongAnswer or Answered): at least <see cref="FilteredRaise"/> Filtered, and
+    /// <summary>Over the last <see cref="FilteredWindow"/> judged results — seeded-name
+    /// outcomes: Filtered, WrongAnswer or Verified (an admin/hostname name's Answered is
+    /// unjudged and never dilutes the window): at least <see cref="FilteredRaise"/> Filtered, and
     /// every name seen Filtered is still Filtered at its latest ask.</summary>
     public static bool IsFiltered(IReadOnlyList<DnsResult> recent)
     {
-        var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Answered").TakeLast(FilteredWindow).ToList();
+        var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Verified").TakeLast(FilteredWindow).ToList();
         if (judged.Count(r => r.Outcome == "Filtered") < FilteredRaise)
             return false;
         var latestByName = judged.Where(r => r.Name is not null).GroupBy(r => r.Name!, StringComparer.OrdinalIgnoreCase)

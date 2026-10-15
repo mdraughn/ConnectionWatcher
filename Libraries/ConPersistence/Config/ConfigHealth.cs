@@ -69,11 +69,11 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         var addresses = await db.Targets.Where(t => t.Enabled && t.Scope != ConCore.Targets.TargetScope.Resolver)
             .Select(t => t.Address).ToListAsync();
         var hasHostnameTarget = addresses.Any(a => !System.Net.IPAddress.TryParse(a, out _));
-        var systemResolvers = await db.Targets.CountAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && t.SystemManaged);
+        var systemResolvers = await db.Targets.CountAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && t.SystemManaged && t.Enabled);
         if (!dnsEnabled || (names.Count == 0 && !hasHostnameTarget) || systemResolvers == 0)
             warnings.Add(new HealthWarning("dns-not-watched",
                 !dnsEnabled ? "Name resolution isn't being watched: the DNS watch is turned off (Dns.Enabled)."
-                : systemResolvers == 0 ? "Name resolution isn't being watched: no resolver was found in this machine's network settings."
+                : systemResolvers == 0 ? "Name resolution isn't being watched: no resolver from this machine's network settings is enabled (none was found, or each is disabled)."
                 : "Name resolution isn't being watched: the lookup-name list is empty and no hostname target is configured."));
         else if (!await db.Targets.AnyAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && !t.SystemManaged && t.Enabled))
             warnings.Add(new HealthWarning("no-upstream-resolver",

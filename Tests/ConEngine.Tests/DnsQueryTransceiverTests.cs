@@ -34,13 +34,13 @@ public class DnsQueryTransceiverTests
     }
 
     [Fact]
-    public async Task An_expected_address_is_Answered()
+    public async Task An_expected_address_is_Verified()
     {
         using var server = new FakeDnsServer();
         using var probe = Probe(server, Names(Google));
         var result = await probe.PingAsync(2000);
         Assert.True(result.Success);
-        Assert.Equal("Answered (dns.google)", result.Message);
+        Assert.Equal("Verified (dns.google)", result.Message);
         Assert.Equal(1, server.Received);
     }
 
@@ -156,7 +156,7 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(Google));
         var result = await probe.PingAsync(2000);
         Assert.True(result.Success);
-        Assert.Equal("Answered (dns.google)", result.Message);
+        Assert.Equal("Verified (dns.google)", result.Message);
     }
 
     [Fact]

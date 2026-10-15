@@ -181,6 +181,12 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
         });
         Assert.DoesNotContain("no-upstream-resolver", await Codes());
 
+        // Disabling the only system resolver leaves nothing watched (final review M4).
+        await _service.UpsertTargetAsync((await Existing("Your resolver 192.168.1.1")) with { Enabled = false });
+        Assert.Contains("dns-not-watched", await Codes());
+        await _service.UpsertTargetAsync((await Existing("Your resolver 192.168.1.1")) with { Enabled = true });
+        Assert.DoesNotContain("dns-not-watched", await Codes());
+
         await _settings.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.DnsEnabled] = "false" });
         codes = await Codes();
         Assert.Contains("dns-not-watched", codes);

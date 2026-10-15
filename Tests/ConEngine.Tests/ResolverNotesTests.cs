@@ -44,11 +44,11 @@ public class ResolverNotesTests : IDisposable
 
     private TargetMonitor M(string name) => _monitors[_graph.GetByName(name).Id];
 
-    private void Start()
+    private void Start(Func<bool>? internetReachable = null)
     {
         var dns = new DnsWatch(true, [M("Your resolver 10.0.0.1"), M("Your resolver 10.0.0.2")], [M("1.1.1.1 directly")]);
         _check = new ModelCheckCoordinator(_graph, _monitors, false, _time, NullLogger<ModelCheckCoordinator>.Instance,
-            null, dns, _log);
+            null, dns, _log, internetReachable);
         _check.ChangeSource.Subscribe(_changes.Add);
         _check.Start();
     }
@@ -68,9 +68,9 @@ public class ResolverNotesTests : IDisposable
 
     private void AllAnswer()
     {
-        Feed("Your resolver 10.0.0.1", 10, true, "Answered (dns.google)");
-        Feed("Your resolver 10.0.0.2", 10, true, "Answered (dns.google)");
-        Feed("1.1.1.1 directly", 10, true, "Answered (dns.google)");
+        Feed("Your resolver 10.0.0.1", 10, true, "Verified (dns.google)");
+        Feed("Your resolver 10.0.0.2", 10, true, "Verified (dns.google)");
+        Feed("1.1.1.1 directly", 10, true, "Verified (dns.google)");
     }
 
     private bool Active(ModelWarningKind kind, string? target = null) =>
@@ -83,9 +83,51 @@ public class ResolverNotesTests : IDisposable
         Feed("Your resolver 10.0.0.2", 20, false, "TimedOut (dns.google)");
         Assert.True(Active(ModelWarningKind.ResolverPartial, "Your resolver 10.0.0.2"));
         Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ResolverPartial &&
-            c.Message == "Your secondary resolver 10.0.0.2 isn't answering; 10.0.0.1 is.");
-        Feed("Your resolver 10.0.0.2", 20, true, "Answered (dns.google)");
+            c.Message == "Your resolver 10.0.0.2 isn't answering; 10.0.0.1 is.");
+        Feed("Your resolver 10.0.0.2", 20, true, "Verified (dns.google)");
         Assert.False(Active(ModelWarningKind.ResolverPartial));
+    }
+
+    [Fact]
+    public void A_resolver_down_during_an_outage_raises_no_Down_based_note()
+    {
+        var reachable = false;
+        Start(() => reachable);
+        AllAnswer();
+        Feed("Your resolver 10.0.0.2", 20, false, "TimedOut (dns.google)");
+        Feed("1.1.1.1 directly", 20, false, "TimedOut (dns.google)");
+        Assert.Equal(HostState.Down, M("Your resolver 10.0.0.2").CurrentState);
+        Assert.False(Active(ModelWarningKind.ResolverPartial));
+        Assert.False(Active(ModelWarningKind.UpstreamResolverDown));
+
+        reachable = true;
+        _check.Evaluate();
+        Assert.True(Active(ModelWarningKind.ResolverPartial, "Your resolver 10.0.0.2"));
+        Assert.True(Active(ModelWarningKind.UpstreamResolverDown, "1.1.1.1 directly"));
+    }
+
+    [Fact]
+    public void Answered_hostname_results_never_dilute_the_lying_window()
+    {
+        Start(); AllAnswer();
+        for (var i = 0; i < 3; i++)
+        {
+            Feed("Your resolver 10.0.0.1", 1, false, "WrongAnswer: 10.99.0.1 (dns.google)");
+            Feed("Your resolver 10.0.0.1", 4, true, "Answered (router.local)");
+        }
+        Assert.True(Active(ModelWarningKind.ResolverLying, "Your resolver 10.0.0.1"));
+    }
+
+    [Theory]
+    [InlineData("Filtered: NXDOMAIN (dns.google)", "NXDOMAIN")]
+    [InlineData("WrongAnswer: 10.99.0.1, 10.99.0.2 (dns.google)", "10.99.0.1, 10.99.0.2")]
+    [InlineData("WrongAnswer: 10.99.0.1", "10.99.0.1")]
+    [InlineData("Filtered (dns.google)", "")]
+    [InlineData("WrongAnswer", "")]
+    public void DetailOf_strips_the_outcome_and_the_name_without_ever_throwing(string message, string detail)
+    {
+        var (outcome, name) = DnsResultLog.Parse(message);
+        Assert.Equal(detail, ModelCheckCoordinator.DetailOf(new DnsResult(DateTimeOffset.UnixEpoch, false, outcome, name, message)));
     }
 
     [Fact]
@@ -129,7 +171,7 @@ public class ResolverNotesTests : IDisposable
             for (var i = 0; i < 3; i++)
             {
                 Feed(r, 1, false, "ServFail (example.org)");
-                Feed(r, 1, true, "Answered (dns.google)");
+                Feed(r, 1, true, "Verified (dns.google)");
             }
         Assert.True(Active(ModelWarningKind.NameUnresolvable));
         Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.NameUnresolvable && c.TargetId is null &&

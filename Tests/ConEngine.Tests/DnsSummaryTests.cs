@@ -28,7 +28,7 @@ public class DnsSummaryTests
         return monitor;
     }
 
-    private void Feed(TargetMonitor monitor, int count, bool success, string message = "Answered (dns.google)")
+    private void Feed(TargetMonitor monitor, int count, bool success, string message = "Verified (dns.google)")
     {
         for (var i = 0; i < count; i++)
         {
@@ -90,7 +90,7 @@ public class DnsSummaryTests
         Assert.Equal(DnsSummaryState.Filtered, DnsSummary.Compute(new DnsWatch(true, [system], []), _log).State);
 
         // The blocked name answers for real again: not a block any more.
-        Feed(system, 1, true, "Answered (dns.google)");
+        Feed(system, 1, true, "Verified (dns.google)");
         Assert.Equal(DnsSummaryState.Ok, DnsSummary.Compute(new DnsWatch(true, [system], []), _log).State);
     }
 
@@ -102,6 +102,30 @@ public class DnsSummaryTests
         {
             Feed(system, 1, true, "Filtered: NXDOMAIN (dns.google)");
             Feed(system, 1, true, "Answered (router.local)"); // an admin/hostname name: no expected set, no judgement
+        }
+        Assert.Equal(DnsSummaryState.Filtered, DnsSummary.Compute(new DnsWatch(true, [system], []), _log).State);
+    }
+
+    [Fact]
+    public void Many_hostname_answers_between_the_blocks_never_dilute_the_judged_window()
+    {
+        var system = Monitor("Your resolver 10.0.0.1", "10.0.0.1", true);
+        for (var i = 0; i < 4; i++)
+        {
+            Feed(system, 1, true, "Filtered: NXDOMAIN (dns.google)");
+            Feed(system, 4, true, "Answered (router.local)");
+        }
+        Assert.Equal(DnsSummaryState.Filtered, DnsSummary.Compute(new DnsWatch(true, [system], []), _log).State);
+    }
+
+    [Fact]
+    public void A_different_seeded_name_verifying_does_not_clear_a_block_on_another()
+    {
+        var system = Monitor("Your resolver 10.0.0.1", "10.0.0.1", true);
+        for (var i = 0; i < 3; i++)
+        {
+            Feed(system, 1, true, "Filtered: NXDOMAIN (dns.google)");
+            Feed(system, 1, true, "Verified (one.one.one.one)");
         }
         Assert.Equal(DnsSummaryState.Filtered, DnsSummary.Compute(new DnsWatch(true, [system], []), _log).State);
     }

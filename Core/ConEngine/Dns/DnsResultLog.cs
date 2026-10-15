@@ -3,7 +3,7 @@ using ConCore;
 namespace ConEngine.Dns;
 
 /// <summary>One DNS probe outcome. Outcome is the message's leading token
-/// ("Answered", "Filtered", "WrongAnswer", "TimedOut", …); Name is the asked
+/// ("Verified", "Answered", "Filtered", "WrongAnswer", "TimedOut", …); Name is the asked
 /// lookup name, null for a probe that sent nothing.</summary>
 public sealed record DnsResult(DateTimeOffset At, bool Success, string Outcome, string? Name, string Message);
 

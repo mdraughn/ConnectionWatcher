@@ -33,6 +33,7 @@ public class DnsResultLogTests
 
     [Theory]
     [InlineData("Answered (dns.google)", "Answered", "dns.google")]
+    [InlineData("Verified (dns.google)", "Verified", "dns.google")]
     [InlineData("Filtered: NXDOMAIN (dns.google)", "Filtered", "dns.google")]
     [InlineData("WrongAnswer: 10.0.0.1, 10.0.0.2 (one.one.one.one)", "WrongAnswer", "one.one.one.one")]
     [InlineData("TimedOut (example.org)", "TimedOut", "example.org")]
