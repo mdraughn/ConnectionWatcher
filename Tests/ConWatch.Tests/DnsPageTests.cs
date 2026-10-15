@@ -109,4 +109,21 @@ public class DnsPageTests : IDisposable
         Assert.Equal("""[{"name":"dns.google","expected":["8.8.8.8","8.8.4.4"]},{"name":"router.lan"}]""", emitted);
         Assert.DoesNotContain("alert(", html);
     }
+
+    [Fact]
+    public async Task The_fallback_dashboard_says_the_watch_is_off_instead_of_listing_resolvers()
+    {
+        await SeedWithResolverAsync();
+        (await _client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?> { ["Dns.Enabled"] = "false" }))
+            .EnsureSuccessStatusCode();
+        string fallback = "";
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var html = await _client.GetStringAsync("/");
+            fallback = html[html.IndexOf("id=\"dashboard-root\"", StringComparison.Ordinal)..];
+            return fallback.Contains("isn&#x27;t being watched") || fallback.Contains("isn't being watched");
+        });
+        Assert.Contains("Name resolution", fallback);
+        Assert.DoesNotContain("Your resolver", fallback);
+    }
 }

@@ -60,7 +60,12 @@
             }
         </ul>
     }
-    @if (Model.ResolverMonitors.Count > 0)
+    @if (Model.ResolverMonitors.Count > 0 && !Model.DnsWatched)
+    {
+        <h4>Name resolution</h4>
+        <p>Name resolution isn't being watched.</p>
+    }
+    else if (Model.ResolverMonitors.Count > 0)
     {
         <h4>Name resolution</h4>
         <ul class="cw-tree">
