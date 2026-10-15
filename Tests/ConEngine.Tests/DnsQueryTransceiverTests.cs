@@ -29,7 +29,7 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(new DnsLookupName("a..b", [])));
         var result = await probe.PingAsync(2000);
         Assert.False(result.Success);
-        Assert.Equal("BadName", result.Message);
+        Assert.Equal("BadName (a..b)", result.Message);
         Assert.Equal(0, server.Received);
     }
 
@@ -40,7 +40,7 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(Google));
         var result = await probe.PingAsync(2000);
         Assert.True(result.Success);
-        Assert.Equal("Answered", result.Message);
+        Assert.Equal("Answered (dns.google)", result.Message);
         Assert.Equal(1, server.Received);
     }
 
@@ -52,30 +52,65 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(Google));
         var result = await probe.PingAsync(2000);
         Assert.False(result.Success);
-        Assert.Equal("WrongAnswer: 10.0.0.1", result.Message);
+        Assert.Equal("WrongAnswer: 10.0.0.1 (dns.google)", result.Message);
     }
 
     [Fact]
-    public async Task NXDOMAIN_is_a_miss_for_a_seeded_name_but_a_hit_for_an_admin_name()
+    public async Task NXDOMAIN_is_Filtered_for_a_seeded_name_and_a_hit_for_an_admin_name()
     {
         using var server = new FakeDnsServer();
         server.Reply = (id, name) => [FakeDnsWire.Response(id, name, DnsRcode.NxDomain)];
 
         using var seeded = Probe(server, Names(Google));
-        var miss = await seeded.PingAsync(2000);
-        Assert.False(miss.Success);
-        Assert.Equal("WrongAnswer: NXDOMAIN", miss.Message);
+        var filtered = await seeded.PingAsync(2000);
+        Assert.True(filtered.Success);
+        Assert.Equal("Filtered: NXDOMAIN (dns.google)", filtered.Message);
 
         using var admin = Probe(server, Names(Admin));
         var hit = await admin.PingAsync(2000);
         Assert.True(hit.Success);
-        Assert.Equal("NxDomain", hit.Message);
+        Assert.Equal("NxDomain (example.org)", hit.Message);
     }
 
     [Theory]
-    [InlineData(DnsRcode.ServFail, "ServFail")]
-    [InlineData(DnsRcode.Refused, "RcodeRefused")]
-    [InlineData(DnsRcode.NotImp, "Rcode4")]
+    [InlineData("0.0.0.0", "Filtered: 0.0.0.0 (dns.google)")]
+    [InlineData("127.0.0.1", "Filtered: 127.0.0.1 (dns.google)")]
+    public async Task A_blocked_address_for_a_seeded_name_is_a_Filtered_hit(string blocked, string message)
+    {
+        using var server = new FakeDnsServer();
+        server.Reply = (id, name) => [FakeDnsWire.Response(id, name, DnsRcode.NoError, IPAddress.Parse(blocked))];
+        using var probe = Probe(server, Names(Google));
+        var result = await probe.PingAsync(2000);
+        Assert.True(result.Success);
+        Assert.Equal(message, result.Message);
+    }
+
+    [Fact]
+    public async Task An_empty_answer_for_a_seeded_name_is_a_Filtered_hit()
+    {
+        using var server = new FakeDnsServer();
+        server.Reply = (id, name) => [FakeDnsWire.Response(id, name, DnsRcode.NoError)];
+        using var probe = Probe(server, Names(Google));
+        var empty = await probe.PingAsync(2000);
+        Assert.True(empty.Success);
+        Assert.Equal("Filtered: no address (dns.google)", empty.Message);
+    }
+
+    [Fact]
+    public async Task A_real_wrong_address_is_still_a_WrongAnswer_miss()
+    {
+        using var server = new FakeDnsServer();
+        server.Reply = (id, name) => [FakeDnsWire.Response(id, name, DnsRcode.NoError, IPAddress.Parse("0.0.0.0"), IPAddress.Parse("10.0.0.1"))];
+        using var probe = Probe(server, Names(Google));
+        var result = await probe.PingAsync(2000);
+        Assert.False(result.Success); // one real address among the blocked ones: not a clean block
+        Assert.Equal("WrongAnswer: 0.0.0.0, 10.0.0.1 (dns.google)", result.Message);
+    }
+
+    [Theory]
+    [InlineData(DnsRcode.ServFail, "ServFail (example.org)")]
+    [InlineData(DnsRcode.Refused, "RcodeRefused (example.org)")]
+    [InlineData(DnsRcode.NotImp, "Rcode4 (example.org)")]
     public async Task Error_rcodes_are_misses_named_without_the_bare_word_Refused(DnsRcode rcode, string message)
     {
         using var server = new FakeDnsServer();
@@ -95,7 +130,7 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(Admin));
         var result = await probe.PingAsync(300);
         Assert.False(result.Success);
-        Assert.Equal("TimedOut", result.Message);
+        Assert.Equal("TimedOut (example.org)", result.Message);
     }
 
     [Fact]
@@ -106,7 +141,7 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(Admin));
         var result = await probe.PingAsync(2000);
         Assert.False(result.Success);
-        Assert.Equal("Malformed", result.Message);
+        Assert.Equal("Malformed (example.org)", result.Message);
     }
 
     [Fact]
@@ -121,7 +156,7 @@ public class DnsQueryTransceiverTests
         using var probe = Probe(server, Names(Google));
         var result = await probe.PingAsync(2000);
         Assert.True(result.Success);
-        Assert.Equal("Answered", result.Message);
+        Assert.Equal("Answered (dns.google)", result.Message);
     }
 
     [Fact]

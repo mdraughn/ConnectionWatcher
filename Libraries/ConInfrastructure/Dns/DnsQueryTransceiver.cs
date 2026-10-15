@@ -25,6 +25,8 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
         if (lookup is null)
             return new PingResult(ipAddress, false, 0, "NoLookupNames");
 
+        PingResult Miss(string token) => new(ipAddress, false, 0, $"{token} ({lookup.Name})");
+
         var id = (ushort)Random.Shared.Next(1, ushort.MaxValue);
         var stopwatch = Stopwatch.StartNew();
         using var udp = new UdpClient(ipAddress.AddressFamily);
@@ -39,7 +41,7 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
             }
             catch (ArgumentException)
             {
-                return new PingResult(ipAddress, false, 0, "BadName"); // a name the wire format cannot carry
+                return Miss("BadName"); // a name the wire format cannot carry
             }
             udp.Connect(new IPEndPoint(ipAddress, port));
             await udp.SendAsync(query, timeout.Token).ConfigureAwait(false);
@@ -47,7 +49,7 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
             {
                 var received = await udp.ReceiveAsync(timeout.Token).ConfigureAwait(false);
                 if (!DnsMessage.TryParseAnswer(received.Buffer, out var answer))
-                    return new PingResult(ipAddress, false, 0, "Malformed");
+                    return Miss("Malformed");
                 if (answer.Id != id)
                     continue; // a late answer to an earlier query: not ours
                 return Classify(ipAddress, lookup, answer, stopwatch.ElapsedMilliseconds);
@@ -55,25 +57,33 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new PingResult(ipAddress, false, 0, "TimedOut"); // our own timeout token
+            return Miss("TimedOut"); // our own timeout token
         }
         catch (SocketException ex)
         {
             // ICMP port-unreachable surfaces here (ConnectionReset): the host is up, nothing listens on 53.
-            return new PingResult(ipAddress, false, 0, ex.SocketErrorCode.ToString());
+            return Miss(ex.SocketErrorCode.ToString());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new PingResult(ipAddress, false, 0, ex.Message);
+            return Miss(ex.Message);
         }
     }
 
+    private static readonly string[] BlockedAddresses = ["0.0.0.0", "::", "127.0.0.1"];
+
+    /// <summary>Spec §4.2 / D11. A seeded name must come back with an expected address.
+    /// A blocked answer (every address is 0.0.0.0, :: or 127.0.0.1; NXDOMAIN; or an
+    /// empty answer) is a working resolver that filters: a hit, "Filtered". Any other
+    /// address outside the expected set is interception: a miss, "WrongAnswer".
+    /// An admin name has no expected set, so any real answer is a hit.</summary>
     internal static PingResult Classify(IPAddress resolver, DnsLookupName lookup, DnsAnswer answer, long elapsedMs)
     {
+        var suffix = $" ({lookup.Name})";
         if (lookup.HasExpected)
         {
             if (answer.Rcode == DnsRcode.NoError && answer.Addresses.Any(a => lookup.Expected.Contains(a.ToString())))
-                return new PingResult(resolver, true, elapsedMs, "Answered");
+                return new PingResult(resolver, true, elapsedMs, "Answered" + suffix);
             var detail = answer.Rcode switch
             {
                 DnsRcode.NoError when answer.Addresses.Count > 0 => string.Join(", ", answer.Addresses),
@@ -83,23 +93,27 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
                 DnsRcode.Refused => "REFUSED",
                 var other => $"RCODE {(int)other}",
             };
-            return answer.Rcode is DnsRcode.NoError or DnsRcode.NxDomain
-                ? new PingResult(resolver, false, 0, $"WrongAnswer: {detail}")
+            var blocked = answer.Rcode == DnsRcode.NxDomain ||
+                (answer.Rcode == DnsRcode.NoError && answer.Addresses.All(a => BlockedAddresses.Contains(a.ToString())));
+            if (blocked)
+                return new PingResult(resolver, true, elapsedMs, $"Filtered: {detail}{suffix}");
+            return answer.Rcode == DnsRcode.NoError
+                ? new PingResult(resolver, false, 0, $"WrongAnswer: {detail}{suffix}")
                 : Miss(answer.Rcode);
         }
         return answer.Rcode switch
         {
-            DnsRcode.NoError => new PingResult(resolver, true, elapsedMs, "Answered"),
-            DnsRcode.NxDomain => new PingResult(resolver, true, elapsedMs, "NxDomain"),
+            DnsRcode.NoError => new PingResult(resolver, true, elapsedMs, "Answered" + suffix),
+            DnsRcode.NxDomain => new PingResult(resolver, true, elapsedMs, "NxDomain" + suffix),
             var rcode => Miss(rcode),
         };
 
-        PingResult Miss(DnsRcode rcode) => new(resolver, false, 0, rcode switch
+        PingResult Miss(DnsRcode rcode) => new(resolver, false, 0, (rcode switch
         {
             DnsRcode.ServFail => "ServFail",
             DnsRcode.Refused => "RcodeRefused",
             var other => $"Rcode{(int)other}",
-        });
+        }) + suffix);
     }
 
     public void Dispose() { }

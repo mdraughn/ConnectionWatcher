@@ -2,8 +2,10 @@ using ConCore;
 
 namespace ConEngine.Dns;
 
-/// <summary>One DNS probe outcome, as the transceiver classified it.</summary>
-public sealed record DnsResult(DateTimeOffset At, bool Success, string Message);
+/// <summary>One DNS probe outcome. Outcome is the message's leading token
+/// ("Answered", "Filtered", "WrongAnswer", "TimedOut", …); Name is the asked
+/// lookup name, null for a probe that sent nothing.</summary>
+public sealed record DnsResult(DateTimeOffset At, bool Success, string Outcome, string? Name, string Message);
 
 /// <summary>
 /// The last <see cref="Keep"/> DNS results per Resolver target, in memory and
@@ -19,11 +21,12 @@ public sealed class DnsResultLog
 
     public void Record(Guid targetId, PingResult result)
     {
+        var (outcome, name) = Parse(result.Message);
         lock (_lock)
         {
             if (!_results.TryGetValue(targetId, out var queue))
                 _results[targetId] = queue = new Queue<DnsResult>(Keep);
-            queue.Enqueue(new DnsResult(result.Timestamp, result.Success, result.Message));
+            queue.Enqueue(new DnsResult(result.Timestamp, result.Success, outcome, name, result.Message));
             while (queue.Count > Keep)
                 queue.Dequeue();
         }
@@ -34,5 +37,22 @@ public sealed class DnsResultLog
     {
         lock (_lock)
             return _results.TryGetValue(targetId, out var queue) ? queue.ToList() : [];
+    }
+
+    /// <summary>"Filtered: NXDOMAIN (dns.google)" → ("Filtered", "dns.google").
+    /// The name is the last parenthesised group; the outcome ends at the first
+    /// space or colon.</summary>
+    public static (string Outcome, string? Name) Parse(string message)
+    {
+        var text = message.Trim();
+        string? name = null;
+        if (text.EndsWith(')') && text.LastIndexOf(" (", StringComparison.Ordinal) is var open and >= 0)
+        {
+            name = text[(open + 2)..^1];
+            text = text[..open];
+        }
+        var end = text.IndexOfAny([' ', ':']);
+        var outcome = end < 0 ? text : text[..end];
+        return (outcome, name is { Length: > 0 } ? name : null);
     }
 }

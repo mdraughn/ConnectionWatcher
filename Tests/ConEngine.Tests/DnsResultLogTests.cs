@@ -11,7 +11,7 @@ namespace ConEngine.Tests;
 public class DnsResultLogTests
 {
     [Fact]
-    public void Keeps_the_last_twenty_per_target_oldest_first()
+    public void Keeps_the_last_twenty_per_target_oldest_first_and_parses_outcome_and_name()
     {
         var log = new DnsResultLog();
         var id = Guid.NewGuid();
@@ -19,15 +19,30 @@ public class DnsResultLogTests
         Assert.Empty(log.Recent(id));
 
         for (var i = 0; i < 25; i++)
-            log.Record(id, new PingResult(ip, i % 2 == 0, 5, $"m{i}", DateTimeOffset.UnixEpoch.AddSeconds(i)));
+            log.Record(id, new PingResult(ip, i % 2 == 0, 5, $"Answered (n{i}.test)", DateTimeOffset.UnixEpoch.AddSeconds(i)));
 
         var recent = log.Recent(id);
         Assert.Equal(DnsResultLog.Keep, recent.Count);
-        Assert.Equal("m5", recent[0].Message);
-        Assert.Equal("m24", recent[^1].Message);
+        Assert.Equal("n5.test", recent[0].Name);
+        Assert.Equal("Answered", recent[0].Outcome);
+        Assert.Equal("n24.test", recent[^1].Name);
         Assert.Equal(DateTimeOffset.UnixEpoch.AddSeconds(24), recent[^1].At);
         Assert.True(recent[^1].Success);
         Assert.Empty(log.Recent(Guid.NewGuid()));
+    }
+
+    [Theory]
+    [InlineData("Answered (dns.google)", "Answered", "dns.google")]
+    [InlineData("Filtered: NXDOMAIN (dns.google)", "Filtered", "dns.google")]
+    [InlineData("WrongAnswer: 10.0.0.1, 10.0.0.2 (one.one.one.one)", "WrongAnswer", "one.one.one.one")]
+    [InlineData("TimedOut (example.org)", "TimedOut", "example.org")]
+    [InlineData("NoLookupNames", "NoLookupNames", null)]
+    [InlineData("ConnectionReset (dns.quad9.net)", "ConnectionReset", "dns.quad9.net")]
+    public void Outcome_and_name_are_parsed_from_the_message(string message, string outcome, string? name)
+    {
+        var (parsedOutcome, parsedName) = DnsResultLog.Parse(message);
+        Assert.Equal(outcome, parsedOutcome);
+        Assert.Equal(name, parsedName);
     }
 
     [Fact]
