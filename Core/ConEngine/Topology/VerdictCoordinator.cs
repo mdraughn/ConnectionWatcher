@@ -16,8 +16,14 @@ public enum VerdictState
     SiteIncident,
     InternetWeather,
     LinkDegraded,
+    DnsDown,
     LinkDown
 }
+
+public enum DnsBlameKind { YourResolver, NoResolver }
+
+/// <summary>Why name lookups fail while the internet is reachable (spec 2026-10-10 §4.4).</summary>
+public sealed record DnsBlame(DnsBlameKind Kind, string Message, IReadOnlyList<string> Resolvers);
 
 /// <summary>
 /// Classifies overall internet health (spec 2026-10-09 §4.1–4.3). The ANCHORS
@@ -54,6 +60,7 @@ public class VerdictCoordinator : IDisposable
     // ISP (all of them when the ISP is unknown, or when every one is the ISP's).
     private readonly List<TargetMonitor> _counted;
     private readonly int _weatherThreshold;
+    private readonly ConEngine.Dns.DnsWatch _dns;
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
     private readonly Lock _lock = new();
@@ -64,7 +71,7 @@ public class VerdictCoordinator : IDisposable
 
     /// <summary>State, detail and blamed operator as one immutable value:
     /// readers on other threads get a consistent triple, never a torn one.</summary>
-    public sealed record VerdictSnapshot(VerdictState State, string? Detail, string? Operator);
+    public sealed record VerdictSnapshot(VerdictState State, string? Detail, string? Operator, DnsBlame? Dns = null);
 
     public VerdictSnapshot Current { get; private set; } = new(VerdictState.Unknown, null, null);
 
@@ -95,9 +102,11 @@ public class VerdictCoordinator : IDisposable
 
     public VerdictCoordinator(TargetGraph graph, PoolDefinition anchorPool,
         IReadOnlyDictionary<Guid, TargetMonitor> monitors, int weatherThreshold,
-        TimeProvider timeProvider, ILogger<VerdictCoordinator> log)
+        TimeProvider timeProvider, ILogger<VerdictCoordinator> log,
+        ConEngine.Dns.DnsWatch? dnsWatch = null)
     {
         _graph = graph;
+        _dns = dnsWatch ?? ConEngine.Dns.DnsWatch.Off;
         _weatherThreshold = weatherThreshold;
         _time = timeProvider;
         _log = log;
@@ -228,19 +237,19 @@ public class VerdictCoordinator : IDisposable
             // from the same snapshot, so the detail can never contradict the state.
             var states = _all.ToDictionary(kv => kv.Key, kv => kv.Value.CurrentState);
             _waitingThisPass = false;
-            var (verdict, detail, operatorName) = Classify(states);
+            var (verdict, detail, operatorName, dns) = Classify(states);
             if (!_waitingThisPass)
                 EndWait();
             var previous = Current;
             if (verdict == previous.State)
             {
-                Current = previous with { Detail = detail, Operator = operatorName }; // detail carries live counts — always refresh
+                Current = previous with { Detail = detail, Operator = operatorName, Dns = dns }; // detail carries live counts — always refresh
                 return;
             }
             if (ignoreUnknown && verdict == VerdictState.Unknown)
                 return; // a seeded verdict outranks "no anchors determined yet"
 
-            Current = new VerdictSnapshot(verdict, detail, operatorName);
+            Current = new VerdictSnapshot(verdict, detail, operatorName, dns);
             var transition = new TargetTransition
             {
                 Kind = TransitionSubjectKind.Verdict,
@@ -351,18 +360,25 @@ public class VerdictCoordinator : IDisposable
     private static string? Normalize(string? op) =>
         op?.Trim() is { Length: > 0 } t ? t.ToLowerInvariant() : null;
 
-    private (VerdictState, string, string? Operator) Classify(IReadOnlyDictionary<Guid, HostState> states)
+    private (VerdictState, string, string? Operator, DnsBlame? Dns) Classify(IReadOnlyDictionary<Guid, HostState> states)
     {
         var anchors = _anchors.Select(a => (Monitor: a, State: states[a.Target.Id])).ToList();
         var determined = anchors.Where(a => !Undetermined(a.State)).ToList();
         if (determined.Count == 0)
-            return (VerdictState.Unknown, "No anchors determined yet", null);
+            return (VerdictState.Unknown, "No anchors determined yet", null, null);
 
         // 1. Reachability: did packets get out and back? (spec §4.1, D2)
         // One answering counted anchor is enough (Mark's rule 2026-10-09).
         var counted = anchors.Where(a => _counted.Contains(a.Monitor)).ToList();
         if (counted.Any(a => Answering(a.State)))
-            return Quality(determined, states);
+        {
+            // Reachable. Name resolution next (spec 2026-10-10 §4.4): it outranks quality.
+            var dns = CheckDns(states);
+            if (dns is { } down)
+                return down;
+            var (state, detail, op) = Quality(determined, states);
+            return (state, detail, op, null);
+        }
 
         // None answering. Wait (uncapped) while NO anchor is determined (above).
         // Once one is — an ISP-owned anchor determined Down is evidence too —
@@ -372,10 +388,42 @@ public class VerdictCoordinator : IDisposable
         // AnchorWaitCap: an anchor stuck in Starting (an address that never
         // resolves) must not hide the outage longer (spec §4.2, I2).
         if (counted.Any(a => Undetermined(a.State)) && StillWaiting())
-            return (VerdictState.Unknown, "Waiting for anchors to report", null);
+            return (VerdictState.Unknown, "Waiting for anchors to report", null, null);
 
         // 2. Down: the path says where (spec §4.3).
-        return Blame(VerdictState.LinkDown, states);
+        var (linkDown, downDetail, downOp) = Blame(VerdictState.LinkDown, states);
+        return (linkDown, AllSystemResolversDown(states) ? downDetail + " — name lookups are failing too" : downDetail, downOp, null);
+    }
+
+    private bool AllSystemResolversDown(IReadOnlyDictionary<Guid, HostState> states) =>
+        _dns.Enabled && _dns.System.Count > 0 &&
+        _dns.System.All(m => states[m.Target.Id] is HostState.Down or HostState.Unreachable);
+
+    /// <summary>DnsDown when every determined system resolver is Down (and none is still
+    /// undetermined past the wait cap); null otherwise. Upstream resolvers decide the blame.</summary>
+    private (VerdictState, string, string?, DnsBlame?)? CheckDns(IReadOnlyDictionary<Guid, HostState> states)
+    {
+        if (!_dns.Enabled || _dns.System.Count == 0)
+            return null;
+        var system = _dns.System.Select(m => (Monitor: m, State: states[m.Target.Id])).ToList();
+        var determined = system.Where(s => !Undetermined(s.State)).ToList();
+        if (determined.Count == 0)
+            return null;
+        if (!determined.All(s => s.State is HostState.Down or HostState.Unreachable))
+            return null;
+        if (system.Any(s => Undetermined(s.State)) && StillWaiting())
+            return (VerdictState.Unknown, "Waiting for resolvers to report", null, null);
+
+        var resolvers = system.Select(s => s.Monitor.Target.Address).ToList();
+        var upstream = _dns.Upstream.FirstOrDefault(m => Answering(states[m.Target.Id]));
+        DnsBlame blame = upstream is not null
+            ? new DnsBlame(DnsBlameKind.YourResolver,
+                $"Your resolver {resolvers[0]} isn't answering, but {upstream.Target.Address} answers directly.", resolvers)
+            : new DnsBlame(DnsBlameKind.NoResolver,
+                "No resolver is answering, though the internet is reachable." +
+                (_dns.Upstream.Count == 0 ? " Name a public resolver in Config → DNS so ConnectionWatcher can tell your resolver from everyone's." : ""),
+                resolvers);
+        return (VerdictState.DnsDown, $"DnsDown: {blame.Message}", null, blame);
     }
 
     /// <summary>The internet is reachable: how good is it? Anchor evidence decides
@@ -496,7 +544,7 @@ public class VerdictCoordinator : IDisposable
     {
         VerdictState.Healthy or VerdictState.SiteIncident => HostState.Responding,
         VerdictState.InternetWeather or VerdictState.LinkDegraded => HostState.Faltering,
-        VerdictState.LinkDown => HostState.Down,
+        VerdictState.DnsDown or VerdictState.LinkDown => HostState.Down,
         _ => HostState.Starting,
     };
 

@@ -245,7 +245,7 @@ public class WatcherEngine
         {
             Verdict = new VerdictCoordinator(_graph, anchorPool, _monitors,
                 _verdictOptions.WeatherThreshold, _timeProvider,
-                _loggerFactory.CreateLogger<VerdictCoordinator>());
+                _loggerFactory.CreateLogger<VerdictCoordinator>(), DnsWatch);
             if (seed?.Verdict is { } verdictSeed)
                 Verdict.Seed(verdictSeed);
             _subscriptions.Add(Verdict.TransitionSource.Subscribe(_transitionSubject.OnNext));
