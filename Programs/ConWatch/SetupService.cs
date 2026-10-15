@@ -5,9 +5,9 @@ using ConPersistence.Settings;
 
 namespace ConWatch;
 
-public record SetupTarget(string Name, string Address, string? Operator = null);
+public record SetupTarget(string Name, string Address, string? Operator = null, string? LookupName = null);
 public record SetupApplyRequest(SetupTarget Router, SetupTarget? OuterIp, List<string> AnchorAddresses,
-    string? IspName = null);
+    string? IspName = null, string? UpstreamResolverAddress = null);
 
 /// <summary>
 /// Applies the quick-setup wizard's choices additively: existing names and
@@ -23,10 +23,10 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
     /// as independent evidence (see VerdictCoordinator).</summary>
     public static readonly IReadOnlyList<SetupTarget> AnchorCatalog =
     [
-        new("Google DNS", "8.8.8.8", "Google"),
-        new("Cloudflare DNS", "1.1.1.1", "Cloudflare"),
-        new("Quad9 DNS", "9.9.9.9", "Quad9"),
-        new("OpenDNS", "208.67.222.222", "OpenDNS"),
+        new("Google DNS", "8.8.8.8", "Google", "dns.google"),
+        new("Cloudflare DNS", "1.1.1.1", "Cloudflare", "one.one.one.one"),
+        new("Quad9 DNS", "9.9.9.9", "Quad9", "dns.quad9.net"),
+        new("OpenDNS", "208.67.222.222", "OpenDNS", "dns.opendns.com"),
     ];
 
     public async Task<ConfigResult> ApplyAsync(SetupApplyRequest request)
@@ -86,6 +86,21 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                     Address = address, Parent = pathLeaf, Profile = "Public",
                     Operator = catalogEntry?.Operator,
                 }));
+            }
+
+            // The public resolver asked directly (spec 2026-10-10 §5.3): the one named,
+            // else the first anchor chosen. Reused when a Resolver target is already there.
+            var upstream = string.IsNullOrWhiteSpace(request.UpstreamResolverAddress)
+                ? request.AnchorAddresses.FirstOrDefault()
+                : request.UpstreamResolverAddress.Trim();
+            if (upstream is { Length: > 0 } && !doc.Targets.Any(t => t.Scope == TargetScope.Resolver
+                    && t.Address.Equals(upstream, StringComparison.OrdinalIgnoreCase)))
+            {
+                Add(new TargetDto
+                {
+                    Name = Unique($"{upstream} directly", NameTaken), Address = upstream,
+                    Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver,
+                });
             }
 
             // Pool: create, or union in any new members.

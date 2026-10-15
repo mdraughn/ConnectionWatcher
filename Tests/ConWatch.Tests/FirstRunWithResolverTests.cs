@@ -54,6 +54,6 @@ public class FirstRunWithResolverTests : IDisposable
         Assert.NotEqual(managed.Id, router.Id);
         Assert.Equal(TargetScope.Verdict, router.Scope);
         Assert.False(router.SystemManaged);
-        Assert.Equal("Router", targets.Single(t => t.Address == "8.8.8.8").Parent);
+        Assert.Equal("Router", targets.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Parent);
     }
 }

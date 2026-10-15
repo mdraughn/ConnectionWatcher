@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConCore.Targets;
 using ConInfrastructure.Discovery;
 using ConPersistence.Config;
 using Microsoft.AspNetCore.Hosting;
@@ -81,9 +82,9 @@ public class SetupApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
-        Assert.Equal(3, targets!.Count);
+        Assert.Equal(4, targets!.Count); // Router + 2 anchors + the upstream resolver
         Assert.Null(targets.Single(t => t.Name == "Router").Parent);
-        Assert.Equal("Router", targets.Single(t => t.Address == "8.8.8.8").Parent);
+        Assert.Equal("Router", targets.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Parent);
         Assert.True(targets.Single(t => t.Name == "Router").Critical);
         Assert.All(targets.Where(t => t.Name != "Router"), t => Assert.False(t.Critical));
 
@@ -121,7 +122,7 @@ public class SetupApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, again.StatusCode);
 
         var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
-        Assert.Equal(3, targets!.Count); // Router + 2 anchors, no duplicates
+        Assert.Equal(4, targets!.Count); // Router + 2 anchors + one upstream resolver, no duplicates
         var pools = await _client.GetFromJsonAsync<List<PoolDto>>("/api/v1/pools");
         Assert.Equal(2, Assert.Single(pools!).Members.Count);
     }
@@ -135,7 +136,7 @@ public class SetupApiTests : IDisposable
 
         var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
         Assert.Equal("Router", targets.Single(t => t.Name == "Outer IP").Parent);
-        Assert.Equal("Outer IP", targets.Single(t => t.Address == "8.8.8.8").Parent);
+        Assert.Equal("Outer IP", targets.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Parent);
     }
 
     [Fact]
@@ -146,8 +147,8 @@ public class SetupApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
-        Assert.Equal("Google", targets.Single(t => t.Address == "8.8.8.8").Operator);
-        Assert.Equal("Cloudflare", targets.Single(t => t.Address == "1.1.1.1").Operator);
+        Assert.Equal("Google", targets.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Operator);
+        Assert.Equal("Cloudflare", targets.Single(t => t.Address == "1.1.1.1" && t.Scope == TargetScope.Verdict).Operator);
         Assert.Null(targets.Single(t => t.Address == "203.0.113.9").Operator); // not in the catalog
     }
 
@@ -227,6 +228,6 @@ public class SetupApiTests : IDisposable
         var targets = await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets");
         Assert.Equal("Internal", targets!.Single(t => t.Name == "Router").Profile);
         Assert.Equal("Path", targets!.Single(t => t.Address == "203.0.113.23").Profile);
-        Assert.Equal("Public", targets!.Single(t => t.Address == "8.8.8.8").Profile);
+        Assert.Equal("Public", targets!.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Profile);
     }
 }

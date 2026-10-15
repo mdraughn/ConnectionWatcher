@@ -45,6 +45,24 @@ async function loadAnchors() {
         label.append(` ${anchor.name} (${anchor.address})`);
         list.appendChild(label);
     }
+
+    const resolvers = document.getElementById("resolver-list");
+    resolvers.removeAttribute("aria-busy");
+    resolvers.innerHTML = "";
+    const addRadio = (value, text, checked) => {
+        const label = document.createElement("label");
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "resolver";
+        radio.value = value;
+        radio.checked = checked;
+        label.appendChild(radio);
+        label.append(` ${text}`);
+        resolvers.appendChild(label);
+    };
+    for (const anchor of result.body ?? [])
+        addRadio(anchor.address, `${anchor.name} (${anchor.address})`, false);
+    addRadio("", "I don't know", true);
 }
 
 document.getElementById("wan-probe").addEventListener("click", async () => {
@@ -92,6 +110,7 @@ document.getElementById("apply").addEventListener("click", async () => {
         },
         outerIp: wanOffer,
         anchorAddresses: anchors,
+        upstreamResolverAddress: document.querySelector("#resolver-list input:checked")?.value || null,
         ispName: document.getElementById("isp-name").value.trim() || null,
     };
     const button = document.getElementById("apply");
