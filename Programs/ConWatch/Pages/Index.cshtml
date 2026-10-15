@@ -60,7 +60,7 @@
             }
         </ul>
     }
-    @if (Model.ResolverMonitors.Count > 0 && !Model.DnsWatched)
+    @if (!Model.EngineDisabled && !Model.DnsWatched)
     {
         <h4>Name resolution</h4>
         <p>Name resolution isn't being watched.</p>

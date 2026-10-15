@@ -32,7 +32,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
     /// <summary>Resolver targets for the fallback's "Name resolution" list (never in the tree).</summary>
     public List<TargetMonitor> ResolverMonitors { get; } = new();
 
-    /// <summary>False when the name-resolution watch is off: the resolver monitors still
+    /// <summary>False only when an engine exists and its name-resolution watch is off (true with no engine, so the page never claims the watch is off then). The resolver monitors may still
     /// run (and fail with NoLookupNames), so the fallback shows one line instead of them.</summary>
     public bool DnsWatched { get; private set; }
 
@@ -55,7 +55,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
         var engine = host.Engine;
         var parents = new Dictionary<string, string?>();
         var poolMembers = new Dictionary<string, string[]>();
-        DnsWatched = engine?.DnsWatch.Enabled ?? false;
+        DnsWatched = engine?.DnsWatch.Enabled ?? true;
 
         if (engine is not null)
         {
