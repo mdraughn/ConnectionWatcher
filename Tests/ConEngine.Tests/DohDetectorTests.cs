@@ -13,6 +13,13 @@ public class DohDetectorTests
     }
 
     [Fact]
+    public void An_IPv6_server_matches_however_either_side_spells_it()
+    {
+        var detector = new WindowsDohDetector(() => ["2001:4860:4860:0000:0000:0000:0000:8888"]);
+        Assert.Equal(["2001:4860:4860::8888"], detector.AddressesUsingDoh(["2001:4860:4860::8888", "2001:4860:4860::8844"]));
+    }
+
+    [Fact]
     public void A_throwing_source_reads_as_nothing()
     {
         var detector = new WindowsDohDetector(() => throw new UnauthorizedAccessException("registry"));

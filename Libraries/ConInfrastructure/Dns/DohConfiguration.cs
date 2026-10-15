@@ -5,7 +5,8 @@ namespace ConInfrastructure.NameResolution;
 
 /// <summary>
 /// Windows keeps per-interface DoH settings under
-/// HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\{iface}\DohInterfaceSettings\Doh\{address},
+/// HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\{iface}\DohInterfaceSettings\Doh\{address}
+/// (IPv4 servers) and ...\DohInterfaceSettings\Doh6\{address} (IPv6 servers), each
 /// with a DohFlags value that is non-zero when DoH is on for that server. Best effort:
 /// any error, or a layout we do not recognise, reads as "nothing configured".
 /// </summary>
@@ -20,14 +21,20 @@ public sealed class WindowsDohDetector(Func<IEnumerable<string>> dohAddresses) :
         HashSet<string> configured;
         try
         {
-            configured = dohAddresses().Select(a => a.ToLowerInvariant()).ToHashSet();
+            configured = dohAddresses().Select(Canonical).ToHashSet();
         }
         catch (Exception)
         {
             return [];
         }
-        return resolverAddresses.Select(a => a.ToLowerInvariant()).Where(configured.Contains).Distinct().ToList();
+        return resolverAddresses.Where(a => configured.Contains(Canonical(a)))
+            .Select(a => a.ToLowerInvariant()).Distinct().ToList();
     }
+
+    /// <summary>One spelling per address, so an IPv6 server written in full in the
+    /// registry (Doh6) still matches the compressed form a resolver reports.</summary>
+    private static string Canonical(string address) =>
+        System.Net.IPAddress.TryParse(address, out var ip) ? ip.ToString() : address.ToLowerInvariant();
 
     /// <summary>The addresses whose DohFlags is a non-zero integer (int or long).</summary>
     public static IReadOnlyList<string> AddressesFrom(IEnumerable<(string Iface, string Address, object? Flags)> rows) =>
@@ -44,13 +51,17 @@ public sealed class WindowsDohDetector(Func<IEnumerable<string>> dohAddresses) :
             return [];
         foreach (var iface in root.GetSubKeyNames())
         {
-            using var doh = root.OpenSubKey($@"{iface}\DohInterfaceSettings\Doh");
-            if (doh is null)
-                continue;
-            foreach (var address in doh.GetSubKeyNames())
+            // Doh holds the IPv4 servers, Doh6 the IPv6 ones; both have the same shape.
+            foreach (var family in (string[])["Doh", "Doh6"])
             {
-                using var server = doh.OpenSubKey(address);
-                rows.Add((iface, address, server?.GetValue("DohFlags")));
+                using var doh = root.OpenSubKey($@"{iface}\DohInterfaceSettings\{family}");
+                if (doh is null)
+                    continue;
+                foreach (var address in doh.GetSubKeyNames())
+                {
+                    using var server = doh.OpenSubKey(address);
+                    rows.Add((iface, address, server?.GetValue("DohFlags")));
+                }
             }
         }
         return AddressesFrom(rows);
