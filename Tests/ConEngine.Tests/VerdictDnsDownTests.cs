@@ -142,11 +142,56 @@ public class VerdictDnsDownTests
     {
         Start();
         AnchorsUp();
+        Feed("9.9.9.9 directly", 10, true);
         Feed("Your resolver 192.168.1.1", 20, false); // the other stays Starting
-        Assert.Equal(VerdictState.Unknown, _verdict.CurrentVerdict);
-        Assert.Equal("Waiting for resolvers to report", _verdict.CurrentDetail);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Null(_verdict.Current.Dns);
         _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
         Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.StartsWith("Your resolver 192.168.1.1 isn't answering", _verdict.Current.Dns!.Message);
+    }
+
+    [Fact]
+    public void An_expired_anchor_wait_does_not_shorten_a_later_resolver_wait()
+    {
+        Start();
+        Feed("Router", 10, true);
+        Feed("Google", 20, false); // Cloudflare stays Starting: the anchor wait runs
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+
+        Feed("Google", 20, true);
+        Feed("Your resolver 192.168.1.1", 20, false); // the other stays Starting
+        Assert.NotEqual(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+    }
+
+    [Fact]
+    public void DnsDown_then_anchors_down_is_LinkDown_with_the_suffix()
+    {
+        Start();
+        AnchorsUp();
+        ResolversDown();
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Feed("Google", 20, false); Feed("Cloudflare", 20, false);
+        Assert.Equal(VerdictState.LinkDown, _verdict.CurrentVerdict);
+        Assert.EndsWith(" — name lookups are failing too", _verdict.CurrentDetail);
+    }
+
+    [Fact]
+    public void A_resolver_recovering_during_the_wait_ends_it_cleanly()
+    {
+        Start();
+        AnchorsUp();
+        Feed("Your resolver 192.168.1.1", 20, false); // B stays Starting
+        _time.Advance(TimeSpan.FromSeconds(10));
+        Feed("Your resolver 192.168.1.1", 20, true);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        var count = _transitions.Count;
+        _time.Advance(VerdictCoordinator.AnchorWaitCap + TimeSpan.FromSeconds(1));
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Equal(count, _transitions.Count);
     }
 
     [Fact]

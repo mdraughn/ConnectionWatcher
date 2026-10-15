@@ -46,7 +46,8 @@ public class VerdictCoordinator : IDisposable
     /// <summary>The longest the verdict waits for undetermined anchors that
     /// could still answer before concluding LinkDown from the ones that have
     /// reported (spec §4.2): a stuck anchor — an address that
-    /// never resolves — must never hide an outage for longer than this.</summary>
+    /// never resolves — must never hide an outage for longer than this. The same
+    /// cap bounds the wait for undetermined system resolvers before DnsDown.</summary>
     public static readonly TimeSpan AnchorWaitCap = TimeSpan.FromSeconds(30);
 
     private readonly TargetGraph _graph;
@@ -299,20 +300,26 @@ public class VerdictCoordinator : IDisposable
         }
     }
 
+    private enum WaitKind { Anchors, Resolvers }
+    private WaitKind _waitKind;
+
     /// <summary>Under _lock, from Classify: no counted anchor answers, but
     /// undetermined ones could still. True while the wait
     /// is within its cap. The first call of a wait starts the clock and arms a
     /// one-shot timer that reclassifies at the cap (Classify otherwise runs
     /// only on monitor transitions, and a stuck anchor emits none).</summary>
-    private bool StillWaiting()
+    private bool StillWaiting(WaitKind kind)
     {
         _waitingThisPass = true;
+        if (_waitingSince is not null && _waitKind != kind)
+            EndWait(); // a different wait never inherits this one's clock or expiry
         if (_waitExpired)
             return false;
         var now = _time.GetUtcNow();
         if (_waitingSince is not { } since)
         {
             _waitingSince = now;
+            _waitKind = kind;
             _waitTimer?.Dispose();
             // The callback takes _lock before reading `timer`, and this
             // assignment happens under _lock: it always sees its own instance.
@@ -387,7 +394,7 @@ public class VerdictCoordinator : IDisposable
         // the anchors while one is permanently dead) — but only for
         // AnchorWaitCap: an anchor stuck in Starting (an address that never
         // resolves) must not hide the outage longer (spec §4.2, I2).
-        if (counted.Any(a => Undetermined(a.State)) && StillWaiting())
+        if (counted.Any(a => Undetermined(a.State)) && StillWaiting(WaitKind.Anchors))
             return (VerdictState.Unknown, "Waiting for anchors to report", null, null);
 
         // 2. Down: the path says where (spec §4.3).
@@ -400,7 +407,9 @@ public class VerdictCoordinator : IDisposable
         _dns.System.All(m => states[m.Target.Id] is HostState.Down or HostState.Unreachable);
 
     /// <summary>DnsDown when every determined system resolver is Down (and none is still
-    /// undetermined past the wait cap); null otherwise. Upstream resolvers decide the blame.</summary>
+    /// undetermined past the wait cap); null otherwise, including while an undetermined
+    /// resolver is still within the cap (the quality verdict stands meanwhile, the timer
+    /// stays armed and the cap concludes DnsDown). Upstream resolvers decide the blame.</summary>
     private (VerdictState, string, string?, DnsBlame?)? CheckDns(IReadOnlyDictionary<Guid, HostState> states)
     {
         if (!_dns.Enabled || _dns.System.Count == 0)
@@ -411,14 +420,15 @@ public class VerdictCoordinator : IDisposable
             return null;
         if (!determined.All(s => s.State is HostState.Down or HostState.Unreachable))
             return null;
-        if (system.Any(s => Undetermined(s.State)) && StillWaiting())
-            return (VerdictState.Unknown, "Waiting for resolvers to report", null, null);
+        if (system.Any(s => Undetermined(s.State)) && StillWaiting(WaitKind.Resolvers))
+            return null; // keep waiting (timer armed) but never hide a reachable internet's quality verdict
 
         var resolvers = system.Select(s => s.Monitor.Target.Address).ToList();
+        var firstDown = determined[0].Monitor.Target.Address;
         var upstream = _dns.Upstream.FirstOrDefault(m => Answering(states[m.Target.Id]));
         DnsBlame blame = upstream is not null
             ? new DnsBlame(DnsBlameKind.YourResolver,
-                $"Your resolver {resolvers[0]} isn't answering, but {upstream.Target.Address} answers directly.", resolvers)
+                $"Your resolver {firstDown} isn't answering, but {upstream.Target.Address} answers directly.", resolvers)
             : new DnsBlame(DnsBlameKind.NoResolver,
                 "No resolver is answering, though the internet is reachable." +
                 (_dns.Upstream.Count == 0 ? " Name a public resolver in Config → DNS so ConnectionWatcher can tell your resolver from everyone's." : ""),
