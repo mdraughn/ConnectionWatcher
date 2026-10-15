@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { answerClassOf } from "../lib/verdictClock";
 import { slabFor } from "./VerdictBanner";
 
 const v = (state: string, operator: string | null = null) =>
@@ -47,5 +48,9 @@ describe("slabFor", () => {
     expect(slab.icon).toBe("down");
     expect(slab.headline).toBe("Your internet is UP, but name lookups are failing");
     expect(slab.caveat).toBe("Your resolver 10.0.0.1 isn't answering, but 1.1.1.1 answers directly.");
+  });
+
+  it("DnsDown's clock reads 'down for', like the red slab it sits on", () => {
+    expect(answerClassOf("DnsDown")).toBe("down");
   });
 });

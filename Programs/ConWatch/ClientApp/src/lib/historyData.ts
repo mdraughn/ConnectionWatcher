@@ -21,6 +21,8 @@ export function uptimePercent(points: RollupPoint[]): number | null {
  *   total time is reported. It ends at the release (`ParentRecovered`), at
  *   any transition out of `Unreachable` (e.g. to `Recovering`), or at any
  *   transition to `Responding`/`Down`.
+ * - A verdict transition into `DnsDown` (internet up, name lookups failing)
+ *   is never an outage, and it closes an open `LinkDown` outage.
  * Open windows run to the range end. Transitions must be chronological and
  * already clipped via clipAtReset().
  */
@@ -60,7 +62,11 @@ export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
 
   for (const t of transitions) {
     const at = Date.parse(t.timestamp);
-    if (t.to === "Down") {
+    if (t.verdict === "DnsDown") {
+      // The internet is up; name lookups fail (the user's resolver). Never an
+      // outage — and it ends any LinkDown outage that was open.
+      if (open?.kind === "outage") close(at);
+    } else if (t.to === "Down") {
       if (open?.kind === "unreach") close(at);
       if (open === null) {
         open = { kind: "outage", start: at };

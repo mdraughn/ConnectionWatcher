@@ -118,6 +118,11 @@ describe("verdictFill", () => {
     expect(verdictFill("Healthy", "Responding")).toBe(HEALTHY);
   });
 
+  it("DnsDown is your gear (the resolver) at the out depth, never the warm internet-outage fill", () => {
+    expect(verdictFill("DnsDown", "Down")).toBe(RAMP.grey.out);
+    expect(verdictFill("DnsDown", "Down")).not.toBe(RAMP.warm.out);
+  });
+
   it("falls back to the plain state mapping without a recognizable name", () => {
     expect(verdictFill(null, "Down")).toBe(RAMP.warm.out);
     expect(verdictFill("something else", "Responding")).toBe(HEALTHY);

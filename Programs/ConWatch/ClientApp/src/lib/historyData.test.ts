@@ -91,6 +91,30 @@ describe("incidents (split semantics)", () => {
     expect(stats.longestOutageMs).toBe(60 * 60_000);
   });
 
+  it("a DnsDown verdict is never an outage (the internet is up; the user's resolver is not)", () => {
+    const dns = (iso: string, to: string, from: string, verdict: string): TransitionEvent =>
+      ({ ...t(iso, to, from, "VerdictChanged"), subjectKind: "Verdict", verdict });
+    const stats = incidents([
+      dns("2026-08-20T01:00:00Z", "Down", "Responding", "DnsDown"),
+      dns("2026-08-20T01:20:00Z", "Responding", "Down", "Healthy"),
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(0);
+    expect(stats.longestOutageMs).toBe(0);
+  });
+
+  it("a transition into DnsDown closes an open LinkDown outage; LinkDown after DnsDown opens one", () => {
+    const v = (iso: string, to: string, from: string, verdict: string): TransitionEvent =>
+      ({ ...t(iso, to, from, "VerdictChanged"), subjectKind: "Verdict", verdict });
+    const stats = incidents([
+      v("2026-08-20T01:00:00Z", "Down", "Responding", "LinkDown"),
+      v("2026-08-20T01:05:00Z", "Down", "Down", "DnsDown"),
+      v("2026-08-20T02:00:00Z", "Down", "Down", "LinkDown"),
+      v("2026-08-20T02:02:00Z", "Responding", "Down", "Healthy"),
+    ], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(2);
+    expect(stats.longestOutageMs).toBe(5 * 60_000);
+  });
+
   it("an unreachable window already open at the range start counts from the range start", () => {
     const stats = incidents([
       t("2026-08-20T00:30:00Z", "Starting", "Unreachable", "ParentRecovered"),

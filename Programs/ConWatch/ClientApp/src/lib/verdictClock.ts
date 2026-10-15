@@ -3,7 +3,8 @@
 //  - The ANSWER classes are up / struggling / down (SiteIncident and
 //    InternetWeather read as UP — your internet was up through them).
 //  - The up-streak is "time since the internet was last DOWN": struggling
-//    blemishes a streak but does not reset it; only LinkDown does. The
+//    blemishes a streak but does not reset it; only LinkDown (or DnsDown,
+//    which the slab shows red: name lookups fail) does. The
 //    ledger and History carry the blemishes.
 // Pure functions, unit-tested.
 import type { TransitionEvent } from "./types";
@@ -14,7 +15,7 @@ export function answerClassOf(verdictState: string | null | undefined): AnswerCl
   switch (verdictState) {
     case "Healthy": case "SiteIncident": case "InternetWeather": return "up";
     case "LinkDegraded": return "struggling";
-    case "LinkDown": return "down";
+    case "LinkDown": case "DnsDown": return "down";
     default: return "checking";
   }
 }

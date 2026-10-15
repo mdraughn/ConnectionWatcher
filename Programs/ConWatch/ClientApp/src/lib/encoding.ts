@@ -77,6 +77,7 @@ export function ribbonFill(role: RowRole, state: string): string {
 export function verdictFill(verdictName: string | null, state: string): string {
   switch (verdictName) {
     case "LinkDown": return RAMP.grey.out;
+    case "DnsDown": return RAMP.grey.out; // your resolver: your gear, name lookups out
     case "LinkDegraded": return RAMP.grey.degraded;
     case "InternetWeather": return RAMP.warm.degraded;
     case "SiteIncident": return RAMP.warm.glitch;
