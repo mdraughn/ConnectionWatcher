@@ -205,6 +205,7 @@ public class WatcherHostService(
             AnchorPool = await settingsStore.GetAsync(SettingKeys.AnchorPool),
             WeatherThreshold = await settingsStore.GetIntAsync(SettingKeys.WeatherThreshold,
                 verdictOptions.Value.WeatherThreshold),
+            DnsWatch = dnsEnabled && lookupNames.Current.Count > 0,
         };
         var engine = new WatcherEngine(timeProvider, pingFactory, resolverFactory,
             loggerFactory, Options.Create(options), Options.Create(effectiveVerdict));

@@ -112,6 +112,10 @@ public class WatcherEngine
     /// <summary>Every routed ping result, tagged with its target id (feeds rollups).</summary>
     public IObservable<(Guid TargetId, PingResult Result)> PingSampleSource => _pingSampleSubject;
     public IReadOnlyDictionary<Guid, TargetMonitor> Monitors => _monitors;
+
+    /// <summary>The name-resolution watch: on/off and the resolver monitors (set in StartAsync).</summary>
+    public ConEngine.Dns.DnsWatch DnsWatch { get; private set; } = ConEngine.Dns.DnsWatch.Off;
+
     public IReadOnlyList<PoolCoordinator> PoolCoordinators => _poolCoordinators;
     public TargetGraph Graph => _graph ?? throw new InvalidOperationException("Engine not started");
 
@@ -194,6 +198,13 @@ public class WatcherEngine
             _monitors[target.Id] = monitor;
             _subscriptions.Add(monitor.TransitionSource.Subscribe(_transitionSubject.OnNext));
         }
+
+        // The name-resolution watch (spec 2026-10-10 §4.4): the enabled Resolver-scope
+        // monitors, split into the host's own resolvers and the admin's upstream ones.
+        var resolvers = _monitors.Values.Where(m => m.Target.Scope == TargetScope.Resolver).ToList();
+        DnsWatch = new ConEngine.Dns.DnsWatch(_verdictOptions.DnsWatch,
+            resolvers.Where(m => m.Target.SystemManaged).ToList(),
+            resolvers.Where(m => !m.Target.SystemManaged).ToList());
 
         // Topology enforcement.
         _topology = new TopologyCoordinator(_graph, _monitors,
