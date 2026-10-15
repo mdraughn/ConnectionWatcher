@@ -5,9 +5,10 @@ public static class StatusEndpoints
 {
     public static void MapStatus(this RouteGroupBuilder api)
     {
-        api.MapGet("/status", (WatcherHostService host, ConPersistence.Warnings.ModelWarningLedger warnings) =>
+        api.MapGet("/status", (WatcherHostService host, ConPersistence.Warnings.ModelWarningLedger warnings,
+            ConInfrastructure.NameResolution.DnsLookupNames lookupNames) =>
         {
-            if (StatusSnapshotBuilder.Build(host.Engine, warnings) is { } snapshot)
+            if (StatusSnapshotBuilder.Build(host.Engine, warnings, lookupNames.Current) is { } snapshot)
                 return Results.Ok(snapshot);
             // Archive mode is a healthy answer, not an error: no live states.
             if (!host.EngineEnabled)

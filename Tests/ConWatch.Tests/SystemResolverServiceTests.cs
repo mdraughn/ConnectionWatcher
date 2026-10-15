@@ -54,7 +54,9 @@ public class SystemResolverServiceTests : IDisposable
         // The engine probes it with the dns spec and reports it in status.
         await ConfigApiTests.Eventually(async () =>
         {
-            var status = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/status");
+            var response = await _client.GetAsync("/api/v1/status"); // 503 while the engine is (re)building
+            if (!response.IsSuccessStatusCode) return false;
+            var status = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
             return status.GetProperty("targets").EnumerateArray()
                 .Any(t => t.GetProperty("systemManaged").GetBoolean() && t.GetProperty("probe").GetString() == "dns");
         });

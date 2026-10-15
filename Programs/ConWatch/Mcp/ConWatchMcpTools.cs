@@ -26,7 +26,8 @@ namespace ConWatch.Mcp;
 public class ConWatchMcpTools(WatcherHostService host,
     IDbContextFactory<ConWatchDbContext> dbFactory, IspReportBuilder reportBuilder,
     DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http,
-    ConPersistence.Warnings.ModelWarningLedger warnings)
+    ConPersistence.Warnings.ModelWarningLedger warnings,
+    ConInfrastructure.NameResolution.DnsLookupNames lookupNames)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -44,10 +45,11 @@ public class ConWatchMcpTools(WatcherHostService host,
         "Targets with scope 'Local' are LAN devices (cameras, NAS, IoT) tracked on the side; they say " +
         "nothing about the internet connection and never affect the verdict." +
         " Includes warnings: admin notes where ConnectionWatcher's map disagrees with what the probes prove; they never affect the verdict." +
-        " Each target carries critical (the user asked to be told when it is down, even if the internet is fine) and explainedBy (the id of the upstream target whose failure explains this one, or null).")]
+        " Each target carries critical (the user asked to be told when it is down, even if the internet is fine) and explainedBy (the id of the upstream target whose failure explains this one, or null)." +
+        " dns is the name-resolution watch: watched, state (Ok, Degraded, Filtered = the resolver blocks the seeded names but works, Down, Unknown), the host's resolvers and any upstream ones, the blame when the verdict is DnsDown, and each lookup name's last result.")]
     public Task<string> GetCurrentStatus()
     {
-        var snapshot = StatusSnapshotBuilder.Build(host.Engine, warnings);
+        var snapshot = StatusSnapshotBuilder.Build(host.Engine, warnings, lookupNames.Current);
         return Task.FromResult(JsonSerializer.Serialize(new
         {
             monitoringEnabled = host.EngineEnabled,
@@ -56,6 +58,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             verdict = snapshot?.Verdict,
             targets = snapshot?.Targets,
             warnings = snapshot?.Warnings,
+            dns = snapshot?.Dns,
         }, Json));
     }
 

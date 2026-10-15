@@ -1,3 +1,5 @@
+using ConCore.Dns;
+using ConCore.Targets;
 using ConPersistence.Config;
 using ConPersistence.Settings;
 
@@ -35,10 +37,14 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
     private async Task<List<string>> Codes() =>
         (await _health.EvaluateAsync()).Select(w => w.Code).ToList();
 
+    /// <summary>The anchor-pool codes only: these fixtures have no resolvers, so the DNS codes ride along and are tested on their own.</summary>
+    private async Task<List<string>> AnchorCodes() =>
+        (await Codes()).Where(c => c is not ("dns-not-watched" or "no-upstream-resolver")).ToList();
+
     [Fact]
     public async Task Two_anchors_threshold_two_warns_recommended_only()
     {
-        var codes = await Codes();
+        var codes = await AnchorCodes();
         Assert.Equal(["anchors-below-recommended"], codes);
     }
 
@@ -48,7 +54,7 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
         await _service.UpsertTargetAsync(new TargetDto { Name = "Quad9", Address = "9.9.9.9", Parent = "Modem" });
         var pool = (await _store.ExportAsync()).Pools.Single();
         await _service.UpsertPoolAsync(pool with { Members = ["Google", "Cloudflare", "Quad9"] });
-        Assert.Empty(await Codes());
+        Assert.Empty(await AnchorCodes());
     }
 
     [Fact]
@@ -65,14 +71,14 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
     public async Task No_anchor_pool_setting_warns_off()
     {
         await _settings.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.AnchorPool] = null });
-        Assert.Equal(["no-anchor-pool"], await Codes());
+        Assert.Equal(["no-anchor-pool"], await AnchorCodes());
     }
 
     [Fact]
     public async Task Dangling_anchor_pool_name_warns_missing()
     {
         await _settings.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.AnchorPool] = "Ghost" });
-        Assert.Equal(["anchor-pool-missing"], await Codes());
+        Assert.Equal(["anchor-pool-missing"], await AnchorCodes());
     }
 
     [Fact]
@@ -141,5 +147,43 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
         await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });
         await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Operator = "Comcast" });
         Assert.DoesNotContain("anchors-all-isp", await Codes()); // the path itself is untagged
+    }
+
+    [Fact]
+    public async Task No_upstream_resolver_and_a_disabled_watch_are_health_warnings()
+    {
+        // ValidHome has no Resolver targets at all: nothing is watched yet (no system resolver found).
+        Assert.Contains("dns-not-watched", await Codes());
+
+        // A system resolver and the seeded names: watched, but no upstream resolver is named.
+        await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto
+            {
+                Name = "Your resolver 192.168.1.1", Address = "192.168.1.1", Profile = "Resolver",
+                Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true,
+            });
+            return ConfigResult.Ok();
+        });
+        await _settings.SetManyAsync(new Dictionary<string, string?>
+        {
+            [SettingKeys.DnsLookupNames] = DnsLookupName.ToJson(DnsLookupName.Seeded),
+        });
+        var codes = await Codes();
+        Assert.Contains("no-upstream-resolver", codes);
+        Assert.DoesNotContain("dns-not-watched", codes);
+
+        // An upstream resolver silences that; turning the watch off replaces it with dns-not-watched.
+        await _service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "1.1.1.1 directly", Address = "1.1.1.1", Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver });
+            return ConfigResult.Ok();
+        });
+        Assert.DoesNotContain("no-upstream-resolver", await Codes());
+
+        await _settings.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.DnsEnabled] = "false" });
+        codes = await Codes();
+        Assert.Contains("dns-not-watched", codes);
+        Assert.DoesNotContain("no-upstream-resolver", codes);
     }
 }

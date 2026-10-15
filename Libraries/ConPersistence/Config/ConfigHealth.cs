@@ -18,6 +18,7 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
     public async Task<IReadOnlyList<HealthWarning>> EvaluateAsync()
     {
         var warnings = new List<HealthWarning>();
+        await AddDnsWarningsAsync(warnings);
         var anchorPool = await settings.GetAsync(SettingKeys.AnchorPool);
         if (anchorPool is not { Length: > 0 })
         {
@@ -56,6 +57,27 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         if (await PoolParentDriftAsync(db, pool) is { } drift)
             warnings.Add(drift);
         return warnings;
+    }
+
+    /// <summary>Name-resolution watch (spec 2026-10-10 §4.5). Runs first so a node
+    /// without an anchor pool still gets DNS health.</summary>
+    private async Task AddDnsWarningsAsync(List<HealthWarning> warnings)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var dnsEnabled = await settings.GetAsync(SettingKeys.DnsEnabled) != "false";
+        var names = ConCore.Dns.DnsLookupName.FromJson(await settings.GetAsync(SettingKeys.DnsLookupNames));
+        var addresses = await db.Targets.Where(t => t.Enabled && t.Scope != ConCore.Targets.TargetScope.Resolver)
+            .Select(t => t.Address).ToListAsync();
+        var hasHostnameTarget = addresses.Any(a => !System.Net.IPAddress.TryParse(a, out _));
+        var systemResolvers = await db.Targets.CountAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && t.SystemManaged);
+        if (!dnsEnabled || (names.Count == 0 && !hasHostnameTarget) || systemResolvers == 0)
+            warnings.Add(new HealthWarning("dns-not-watched",
+                !dnsEnabled ? "Name resolution isn't being watched: the DNS watch is turned off (Dns.Enabled)."
+                : systemResolvers == 0 ? "Name resolution isn't being watched: no resolver was found in this machine's network settings."
+                : "Name resolution isn't being watched: the lookup-name list is empty and no hostname target is configured."));
+        else if (!await db.Targets.AnyAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && !t.SystemManaged && t.Enabled))
+            warnings.Add(new HealthWarning("no-upstream-resolver",
+                "Name a public resolver (1.1.1.1, 8.8.8.8, …) as an upstream Resolver target so ConnectionWatcher can tell your resolver from everyone's."));
     }
 
     /// <summary>Every anchor carries the ISP's operator tag: the verdict then

@@ -31,7 +31,7 @@ public class StatusShapeTests : IDisposable
                 && status.GetProperty("pools").GetArrayLength() == 1;
         });
 
-        Assert.Equal(new[] { "enabled", "pools", "targets", "verdict", "warnings" }, Keys(status));
+        Assert.Equal(new[] { "dns", "enabled", "pools", "targets", "verdict", "warnings" }, Keys(status));
         Assert.Equal(JsonValueKind.Array, status.GetProperty("warnings").ValueKind);
         var sample = JsonSerializer.SerializeToElement(
             new StatusWarning("k", "HopBypassed", Guid.Empty, "Router", "m", DateTimeOffset.UnixEpoch, false),
@@ -81,6 +81,6 @@ public class StatusShapeTests : IDisposable
             return response.IsSuccessStatusCode && body.Contains("\"enabled\":false");
         });
 
-        Assert.Equal("""{"enabled":false,"verdict":null,"targets":[],"pools":[],"warnings":[]}""", body);
+        Assert.Equal("""{"enabled":false,"verdict":null,"targets":[],"pools":[],"warnings":[],"dns":null}""", body);
     }
 }

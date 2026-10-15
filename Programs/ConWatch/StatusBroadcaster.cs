@@ -12,7 +12,8 @@ namespace ConWatch;
 /// </summary>
 public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProvider,
     ILogger<StatusBroadcaster> log,
-    ConPersistence.Warnings.ModelWarningLedger warnings) : BackgroundService, IEngineObserver
+    ConPersistence.Warnings.ModelWarningLedger warnings,
+    ConInfrastructure.NameResolution.DnsLookupNames lookupNames) : BackgroundService, IEngineObserver
 {
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MinGap = TimeSpan.FromMilliseconds(250);
@@ -127,7 +128,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
                 return;
             _lastSnapshotSent = now;
         }
-        var snapshot = StatusSnapshotBuilder.Build(engine, warnings);
+        var snapshot = StatusSnapshotBuilder.Build(engine, warnings, lookupNames.Current);
         if (snapshot is null)
             return;
 

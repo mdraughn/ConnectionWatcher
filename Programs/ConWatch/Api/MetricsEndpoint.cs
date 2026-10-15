@@ -59,6 +59,13 @@ public static class MetricsEndpoint
                       .Append(verdict.CurrentVerdict == state ? 1 : 0).Append('\n');
             }
 
+            var dns = ConEngine.Dns.DnsSummary.Compute(engine.DnsWatch, engine.DnsResults);
+            if (dns.Watched && dns.State != ConEngine.Dns.DnsSummaryState.Unknown)
+            {
+                Family(sb, "conwatch_dns_up", "gauge", "1 while the host's name resolution works (Ok, Degraded or Filtered), 0 when every system resolver is down.");
+                sb.Append("conwatch_dns_up ").Append(dns.State == ConEngine.Dns.DnsSummaryState.Down ? 0 : 1).Append('\n');
+            }
+
             var targets = engine.Monitors.Values.OrderBy(m => m.Target.Name).ToList();
 
             Family(sb, "conwatch_target_up", "gauge", "1 while the target is responding.");

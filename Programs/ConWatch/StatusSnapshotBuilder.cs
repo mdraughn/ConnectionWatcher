@@ -1,5 +1,7 @@
 using ConCore.Targets;
 using ConEngine;
+using ConEngine.Topology;
+using ConEngine.Tracking;
 using ConPersistence.Warnings;
 
 namespace ConWatch;
@@ -12,11 +14,26 @@ namespace ConWatch;
 /// </summary>
 public sealed record StatusSnapshot(bool Enabled, StatusVerdict? Verdict,
     IReadOnlyList<StatusTarget> Targets, IReadOnlyList<StatusPool> Pools,
-    IReadOnlyList<StatusWarning> Warnings)
+    IReadOnlyList<StatusWarning> Warnings, StatusDns? Dns)
 {
     /// <summary>Archive mode (monitoring disabled): no live states.</summary>
-    public static StatusSnapshot Disabled { get; } = new(false, null, [], [], []);
+    public static StatusSnapshot Disabled { get; } = new(false, null, [], [], [], null);
 }
+
+/// <summary>One resolver the name-resolution watch pings. <paramref name="Detail"/> is the
+/// latest failure message while the resolver is not answering, else null.</summary>
+public sealed record StatusResolver(Guid Id, string Address, string Label, string State, string? Detail, bool Enabled);
+
+/// <param name="Kind">"YourResolver" or "NoResolver".</param>
+public sealed record StatusDnsBlame(string Kind, string Message, IReadOnlyList<string> Resolvers);
+
+/// <param name="LastResult">"ok", "miss", "filtered" or "none".</param>
+public sealed record StatusLookupName(string Name, string LastResult, string? Detail);
+
+/// <summary>The name-resolution watch (spec 2026-10-10): the summary state, the host's
+/// resolvers and any upstream ones, the DnsDown blame, and each lookup name's last result.</summary>
+public sealed record StatusDns(bool Watched, string State, IReadOnlyList<StatusResolver> SystemResolvers,
+    IReadOnlyList<StatusResolver> UpstreamResolvers, StatusDnsBlame? Blame, IReadOnlyList<StatusLookupName> LookupNames);
 
 /// <param name="Operator">The ISP blamed by a Link* verdict ("Comcast"), else null.</param>
 public sealed record StatusVerdict(string State, string? Detail, string? Operator);
@@ -40,7 +57,8 @@ public sealed record StatusWarning(string Key, string Kind, Guid? TargetId, stri
 
 public static class StatusSnapshotBuilder
 {
-    public static StatusSnapshot? Build(WatcherEngine? engine, ModelWarningLedger warnings)
+    public static StatusSnapshot? Build(WatcherEngine? engine, ModelWarningLedger warnings,
+        IReadOnlyList<ConCore.Dns.DnsLookupName> lookupNames)
     {
         if (engine is null)
             return null;
@@ -73,6 +91,24 @@ public static class StatusSnapshotBuilder
                 w.TargetId, w.TargetName, w.Message, w.SinceUtc, w.Acknowledged))
             .ToList();
 
-        return new StatusSnapshot(true, verdict, targets, pools, notes);
+        var summary = ConEngine.Dns.DnsSummary.Compute(engine.DnsWatch, engine.DnsResults);
+        StatusResolver Resolver(TargetMonitor m) => new(m.Target.Id, m.Target.Address, m.Target.Name,
+            m.CurrentState.ToString(),
+            engine.DnsResults.Recent(m.Target.Id) is { Count: > 0 } r && !TopologyCoordinator.Answering(m.CurrentState) ? r[^1].Message : null,
+            m.Target.Enabled);
+        // A seeded DnsDown verdict has no blame until the first real classification.
+        var blame = engine.Verdict?.Current.Dns is { } b ? new StatusDnsBlame(b.Kind.ToString(), b.Message, b.Resolvers) : null;
+        var allRecent = engine.DnsWatch.System.Concat(engine.DnsWatch.Upstream)
+            .SelectMany(m => engine.DnsResults.Recent(m.Target.Id)).OrderBy(r => r.At).ToList();
+        var names = lookupNames.Select(n =>
+        {
+            var last = allRecent.LastOrDefault(r => string.Equals(r.Name, n.Name, StringComparison.OrdinalIgnoreCase));
+            var result = last is null ? "none" : last.Outcome == "Filtered" ? "filtered" : last.Success ? "ok" : "miss";
+            return new StatusLookupName(n.Name, result, last?.Message);
+        }).ToList();
+        var dns = new StatusDns(summary.Watched, summary.State.ToString(),
+            engine.DnsWatch.System.Select(Resolver).ToList(), engine.DnsWatch.Upstream.Select(Resolver).ToList(), blame, names);
+
+        return new StatusSnapshot(true, verdict, targets, pools, notes, dns);
     }
 }
