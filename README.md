@@ -63,7 +63,8 @@ With an empty configuration, ConWatch opens the **quick-setup wizard**: it
 detects your router (confirm it — inside a container the detected gateway may
 be the container bridge), offers four public anycast DNS anchors, optionally
 discovers your router's WAN address via UPnP, and starts monitoring with one
-click. The **Admin** page holds database stats, retention/verdict settings,
+click. It also asks which public resolver you use, so ConnectionWatcher can tell your
+resolver from everyone's. The **Admin** page holds database stats, retention/verdict settings,
 and the danger zone (clear history / factory reset, type-to-confirm).
 
 Restarts are warm: after an update, reboot, or config change, ConWatch resumes
@@ -118,6 +119,8 @@ ConWatch serves its UI at the root:
   **operators**, not targets: four addresses of one provider failing together
   are one piece of evidence and stay a site incident, never internet weather.
   Untagged anchors each count as their own operator.
+- **Config → DNS**: the resolvers your machine uses (switch any off), the public
+  resolver asked directly, and the names they are asked for.
 - **Traceroute** (`/Traceroute`) — discover upstream hops and add them as
   monitored targets with the right parent pre-filled.
 
