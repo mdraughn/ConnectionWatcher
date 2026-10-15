@@ -73,7 +73,7 @@ public class TrayToastsTests
         var toast = TrayToasts.Internet(Info(TrayState.Healthy, "Healthy"),
             Info(TrayState.Down, "DnsDown", "DnsDown: Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly."), "http://localhost:8080")!;
         Assert.Equal("Name lookups are failing", toast.Title);
-        Assert.Equal("Your internet is up, but name lookups are failing — Your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly.", toast.Body);
+        Assert.Equal("Your internet is up, but name lookups are failing — your resolver 10.1.10.1 isn't answering, but 1.1.1.1 answers directly.", toast.Body);
         Assert.Equal(ToastLevel.Error, toast.Level);
     }
 

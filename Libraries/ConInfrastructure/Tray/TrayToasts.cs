@@ -22,6 +22,8 @@ public static class TrayToasts
         {
             var blame = (next.Detail ?? "").StartsWith("DnsDown: ", StringComparison.Ordinal)
                 ? next.Detail![9..] : next.Detail is { Length: > 0 } d ? d : "your resolver isn't answering";
+            if (blame.Length > 0)
+                blame = char.ToLowerInvariant(blame[0]) + blame[1..];
             return new TrayToast("Name lookups are failing", $"Your internet is up, but name lookups are failing — {blame}", ToastLevel.Error);
         }
         (string? title, ToastLevel level) = next.State switch
