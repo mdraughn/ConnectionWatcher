@@ -72,7 +72,7 @@ public static class TrayStatus
                     // mean YOUR internet is up — no amber, no toast.
                     "Healthy" or "SiteIncident" or "InternetWeather" => TrayState.Healthy,
                     "LinkDegraded" => TrayState.Degraded,
-                    "LinkDown" => TrayState.Down,
+                    "LinkDown" or "DnsDown" => TrayState.Down,
                     _ => TrayState.Measuring,
                 };
                 return new TrayInfo(state, detail, notes) { Critical = critical };

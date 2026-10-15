@@ -80,6 +80,12 @@ export function slabFor(verdict: VerdictStatus): Slab {
           : "your connection to the internet is not carrying traffic",
         mark: { shape: "bar", hue: "grey", depth: "out" },
       };
+    case "DnsDown":
+      return {
+        cls: "linkdown", icon: "down", headline: "Your internet is UP, but name lookups are failing",
+        caveat: (verdict.detail ?? "").replace(/^DnsDown:\s*/, "") || "your resolver isn't answering",
+        mark: { shape: "bar", hue: "grey", depth: "out" },
+      };
     default:
       return {
         cls: "unknown", icon: "checking", headline: "Checking your internet…",

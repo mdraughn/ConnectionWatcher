@@ -49,8 +49,9 @@ public class StateMappingTests
     [InlineData("InternetWeather", "ON")]
     [InlineData("LinkDegraded", "ON")]
     [InlineData("LinkDown", "OFF")]
+    [InlineData("DnsDown", "OFF")]
     [InlineData("Unknown", "ON")]
-    public void Internet_binary_is_on_unless_link_down(string verdict, string expected)
+    public void Internet_binary_is_on_unless_link_down_or_names_fail(string verdict, string expected)
     {
         Assert.Equal(expected, StateMapping.InternetPayload(verdict));
     }

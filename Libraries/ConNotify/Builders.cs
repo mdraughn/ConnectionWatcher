@@ -47,9 +47,9 @@ public static class StateMapping
     public static string TargetPayload(HostState state) =>
         state is HostState.Down or HostState.Unreachable ? "OFF" : "ON";
 
-    /// <summary>The headline binary: ON unless the verdict says the LINK is down.</summary>
+    /// <summary>The headline binary: ON unless the verdict says the LINK is down or name lookups are failing (spec 2026-10-10 D9).</summary>
     public static string InternetPayload(string verdict) =>
-        verdict == "LinkDown" ? "OFF" : "ON";
+        verdict is "LinkDown" or "DnsDown" ? "OFF" : "ON";
 }
 
 /// <summary>All topic strings derive from here — one source of truth.</summary>

@@ -225,6 +225,20 @@ is written to log files, credentials are never logged, and webhook/heartbeat
 URLs appear in logs with their secret paths elided (`https://hc-ping.com/…`)
 so a pasted log can't leak them.
 
+## How the verdict is decided
+
+The internet is up when at least one anchor outside your ISP answers; the path
+(router, modem, ISP hops) only says *where* the problem is when the anchors say
+it is down.
+
+### Name resolution
+
+The resolvers your machine uses are asked for a few well-known names. When the
+anchors answer but every one of those resolvers is down, the verdict is "UP, but
+name lookups are failing", and the banner says whether it is your resolver or
+every resolver. A resolver that blocks the seeded names (a Pi-hole, say) is
+shown as filtered, not down.
+
 ## Ask Claude about your internet (MCP)
 
 ConnectionWatcher exposes a Model Context Protocol endpoint at `/mcp`, so an

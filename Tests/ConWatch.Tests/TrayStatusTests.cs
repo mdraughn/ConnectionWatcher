@@ -78,6 +78,15 @@ public class TrayStatusTests
             TrayStatus.Tooltip(new TrayInfo(TrayState.Down, "LinkDown: Router is Down", [])));
     }
 
+    [Theory]
+    [InlineData("Healthy", TrayState.Healthy)]
+    [InlineData("LinkDegraded", TrayState.Degraded)]
+    [InlineData("LinkDown", TrayState.Down)]
+    [InlineData("DnsDown", TrayState.Down)]
+    [InlineData("Unknown", TrayState.Measuring)]
+    public void Verdict_maps_to_the_tray_state(string verdict, TrayState expected) =>
+        Assert.Equal(expected, TrayStatus.FromStatusJson(Status("Responding", verdict: verdict)).State);
+
     private const string RouterId = "11111111-1111-1111-1111-111111111111";
 
     private static string Status(string routerState, bool critical = true, string verdict = "Healthy",

@@ -40,4 +40,12 @@ describe("slabFor", () => {
     expect(slabFor(v("LinkDown", "Comcast")).caveat).toBe("Comcast is not carrying your traffic");
     expect(slabFor(v("LinkDown")).caveat).toContain("your connection");
   });
+
+  it("DnsDown is a red 'up but name lookups fail' slab carrying the blame", () => {
+    const slab = slabFor({ state: "DnsDown", detail: "DnsDown: Your resolver 10.0.0.1 isn't answering, but 1.1.1.1 answers directly.", operator: null });
+    expect(slab.cls).toBe("linkdown");
+    expect(slab.icon).toBe("down");
+    expect(slab.headline).toBe("Your internet is UP, but name lookups are failing");
+    expect(slab.caveat).toBe("Your resolver 10.0.0.1 isn't answering, but 1.1.1.1 answers directly.");
+  });
 });
