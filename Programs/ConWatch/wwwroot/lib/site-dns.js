@@ -16,17 +16,22 @@ function currentNames() {
     return [...document.querySelectorAll("#name-list li")].map((li) => li.dataset.name);
 }
 
+// The Watch switch saves on change, like the resolver switches: the submit
+// handler wireSettingsForm installs does the PUT, then reloads or shows errors.
+wireSettingsForm("watch-form", "watch-errors");
 document.getElementById("dns-enabled").addEventListener("change", (e) => {
     document.querySelector("#watch-form [name='Dns.Enabled']").value = e.target.checked ? "true" : "false";
+    document.getElementById("watch-form").requestSubmit();
 });
-wireSettingsForm("watch-form", "watch-errors");
 
 document.querySelectorAll("[data-toggle-resolver]").forEach((box) => box.addEventListener("change", async (e) => {
+    const errors = document.getElementById("resolver-errors");
+    clearErrors(errors);
     const row = e.target.closest("tr");
     const dto = JSON.parse(row.dataset.json);
     dto.enabled = e.target.checked;
     const result = await apiFetch("PUT", `/api/v1/targets/${row.dataset.resolverId}`, dto);
-    if (result.ok) location.reload(); else { e.target.checked = !e.target.checked; showErrors(document.getElementById("watch-errors"), result); }
+    if (result.ok) location.reload(); else { e.target.checked = !e.target.checked; showErrors(errors, result); }
 }));
 
 document.getElementById("upstream-form").addEventListener("submit", async (e) => {
@@ -51,6 +56,10 @@ document.getElementById("name-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = e.target.elements.name.value.trim();
     if (!name) return;
+    if (currentNames().some((n) => n.toLowerCase() === name.toLowerCase())) {
+        showErrors(document.getElementById("name-errors"), { body: { errors: ["That name is already in the list."] } });
+        return;
+    }
     saveLookupNames([...currentNames(), name]);
 });
 document.querySelectorAll("[data-remove-name]").forEach((btn) => btn.addEventListener("click", () =>

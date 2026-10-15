@@ -181,6 +181,12 @@ main.container h5 { font-size: 0.85rem; }
    directly, which beats the ul-level none by inheritance rules — iOS Safari
    paints those phantom squares where desktop browsers happened to hide them. */
 .cw-tree li { padding: 0.1rem 0; list-style: none; }
+/* Name resolution: the troubled check names under the resolver rows, laid
+   out like tree rows (same indent and gap, no bullets). */
+.cw-names { list-style: none; padding-left: 0; margin: 0.2rem 0; }
+.cw-names li { list-style: none; display: flex; align-items: baseline; gap: 10px;
+    padding: 0.1rem 10px; }
+.cw-row .detail, .cw-names .detail { color: var(--muted); font-size: 0.78rem; }
 .cw-row { display: flex; align-items: center; gap: 10px;
     min-height: 33px; padding: 0 10px; border-radius: 5px; }
 .cw-row .addr { font-family: var(--mono); font-size: 0.735rem; color: var(--faint); white-space: nowrap; }

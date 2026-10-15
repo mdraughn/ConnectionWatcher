@@ -24,8 +24,7 @@
         Watch name resolution
     </label>
     <input type="hidden" name="@SettingKeys.DnsEnabled" value="@(Model.Enabled ? "true" : "false")" />
-    <p><small>Off: the resolvers below are kept but not probed, and the verdict never says name lookups are failing.</small></p>
-    <button type="submit">Save</button>
+    <p><small>Off: the resolvers below are kept, their results are ignored, and the verdict never says name lookups are failing.</small></p>
 </form>
 
 <h3>Your resolvers <small>found from your network settings</small></h3>
@@ -41,10 +40,11 @@
     }
     @if (Model.SystemResolvers.Count == 0)
     {
-        <tr><td colspan="3"><i>None found yet — they appear within a minute of the first start.</i></td></tr>
+        <tr><td colspan="3"><i>None found from this machine's network settings.</i></td></tr>
     }
     </tbody>
 </table>
+<ul class="form-errors" id="resolver-errors"></ul>
 
 <h3>Public resolver <small>asked directly, to tell your resolver from everyone's</small></h3>
 <table>
