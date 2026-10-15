@@ -29,6 +29,9 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
     /// <summary>LAN devices for the fallback's "How's my LAN" list (never in the tree).</summary>
     public List<TargetMonitor> LocalMonitors { get; } = new();
 
+    /// <summary>Resolver targets for the fallback's "Name resolution" list (never in the tree).</summary>
+    public List<TargetMonitor> ResolverMonitors { get; } = new();
+
     public async Task<IActionResult> OnGetAsync()
     {
         // First boot: nothing configured yet -> hand the user to the wizard. System-managed
@@ -64,7 +67,10 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
                     continue;
                 }
                 if (monitor.Target.Scope == TargetScope.Resolver)
-                    continue; // name-resolution section comes with a later plan; never a tree root
+                {
+                    ResolverMonitors.Add(monitor); // listed under "Name resolution"; never a tree root
+                    continue;
+                }
                 if (monitor.Target.ParentId is { } parentId && engine.Monitors.ContainsKey(parentId))
                 {
                     if (!Children.TryGetValue(parentId, out var list))

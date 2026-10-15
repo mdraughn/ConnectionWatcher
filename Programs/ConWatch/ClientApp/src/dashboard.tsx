@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { EventStrip } from "./components/EventStrip";
 import { GlitchSection } from "./components/GlitchSection";
 import { LanSection } from "./components/LanSection";
+import { NameResolutionSection } from "./components/NameResolutionSection";
 import { Ledger } from "./components/Ledger";
 import { NotesPanel, acknowledgeWarning } from "./components/NotesPanel";
 import { StatusBar } from "./components/StatusBar";
@@ -124,6 +125,7 @@ function App({ store, topology, initial }: {
       <Tree topology={topology} targets={state.targets.filter(isInternetTarget)} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
       <LanSection targets={state.targets} />
+      <NameResolutionSection dns={state.dns} verdictState={state.verdict?.state ?? null} />
       {initial.admin && (
         <NotesPanel warnings={state.warnings}
           onAcknowledge={(key) => { void acknowledgeWarning(key); }} />
