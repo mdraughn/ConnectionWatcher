@@ -93,9 +93,7 @@ public static class StatusSnapshotBuilder
 
         var summary = ConEngine.Dns.DnsSummary.Compute(engine.DnsWatch, engine.DnsResults);
         StatusResolver Resolver(TargetMonitor m) => new(m.Target.Id, m.Target.Address, m.Target.Name,
-            m.CurrentState.ToString(),
-            engine.DnsResults.Recent(m.Target.Id) is { Count: > 0 } r && !TopologyCoordinator.Answering(m.CurrentState) ? r[^1].Message : null,
-            m.Target.Enabled);
+            m.CurrentState.ToString(), ResolverDetail(m.CurrentState, engine.DnsResults.Recent(m.Target.Id)), m.Target.Enabled);
         // A seeded DnsDown verdict has no blame until the first real classification.
         var blame = engine.Verdict?.Current.Dns is { } b ? new StatusDnsBlame(b.Kind.ToString(), b.Message, b.Resolvers) : null;
         var allRecent = engine.DnsWatch.System.Concat(engine.DnsWatch.Upstream)
@@ -110,5 +108,19 @@ public static class StatusSnapshotBuilder
             engine.DnsWatch.System.Select(Resolver).ToList(), engine.DnsWatch.Upstream.Select(Resolver).ToList(), blame, names);
 
         return new StatusSnapshot(true, verdict, targets, pools, notes, dns);
+    }
+
+    /// <summary>The detail beside a resolver that isn't answering: its most recent failed
+    /// DNS result, so a Down row never reads "Verified" because one later probe got through
+    /// while the state still lags a burst; the newest message when nothing failed; null while
+    /// answering or without samples (spec 2026-10-10 §5.2).</summary>
+    public static string? ResolverDetail(HostState state, IReadOnlyList<ConEngine.Dns.DnsResult> recent)
+    {
+        if (recent.Count == 0 || TopologyCoordinator.Answering(state))
+            return null;
+        for (var i = recent.Count - 1; i >= 0; i--)
+            if (!recent[i].Success)
+                return recent[i].Message;
+        return recent[^1].Message;
     }
 }
