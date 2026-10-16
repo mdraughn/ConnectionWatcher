@@ -67,10 +67,13 @@ public class DohDetectorTests
     }
 
     [Fact]
-    public void Prohibit_policy_switches_off_auto_doh_but_not_a_per_interface_entry()
+    public void Prohibit_policy_switches_off_every_doh_path_including_a_per_interface_entry()
     {
+        // The policy is authoritative for the DNS client: under Prohibit Windows performs no DoH
+        // resolution at all, so a leftover per-interface entry must not raise a false warning.
         Assert.Empty(WindowsDohDetector.Decide(View(policy: 1, auto: 2), ["8.8.8.8"]));
-        Assert.Equal(["10.1.10.1"], WindowsDohDetector.Decide(View(perInterface: ["10.1.10.1"], policy: 1, auto: 2), ["10.1.10.1", "8.8.8.8"]));
+        Assert.Empty(WindowsDohDetector.Decide(View(perInterface: ["10.1.10.1"], policy: 1, auto: 2), ["10.1.10.1", "8.8.8.8"]));
+        Assert.Equal(["10.1.10.1"], WindowsDohDetector.Decide(View(perInterface: ["10.1.10.1"], policy: 2), ["10.1.10.1"]));
     }
 
     [Fact]

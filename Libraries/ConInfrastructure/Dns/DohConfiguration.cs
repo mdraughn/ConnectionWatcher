@@ -53,13 +53,17 @@ public sealed class WindowsDohDetector(Func<DohRegistryView> view) : IDohDetecto
     }
 
     /// <summary>The resolvers the registry view says Windows reaches over DoH, in the
-    /// resolver's own spelling (lower-cased). Require: all of them. Otherwise a per-interface
-    /// entry, or — under Allow or auto-DoH, unless Prohibit — a well-known server.</summary>
+    /// resolver's own spelling (lower-cased). Prohibit: none — the policy is authoritative for
+    /// the DNS client, so a leftover per-interface entry must not raise a false warning.
+    /// Require: all of them. Otherwise a per-interface entry, or — under Allow or auto-DoH —
+    /// a well-known server.</summary>
     public static IReadOnlyList<string> Decide(DohRegistryView view, IEnumerable<string> resolverAddresses)
     {
+        if (view.DohPolicy == 1)
+            return [];
         var perInterface = view.PerInterface.Select(Canonical).ToHashSet();
         var require = view.DohPolicy == 3;
-        var autoForWellKnown = view.DohPolicy != 1 && (view.DohPolicy == 2 || view.EnableAutoDoh == 2);
+        var autoForWellKnown = view.DohPolicy == 2 || view.EnableAutoDoh == 2;
         var wellKnown = BuiltInWellKnown.Concat(view.WellKnown).Select(Canonical).ToHashSet();
         return resolverAddresses
             .Where(a =>

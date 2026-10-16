@@ -24,8 +24,16 @@ document.getElementById("dns-enabled").addEventListener("change", async (e) => {
     const hidden = document.querySelector("#watch-form [name='Dns.Enabled']");
     const previous = hidden.value;
     hidden.value = e.target.checked ? "true" : "false";
-    const result = await apiFetch("PUT", "/api/v1/settings", { "Dns.Enabled": hidden.value });
-    if (result.ok) { location.reload(); return; }
+    e.target.disabled = true; // one save at a time: a second click mid-flight would revert to the wrong side
+    let result;
+    try {
+        result = await apiFetch("PUT", "/api/v1/settings", { "Dns.Enabled": hidden.value });
+    } catch {
+        result = null; // the request itself failed (service restarting, network): treated as a failed save
+    } finally {
+        e.target.disabled = false;
+    }
+    if (result?.ok) { location.reload(); return; }
     hidden.value = previous;
     e.target.checked = previous === "true";
     showErrors(errors, result);
