@@ -3,68 +3,121 @@ using Microsoft.Win32;
 
 namespace ConInfrastructure.NameResolution;
 
-/// <summary>
-/// Windows keeps per-interface DoH settings under
-/// HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\{iface}\DohInterfaceSettings\Doh\{address}
-/// (IPv4 servers) and ...\DohInterfaceSettings\Doh6\{address} (IPv6 servers), each
-/// with a DohFlags value that is non-zero when DoH is on for that server. Best effort:
-/// any error, or a layout we do not recognise, reads as "nothing configured".
-/// </summary>
-public sealed class WindowsDohDetector(Func<IEnumerable<string>> dohAddresses) : IDohDetector
+/// <summary>What the Windows registry says about DoH, read once per evaluation: the per-interface
+/// servers with DoH on, the DNS client policy (DoHPolicy: 1 Prohibit, 2 Allow, 3 Require — the
+/// numeric meanings follow Microsoft's policy reference; the option names are documented, the
+/// DWORD values come from community write-ups), EnableAutoDoh (2 = automatic DoH for well-known
+/// servers) and the admin-added well-known servers.</summary>
+public sealed record DohRegistryView(IReadOnlyList<string> PerInterface, int? DohPolicy, int? EnableAutoDoh, IReadOnlyList<string> WellKnown)
 {
-    private const string Root = @"SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters";
+    public static DohRegistryView Empty { get; } = new([], null, null, []);
+}
+
+/// <summary>
+/// Which of the host's resolvers Windows reaches over DoH (spec 2026-10-10 §4.5). Three sources:
+/// per-interface settings under
+/// HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\{iface}\DohInterfaceSettings\Doh\{address}
+/// (IPv4) and ...\Doh6\{address} (IPv6), each with a DohFlags value that is non-zero when DoH is on;
+/// the DNS client policy DoHPolicy under HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient
+/// (Require counts every resolver, Allow the well-known ones, Prohibit switches the automatic
+/// paths off); and EnableAutoDoh under Dnscache\Parameters, which upgrades well-known public
+/// resolvers (Windows' built-in list plus Dnscache\Parameters\DohWellKnownServers) on its own.
+/// Best effort: any error, or a layout we do not recognise, reads as "nothing configured".
+/// </summary>
+public sealed class WindowsDohDetector(Func<DohRegistryView> view) : IDohDetector
+{
+    private const string InterfaceRoot = @"SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters";
+    private const string ParametersKey = @"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters";
+    private const string PolicyKey = @"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient";
+
+    /// <summary>Windows' own list of DoH-capable public resolvers (Cloudflare, Google, Quad9).</summary>
+    public static readonly IReadOnlyList<string> BuiltInWellKnown =
+    [
+        "1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001",
+        "8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844",
+        "9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9",
+    ];
 
     public WindowsDohDetector() : this(ReadRegistry) { }
 
     public IReadOnlyList<string> AddressesUsingDoh(IEnumerable<string> resolverAddresses)
     {
-        HashSet<string> configured;
         try
         {
-            configured = dohAddresses().Select(Canonical).ToHashSet();
+            return Decide(view(), resolverAddresses);
         }
         catch (Exception)
         {
             return [];
         }
-        return resolverAddresses.Where(a => configured.Contains(Canonical(a)))
+    }
+
+    /// <summary>The resolvers the registry view says Windows reaches over DoH, in the
+    /// resolver's own spelling (lower-cased). Require: all of them. Otherwise a per-interface
+    /// entry, or — under Allow or auto-DoH, unless Prohibit — a well-known server.</summary>
+    public static IReadOnlyList<string> Decide(DohRegistryView view, IEnumerable<string> resolverAddresses)
+    {
+        var perInterface = view.PerInterface.Select(Canonical).ToHashSet();
+        var require = view.DohPolicy == 3;
+        var autoForWellKnown = view.DohPolicy != 1 && (view.DohPolicy == 2 || view.EnableAutoDoh == 2);
+        var wellKnown = BuiltInWellKnown.Concat(view.WellKnown).Select(Canonical).ToHashSet();
+        return resolverAddresses
+            .Where(a =>
+            {
+                var c = Canonical(a);
+                return require || perInterface.Contains(c) || (autoForWellKnown && wellKnown.Contains(c));
+            })
             .Select(a => a.ToLowerInvariant()).Distinct().ToList();
     }
 
-    /// <summary>One spelling per address, so an IPv6 server written in full in the
-    /// registry (Doh6) still matches the compressed form a resolver reports.</summary>
-    private static string Canonical(string address) =>
-        System.Net.IPAddress.TryParse(address, out var ip) ? ip.ToString() : address.ToLowerInvariant();
+    /// <summary>One spelling per address: zone id stripped (a registry key may carry it),
+    /// IPv6 compressed, else lower-cased.</summary>
+    private static string Canonical(string address)
+    {
+        var bare = address.Split('%')[0];
+        return System.Net.IPAddress.TryParse(bare, out var ip) ? ip.ToString() : bare.ToLowerInvariant();
+    }
 
     /// <summary>The addresses whose DohFlags is a non-zero integer (int or long).</summary>
     public static IReadOnlyList<string> AddressesFrom(IEnumerable<(string Iface, string Address, object? Flags)> rows) =>
         rows.Where(r => r.Flags is int i && i != 0 || r.Flags is long l && l != 0)
             .Select(r => r.Address).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-    private static IEnumerable<string> ReadRegistry()
+    private static DohRegistryView ReadRegistry()
     {
         if (!OperatingSystem.IsWindows())
-            return [];
+            return DohRegistryView.Empty;
+
         var rows = new List<(string, string, object?)>();
-        using var root = Registry.LocalMachine.OpenSubKey(Root);
-        if (root is null)
-            return [];
-        foreach (var iface in root.GetSubKeyNames())
+        using (var root = Registry.LocalMachine.OpenSubKey(InterfaceRoot))
         {
-            // Doh holds the IPv4 servers, Doh6 the IPv6 ones; both have the same shape.
-            foreach (var family in (string[])["Doh", "Doh6"])
-            {
-                using var doh = root.OpenSubKey($@"{iface}\DohInterfaceSettings\{family}");
-                if (doh is null)
-                    continue;
-                foreach (var address in doh.GetSubKeyNames())
+            if (root is not null)
+                foreach (var iface in root.GetSubKeyNames())
                 {
-                    using var server = doh.OpenSubKey(address);
-                    rows.Add((iface, address, server?.GetValue("DohFlags")));
+                    // Doh holds the IPv4 servers, Doh6 the IPv6 ones; both have the same shape.
+                    foreach (var family in (string[])["Doh", "Doh6"])
+                    {
+                        using var doh = root.OpenSubKey($@"{iface}\DohInterfaceSettings\{family}");
+                        if (doh is null)
+                            continue;
+                        foreach (var address in doh.GetSubKeyNames())
+                        {
+                            using var server = doh.OpenSubKey(address);
+                            rows.Add((iface, address, server?.GetValue("DohFlags")));
+                        }
+                    }
                 }
-            }
         }
-        return AddressesFrom(rows);
+
+        using var policyKey = Registry.LocalMachine.OpenSubKey(PolicyKey);
+        var policy = policyKey?.GetValue("DoHPolicy") as int?;
+        using var parameters = Registry.LocalMachine.OpenSubKey(ParametersKey);
+        var auto = parameters?.GetValue("EnableAutoDoh") as int?;
+        var wellKnown = new List<string>();
+        using var wk = parameters?.OpenSubKey("DohWellKnownServers");
+        if (wk is not null)
+            wellKnown.AddRange(wk.GetSubKeyNames());
+        return new DohRegistryView(AddressesFrom(rows), policy, auto, wellKnown);
     }
 }
 
