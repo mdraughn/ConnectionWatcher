@@ -16,13 +16,21 @@ function currentNames() {
     return [...document.querySelectorAll("#name-list li")].map((li) => li.dataset.name);
 }
 
-// The Watch switch saves on change, like the resolver switches: the submit
-// handler wireSettingsForm installs does the PUT, then reloads or shows errors.
-wireSettingsForm("watch-form", "watch-errors");
-document.getElementById("dns-enabled").addEventListener("change", (e) => {
-    document.querySelector("#watch-form [name='Dns.Enabled']").value = e.target.checked ? "true" : "false";
-    document.getElementById("watch-form").requestSubmit();
+// The Watch switch saves on change, like the resolver switches. A failed save puts the
+// switch back where it was and shows why; a successful one reloads the page.
+document.getElementById("dns-enabled").addEventListener("change", async (e) => {
+    const errors = document.getElementById("watch-errors");
+    clearErrors(errors);
+    const hidden = document.querySelector("#watch-form [name='Dns.Enabled']");
+    const previous = hidden.value;
+    hidden.value = e.target.checked ? "true" : "false";
+    const result = await apiFetch("PUT", "/api/v1/settings", { "Dns.Enabled": hidden.value });
+    if (result.ok) { location.reload(); return; }
+    hidden.value = previous;
+    e.target.checked = previous === "true";
+    showErrors(errors, result);
 });
+document.getElementById("watch-form").addEventListener("submit", (e) => e.preventDefault());
 
 document.querySelectorAll("[data-toggle-resolver]").forEach((box) => box.addEventListener("change", async (e) => {
     const errors = document.getElementById("resolver-errors");
