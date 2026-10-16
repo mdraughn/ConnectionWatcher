@@ -13,30 +13,38 @@ namespace ConPersistence.Recording;
 /// stays pending and is retried on a timer, not on the next event.
 /// </summary>
 /// <typeparam name="TEvent">The engine event being persisted.</typeparam>
-public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, int batchSize = 500,
-    TimeSpan? retryDelay = null) : BackgroundService, IEngineObserver
+public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserver
 {
-    // DropOldest is the right policy for transitions: the NEWEST row per subject
-    // is what warm start seeds from, so under a long database outage the recent
-    // past matters more than the distant. TryWrite never reports the eviction
-    // (it returns false only for a completed channel), so the drop is logged here.
-    private readonly Channel<TEvent> _channel = Channel.CreateBounded<TEvent>(
-        new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest },
-        // A field initializer cannot touch instance members (no `this` yet), so
-        // the message names the event's CLR type rather than EventNoun.
-        dropped =>
-        {
-            if (Volatile.Read(ref _dropThrottle).ShouldLog(TimeProvider.System.GetUtcNow(), out var suppressed))
-                log.LogWarning("{Kind} channel full; dropped {Event} ({Suppressed} more drops since the last line)",
-                    typeof(TEvent).Name, dropped, suppressed);
-        });
-    // A static in a generic class is per closed type: one throttle per event kind.
-    private static LogThrottle _dropThrottle = new(TimeSpan.FromMinutes(1));
-
-    /// <summary>Forgets what the drop throttle has logged, so a test sees its own first line.</summary>
-    protected static void ResetDropThrottle() => Volatile.Write(ref _dropThrottle, new LogThrottle(TimeSpan.FromMinutes(1)));
+    private readonly ILogger _log;
+    private readonly int _batchSize;
+    private readonly LogThrottle _dropThrottle = new(TimeSpan.FromMinutes(1));
+    private readonly Channel<TEvent> _channel;
     private readonly SemaphoreSlim _flushLock = new(1, 1);
-    private readonly TimeSpan _retryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _retryDelay;
+
+    protected ChannelRecorder(ILogger log, int capacity = 1000, int batchSize = 500,
+        TimeSpan? retryDelay = null)
+    {
+        _log = log;
+        _batchSize = batchSize;
+        _retryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
+        // DropOldest is the right policy for transitions: the NEWEST row per subject
+        // is what warm start seeds from, so under a long database outage the recent
+        // past matters more than the distant. TryWrite never reports the eviction
+        // (it returns false only for a completed channel), so the drop is logged here,
+        // throttled so a sustained outage logs a line a minute, not one per drop.
+        // The message names the event's CLR type rather than EventNoun (abstract,
+        // and not safe to call from a constructor).
+        _channel = Channel.CreateBounded<TEvent>(
+            new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest },
+            dropped =>
+            {
+                if (_dropThrottle.ShouldLog(TimeProvider.System.GetUtcNow(), out var suppressed))
+                    _log.LogWarning("{Kind} channel full; dropped {Event} ({Suppressed} more drops since the last line)",
+                        typeof(TEvent).Name, dropped, suppressed);
+            });
+    }
+
     private List<TEvent>? _pending; // a batch whose write failed; retried first
     private IDisposable? _subscription;
 
@@ -55,7 +63,7 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
         _subscription?.Dispose();
         _subscription = source.Subscribe(
             e => _channel.Writer.TryWrite(e),
-            ex => log.LogError(ex, "{Noun} stream error", EventNoun));
+            ex => _log.LogError(ex, "{Noun} stream error", EventNoun));
     }
 
     public void Attach(WatcherEngine engine) => Attach(SourceOf(engine));
@@ -83,7 +91,7 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
-                    log.LogError(ex, "Failed writing {Noun}; retrying in {Delay}", EventNoun, _retryDelay);
+                    _log.LogError(ex, "Failed writing {Noun}; retrying in {Delay}", EventNoun, _retryDelay);
                     await Task.Delay(_retryDelay, stoppingToken).ConfigureAwait(false);
                 }
             }
@@ -92,7 +100,7 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
         {
             // Shutdown: drain what's left without a token.
             try { await FlushAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch (Exception ex) { log.LogWarning(ex, "Final {Noun} flush failed", EventNoun); }
+            catch (Exception ex) { _log.LogWarning(ex, "Final {Noun} flush failed", EventNoun); }
         }
     }
 
@@ -109,7 +117,7 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
             while (true)
             {
                 var batch = _pending ?? new List<TEvent>();
-                while (batch.Count < batchSize && _channel.Reader.TryRead(out var e))
+                while (batch.Count < _batchSize && _channel.Reader.TryRead(out var e))
                     batch.Add(e);
                 if (batch.Count == 0)
                     return;
@@ -117,9 +125,9 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
                 _pending = batch;
                 await WriteBatchAsync(batch, ct).ConfigureAwait(false);
                 _pending = null;
-                log.LogDebug("Recorded {Count} {Noun}", batch.Count, EventNoun);
+                _log.LogDebug("Recorded {Count} {Noun}", batch.Count, EventNoun);
 
-                if (batch.Count < batchSize)
+                if (batch.Count < _batchSize)
                     return; // the channel is empty; a full batch means there may be more
             }
         }
