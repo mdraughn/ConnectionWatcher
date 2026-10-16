@@ -159,12 +159,13 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
             // The dns summary can change with no transition (Filtered comes from the result log),
             // so a tick re-checks it; the handler publishes only when something moved.
+            var tickToken = tickCts.Token;
             _ = Task.Run(async () =>
             {
                 using var timer = new PeriodicTimer(DnsRefreshInterval);
                 try
                 {
-                    while (await timer.WaitForNextTickAsync(tickCts.Token).ConfigureAwait(false))
+                    while (await timer.WaitForNextTickAsync(tickToken).ConfigureAwait(false))
                         _inbox.Tick();
                 }
                 catch (OperationCanceledException)
@@ -342,13 +343,16 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         if (_topics is null)
             return;
         var next = DnsPublication.From(engine);
-        if (onlyIfChanged && next == _lastDns)
+        if (!ShouldPublishDns(_lastDns, next, onlyIfChanged))
             return; // retained topics must not churn when nothing moved
         await PublishAsync(client, _topics.DnsAvailability, next.Availability, retain: true, ct);
         await PublishAsync(client, _topics.DnsState, next.State, retain: true, ct);
         await PublishAsync(client, _topics.DnsAttributes, next.Attributes, retain: true, ct);
         _lastDns = next;
     }
+
+    /// <summary>A tick publishes the name-resolution sensor only when it changed; a full publish always does.</summary>
+    public static bool ShouldPublishDns(DnsPublication? last, DnsPublication next, bool onlyIfChanged) => !onlyIfChanged || next != last;
 
     private static Task PublishAsync(IMqttClient client, string topic, string payload, bool retain, CancellationToken ct) =>
         client.PublishAsync(new MqttApplicationMessageBuilder()

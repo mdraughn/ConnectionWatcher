@@ -137,9 +137,11 @@ State topics are retained under the base topic (default `conwatch/…`), with a
 last-will `availability` topic so entities show *unavailable* if ConWatch
 stops. A target named *Internet* or *DNS* gets a suffixed entity (`internet_2`,
 `dns_2`) so it cannot overwrite the fixed sensors; after upgrading, delete the
-old entity in Home Assistant if one lingers. Every transition is also published as JSON to `conwatch/transitions`
-for automations that want the raw events. Publishes happen only on state
-changes and reconnects — never per ping.
+old entity in Home Assistant if one lingers. Every transition is also published
+as JSON to `conwatch/transitions` for automations that want the raw events.
+Publishes happen only on state changes and reconnects, plus a once-a-minute
+re-check of the name-resolution sensor that publishes only when it changed —
+never per ping.
 
 **Heartbeat** — point `Heartbeat.Url` at a dead-man's-switch service
 (healthchecks.io or self-hosted) and ConnectionWatcher GETs it every few

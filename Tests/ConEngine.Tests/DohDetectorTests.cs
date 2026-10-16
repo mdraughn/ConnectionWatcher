@@ -81,4 +81,13 @@ public class DohDetectorTests
     {
         Assert.Equal(["fe80::1"], WindowsDohDetector.Decide(View(perInterface: ["fe80::1%12"]), ["fe80::1"]));
     }
+
+    [Fact]
+    public void Registry_integers_are_read_from_DWORD_and_QWORD_and_nothing_else()
+    {
+        Assert.Equal(2, WindowsDohDetector.AsInt(2));
+        Assert.Equal(3, WindowsDohDetector.AsInt(3L));
+        Assert.Null(WindowsDohDetector.AsInt("2"));
+        Assert.Null(WindowsDohDetector.AsInt(null));
+    }
 }

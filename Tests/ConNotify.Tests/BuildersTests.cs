@@ -298,4 +298,14 @@ public class DnsPublicationTests
         Assert.Equal(a, same);
         Assert.NotEqual(a, filtered);
     }
+
+    [Fact]
+    public void The_tick_skips_only_an_unchanged_publication_and_a_full_publish_never_skips()
+    {
+        var a = new DnsPublication("online", "ON", "{\"state\":\"Ok\"}");
+        Assert.True(MqttNotifier.ShouldPublishDns(null, a, onlyIfChanged: true));   // first of a session
+        Assert.False(MqttNotifier.ShouldPublishDns(a, a with { }, onlyIfChanged: true));
+        Assert.True(MqttNotifier.ShouldPublishDns(a, a with { State = "OFF" }, onlyIfChanged: true));
+        Assert.True(MqttNotifier.ShouldPublishDns(a, a with { }, onlyIfChanged: false));
+    }
 }

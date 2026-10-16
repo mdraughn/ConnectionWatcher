@@ -82,6 +82,9 @@ public sealed class WindowsDohDetector(Func<DohRegistryView> view) : IDohDetecto
         return System.Net.IPAddress.TryParse(bare, out var ip) ? ip.ToString() : bare.ToLowerInvariant();
     }
 
+    /// <summary>A registry integer read: a DWORD (int) or QWORD (long); anything else is not one.</summary>
+    public static int? AsInt(object? value) => value switch { int i => i, long l => (int)l, _ => null };
+
     /// <summary>The addresses whose DohFlags is a non-zero integer (int or long).</summary>
     public static IReadOnlyList<string> AddressesFrom(IEnumerable<(string Iface, string Address, object? Flags)> rows) =>
         rows.Where(r => r.Flags is int i && i != 0 || r.Flags is long l && l != 0)
@@ -114,9 +117,9 @@ public sealed class WindowsDohDetector(Func<DohRegistryView> view) : IDohDetecto
         }
 
         using var policyKey = Registry.LocalMachine.OpenSubKey(PolicyKey);
-        var policy = policyKey?.GetValue("DoHPolicy") as int?;
+        var policy = AsInt(policyKey?.GetValue("DoHPolicy"));
         using var parameters = Registry.LocalMachine.OpenSubKey(ParametersKey);
-        var auto = parameters?.GetValue("EnableAutoDoh") as int?;
+        var auto = AsInt(parameters?.GetValue("EnableAutoDoh"));
         var wellKnown = new List<string>();
         using var wk = parameters?.OpenSubKey("DohWellKnownServers");
         if (wk is not null)
