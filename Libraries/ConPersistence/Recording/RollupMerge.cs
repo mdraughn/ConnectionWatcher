@@ -28,7 +28,7 @@ public static class RollupMerge
         target.SuccessCount = totalSuccess;
     }
 
-    public static RollupRow ToRow(RollupBucket bucket, string resolution = "Minute") => new()
+    public static RollupRow ToRow(RollupBucket bucket, string resolution = RollupResolution.Minute) => new()
     {
         TargetId = bucket.TargetId,
         PeriodStartUtc = bucket.PeriodStartUtc,

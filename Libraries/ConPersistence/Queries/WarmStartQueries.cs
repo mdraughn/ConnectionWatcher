@@ -19,7 +19,7 @@ public static class WarmStartQueries
             .Select(t => (DateTime?)t.TimestampUtc)
             .FirstOrDefaultAsync();
         var lastRollupStart = await db.Rollups.AsNoTracking()
-            .Where(r => r.Resolution == "Minute")
+            .Where(r => r.Resolution == RollupResolution.Minute)
             .OrderByDescending(r => r.PeriodStartUtc)
             .Select(r => (DateTime?)r.PeriodStartUtc)
             .FirstOrDefaultAsync();

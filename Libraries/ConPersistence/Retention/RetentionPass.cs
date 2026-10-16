@@ -22,9 +22,9 @@ public class RetentionPass(ILogger log)
         RetentionWindows windows, CancellationToken ct)
     {
         int converted = 0;
-        converted += await DownsampleAsync(db, "Minute", "Hour",
+        converted += await DownsampleAsync(db, RollupResolution.Minute, RollupResolution.Hour,
             nowUtc.AddDays(-windows.MinuteDays), TruncateToHour, ct);
-        converted += await DownsampleAsync(db, "Hour", "Day",
+        converted += await DownsampleAsync(db, RollupResolution.Hour, RollupResolution.Day,
             nowUtc.AddMonths(-windows.HourlyMonths), TruncateToDay, ct);
 
         // Glitches are fine-grained events; they age out with the minute data.

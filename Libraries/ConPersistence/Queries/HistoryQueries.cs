@@ -51,17 +51,17 @@ public static class HistoryQueries
         {
             return requested.ToLowerInvariant() switch
             {
-                "minute" => "Minute",
-                "hour" => "Hour",
-                "day" => "Day",
+                "minute" => RollupResolution.Minute,
+                "hour" => RollupResolution.Hour,
+                "day" => RollupResolution.Day,
                 _ => throw new ArgumentException($"Unknown resolution '{requested}'."),
             };
         }
         if (fromUtc >= nowUtc.AddDays(-options.MinuteRetentionDays))
-            return "Minute";
+            return RollupResolution.Minute;
         if (fromUtc >= nowUtc.AddMonths(-options.HourlyRetentionMonths))
-            return "Hour";
-        return "Day";
+            return RollupResolution.Hour;
+        return RollupResolution.Day;
     }
 
     /// <summary>Rollup points for one target in ascending period order.</summary>

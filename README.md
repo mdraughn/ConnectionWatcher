@@ -404,6 +404,10 @@ dotnet run --project Programs/ConWatch
 - The SQLite database lives at `data/conwatch.db` (relative to the working
   directory; configurable via `Persistence:DbPath`). Schema migrations apply
   automatically at startup.
+- Migrations: `dotnet ef migrations add <Name> --project Libraries/ConPersistence` — the
+  library carries its own design-time factory, so no startup project is needed
+  (passing `--startup-project Programs/ConWatch` fails because the design package
+  is private to the library).
 - Configuration (targets, profiles, pools) lives **in the database** and is
   edited through the REST API under `/api/v1` — Swagger UI at `/swagger` in
   Development. On first boot, a `Watcher` section in appsettings.json (if

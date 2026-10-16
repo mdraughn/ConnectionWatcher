@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using ConCore.Logging;
 using ConEngine;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -23,7 +24,17 @@ public abstract class ChannelRecorder<TEvent>(ILogger log, int capacity = 1000, 
         new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest },
         // A field initializer cannot touch instance members (no `this` yet), so
         // the message names the event's CLR type rather than EventNoun.
-        dropped => log.LogWarning("{Kind} channel full; dropped {Event}", typeof(TEvent).Name, dropped));
+        dropped =>
+        {
+            if (Volatile.Read(ref _dropThrottle).ShouldLog(TimeProvider.System.GetUtcNow(), out var suppressed))
+                log.LogWarning("{Kind} channel full; dropped {Event} ({Suppressed} more drops since the last line)",
+                    typeof(TEvent).Name, dropped, suppressed);
+        });
+    // A static in a generic class is per closed type: one throttle per event kind.
+    private static LogThrottle _dropThrottle = new(TimeSpan.FromMinutes(1));
+
+    /// <summary>Forgets what the drop throttle has logged, so a test sees its own first line.</summary>
+    protected static void ResetDropThrottle() => Volatile.Write(ref _dropThrottle, new LogThrottle(TimeSpan.FromMinutes(1)));
     private readonly SemaphoreSlim _flushLock = new(1, 1);
     private readonly TimeSpan _retryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
     private List<TEvent>? _pending; // a batch whose write failed; retried first

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
+using ConCore.Logging;
 using ConCore.Targets;
 using ConEngine.Configuration;
 using ConEngine.Events;
@@ -22,6 +23,7 @@ namespace ConEngine;
 public class WatcherEngine
 {
     private readonly TimeProvider _timeProvider;
+    private readonly LogThrottle _subscriberErrors = new(TimeSpan.FromMinutes(1));
     private readonly IPingTransceiverFactory _pingFactory;
     private readonly IDomainNameResolverFactory _resolverFactory;
     private readonly ILoggerFactory _loggerFactory;
@@ -315,8 +317,9 @@ public class WatcherEngine
                         // Host observers ride this stream; one of them throwing must
                         // not starve suspicion or the stall stamp — including when
                         // it throws a cancellation of its own, which is not ours.
-                        _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed",
-                            monitor.Target.Name);
+                        if (_subscriberErrors.ShouldLog(_timeProvider.GetUtcNow(), out var suppressed))
+                            _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed ({Suppressed} more since the last line)",
+                                monitor.Target.Name, suppressed);
                     }
                     // Local and Resolver targets are tracked on the side: no
                     // suspicion bursts, corroboration sweeps, glitch episodes

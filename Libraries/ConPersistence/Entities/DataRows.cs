@@ -43,7 +43,7 @@ public class RollupRow
     public long Id { get; set; }
     public Guid TargetId { get; set; }
     public DateTime PeriodStartUtc { get; set; }
-    public string Resolution { get; set; } = "Minute";
+    public string Resolution { get; set; } = RollupResolution.Minute;
     public int PingCount { get; set; }
     public int SuccessCount { get; set; }
     public double RttAvg { get; set; }

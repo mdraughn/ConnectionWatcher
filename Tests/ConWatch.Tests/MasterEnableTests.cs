@@ -158,9 +158,10 @@ public class MasterEnableTests : IDisposable
 
         var off = await _client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false });
         Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
-        await Task.Delay(500); // a second, debounced rebuild would land in here
+        await ConfigApiTests.Eventually(() => Task.FromResult(host.RebuildCount >= before + 1));
 
-        Assert.Equal(before + 1, host.RebuildCount);
+        // A second, debounced rebuild would land in the settled window.
+        Assert.Equal(before + 1, await SettledRebuildCountAsync(host));
     }
 
     [Fact]

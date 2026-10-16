@@ -328,6 +328,7 @@ public class RecorderCollectorTests : IDisposable
     {
         private int _writes;
         public int Writes => _writes;
+        public static void ResetThrottle() => ResetDropThrottle();
         protected override string EventNoun => "test events";
         protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
         protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
@@ -378,6 +379,7 @@ public class RecorderCollectorTests : IDisposable
 
     private sealed class LoggedRecorder(ILogger log, int capacity) : ChannelRecorder<TargetTransition>(log, capacity)
     {
+        public static void ResetThrottle() => ResetDropThrottle();
         protected override string EventNoun => "test events";
         protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
         protected override Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct) => Task.CompletedTask;
@@ -386,6 +388,7 @@ public class RecorderCollectorTests : IDisposable
     [Fact]
     public void An_evicted_event_is_logged_as_a_warning()
     {
+        LoggedRecorder.ResetThrottle(); // the drop throttle is static per event type
         var log = new CapturingLogger();
         var recorder = new LoggedRecorder(log, capacity: 2);
         using var source = new Subject<TargetTransition>();
@@ -397,5 +400,20 @@ public class RecorderCollectorTests : IDisposable
         var warning = Assert.Single(log.Entries, e => e.Level == LogLevel.Warning);
         Assert.Contains("channel full", warning.Message);
         Assert.Contains("First", warning.Message);
+    }
+
+    [Fact]
+    public void Many_drops_log_one_channel_full_warning_not_one_per_drop()
+    {
+        LoggedRecorder.ResetThrottle(); // the drop throttle is static per event type
+        var log = new CapturingLogger();
+        var recorder = new LoggedRecorder(log, capacity: 2);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        for (var i = 0; i < 10; i++)
+            source.OnNext(Transition(TransitionSubjectKind.Target, $"T{i}", HostState.Down));
+
+        lock (log.Entries)
+            Assert.Single(log.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("channel full"));
     }
 }

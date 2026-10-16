@@ -1,3 +1,4 @@
+using ConPersistence.Entities;
 using ConCore;
 using ConEngine;
 using ConEngine.Tracking;
@@ -119,7 +120,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
             var earliest = merged.Min(b => b.PeriodStartUtc);
             var targetIds = merged.Select(b => b.TargetId).Distinct().ToList();
             var existing = await db.Rollups
-                .Where(r => r.Resolution == "Minute" && r.PeriodStartUtc >= earliest && targetIds.Contains(r.TargetId))
+                .Where(r => r.Resolution == RollupResolution.Minute && r.PeriodStartUtc >= earliest && targetIds.Contains(r.TargetId))
                 .ToListAsync(ct).ConfigureAwait(false);
             var byKey = existing.ToDictionary(r => (r.TargetId, r.PeriodStartUtc));
             foreach (var bucket in merged)

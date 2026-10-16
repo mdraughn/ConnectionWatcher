@@ -1,5 +1,6 @@
 using ConEngine.Configuration;
 using ConEngine.Tests.Fakes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConEngine.Tests;
@@ -23,8 +24,9 @@ public class PingPumpResilienceTests
     [Fact]
     public async Task A_throwing_sample_subscriber_does_not_stop_the_pump()
     {
+        var logs = new CapturingLoggerFactory();
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new FakeDomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new FakeDomainNameResolverFactory(), logs,
             Microsoft.Extensions.Options.Options.Create(OneTarget()));
         int delivered = 0;
         int thrown = 0;
@@ -52,6 +54,10 @@ public class PingPumpResilienceTests
             // 2-core CI runner.
             var stampAfterThrow = engine.LastResultUtc;
             await Eventually(() => engine.LastResultUtc > stampAfterThrow);
+            // Several samples threw; the repeat is throttled to one line.
+            Assert.True(Volatile.Read(ref thrown) >= 2);
+            lock (logs.Entries)
+                Assert.Single(logs.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("subscriber threw"));
         }
         finally
         {
