@@ -35,7 +35,9 @@ function wireSettingsForm(formId, errorsId) {
         clearErrors(errors);
         const values = {};
         for (const field of e.target.querySelectorAll("[name]"))
-            values[field.name] = field.value === "" ? null : field.value;
+            values[field.name] = field.type === "checkbox"
+                ? (field.checked ? "true" : "false")
+                : field.value === "" ? null : field.value;
         const result = await apiFetch("PUT", "/api/v1/settings", values);
         if (result.ok) location.reload();
         else showErrors(errors, result);
