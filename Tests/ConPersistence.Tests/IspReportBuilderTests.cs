@@ -288,4 +288,25 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(TimeSpan.FromMinutes(5), report.LinkDownTime);
         Assert.DoesNotContain(report.Episodes, e => e.Kind == "DnsDown");
     }
+
+    [Fact]
+    public async Task A_deleted_targets_glitches_are_not_the_ISPs_but_Internet_class_ones_are()
+    {
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.Glitches.AddRange(
+                new GlitchRow { TargetId = _googleId, TargetName = "Google", Class = 0,
+                    StartUtc = From.AddHours(3), EndUtc = From.AddHours(3.01), LostCount = 2, SampleCount = 8 },
+                new GlitchRow { TargetId = Guid.NewGuid(), TargetName = "Gone", Class = 0, // no longer configured
+                    StartUtc = From.AddHours(4), EndUtc = From.AddHours(4.01), LostCount = 2, SampleCount = 8 },
+                new GlitchRow { TargetId = Guid.NewGuid(), TargetName = "Internet", Class = 1, // verdict subject id
+                    StartUtc = From.AddHours(5), EndUtc = From.AddHours(5.01), LostCount = 2, SampleCount = 8 });
+            await db.SaveChangesAsync();
+        }
+
+        var report = await _builder.BuildAsync(From, To);
+
+        Assert.Equal(2, report.Glitches.TotalCount);
+        Assert.Equal(1, report.Glitches.InternetCount);
+    }
 }

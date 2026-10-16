@@ -74,4 +74,24 @@ public class HistoryScopeApiTests : IDisposable
         foreach (var scope in new[] { "all", "internet", "local" })
             Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync($"/api/v1/glitches?scope={scope}")).StatusCode);
     }
+
+    [Fact]
+    public async Task A_deleted_target_is_Unknown_under_all_and_off_both_filters() // Review Focus 1, 2
+    {
+        await SeedWithLocalNasAsync();
+        var targets = await GetJson("/api/v1/targets");
+        var nasId = targets.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "NAS").GetProperty("id").GetString();
+        (await _client.DeleteAsync($"/api/v1/targets/{nasId}")).EnsureSuccessStatusCode();
+
+        var all = (await GetJson("/api/v1/transitions?limit=200")).GetProperty("items").EnumerateArray().ToList();
+        var nas = all.Where(i => i.GetProperty("subjectName").GetString() == "NAS").ToList();
+        Assert.NotEmpty(nas);
+        Assert.All(nas, i => Assert.Equal("Unknown", i.GetProperty("scope").GetString()));
+        var local = (await GetJson("/api/v1/transitions?scope=local&limit=200")).GetProperty("items").EnumerateArray();
+        Assert.DoesNotContain(local, i => i.GetProperty("subjectName").GetString() == "NAS");
+        var internet = (await GetJson("/api/v1/transitions?scope=internet&limit=200")).GetProperty("items").EnumerateArray().ToList();
+        Assert.DoesNotContain(internet, i => i.GetProperty("subjectName").GetString() == "NAS");
+        Assert.All(internet, i => Assert.NotEqual("Unknown", i.GetProperty("scope").GetString()));
+        Assert.Contains(internet, i => i.GetProperty("subjectName").GetString() == "Router"); // live targets unaffected
+    }
 }

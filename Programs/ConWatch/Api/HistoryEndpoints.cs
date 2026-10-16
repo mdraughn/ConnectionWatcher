@@ -24,7 +24,8 @@ public static class HistoryEndpoints
                 fromUtc, toUtc, limit, before, subjectName, scopeFilter);
             var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
             var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
-            var items = rows.Select(r => TransitionDto.From(r, localIds, resolverIds)).ToList();
+            var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
+            var items = rows.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds)).ToList();
             long? nextBefore = rows.Count == Math.Clamp(limit, 1, 1000) ? rows.Last().Id : null;
             return Results.Ok(new { Items = items, NextBefore = nextBefore });
         });

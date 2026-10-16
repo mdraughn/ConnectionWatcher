@@ -41,10 +41,10 @@ public sealed record TransitionDto
     public string? Detail { get; init; }
     public string? Verdict { get; init; }
     public float AvgRtt { get; init; }
-    /// <summary>"Verdict", "Local" or "Resolver" on history rows (REST /transitions, MCP get_transitions);
-    /// omitted on live messages, whose subscribers know their targets.</summary>
+    /// <summary>"Verdict", "Local", "Resolver" or "Unknown" (a target since deleted) on history rows
+    /// (REST /transitions, MCP get_transitions); omitted on live messages, whose subscribers know their targets.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public TargetScope? Scope { get; init; }
+    public string? Scope { get; init; }
     /// <summary>Present only on a DnsDown verdict transition (live messages); history rows do not keep it.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TransitionDnsBlame? Dns { get; init; }
@@ -89,16 +89,7 @@ public sealed record TransitionDto
         AvgRtt = r.AvgRtt,
     };
 
-    /// <summary>A history row tagged with its subject's current scope; pools, the verdict
-    /// and since-deleted targets read as <see cref="TargetScope.Verdict"/>.</summary>
-    public static TransitionDto From(TransitionRow r, ISet<Guid> localIds) =>
-        From(r, localIds, new HashSet<Guid>());
-
-    /// <summary>As above, also tagging <see cref="TargetScope.Resolver"/> subjects.</summary>
-    public static TransitionDto From(TransitionRow r, ISet<Guid> localIds, ISet<Guid> resolverIds) => From(r) with
-    {
-        Scope = localIds.Contains(r.SubjectId) ? TargetScope.Local
-            : resolverIds.Contains(r.SubjectId) ? TargetScope.Resolver
-            : TargetScope.Verdict,
-    };
+    /// <summary>A history row tagged with its subject's current scope (see <see cref="HistoryQueries.ScopeOf"/>).</summary>
+    public static TransitionDto From(TransitionRow r, ISet<Guid> localIds, ISet<Guid> resolverIds, ISet<Guid> knownIds) =>
+        From(r) with { Scope = HistoryQueries.ScopeOf(r.SubjectId, r.SubjectKind, localIds, resolverIds, knownIds) };
 }

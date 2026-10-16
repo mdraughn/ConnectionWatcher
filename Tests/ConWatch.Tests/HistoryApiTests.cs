@@ -162,7 +162,7 @@ public class HistoryApiTests : IDisposable
         var body = await GetJson("/api/v1/transitions?limit=1");
 
         Assert.Equal(
-            $$"""{"id":{{id}},"timestamp":"2026-09-18T10:00:00.123+00:00","subjectId":"11111111-1111-1111-1111-111111111111","subjectName":"Router","subjectKind":"Target","from":"Responding","to":"Down","trigger":"ThresholdCrossed","successRate":0.1,"sampleSize":10,"burstLossRate":null,"ancestorId":null,"detail":null,"verdict":null,"avgRtt":12.5,"scope":"Verdict"}""",
+            $$"""{"id":{{id}},"timestamp":"2026-09-18T10:00:00.123+00:00","subjectId":"11111111-1111-1111-1111-111111111111","subjectName":"Router","subjectKind":"Target","from":"Responding","to":"Down","trigger":"ThresholdCrossed","successRate":0.1,"sampleSize":10,"burstLossRate":null,"ancestorId":null,"detail":null,"verdict":null,"avgRtt":12.5,"scope":"Unknown"}""",
             body.GetProperty("items")[0].GetRawText());
     }
 }

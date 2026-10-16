@@ -108,7 +108,8 @@ public class ConWatchMcpTools(WatcherHostService host,
             Math.Clamp(limit, 1, 500), before: null, subjectName, scopeFilter);
         var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
         var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
-        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, localIds, resolverIds)), Json);
+        var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
+        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds)), Json);
     }
 
     [McpServerTool(Name = "get_glitches", ReadOnly = true)]
@@ -131,6 +132,8 @@ public class ConWatchMcpTools(WatcherHostService host,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
             Math.Clamp(limit, 1, 500), scopeFilter);
         var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
+        var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
+        var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
         return JsonSerializer.Serialize(rows.Select(g => new
         {
             StartUtc = g.StartUtc,
@@ -138,7 +141,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             g.TargetName,
             @class = g.Class == 1 ? "Internet" : "Target",
             g.LostCount, g.SampleCount, g.Detail,
-            Scope = localIds.Contains(g.TargetId) ? "Local" : "Verdict",
+            Scope = HistoryQueries.ScopeOf(g.TargetId, g.Class == 1 ? "Verdict" : "Target", localIds, resolverIds, knownIds),
         }), Json);
     }
 

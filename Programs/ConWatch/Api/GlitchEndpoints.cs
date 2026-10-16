@@ -20,6 +20,8 @@ public static class GlitchEndpoints
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.GlitchesAsync(db, targetId, fromUtc, toUtc, limit, scopeFilter);
             var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
+            var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
+            var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
 
             return Results.Ok(new
             {
@@ -30,7 +32,7 @@ public static class GlitchEndpoints
                     StartUtc = new DateTimeOffset(g.StartUtc),
                     EndUtc = new DateTimeOffset(g.EndUtc),
                     g.LostCount, g.SampleCount, g.Detail,
-                    Scope = localIds.Contains(g.TargetId) ? "Local" : "Verdict",
+                    Scope = HistoryQueries.ScopeOf(g.TargetId, g.Class == 1 ? "Verdict" : "Target", localIds, resolverIds, knownIds),
                 }).ToList(),
             });
         });

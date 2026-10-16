@@ -136,10 +136,11 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
         var local = await HistoryQueries.TransitionsAsync(db, null, null, null, 100, null, null, ScopeFilter.Local);
         var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
         var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
+        var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
 
-        var tagged = internet.Select(r => TransitionDto.From(r, localIds, resolverIds))
+        var tagged = internet.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds))
             .Single(d => d.SubjectName == "Resolver");
-        Assert.Equal(TargetScope.Resolver, tagged.Scope);
+        Assert.Equal("Resolver", tagged.Scope);
         Assert.DoesNotContain(local, r => r.SubjectName == "Resolver");
     }
 }

@@ -263,7 +263,9 @@ Grafana state-timeline panel), per-target `conwatch_target_up`,
 `conwatch_target_loss_ratio` (packet loss, 0..1) and
 `conwatch_target_rtt_seconds`, `conwatch_pool_up`, plus
 `conwatch_transitions_total` and `conwatch_glitches_total` counters for
-`rate()` panels. Useful starters:
+`rate()` panels. Per-target series of Local-scope targets carry
+`scope="local"`, so a dashboard can leave LAN devices out
+(`conwatch_target_up{scope!="local"}`) or chart them alone. Useful starters:
 
 ```promql
 conwatch_target_rtt_seconds * 1000            # per-target latency in ms

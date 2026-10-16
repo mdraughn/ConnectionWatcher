@@ -57,13 +57,13 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
     private static async Task<GlitchSummary> BuildGlitchSummaryAsync(
         ConWatchDbContext db, DateTime fromUtc, DateTime toUtc)
     {
-        // Local targets (including ones switched from Verdict, whose old glitches remain)
-        // are not ISP evidence. Internet-class glitches carry the verdict subject id,
-        // which is not in Targets, so they are kept.
-        var localIds = await db.Targets.AsNoTracking()
-            .Where(t => t.Scope == TargetScope.Local).Select(t => t.Id).ToListAsync();
+        // Only glitches of targets that are internet evidence today count: current Verdict-scope
+        // targets, plus Internet-class glitches (they carry the verdict subject id, which is not
+        // a target). A deleted or Local target's old glitches are not the ISP's.
+        var verdictIds = await db.Targets.AsNoTracking()
+            .Where(t => t.Scope == TargetScope.Verdict).Select(t => t.Id).ToListAsync();
         var glitches = await db.Glitches.AsNoTracking()
-            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc && !localIds.Contains(g.TargetId))
+            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc && (g.Class == 1 || verdictIds.Contains(g.TargetId)))
             .ToListAsync();
 
         var topHours = glitches
