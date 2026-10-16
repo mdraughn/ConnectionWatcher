@@ -33,14 +33,13 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
         // past matters more than the distant. TryWrite never reports the eviction
         // (it returns false only for a completed channel), so the drop is logged here,
         // throttled so a sustained outage logs a line a minute, not one per drop.
-        // The message names the event's CLR type rather than EventNoun (abstract,
-        // and not safe to call from a constructor).
+        // The message names the event's CLR type, for brevity.
         _channel = Channel.CreateBounded<TEvent>(
             new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest },
             dropped =>
             {
                 if (_dropThrottle.ShouldLog(TimeProvider.System.GetUtcNow(), out var suppressed))
-                    _log.LogWarning("{Kind} channel full; dropped {Event} ({Suppressed} more drops since the last line)",
+                    _log.LogWarning("{Kind} channel full; dropped {Event} ({Suppressed} suppressed since the last line)",
                         typeof(TEvent).Name, dropped, suppressed);
             });
     }

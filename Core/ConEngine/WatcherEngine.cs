@@ -318,7 +318,7 @@ public class WatcherEngine
                         // not starve suspicion or the stall stamp — including when
                         // it throws a cancellation of its own, which is not ours.
                         if (_subscriberErrors.ShouldLog(_timeProvider.GetUtcNow(), out var suppressed))
-                            _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed ({Suppressed} more since the last line)",
+                            _log.LogError(ex, "A ping sample subscriber threw for {Target}; sample still processed ({Suppressed} suppressed since the last line)",
                                 monitor.Target.Name, suppressed);
                     }
                     // Local and Resolver targets are tracked on the side: no

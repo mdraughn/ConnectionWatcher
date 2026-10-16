@@ -91,7 +91,8 @@ public class ConWatchMcpTools(WatcherHostService host,
         "the side — they are NOT evidence about the internet connection and never affect " +
         "the verdict; 'Resolver' rows are DNS resolvers (the user's own and any upstream ones) " +
         "watched on the side — they reach the verdict only as DnsDown; " +
-        "'Verdict' rows are the path to the internet, its anchors and the verdict.")]
+        "'Verdict' rows are the path to the internet, its anchors and the verdict. " +
+        "'Unknown' rows belong to a target since deleted; they are not current evidence and are excluded from both the internet and local filters.")]
     public async Task<string> GetTransitions(
         [Description("Only transitions at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only transitions at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,
@@ -117,7 +118,9 @@ public class ConWatchMcpTools(WatcherHostService host,
         "small to change any state — 'the page stalled for a second' events. " +
         "class Internet means the blip was corroborated across multiple destinations. " +
         "Times are ISO-8601 UTC. " +
-        "Each row has a scope ('Local' = a LAN device, not internet evidence).")]
+        "Each row has a scope ('Local' = a LAN device, not internet evidence; " +
+        "'Resolver' = a DNS resolver watched on the side). " +
+        "'Unknown' rows belong to a target since deleted; they are not current evidence and are excluded from both the internet and local filters.")]
     public async Task<string> GetGlitches(
         [Description("Only glitches starting at/after this ISO-8601 UTC time (optional)")] DateTime? fromUtc = null,
         [Description("Only glitches starting at/before this ISO-8601 UTC time (optional)")] DateTime? toUtc = null,

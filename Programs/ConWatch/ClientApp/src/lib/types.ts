@@ -13,7 +13,7 @@ export interface TargetStatus {
   /** Monotonic count of results ever recorded; the activity LED flickers when it grows. */
   pingCount?: number;
   /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
-  scope?: "Verdict" | "Local" | "Resolver" | "Unknown";
+  scope?: "Verdict" | "Local" | "Resolver";
   /** Notify when this is down, even if the internet is fine (spec §4.7). */
   critical?: boolean;
   /** Created from the host's OS resolver list; the admin can only disable it. */
