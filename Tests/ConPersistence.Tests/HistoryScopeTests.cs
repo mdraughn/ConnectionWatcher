@@ -12,6 +12,7 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
     private readonly TestDbFactory _factory = new();
     private Guid _routerId;
     private Guid _nasId;
+    private readonly Guid _deletedId = Guid.NewGuid(); // not in Targets: a deleted Verdict target
 
     public async Task InitializeAsync()
     {
@@ -33,11 +34,13 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
         db.Transitions.AddRange(
             Row(_routerId, "Router", "Target", at),
             Row(_nasId, "NAS", "Target", at.AddMinutes(1)),
-            Row(VerdictCoordinator.SubjectId, "Internet", "Verdict", at.AddMinutes(2)));
+            Row(VerdictCoordinator.SubjectId, "Internet", "Verdict", at.AddMinutes(2)),
+            Row(_deletedId, "Gone", "Target", at.AddMinutes(3)));
         db.Glitches.AddRange(
             new GlitchRow { TargetId = _routerId, TargetName = "Router", Class = 0, StartUtc = at, EndUtc = at },
             new GlitchRow { TargetId = _nasId, TargetName = "NAS", Class = 0, StartUtc = at, EndUtc = at },
-            new GlitchRow { TargetId = VerdictCoordinator.SubjectId, TargetName = "Internet", Class = 1, StartUtc = at, EndUtc = at });
+            new GlitchRow { TargetId = VerdictCoordinator.SubjectId, TargetName = "Internet", Class = 1, StartUtc = at, EndUtc = at },
+            new GlitchRow { TargetId = _deletedId, TargetName = "Gone", Class = 0, StartUtc = at, EndUtc = at });
         await db.SaveChangesAsync();
     }
 
@@ -59,7 +62,7 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
 
     [Fact]
     public async Task All_returns_every_subject()
-        => Assert.Equal(["Internet", "NAS", "Router"], await Names(ScopeFilter.All));
+        => Assert.Equal(["Gone", "Internet", "NAS", "Router"], await Names(ScopeFilter.All));
 
     [Fact]
     public async Task Internet_excludes_Local_targets_but_keeps_pools_and_the_verdict()
@@ -85,6 +88,27 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
 
         Assert.Equal(["Internet", "Router"], internet.Select(g => g.TargetName).OrderBy(n => n));
         Assert.Equal(["NAS"], local.Select(g => g.TargetName));
+    }
+
+    [Fact]
+    public async Task A_deleted_targets_transitions_are_under_All_and_off_both_filters()
+    {
+        Assert.Contains("Gone", await Names(ScopeFilter.All));
+        Assert.DoesNotContain("Gone", await Names(ScopeFilter.Internet));
+        Assert.DoesNotContain("Gone", await Names(ScopeFilter.Local));
+    }
+
+    [Fact]
+    public async Task A_deleted_targets_glitches_are_under_All_and_off_both_filters()
+    {
+        await using var db = _factory.CreateDbContext();
+        var all = await HistoryQueries.GlitchesAsync(db, null, null, null, 100, ScopeFilter.All);
+        var internet = await HistoryQueries.GlitchesAsync(db, null, null, null, 100, ScopeFilter.Internet);
+        var local = await HistoryQueries.GlitchesAsync(db, null, null, null, 100, ScopeFilter.Local);
+
+        Assert.Contains(all, g => g.TargetName == "Gone");
+        Assert.DoesNotContain(internet, g => g.TargetName == "Gone");
+        Assert.DoesNotContain(local, g => g.TargetName == "Gone");
     }
 
     [Fact]
