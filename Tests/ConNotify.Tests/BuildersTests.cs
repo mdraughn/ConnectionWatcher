@@ -286,3 +286,16 @@ public class WebhookPayloadTests
         Assert.False(other.TryGetProperty("dns", out _)); // omitted, never null (Review Focus 1)
     }
 }
+
+public class DnsPublicationTests
+{
+    [Fact]
+    public void Equality_is_what_the_tick_uses_to_skip_unchanged_republishes()
+    {
+        var a = new DnsPublication("online", "ON", "{\"state\":\"Ok\"}");
+        var same = new DnsPublication("online", "ON", "{\"state\":\"Ok\"}");
+        var filtered = a with { Attributes = "{\"state\":\"Filtered\"}" };
+        Assert.Equal(a, same);
+        Assert.NotEqual(a, filtered);
+    }
+}

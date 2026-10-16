@@ -135,7 +135,9 @@ Assistant discovery documents, so entities appear automatically under one
 
 State topics are retained under the base topic (default `conwatch/…`), with a
 last-will `availability` topic so entities show *unavailable* if ConWatch
-stops. Every transition is also published as JSON to `conwatch/transitions`
+stops. A target named *Internet* or *DNS* gets a suffixed entity (`internet_2`,
+`dns_2`) so it cannot overwrite the fixed sensors; after upgrading, delete the
+old entity in Home Assistant if one lingers. Every transition is also published as JSON to `conwatch/transitions`
 for automations that want the raw events. Publishes happen only on state
 changes and reconnects — never per ping.
 

@@ -37,6 +37,9 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         public void Post(TargetTransition transition) => _queue.Writer.TryWrite(transition);
         public void Refresh() => _queue.Writer.TryWrite(new RefreshMessage());
         public void Reconfigure() => _queue.Writer.TryWrite(new ReconfigureMessage());
+        /// <summary>The periodic dns check: the summary can move without a transition (Filtered).</summary>
+        public sealed record TickMessage;
+        public void Tick() => _queue.Writer.TryWrite(new TickMessage());
 
         public ValueTask<object> ReadAsync(CancellationToken ct) => _queue.Reader.ReadAsync(ct);
 
@@ -49,8 +52,13 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         }
     }
 
+    /// <summary>How often the dns entity is re-checked against the summary while connected.</summary>
+    public static readonly TimeSpan DnsRefreshInterval = TimeSpan.FromMinutes(1);
+
     private readonly Inbox _inbox = new();
     private readonly Lock _lock = new();
+    // What the dns entity last published this session (session-loop thread only).
+    private DnsPublication? _lastDns;
 
     private WatcherEngine? _engine;
     private IDisposable? _subscription;
@@ -141,10 +149,29 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         await client.ConnectAsync(optionsBuilder.Build(), stoppingToken).ConfigureAwait(false);
         log.LogInformation("MQTT connected to {Host}:{Port} (base '{Base}')", host, port, baseTopic);
 
+        // A new session republishes everything, so nothing from the last one counts as "unchanged".
+        _lastDns = null;
+        using var tickCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         try
         {
             await PublishAsync(client, _topics.Availability, "online", retain: true, stoppingToken);
             await RefreshAllAsync(client, stoppingToken).ConfigureAwait(false);
+
+            // The dns summary can change with no transition (Filtered comes from the result log),
+            // so a tick re-checks it; the handler publishes only when something moved.
+            _ = Task.Run(async () =>
+            {
+                using var timer = new PeriodicTimer(DnsRefreshInterval);
+                try
+                {
+                    while (await timer.WaitForNextTickAsync(tickCts.Token).ConfigureAwait(false))
+                        _inbox.Tick();
+                }
+                catch (OperationCanceledException)
+                {
+                    // Session over.
+                }
+            }, CancellationToken.None);
 
             while (client.IsConnected && !stoppingToken.IsCancellationRequested)
             {
@@ -157,6 +184,12 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
                     case Inbox.RefreshMessage:
                         await RefreshAllAsync(client, stoppingToken).ConfigureAwait(false);
                         break;
+                    case Inbox.TickMessage:
+                        WatcherEngine? engineForTick;
+                        lock (_lock) { engineForTick = _engine; }
+                        if (engineForTick is not null)
+                            await PublishDnsAsync(client, engineForTick, stoppingToken, onlyIfChanged: true).ConfigureAwait(false);
+                        break;
                     case TargetTransition transition:
                         await PublishTransitionAsync(client, transition, stoppingToken).ConfigureAwait(false);
                         break;
@@ -165,6 +198,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         }
         finally
         {
+            tickCts.Cancel();
             if (client.IsConnected)
             {
                 try
@@ -197,6 +231,15 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             .OrderBy(m => m.Target.Name).ToList();
         foreach (var monitor in monitors)
             slugs[monitor.Target.Id] = slugger.Slug(monitor.Target.Name);
+
+        // A node from before the slugs were reserved may have published a target named
+        // Internet or DNS under these per-target topics; its discovery topic is the fixed
+        // entity's own and is republished below, but these two would otherwise sit retained forever.
+        foreach (var reserved in MqttTopics.ReservedSlugs)
+        {
+            await PublishAsync(client, _topics.TargetState(reserved), "", retain: true, ct);
+            await PublishAsync(client, _topics.TargetAttributes(reserved), "", retain: true, ct);
+        }
 
         // Clear entities for targets that vanished since the last refresh.
         foreach (var stale in _publishedSlugs.Except(slugs.Values))
@@ -294,16 +337,17 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
     /// <summary>The name-resolution entity: its own availability says whether the watch is on
     /// (spec 2026-10-10 §5.4); state and attributes come from the same summary the status block uses.</summary>
-    private async Task PublishDnsAsync(IMqttClient client, WatcherEngine engine, CancellationToken ct)
+    private async Task PublishDnsAsync(IMqttClient client, WatcherEngine engine, CancellationToken ct, bool onlyIfChanged = false)
     {
         if (_topics is null)
             return;
-        var watch = engine.DnsWatch;
-        var summary = DnsSummary.Compute(watch, engine.DnsResults);
-        await PublishAsync(client, _topics.DnsAvailability, StateMapping.DnsAvailabilityPayload(summary.Watched), retain: true, ct);
-        await PublishAsync(client, _topics.DnsState, StateMapping.DnsPayload(summary.State), retain: true, ct);
-        await PublishAsync(client, _topics.DnsAttributes, HaDiscovery.DnsAttributes(summary, engine.Verdict?.Current.Dns,
-            watch.System.Select(DnsResolverEntry.From).ToList(), watch.Upstream.Select(DnsResolverEntry.From).ToList()), retain: true, ct);
+        var next = DnsPublication.From(engine);
+        if (onlyIfChanged && next == _lastDns)
+            return; // retained topics must not churn when nothing moved
+        await PublishAsync(client, _topics.DnsAvailability, next.Availability, retain: true, ct);
+        await PublishAsync(client, _topics.DnsState, next.State, retain: true, ct);
+        await PublishAsync(client, _topics.DnsAttributes, next.Attributes, retain: true, ct);
+        _lastDns = next;
     }
 
     private static Task PublishAsync(IMqttClient client, string topic, string payload, bool retain, CancellationToken ct) =>

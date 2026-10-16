@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using ConCore.Targets;
+using ConEngine;
 using ConEngine.Dns;
 using ConEngine.Events;
 using ConEngine.Topology;
@@ -72,6 +73,20 @@ public static class StateMapping
 public sealed record DnsResolverEntry(string Name, string Address, string State)
 {
     public static DnsResolverEntry From(TargetMonitor m) => new(m.Target.Name, m.Target.Address, m.CurrentState.ToString());
+}
+
+/// <summary>Everything the dns entity publishes, so a periodic tick can tell "unchanged" from
+/// "the summary moved without a transition" (Filtered is decided from the result log).</summary>
+public sealed record DnsPublication(string Availability, string State, string Attributes)
+{
+    public static DnsPublication From(WatcherEngine engine)
+    {
+        var watch = engine.DnsWatch;
+        var summary = DnsSummary.Compute(watch, engine.DnsResults);
+        return new(StateMapping.DnsAvailabilityPayload(summary.Watched), StateMapping.DnsPayload(summary.State),
+            HaDiscovery.DnsAttributes(summary, engine.Verdict?.Current.Dns,
+                watch.System.Select(DnsResolverEntry.From).ToList(), watch.Upstream.Select(DnsResolverEntry.From).ToList()));
+    }
 }
 
 /// <summary>All topic strings derive from here — one source of truth.</summary>

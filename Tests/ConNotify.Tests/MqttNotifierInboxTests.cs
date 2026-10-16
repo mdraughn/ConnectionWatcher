@@ -46,4 +46,14 @@ public class MqttNotifierInboxTests
         var next = await inbox.ReadAsync(CancellationToken.None);
         Assert.Equal("D", Assert.IsType<TargetTransition>(next).TargetName);
     }
+
+    [Fact]
+    public async Task A_tick_is_delivered_in_order_with_traffic()
+    {
+        var inbox = new MqttNotifier.Inbox();
+        inbox.Post(Transition("A"));
+        inbox.Tick();
+        Assert.IsType<TargetTransition>(await inbox.ReadAsync(CancellationToken.None));
+        Assert.IsType<MqttNotifier.Inbox.TickMessage>(await inbox.ReadAsync(CancellationToken.None));
+    }
 }
