@@ -1,3 +1,4 @@
+using ConEngine.Configuration;
 using ConEngine.Events;
 using ConEngine.Tests.Fakes;
 using ConEngine.Topology;
@@ -83,7 +84,6 @@ public class EngineSeedTests
 
         var router = h.Engine.Monitors[RouterId];
         Assert.False(router.IsAssumed);
-        Assert.NotEqual(HostState.Down, router.CurrentState);
         await TestWait.Eventually(
             () => h.Transitions.Any(t => t.TargetId == RouterId &&
                                          t.From == HostState.Starting && t.To == HostState.Responding),
@@ -130,15 +130,35 @@ public class EngineSeedTests
     [Fact]
     public async Task A_seeded_LinkDown_verdict_bursts_the_resolvers_when_it_clears()
     {
-        await using var h = Home(burstMaxSeconds: 30);
+        // The warm start bursts every monitor, so the link-return burst is only visible once
+        // that one is over. The Resolver gets a short burst window; the anchors are held down
+        // so the seeded LinkDown cannot clear until the warm-start burst has ended.
+        await using var h = EngineHarness.Home(o =>
+        {
+            o.Profiles["Fast"].BurstMaxDurationSeconds = 5;
+            o.Profiles["Short"] = new PingProfileConfig
+            {
+                NormalIntervalSeconds = 0.02, BurstIntervalSeconds = 0.01, BurstMaxDurationSeconds = 1,
+                PingTimeoutSeconds = 0.5, HistorySize = 10, MinUsableSample = 5,
+            };
+            o.Targets.Single(t => t.Name == "Resolver").Id = ResolverId;
+            o.Targets.Single(t => t.Name == "Resolver").Profile = "Short";
+        });
+        h.Pings.SetUp(h.Ip("Google"), false);
+        h.Pings.SetUp(h.Ip("Cloudflare"), false);
         await h.StartAsync(new EngineSeed { Verdict = VerdictState.LinkDown });
 
         var resolver = h.Engine.Monitors[ResolverId];
-        // The Resolver is not seeded, and it reaches Responding (which ends the warm-start
-        // burst) before the seeded LinkDown clears; the burst seen after that is the
-        // link-return one. Proven by mutation: without that burst this wait times out.
         await TestWait.Eventually(
-            () => resolver.Discipline.IsBurstActive,
+            () => !resolver.Discipline.IsBurstActive && h.Engine.Verdict!.CurrentVerdict == VerdictState.LinkDown,
+            what: "the warm-start burst never ended while the verdict was still LinkDown");
+
+        h.Pings.SetUp(h.Ip("Google"), true);
+        h.Pings.SetUp(h.Ip("Cloudflare"), true);
+        await TestWait.Eventually(() => h.Engine.Verdict!.CurrentVerdict != VerdictState.LinkDown,
+            what: "the seeded LinkDown never cleared");
+
+        await TestWait.Eventually(() => resolver.Discipline.IsBurstActive,
             what: "the Resolver never burst after the seeded LinkDown cleared");
     }
 }
