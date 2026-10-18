@@ -327,4 +327,60 @@ public class PingDisciplineTests
         var wait = d.WaitForNextPingAsync(CancellationToken.None);
         Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
     }
+
+    // Spec 2026-08-14: a target that is already failing must not start new
+    // bursts from its own losses, or a long outage hammers a public anchor
+    // forever. The state-change burst is the only one a failing state gets.
+    [Theory]
+    [InlineData(HostState.Down)]
+    [InlineData(HostState.Faltering)]
+    [InlineData(HostState.Recovering)]
+    [InlineData(HostState.Unreachable)]
+    public async Task A_loss_in_a_failing_state_never_starts_a_burst(HostState failing)
+    {
+        var time = new TimerCountingTime();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(failing);
+        time.Advance(TimeSpan.FromSeconds(120)); // the 60 s cap and the 60 s guard are both over
+
+        d.OnPingResult(success: false);
+        Assert.False(d.IsBurstActive);
+
+        var timers = time.TimersCreated;
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        await time.NewTimerArmedSince(timers);
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(9))); // not a burst-interval wait
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));    // done only after NormalInterval
+    }
+
+    [Fact]
+    public async Task Entering_responding_ends_an_active_burst()
+    {
+        var time = new TimerCountingTime();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Down);
+        Assert.NotNull(d.BurstStartedAt);
+
+        d.OnStateChanged(HostState.Responding);
+        Assert.Null(d.BurstStartedAt);
+        Assert.False(d.IsBurstActive);
+
+        var timers = time.TimersCreated;
+        var wait = d.WaitForNextPingAsync(CancellationToken.None);
+        await time.NewTimerArmedSince(timers);
+        Assert.True(await StaysPending(wait, time, TimeSpan.FromSeconds(9)));
+        Assert.True(await Completes(wait, time, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public void A_loss_while_starting_starts_a_burst()
+    {
+        var time = new FakeTimeProvider();
+        var d = new PingDiscipline(Profile, time);
+        d.OnStateChanged(HostState.Starting);
+
+        d.OnPingResult(success: false);
+        Assert.True(d.IsBurstActive);
+        Assert.NotNull(d.BurstStartedAt);
+    }
 }
