@@ -268,4 +268,101 @@ public class HostAnalysisEngineTests
         Feed(tracker, time, 3, success: false);
         Assert.Equal(3, tracker.EntriesSince(cutoff.AddTicks(1)).Count());
     }
+
+    private static void FeedPattern(TrackerProbe tracker, FakeTimeProvider time, string pattern)
+    {
+        foreach (var c in pattern)
+            Feed(tracker, time, 1, success: c == 'S');
+    }
+
+    private static PingProfile ProfileWith(int sample, double responding = 0.95, double faltering = 0.75) => new()
+    {
+        Name = "Edges",
+        HistorySize = sample,
+        MinUsableSample = sample,
+        RespondingThreshold = responding,
+        FalteringThreshold = faltering,
+        DownThreshold = 0.10,
+        RecoveringThreshold = 0.25,
+    };
+
+    private static (TrackerProbe tracker, FakeTimeProvider time) MakeWith(PingProfile profile)
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-08-14T00:00:00Z"));
+        return (new TrackerProbe(Ip, profile, time), time);
+    }
+
+    // S = success, F = loss. Each setup leaves the host in the named prior
+    // state (asserted); the window is then fed sample by sample and, at five
+    // samples, is exactly the newest MinUsableSample entries.
+    [Theory]
+    [InlineData(HostState.Faltering, "SSSFF", "SSSSF", HostState.Faltering)]    // 4/5: 0.8 is below Responding 0.95
+    [InlineData(HostState.Faltering, "SSSFF", "SSSSS", HostState.Responding)]   // 5/5
+    [InlineData(HostState.Down, "FFFFF", "FFFFS", HostState.Down)]              // 1/5 = 0.2 < Recovering 0.25
+    [InlineData(HostState.Down, "FFFFF", "FFFSS", HostState.Recovering)]        // 2/5 = 0.4
+    [InlineData(HostState.Recovering, "FFFFFSS", "SSSSS", HostState.Responding)]
+    [InlineData(HostState.Recovering, "FFFFFSS", "FFFFF", HostState.Down)]      // 0/5 < Down 0.10
+    [InlineData(HostState.Recovering, "FFFFFSS", "FFSSS", HostState.Recovering)] // 3/5
+    [InlineData(HostState.Recovering, "FFFFFSS", "FFFFS", HostState.Recovering)] // 1/5 = 0.2: between Down 0.10 and Recovering 0.25
+    public void Hysteresis_and_recovering_exits(HostState prior, string setup, string window, HostState expected)
+    {
+        var (tracker, _, time) = Make();
+        FeedPattern(tracker, time, setup);
+        Assert.Equal(prior, tracker.CurrentState);
+
+        FeedPattern(tracker, time, window);
+
+        Assert.Equal(expected, tracker.CurrentState);
+    }
+
+    [Fact]
+    public void Threshold_boundaries_at_twenty_samples()
+    {
+        var profile = ProfileWith(20);
+
+        // 15/20 = 0.75 is not below the Faltering threshold 0.75.
+        var (responding, time1) = MakeWith(profile);
+        Feed(responding, time1, 20, success: true);
+        Assert.Equal(HostState.Responding, responding.CurrentState);
+        Feed(responding, time1, 5, success: false);
+        Assert.Equal(HostState.Responding, responding.CurrentState);
+
+        // 2/20 = 0.10 is not below the Down threshold 0.10; 1/20 is.
+        var (faltering, time2) = MakeWith(profile);
+        Feed(faltering, time2, 8, success: false);
+        Feed(faltering, time2, 12, success: true);
+        Assert.Equal(HostState.Faltering, faltering.CurrentState);
+        Feed(faltering, time2, 18, success: false);
+        Assert.Equal(HostState.Faltering, faltering.CurrentState);
+        Feed(faltering, time2, 1, success: false);
+        Assert.Equal(HostState.Down, faltering.CurrentState);
+
+        // AUDIT: D4, float rate, 19/20 < 0.95: pinned as it is today; Task 31
+        // makes the rate a double and this becomes Responding.
+        var (starting, time3) = MakeWith(profile);
+        Feed(starting, time3, 19, success: true);
+        Feed(starting, time3, 1, success: false);
+        Assert.Equal(HostState.Faltering, starting.CurrentState);
+    }
+
+    [Fact]
+    public void Threshold_boundaries_at_ten_samples_with_edited_thresholds()
+    {
+        var profile = ProfileWith(10, responding: 0.90, faltering: 0.70);
+
+        // AUDIT: D4, float rate, 9/10 < 0.90: pinned as it is today; Task 31
+        // flips this to Responding.
+        var (starting, time1) = MakeWith(profile);
+        Feed(starting, time1, 9, success: true);
+        Feed(starting, time1, 1, success: false);
+        Assert.Equal(HostState.Faltering, starting.CurrentState);
+
+        // AUDIT: D4, float rate, 7/10 < 0.70: pinned as it is today; Task 31
+        // flips this to staying Responding.
+        var (responding, time2) = MakeWith(profile);
+        Feed(responding, time2, 10, success: true);
+        Assert.Equal(HostState.Responding, responding.CurrentState);
+        Feed(responding, time2, 3, success: false);
+        Assert.Equal(HostState.Faltering, responding.CurrentState);
+    }
 }

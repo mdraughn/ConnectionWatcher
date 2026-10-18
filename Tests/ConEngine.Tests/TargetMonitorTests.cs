@@ -317,4 +317,77 @@ public class TargetMonitorTests
         Assert.Equal(4, m.LastStatus!.Host.SampleSize);
         Assert.Equal(m.Target.Id, m.LastStatus.TargetId);
     }
+
+    [Fact]
+    public void Burst_loss_rate_counts_only_since_the_burst_started()
+    {
+        var (m, transitions, time) = Make();
+        m.StartTracking(Ip);
+        Feed(m, time, 20, success: true);
+        var starting = Assert.Single(transitions);
+        Assert.Equal((HostState.Starting, HostState.Responding), (starting.From, starting.To));
+        Assert.Null(starting.Reason.BurstLossRate);
+
+        // One loss while healthy starts the burst (the engine's ping loop
+        // reports it to the discipline just before recording it).
+        time.Advance(TimeSpan.FromSeconds(1));
+        m.Discipline.OnPingResult(false);
+        Assert.NotNull(m.Discipline.BurstStartedAt);
+        m.RecordPingResult(new PingResult(Ip, false, 0, timestamp: time.GetUtcNow()));
+        Assert.Single(transitions); // 4/5 = 0.8 is still Responding
+
+        foreach (var c in "SFFSFF")
+            Feed(m, time, 1, success: c == 'S');
+
+        // Entries since the burst began: F S F, and the third drops the
+        // window to 3/5 = Faltering. Two losses in three entries: neither the
+        // 20 earlier successes nor the 5-entry window may count.
+        var toFaltering = Assert.Single(transitions, t => t.To == HostState.Faltering);
+        Assert.Equal(2.0 / 3.0, toFaltering.Reason.BurstLossRate!.Value, 6);
+    }
+
+    [Fact]
+    public void A_seed_after_tracking_started_is_ignored()
+    {
+        var (m, transitions, time) = Make();
+        m.StartTracking(Ip);
+
+        m.Seed(HostState.Down);
+
+        Assert.Equal(HostState.Initializing, m.CurrentState);
+        Assert.False(m.IsAssumed);
+        Assert.Null(m.Discipline.BurstStartedAt); // a seeded Down would have started a burst
+        Assert.Empty(transitions);
+        Feed(m, time, 5, success: true);
+        Assert.Equal((HostState.Starting, HostState.Responding), (transitions[0].From, transitions[0].To));
+    }
+
+    [Fact]
+    public void Releasing_a_seeded_unreachable_before_tracking_bursts()
+    {
+        var (m, _, _) = Make();
+        m.Seed(HostState.Unreachable);
+        m.SetExplanation(Guid.NewGuid());
+
+        Assert.True(m.SetExplanation(null));
+
+        Assert.Equal(HostState.Starting, m.CurrentState);
+        Assert.True(m.Discipline.IsBurstActive); // reach it now so it re-proves within seconds
+    }
+
+    [Fact]
+    public void One_hundred_ninety_nine_refusals_is_not_persistent()
+    {
+        var (m, _, time) = Make();
+        for (int i = 0; i < 199; i++)
+        {
+            time.Advance(TimeSpan.FromSeconds(1));
+            m.RecordPingResult(new PingResult(Ip, true, 2, "Refused"));
+        }
+        Assert.Equal(199, m.RefusedReplies);
+        Assert.False(m.PersistentlyRefused);
+
+        m.RecordPingResult(new PingResult(Ip, true, 2, "Refused"));
+        Assert.True(m.PersistentlyRefused);
+    }
 }
