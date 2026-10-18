@@ -80,8 +80,14 @@ public sealed class EngineHarness : IAsyncDisposable
 
     public TimeProvider Time { get; private set; } = TimeProvider.System;
 
-    public List<TargetTransition> Transitions { get; } = new();
-    public List<GlitchEvent> Glitches { get; } = new();
+    private readonly List<TargetTransition> _transitions = new();
+    private readonly List<GlitchEvent> _glitches = new();
+
+    /// <summary>Every transition seen so far; each read is a snapshot copy taken under the lock.</summary>
+    public IReadOnlyList<TargetTransition> Transitions { get { lock (_gate) return _transitions.ToArray(); } }
+
+    /// <summary>Every glitch seen so far; each read is a snapshot copy taken under the lock.</summary>
+    public IReadOnlyList<GlitchEvent> Glitches { get { lock (_gate) return _glitches.ToArray(); } }
 
     /// <summary>Available once <see cref="StartAsync"/> has been called.</summary>
     public WatcherEngine Engine => _engine ?? throw new InvalidOperationException("Harness not started");
@@ -106,8 +112,8 @@ public sealed class EngineHarness : IAsyncDisposable
         _started = true;
         _engine = new WatcherEngine(Time, Pings, new ConInfrastructure.DomainNameResolverFactory(),
             NullLoggerFactory.Instance, Options.Create(_options), Options.Create(_verdict));
-        _subscriptions.Add(_engine.TransitionSource.Subscribe(t => { lock (_gate) Transitions.Add(t); }));
-        _subscriptions.Add(_engine.GlitchSource.Subscribe(g => { lock (_gate) Glitches.Add(g); }));
+        _subscriptions.Add(_engine.TransitionSource.Subscribe(t => { lock (_gate) _transitions.Add(t); }));
+        _subscriptions.Add(_engine.GlitchSource.Subscribe(g => { lock (_gate) _glitches.Add(g); }));
         await _engine.StartAsync(_cts.Token, seed);
     }
 
