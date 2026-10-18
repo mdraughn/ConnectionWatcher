@@ -110,7 +110,7 @@ Re-read at the cited lines, all confirmed:
 | none (baseline) | — | **Passed** 494/494 |
 | M1 `PingDiscipline`: losses burst in any state (gate removed) | ET3 Unpinned | **Passed**, confirmed unpinned |
 | M2 `WatcherEngine`: `Verdict?.UseProbeOnlyVeto(ModelCheck)` removed | EV2 Unpinned | **Passed**, confirmed unpinned |
-| M3 `PingManager`: per-message catch disabled | ET1 Unpinned | **Passed**, confirmed |
+| M3 `PingManager`: per-message catch disabled | ET1 Unpinned | **Passed**, confirmed (re-run 2026-10-18 with a corrected edit, `when (false)`, after the first edit turned out to be a no-op through operator precedence; same result) |
 | M4 `HostAnalysisEngine`: Faltering→Responding at the Faltering threshold (hysteresis removed) | ET5 Unpinned | **Passed**, confirmed |
 | M5 `ModelCheckCoordinator`: ProbeOnlyLoss raise ignores forwarding loss | EV9 Unpinned | **Passed**, confirmed |
 | C1 control: suspicion guard 60 s → 30 s | ET R31 Pinned | **Failed** (2: `Suspicion_burst_blocked_within_60s…`, `ForceBurst_ignores_the_suspicion_guard`), confirmed pinned |
