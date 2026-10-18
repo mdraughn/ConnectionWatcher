@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Xunit.Sdk;
 
 namespace ConWatch.Tests;
@@ -39,5 +40,24 @@ internal static class HostTestWait
             }
         }
         return count;
+    }
+
+    /// <summary>
+    /// Every target Responding and the verdict Healthy: nothing left to
+    /// transition. Counting rows before this (e.g. once Google alone is up)
+    /// races Cloudflare, the pool and the verdict still settling, which then
+    /// record transitions after the count.
+    /// </summary>
+    public static async Task<bool> SteadyStateAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/v1/status");
+        if (!response.IsSuccessStatusCode)
+            return false;
+        var status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        var verdict = status.GetProperty("verdict");
+        return verdict.ValueKind == JsonValueKind.Object
+            && verdict.GetProperty("state").GetString() == "Healthy"
+            && status.GetProperty("targets").EnumerateArray()
+                .All(t => t.GetProperty("state").GetString() == "Responding");
     }
 }

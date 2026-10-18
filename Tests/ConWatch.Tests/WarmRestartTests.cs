@@ -31,25 +31,6 @@ public class WarmRestartTests
         return null;
     }
 
-    /// <summary>
-    /// Every target Responding and the verdict Healthy: nothing left to
-    /// transition. Counting rows before this (e.g. once Google alone is up)
-    /// races Cloudflare, the pool and the verdict still settling, which then
-    /// record transitions after the count.
-    /// </summary>
-    private static async Task<bool> SteadyState(HttpClient client)
-    {
-        var response = await client.GetAsync("/api/v1/status");
-        if (!response.IsSuccessStatusCode)
-            return false;
-        var status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
-        var verdict = status.GetProperty("verdict");
-        return verdict.ValueKind == JsonValueKind.Object
-            && verdict.GetProperty("state").GetString() == "Healthy"
-            && status.GetProperty("targets").EnumerateArray()
-                .All(t => t.GetProperty("state").GetString() == "Responding");
-    }
-
     private static async Task<int> TransitionCount(HttpClient client)
         => (await GetJson(client, "/api/v1/transitions?limit=1000"))
             .GetProperty("items").GetArrayLength();
@@ -66,7 +47,7 @@ public class WarmRestartTests
             {
                 var client = first.CreateClient();
                 await ConfigApiTests.SeedHomeAsync(client);
-                await ConfigApiTests.Eventually(() => SteadyState(client));
+                await ConfigApiTests.Eventually(() => HostTestWait.SteadyStateAsync(client));
                 await first.Services.GetRequiredService<TransitionRecorder>().FlushAsync();
                 countBefore = await TransitionCount(client);
             }

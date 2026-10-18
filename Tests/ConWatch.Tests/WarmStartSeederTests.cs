@@ -1,3 +1,6 @@
+using ConCore.Targets;
+using ConEngine.Configuration;
+using ConEngine.Tests.Fakes;
 using ConEngine.Topology;
 using ConEngine.Tracking;
 using ConPersistence;
@@ -145,5 +148,131 @@ public sealed class WarmStartSeederTests : IAsyncLifetime
 
         Assert.False(await _seeder.EnabledAsync());
         Assert.Null(await _seeder.FromDbAsync());
+    }
+
+    [Fact]
+    public async Task A_pool_row_seeds_the_pool()
+    {
+        await AddTarget("Router", "192.168.1.1");
+        var pool = Guid.NewGuid();
+        await Record(pool, "Pool", "Responding", DateTime.UtcNow.AddMinutes(-1));
+
+        var seed = await _seeder.FromDbAsync();
+
+        Assert.NotNull(seed);
+        Assert.Equal(HostState.Responding, seed.Pools[pool]);
+    }
+
+    [Fact]
+    public async Task An_Unknown_verdict_row_does_not_seed()
+    {
+        var router = await AddTarget("Router", "192.168.1.1");
+        var now = DateTime.UtcNow;
+        await Record(router, "Target", "Responding", now.AddMinutes(-2));
+        await Record(VerdictCoordinator.SubjectId, "Verdict", "Responding", now.AddMinutes(-1),
+            trigger: "VerdictChanged", verdict: "Unknown");
+
+        var seed = await _seeder.FromDbAsync();
+
+        Assert.NotNull(seed);
+        Assert.Null(seed.Verdict);
+        Assert.True(seed.Targets.ContainsKey(router));
+    }
+
+    [Fact]
+    public async Task A_deleted_targets_latest_row_is_ignored()
+    {
+        var router = await AddTarget("Router", "192.168.1.1");
+        var gone = await AddTarget("Gone", "192.168.1.77");
+        var now = DateTime.UtcNow;
+        await Record(router, "Target", "Responding", now.AddMinutes(-2));
+        await Record(gone, "Target", "Responding", now.AddMinutes(-2));
+        Assert.True((await _config.DeleteTargetAsync(gone)).Success);
+
+        var seed = await _seeder.FromDbAsync();
+
+        Assert.NotNull(seed);
+        Assert.True(seed.Targets.ContainsKey(router));
+        Assert.False(seed.Targets.ContainsKey(gone));
+    }
+
+    [Fact]
+    public async Task Unreachable_grandchild_is_kept_when_the_Down_ancestor_is_two_levels_up()
+    {
+        var router = await AddTarget("Router", "192.168.1.1");
+        var modem = await AddTarget("Modem", "192.168.100.1", "Router");
+        var phone = await AddTarget("Phone", "192.168.100.9", "Modem");
+        var now = DateTime.UtcNow;
+        await Record(router, "Target", "Down", now.AddMinutes(-2));
+        await Record(modem, "Target", "Unreachable", now.AddMinutes(-2));
+        await Record(phone, "Target", "Unreachable", now.AddMinutes(-2));
+
+        var seed = await _seeder.FromDbAsync();
+
+        Assert.NotNull(seed);
+        Assert.Equal(HostState.Unreachable, seed.Targets[phone].State);
+        Assert.Equal(HostState.Unreachable, seed.Targets[modem].State);
+    }
+
+    /// <summary>A target that has not finished its first sample window stays Starting
+    /// for the test's whole life; the profile name is "Slow".</summary>
+    private static void SlowFor(HomeOptions home, params string[] names)
+    {
+        home.Profiles["Slow"] = new PingProfileConfig
+        {
+            NormalIntervalSeconds = 3600, BurstIntervalSeconds = 3600, BurstMaxDurationSeconds = 0.2,
+            PingTimeoutSeconds = 0.5, HistorySize = 10, MinUsableSample = 5,
+        };
+        foreach (var t in home.Targets.Where(t => names.Contains(t.Name)))
+            t.Profile = "Slow";
+    }
+
+    [Fact]
+    public async Task FromEngine_carries_determined_states_address_and_probe()
+    {
+        await using var h = EngineHarness.Home(home =>
+        {
+            home.Targets.Add(new TargetConfig { Name = "Mute", Address = "203.0.113.7", Profile = "Slow" });
+            SlowFor(home, "Mute");
+        });
+        h.Pings.SetUp(h.Ip("Mute"), false);
+        await h.StartAsync();
+        await h.WaitVerdictAsync(VerdictState.Healthy);
+        foreach (var name in new[] { "Router", "Modem", "Google", "Cloudflare", "Quad9", "Printer", "NAS" })
+            await h.WaitStateAsync(name, HostState.Responding);
+        Assert.True(h.Engine.Monitors[h.Id("Mute")].CurrentState is HostState.Initializing or HostState.Starting);
+
+        var seed = WarmStartSeeder.FromEngine(h.Engine);
+
+        Assert.Equal(VerdictState.Healthy, seed.Verdict);
+        var seen = 0;
+        foreach (var (id, monitor) in h.Engine.Monitors)
+        {
+            if (monitor.CurrentState is HostState.Initializing or HostState.Starting)
+                continue;
+            seen++;
+            Assert.Equal(monitor.CurrentState, seed.Targets[id].State);
+            Assert.Equal(monitor.Target.Address, seed.Targets[id].Address);
+            Assert.Equal(monitor.Target.Probe, seed.Targets[id].Probe);
+        }
+        Assert.True(seen >= 7);
+        Assert.Equal(seen, seed.Targets.Count);
+        Assert.False(seed.Targets.ContainsKey(h.Id("Mute")));
+        Assert.Equal("198.51.100.8", seed.Targets[h.Id("Google")].Address);
+        Assert.Equal(HostState.Responding, seed.Pools.Single().Value);
+    }
+
+    [Fact]
+    public async Task FromEngine_never_seeds_an_Unknown_verdict()
+    {
+        await using var h = EngineHarness.Home(home => SlowFor(home, "Google", "Cloudflare"));
+        await h.StartAsync();
+        await h.WaitStateAsync("Router", HostState.Responding);
+        Assert.Equal(VerdictState.Unknown, h.Engine.Verdict?.CurrentVerdict);
+
+        var seed = WarmStartSeeder.FromEngine(h.Engine);
+
+        Assert.Null(seed.Verdict);
+        Assert.True(seed.Targets.ContainsKey(h.Id("Router")));
     }
 }
