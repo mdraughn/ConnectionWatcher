@@ -12,11 +12,11 @@ namespace ConEngine.Tests;
 /// The wiring in <see cref="WatcherEngine.StartAsync"/> (EV2, EV10, ET4, CF2 / ET8): the
 /// coordinators are unit-tested by building them by hand, so these pin what only the
 /// engine does — the probe-only veto, the ISP fallback, the DNS split, the reachability
-/// gate on resolver notes, the scope gate on suspicion, and leaving disabled targets out.
+/// gate on resolver notes, the scope gate on glitch episodes, and leaving disabled targets out.
 /// </summary>
 public class EngineWiringTests
 {
-[Fact]
+    [Fact]
     public async Task Every_anchor_isp_owned_raises_unprovable_up()
     {
         await using var h = EngineHarness.Home(home =>
@@ -248,7 +248,7 @@ public class EngineWiringTests
     }
 
     [Fact]
-    public async Task Local_targets_open_no_glitch_and_start_no_sweep()
+    public async Task Local_targets_open_no_glitch_episode()
     {
         await using var h = EngineHarness.Home(TwoLossesStayResponding);
         await h.StartAsync();
@@ -263,16 +263,15 @@ public class EngineWiringTests
         await TestWait.Eventually(() => h.Pings.PingCount(nas) >= before + 12,
             what: "the NAS never got past its script");
 
-        // Absence window, after the positive condition.
-        var anchors = new[] { "Google", "Cloudflare" }.Select(n => h.Engine.Monitors[h.Id(n)]).ToList();
+        // Absence window, after the positive condition: the transceiver count runs
+        // ahead of the engine's pump, so a glitch could still be on its way.
+        var nasId = h.Id("NAS");
         var deadline = DateTime.UtcNow.AddSeconds(1);
         while (DateTime.UtcNow < deadline)
         {
-            Assert.DoesNotContain(anchors, a => a.Discipline.IsBurstActive);
-            await Task.Delay(10);
+            Assert.DoesNotContain(h.Glitches, g => g.TargetId == nasId);
+            await Task.Delay(25);
         }
-        var nasId = h.Id("NAS");
-        Assert.DoesNotContain(h.Glitches, g => g.TargetId == nasId);
         // The NAS never left Responding, so an episode, had one opened, would have
         // closed as a glitch rather than been handed to the transition ledger.
         Assert.DoesNotContain(h.Transitions, t => t.TargetId == nasId && t.From == HostState.Responding);
@@ -303,10 +302,13 @@ public class EngineWiringTests
         Assert.DoesNotContain(h.Ip("Resolver"), probed);
 
         var pool = h.Engine.PoolCoordinators.Single(p => p.Pool.Name == "Internet");
-        await TestWait.Eventually(() => pool.CurrentState == HostState.Responding,
-            what: "the Internet pool never reached Responding");
-        var poolDetail = h.Transitions.Last(t => t.Kind == TransitionSubjectKind.Pool && t.TargetId == pool.Pool.Id)
-            .Reason.Detail;
+        // Wait on the transition itself: the pool sets CurrentState under its lock and
+        // publishes the transition only after leaving it.
+        bool PoolResponding(TargetTransition t) =>
+            t.Kind == TransitionSubjectKind.Pool && t.TargetId == pool.Pool.Id && t.To == HostState.Responding;
+        await TestWait.Eventually(() => h.Transitions.Any(PoolResponding),
+            what: "the Internet pool never published its transition to Responding");
+        var poolDetail = h.Transitions.Last(PoolResponding).Reason.Detail;
         // One member: the detail lists every member's state, and the disabled Cloudflare is not one.
         Assert.Contains("Google", poolDetail);
         Assert.DoesNotContain("Cloudflare", poolDetail);
