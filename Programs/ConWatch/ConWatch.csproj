@@ -42,8 +42,15 @@
     <Content Remove="ClientApp\**" />
   </ItemGroup>
 
-  <!-- SkipClientBuild=true lets Docker build the bundles in a Node stage. -->
-  <Target Name="EnsureClientBuild" BeforeTargets="Build" Condition="!Exists('wwwroot\js\dashboard.js') AND '$(SkipClientBuild)' != 'true'">
+  <!-- The bundle is rebuilt whenever a client source is newer than it (MSBuild's
+       Inputs/Outputs check), not only when it is missing: a stale bundle from an
+       earlier checkout state must never ship. The installer publishes ConWatchCli,
+       so this project is only built, never published, and PublishClientBuild below
+       does not run for it. SkipClientBuild=true lets Docker build in a Node stage. -->
+  <ItemGroup>
+    <ClientSource Include="ClientApp\src\**;ClientApp\package.json;ClientApp\package-lock.json;ClientApp\vite.config.ts;ClientApp\tsconfig.json" />
+  </ItemGroup>
+  <Target Name="EnsureClientBuild" BeforeTargets="Build" Inputs="@(ClientSource)" Outputs="wwwroot\js\dashboard.js;wwwroot\js\history.js" Condition="'$(SkipClientBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" Condition="!Exists('ClientApp\node_modules')" />
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
   </Target>
