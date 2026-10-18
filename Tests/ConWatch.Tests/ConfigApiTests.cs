@@ -34,17 +34,8 @@ public class ConfigApiTests : IDisposable
         (await client.PostAsJsonAsync("/api/v1/pools", pool)).EnsureSuccessStatusCode();
     }
 
-    internal static async Task Eventually(Func<Task<bool>> condition, int timeoutMs = 30000)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (await condition())
-                return;
-            await Task.Delay(50);
-        }
-        Assert.Fail("Condition not met within timeout");
-    }
+    internal static Task Eventually(Func<Task<bool>> condition, int timeoutMs = 30000) =>
+        HostTestWait.Eventually(condition, timeoutMs);
 
     /// <summary>Null while the engine is mid-rebuild (503).</summary>
     private async Task<StatusDto?> GetStatus()

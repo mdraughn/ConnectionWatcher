@@ -1,5 +1,6 @@
 using ConCore.Targets;
 using ConEngine.Scheduling;
+using ConEngine.Tests.Fakes;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Time.Testing;
 
@@ -30,30 +31,6 @@ public class PingDisciplineTests
         time.Advance(advance);
         var winner = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(2)));
         return winner != task;
-    }
-
-    /// <summary>Counts timers, so a test can wait until a woken loop has armed its
-    /// next fake-time timer instead of sleeping and hoping: advancing before the
-    /// timer exists would skip right past it.</summary>
-    private sealed class TimerCountingTime : FakeTimeProvider
-    {
-        private int _created;
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            Interlocked.Increment(ref _created);
-            return base.CreateTimer(callback, state, dueTime, period);
-        }
-
-        public async Task NewTimerArmedSince(int before)
-        {
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (Volatile.Read(ref _created) <= before && DateTime.UtcNow < deadline)
-                await Task.Delay(10);
-            Assert.True(Volatile.Read(ref _created) > before, "the woken loop never armed a new timer");
-        }
-
-        public int TimersCreated => Volatile.Read(ref _created);
     }
 
     [Fact]
