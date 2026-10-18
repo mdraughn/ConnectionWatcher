@@ -77,7 +77,9 @@ public class PingControllerTests
 
         await Collect(channel.Reader, 2);
         Volatile.Write(ref bursting, true);
-        await Collect(channel.Reader, 3);
+        // Wait for the condition (a ping observed with the burst timeout), not a count.
+        await TestWait.Eventually(() => factory.ObservedTimeouts[IpA].Contains(1000), 10_000,
+            "no ping ever used the burst timeout");
         cts.Cancel();
 
         var seen = factory.ObservedTimeouts[IpA].ToArray();
@@ -116,14 +118,18 @@ public class PingControllerTests
     /// as a failed sample. The controller must still not forward it.</summary>
     private sealed class CancelReportingFactory : IPingTransceiverFactory
     {
-        public IPingTransceiver Create(IPAddress ip, ProbeSpec probe, CancellationToken ct) => new Probe(ip, ct);
+        /// <summary>Completed when a probe has entered its (hanging) ping.</summary>
+        public readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        private sealed class Probe(IPAddress ip, CancellationToken ct) : IPingTransceiver
+        public IPingTransceiver Create(IPAddress ip, ProbeSpec probe, CancellationToken ct) => new Probe(ip, ct, Entered);
+
+        private sealed class Probe(IPAddress ip, CancellationToken ct, TaskCompletionSource entered) : IPingTransceiver
         {
             public IPAddress IpAddress => ip;
 
             public async Task<PingResult> PingAsync(int timeoutMs)
             {
+                entered.TrySetResult();
                 try { await Task.Delay(Timeout.Infinite, ct); }
                 catch (OperationCanceledException) { }
                 return new PingResult(ip, false, 0, "Cancelled");
@@ -136,14 +142,15 @@ public class PingControllerTests
     [Fact]
     public async Task A_probe_cancelled_mid_flight_writes_nothing_to_the_channel()
     {
+        var factory = new CancelReportingFactory();
         var channel = Channel.CreateUnbounded<RoutedPingResult>();
         using var cts = new CancellationTokenSource();
-        using var controller = new PingController(new CancelReportingFactory(), NullLogger.Instance, TimeProvider.System);
+        using var controller = new PingController(factory, NullLogger.Instance, TimeProvider.System);
 
         _ = controller.Launch(Guid.NewGuid(), IpA, channel.Writer, ProbeSpec.Icmp,
             new FixedIntervalCadence(TimeSpan.FromMilliseconds(1), TimeProvider.System),
             () => 60_000, cts.Token);
-        await Task.Delay(100); // the loop is inside its first (hanging) probe
+        await factory.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); // the loop is inside its first (hanging) probe
 
         await controller.StopAsync(TimeSpan.FromSeconds(2));
 
