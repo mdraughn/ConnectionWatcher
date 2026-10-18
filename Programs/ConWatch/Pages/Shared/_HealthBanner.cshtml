@@ -1,7 +1,7 @@
 @model IReadOnlyList<ConPersistence.Config.HealthWarning>
 @if (Model.Count > 0)
 {
-    var here = Context.Request.Path.Value ?? "";
+    var here = ViewContext.RouteData.Values["page"] as string ?? "";
     <div class="cw-health" role="alert">
         <b>Configuration warnings</b>
         <ul>

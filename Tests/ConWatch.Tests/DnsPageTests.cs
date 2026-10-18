@@ -138,19 +138,32 @@ public class DnsPageTests : IDisposable
         Assert.Equal("DNS", resolverWarning.GetProperty("pageName").GetString());
         Assert.Contains("on the DNS tab", resolverWarning.GetProperty("message").GetString());
 
-        // The dashboard's hint links to the one page the warnings share, or to "the Config pages" when they differ.
-        var pages = warnings.Select(w => w.GetProperty("page").GetString()).Distinct().ToList();
+        // The home seed has no anchor pool chosen, so a Pools warning sits beside the DNS one:
+        // the dashboard's hint must say the warnings are spread over the Config tabs.
+        Assert.Contains(warnings, w => w.GetProperty("page").GetString() == "/Config/Pools");
         string dashboard = "";
         await ConfigApiTests.Eventually(async () =>
         {
             dashboard = await _client.GetStringAsync("/");
             return dashboard.Contains("configuration warning");
         });
-        if (pages.Count == 1)
-            Assert.Contains("<a href=\"/Config/Dns\">review on the DNS page</a>", dashboard);
-        else
-            Assert.Contains(">review on the Config pages</a>", dashboard);
+        Assert.Contains(">review on the Config tabs</a>", dashboard);
         Assert.DoesNotContain("review on the Targets page", dashboard);
+
+        // With the pool chosen and three anchors in it, only the DNS warning is left: the hint names its tab.
+        var pools = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/pools");
+        var pool = pools.EnumerateArray().Single(p => p.GetProperty("name").GetString() == "Internet");
+        (await _client.PostAsJsonAsync("/api/v1/targets", new { name = "Quad9", address = "9.9.9.9", parent = "Router", profile = "Fast" })).EnsureSuccessStatusCode();
+        (await _client.PutAsJsonAsync($"/api/v1/pools/{pool.GetProperty("id").GetString()}",
+            new { id = pool.GetProperty("id").GetString(), name = "Internet", members = new[] { "Google", "Cloudflare", "Quad9" }, parent = "Router" })).EnsureSuccessStatusCode();
+        (await _client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?> { ["Verdict.AnchorPool"] = "Internet" })).EnsureSuccessStatusCode();
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var h = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/config/health");
+            return h.GetProperty("warnings").EnumerateArray().All(w => w.GetProperty("page").GetString() == "/Config/Dns");
+        });
+        dashboard = await _client.GetStringAsync("/");
+        Assert.Contains("<a href=\"/Config/Dns\">review on the Config → DNS tab</a>", dashboard);
 
         // On another Config tab the warning carries a link to the tab that owns it; on its own tab it does not.
         static string Item(string html) => System.Text.RegularExpressions.Regex.Match(html,

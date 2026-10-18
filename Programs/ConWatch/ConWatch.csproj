@@ -45,19 +45,25 @@
   <!-- The bundle is rebuilt whenever a client source is newer than it (MSBuild's
        Inputs/Outputs check), not only when it is missing: a stale bundle from an
        earlier checkout state must never ship. The installer publishes ConWatchCli,
-       so this project is only built, never published, and PublishClientBuild below
-       does not run for it. SkipClientBuild=true lets Docker build in a Node stage. -->
+       so this project is only built, never published — a publish-time target would
+       not run for it. The build runs BEFORE BeforeBuild, because the static web
+       asset list is taken from @(Content) early in the build: Vite names the shared
+       chunk by content hash and deletes the old one, so the list must be refreshed
+       after the build or the referencing project fails with MSB4018 on a file that
+       no longer exists. SkipClientBuild=true lets Docker build in a Node stage. -->
   <ItemGroup>
     <ClientSource Include="ClientApp\src\**;ClientApp\package.json;ClientApp\package-lock.json;ClientApp\vite.config.ts;ClientApp\tsconfig.json" />
   </ItemGroup>
-  <Target Name="EnsureClientBuild" BeforeTargets="Build" Inputs="@(ClientSource)" Outputs="wwwroot\js\dashboard.js;wwwroot\js\history.js" Condition="'$(SkipClientBuild)' != 'true'">
-    <Exec Command="npm ci" WorkingDirectory="ClientApp" Condition="!Exists('ClientApp\node_modules')" />
-    <Exec Command="npm run build" WorkingDirectory="ClientApp" />
-  </Target>
-
-  <Target Name="PublishClientBuild" BeforeTargets="ComputeFilesToPublish" Condition="'$(SkipClientBuild)' != 'true'">
+  <Target Name="EnsureClientDeps" Inputs="ClientApp\package-lock.json" Outputs="ClientApp\node_modules\.package-lock.json" Condition="'$(SkipClientBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="ClientApp" />
+  </Target>
+  <Target Name="EnsureClientBuild" BeforeTargets="BeforeBuild" DependsOnTargets="EnsureClientDeps" Inputs="@(ClientSource)" Outputs="wwwroot\js\dashboard.js;wwwroot\js\history.js" Condition="'$(SkipClientBuild)' != 'true'">
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
+    <ItemGroup>
+      <_StaleBundle Include="@(Content)" Condition="'%(RelativeDir)' == 'wwwroot\js\'" />
+      <Content Remove="@(_StaleBundle)" />
+      <Content Include="wwwroot\js\**" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    </ItemGroup>
   </Target>
 
 </Project>
