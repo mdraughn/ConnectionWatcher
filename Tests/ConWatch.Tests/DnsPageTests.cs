@@ -126,4 +126,41 @@ public class DnsPageTests : IDisposable
         Assert.Contains("Name resolution", fallback);
         Assert.DoesNotContain("Your resolver", fallback);
     }
+
+    [Fact]
+    public async Task The_resolver_warning_points_at_the_DNS_tab_from_the_dashboard_and_the_Targets_tab()
+    {
+        await SeedWithResolverAsync(); // a system resolver, no upstream one: the no-upstream-resolver warning stands
+        var health = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/config/health");
+        var warnings = health.GetProperty("warnings").EnumerateArray().ToList();
+        var resolverWarning = Assert.Single(warnings, w => w.GetProperty("code").GetString() == "no-upstream-resolver");
+        Assert.Equal("/Config/Dns", resolverWarning.GetProperty("page").GetString());
+        Assert.Equal("DNS", resolverWarning.GetProperty("pageName").GetString());
+        Assert.Contains("on the DNS tab", resolverWarning.GetProperty("message").GetString());
+
+        // The dashboard's hint links to the one page the warnings share, or to "the Config pages" when they differ.
+        var pages = warnings.Select(w => w.GetProperty("page").GetString()).Distinct().ToList();
+        string dashboard = "";
+        await ConfigApiTests.Eventually(async () =>
+        {
+            dashboard = await _client.GetStringAsync("/");
+            return dashboard.Contains("configuration warning");
+        });
+        if (pages.Count == 1)
+            Assert.Contains("<a href=\"/Config/Dns\">review on the DNS page</a>", dashboard);
+        else
+            Assert.Contains(">review on the Config pages</a>", dashboard);
+        Assert.DoesNotContain("review on the Targets page", dashboard);
+
+        // On another Config tab the warning carries a link to the tab that owns it; on its own tab it does not.
+        static string Item(string html) => System.Text.RegularExpressions.Regex.Match(html,
+            "data-code=\"no-upstream-resolver\".*?</li>", System.Text.RegularExpressions.RegexOptions.Singleline).Value;
+        var targetsItem = Item(await _client.GetStringAsync("/Config/Targets"));
+        Assert.NotEmpty(targetsItem);
+        Assert.Contains("href=\"/Config/Dns\"", targetsItem);
+        Assert.Contains("DNS tab", targetsItem);
+        var dnsItem = Item(await _client.GetStringAsync("/Config/Dns"));
+        Assert.NotEmpty(dnsItem);
+        Assert.DoesNotContain("href=", dnsItem);
+    }
 }

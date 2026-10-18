@@ -4,7 +4,26 @@ using Microsoft.EntityFrameworkCore;
 namespace ConPersistence.Config;
 
 /// <summary>One structured configuration warning.</summary>
-public record HealthWarning(string Code, string Message);
+public record HealthWarning(string Code, string Message)
+{
+    /// <summary>The page where this warning is fixed, so a banner can send the person
+    /// there rather than to a tab that cannot act on it.</summary>
+    public string Page => Code switch
+    {
+        "dns-not-watched" or "no-upstream-resolver" or "dns-over-https" => "/Config/Dns",
+        "no-anchor-pool" or "anchor-pool-missing" or "anchors-below-threshold"
+            or "anchors-below-recommended" or "pool-parent-drift" => "/Config/Pools",
+        "clone-source-active" => "/Settings",
+        _ => "/Config/Targets", // anchors-all-isp (operator tags), tcp-refused (probe), anything new
+    };
+
+    /// <summary>The page's name as the UI labels it ("DNS", "Pools", "Targets", "Settings").</summary>
+    public string PageName => Page[(Page.LastIndexOf('/') + 1)..] switch
+    {
+        "Dns" => "DNS",
+        var name => name,
+    };
+}
 
 /// <summary>
 /// Evaluates whether the current configuration can actually deliver what it
@@ -77,7 +96,7 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
                 : "Name resolution isn't being watched: the lookup-name list is empty and no hostname target is configured."));
         else if (!await db.Targets.AnyAsync(t => t.Scope == ConCore.Targets.TargetScope.Resolver && !t.SystemManaged && t.Enabled))
             warnings.Add(new HealthWarning("no-upstream-resolver",
-                "Name a public resolver (1.1.1.1, 8.8.8.8, …) as an upstream Resolver target so ConnectionWatcher can tell your resolver from everyone's."));
+                "Name a public resolver (1.1.1.1, 8.8.8.8, …) on the DNS tab so ConnectionWatcher can tell your resolver from everyone's."));
 
         if (doh is not null && dnsEnabled)
         {

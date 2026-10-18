@@ -17,6 +17,8 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
 
     public string InitialDataJson { get; private set; } = "{}";
     public int WarningCount { get; private set; }
+    /// <summary>The one page every current warning is fixed on, or null when they differ.</summary>
+    public ConPersistence.Config.HealthWarning? WarningPage { get; private set; }
     public bool EngineDisabled { get; private set; }
 
     public bool ShowLock => gate.IsLocked(User);
@@ -51,7 +53,9 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
                 return Redirect("/Setup");
         }
 
-        WarningCount = (await health.EvaluateAsync()).Count;
+        var healthWarnings = await health.EvaluateAsync();
+        WarningCount = healthWarnings.Count;
+        WarningPage = healthWarnings.Select(w => w.Page).Distinct().Count() == 1 ? healthWarnings[0] : null;
         var engine = host.Engine;
         var parents = new Dictionary<string, string?>();
         var poolMembers = new Dictionary<string, string[]>();
