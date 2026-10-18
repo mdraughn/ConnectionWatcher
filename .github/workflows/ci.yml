@@ -1,7 +1,10 @@
 # Test gate for pushes and PRs. The tray is Windows-only (WPF), so tests
 # run per-project rather than via the solution on the Linux runner.
+# Suites: ConEngine, ConPersistence, ConWatch, ConConfig, ConWatchCli and
+# ConNotify tests, then the client's tsc/vitest/build.
 # The runner has Docker, so NotifierIntegrationTests' MQTT cases run
-# against a real Mosquitto container here (they skip where Docker is down).
+# against a real Mosquitto container here; they skip where Docker is down
+# locally but FAIL when CI=true, so they can't silently skip in CI.
 name: ci
 
 on:
@@ -28,6 +31,7 @@ jobs:
       - run: dotnet test Tests/ConPersistence.Tests -c Debug
       - run: dotnet test Tests/ConWatch.Tests -c Debug
       - run: dotnet test Tests/ConConfig.Tests -c Debug
+      - run: dotnet test Tests/ConNotify.Tests -c Debug
       - run: dotnet test Tests/ConWatchCli.Tests -c Debug
 
   client:

@@ -266,15 +266,31 @@ public class NotifierIntegrationTests
         }
     }
 
+    // Starts a Mosquitto container. Where Docker or the container is unavailable the test
+    // skips locally, but fails in CI (CI=true) so a broken runner can't pass silently.
+    private static (int BrokerPort, string ContainerId) RequireMosquitto()
+    {
+        string containerId = "";
+        int brokerPort = 0;
+        if (DockerAvailable())
+        {
+            brokerPort = FreePort();
+            containerId = RunDocker(
+                $"run -d --rm -p {brokerPort}:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf").Trim();
+        }
+        if (containerId.Length == 0)
+        {
+            if (Environment.GetEnvironmentVariable("CI") == "true")
+                Assert.Fail("Docker/Mosquitto unavailable in CI");
+            Skip.If(true, "Docker/Mosquitto unavailable");
+        }
+        return (brokerPort, containerId);
+    }
+
     [SkippableFact]
     public async Task Mqtt_publishes_availability_discovery_and_states_to_a_real_broker()
     {
-        Skip.IfNot(DockerAvailable(), "Docker engine is not running");
-
-        var brokerPort = FreePort();
-        string containerId = RunDocker(
-            $"run -d --rm -p {brokerPort}:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf").Trim();
-        Skip.If(containerId.Length == 0, "Mosquitto container failed to start");
+        var (brokerPort, containerId) = RequireMosquitto();
         try
         {
             await WaitForBrokerAsync(brokerPort);
@@ -332,12 +348,7 @@ public class NotifierIntegrationTests
     [SkippableFact]
     public async Task Mqtt_settings_change_after_traffic_reconnects_on_the_new_base_topic()
     {
-        Skip.IfNot(DockerAvailable(), "Docker engine is not running");
-
-        var brokerPort = FreePort();
-        string containerId = RunDocker(
-            $"run -d --rm -p {brokerPort}:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf").Trim();
-        Skip.If(containerId.Length == 0, "Mosquitto container failed to start");
+        var (brokerPort, containerId) = RequireMosquitto();
         try
         {
             await WaitForBrokerAsync(brokerPort);
