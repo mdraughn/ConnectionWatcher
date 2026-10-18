@@ -126,6 +126,7 @@ public class VerdictCoordinatorTests
         Assert.Equal(VerdictState.LinkDown, Verdict);
         Assert.Equal("LinkDown: Comcast — Modem is Down", _verdict.CurrentDetail);
         Assert.Equal("Comcast", _verdict.CurrentOperator);
+        Assert.Equal(HostState.Down, _verdictTransitions.Last().To); // EV11: LinkDown maps to Down
 
         Feed("Modem", 20, true);
         AllHealthy(); // released anchors re-prove from Starting
@@ -171,6 +172,7 @@ public class VerdictCoordinatorTests
         Feed("Modem", 3, false);        // …and our own hop is losing too
         Assert.Equal(VerdictState.LinkDegraded, Verdict);
         Assert.Contains("Modem", _verdict.CurrentDetail);
+        Assert.Equal(HostState.Faltering, _verdictTransitions.Last().To); // EV11: LinkDegraded maps to Faltering
     }
 
     [Fact]
@@ -627,6 +629,7 @@ public class VerdictCoordinatorTests
     {
         // Final review I2 / spec §4.2: answering = 0 with at least one counted
         // anchor determined is LinkDown, not "waiting".
+        var transitions = new List<TargetTransition>();
         var (verdict, monitors, graph) = Stack(new WatcherOptions
         {
             Targets =
@@ -638,7 +641,7 @@ public class VerdictCoordinatorTests
                 new TargetConfig { Name = "Quad9", Address = "9.9.9.9", Parent = "Edge" },
             ],
             Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
-        }, unresolved: "Quad9");
+        }, transitions, "Quad9");
         Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
 
         FeedDown(monitors, graph, "Google");
@@ -646,11 +649,13 @@ public class VerdictCoordinatorTests
         // Quad9 could still answer: wait, but never longer than the cap.
         Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
         Assert.Equal("Waiting for anchors to report", verdict.CurrentDetail);
+        Assert.Equal(HostState.Starting, transitions.Last().To); // EV11: Unknown maps to Starting
 
         // No further samples: the cap timer alone must reclassify.
         _time.Advance(VerdictCoordinator.AnchorWaitCap);
         Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
         Assert.Equal("LinkDown: Comcast — nothing answers beyond Edge", verdict.CurrentDetail);
+        Assert.Equal(HostState.Down, transitions.Last().To); // EV11: LinkDown maps to Down
     }
 
     [Fact]
@@ -831,5 +836,150 @@ public class VerdictCoordinatorTests
         Assert.NotEmpty(results);
         Assert.All(results, r => Assert.True(r));
         Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict); // Seed stayed a no-op
+    }
+
+    /// <summary>EV4 (EV-R2): with no anchor determined at all there is no evidence
+    /// either way, so the verdict waits uncapped. Merged with the capped wait,
+    /// anchors whose addresses never resolve would read as LinkDown after 30 s.</summary>
+    [Fact]
+    public void No_anchor_determined_stays_unknown_past_the_cap()
+    {
+        var transitions = new List<TargetTransition>();
+        var (verdict, monitors, graph) = ColdStack(IspKnownTwoAnchors(), transitions, "Google", "Cloudflare");
+        FeedUp(monitors, graph, "Router");
+        FeedUp(monitors, graph, "Edge"); // the path answers
+        Assert.Equal(HostState.Responding, monitors[graph.GetByName("Edge").Id].CurrentState);
+
+        _time.Advance(VerdictCoordinator.AnchorWaitCap * 3);
+
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        Assert.Contains("No anchors determined", verdict.CurrentDetail);
+        Assert.Empty(transitions);
+    }
+
+    /// <summary>An ISP-owned anchor (Comcast DNS behind a Comcast edge) and two off-net ones.</summary>
+    private static WatcherOptions IspOwnedAndTwoOffNet() => new()
+    {
+        Targets =
+        [
+            new TargetConfig { Name = "Router", Address = "192.0.2.1", Profile = "Internal" },
+            new TargetConfig { Name = "Edge", Address = "203.0.113.1", Parent = "Router", Operator = "Comcast" },
+            new TargetConfig { Name = "Comcast DNS", Address = "203.0.113.53", Parent = "Edge", Operator = "Comcast" },
+            new TargetConfig { Name = "Google", Address = "198.51.100.8", Parent = "Edge" },
+            new TargetConfig { Name = "Cloudflare", Address = "198.51.100.1", Parent = "Edge" },
+        ],
+        Pools = [new PoolConfig { Name = "Internet", Members = ["Comcast DNS", "Google", "Cloudflare"] }],
+    };
+
+    /// <summary>EV4 (EV-R10): only an undetermined COUNTED anchor holds the wait. An
+    /// ISP-owned one could never prove the internet up, so it is not waited for.</summary>
+    [Fact]
+    public void A_stuck_isp_owned_anchor_does_not_hold_the_wait()
+    {
+        var (verdict, monitors, graph) = Stack(IspOwnedAndTwoOffNet(), unresolved: "Comcast DNS");
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+
+        FeedDown(monitors, graph, "Google");
+        FeedDown(monitors, graph, "Cloudflare");
+
+        // No advance: the stuck Comcast DNS is not waited for.
+        Assert.Equal(VerdictState.LinkDown, verdict.CurrentVerdict);
+        Assert.Contains("nothing answers beyond Edge", verdict.CurrentDetail);
+    }
+
+    /// <summary>EV7 (EV-R41): the frontier moves while the verdict stays LinkDown. No
+    /// transition is raised, but the detail and operator follow the blamed hop.</summary>
+    [Fact]
+    public void Link_down_frontier_refreshes_without_a_transition()
+    {
+        AllHealthy();
+        Fail("Google", "Cloudflare", "Quad9");
+        Assert.Equal(VerdictState.LinkDown, Verdict);
+        Assert.Contains("nothing answers beyond Modem", _verdict.CurrentDetail);
+        Assert.Equal("Comcast", _verdict.CurrentOperator);
+        var count = _verdictTransitions.Count;
+
+        Fail("Modem"); // the Modem also fails
+        Assert.Equal(VerdictState.LinkDown, Verdict);
+        Assert.Contains("Modem is Down", _verdict.CurrentDetail);
+        Assert.Equal("Comcast", _verdict.CurrentOperator);
+        Assert.Equal(count, _verdictTransitions.Count);
+
+        Fail("Router"); // then the untagged Router: the operator clears
+        Assert.Equal(VerdictState.LinkDown, Verdict);
+        Assert.Contains("Router is Down", _verdict.CurrentDetail);
+        Assert.Null(_verdict.CurrentOperator);
+        Assert.Equal(count, _verdictTransitions.Count);
+    }
+
+    /// <summary>EV8 (EV-R24): a Faltering anchor still answers, but it is degraded.</summary>
+    [Fact]
+    public void A_faltering_anchor_is_degraded()
+    {
+        AllHealthy();
+        Feed("Google", 3, false);
+        Assert.Equal(HostState.Faltering, _monitors[_graph.GetByName("Google").Id].CurrentState);
+
+        Assert.Equal(VerdictState.SiteIncident, Verdict);
+        Assert.Contains("Google", _verdict.CurrentDetail);
+    }
+
+    /// <summary>EV8 (EV-R25): an ISP-owned anchor never proves reachability, but its
+    /// failure still counts for quality.</summary>
+    [Fact]
+    public void A_down_isp_owned_anchor_counts_for_site_incident()
+    {
+        var (verdict, monitors, graph) = Stack(IspOwnedAndTwoOffNet());
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+
+        FeedDown(monitors, graph, "Comcast DNS");
+
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+        Assert.Contains("Comcast DNS", verdict.CurrentDetail);
+    }
+
+    /// <summary>EV8 (EV-R16): a losing path hop is blamed only at weather level. One
+    /// anchor down beside a Faltering Modem is still a site incident.</summary>
+    [Fact]
+    public void One_anchor_down_plus_a_faltering_hop_stays_site_incident()
+    {
+        AllHealthy();
+        Fail("Google");
+        Feed("Modem", 3, false);
+        Assert.Equal(HostState.Faltering, _monitors[_graph.GetByName("Modem").Id].CurrentState);
+
+        Assert.Equal(VerdictState.SiteIncident, Verdict);
+        Assert.DoesNotContain("Modem", _verdict.CurrentDetail);
+        Assert.Null(_verdict.CurrentOperator);
+    }
+
+    /// <summary>EV6: Quad9 sits behind a second modem that has died. It is explained
+    /// (Unreachable), so it is neither degraded nor answering.</summary>
+    [Fact]
+    public void An_unreachable_anchor_behind_a_dead_branch()
+    {
+        var (verdict, monitors, graph) = Stack(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.0.2.1", Profile = "Internal" },
+                new TargetConfig { Name = "ModemA", Address = "192.0.2.2", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "ModemB", Address = "192.0.2.3", Parent = "Router", Operator = "Verizon" },
+                new TargetConfig { Name = "Google", Address = "198.51.100.8", Parent = "ModemA" },
+                new TargetConfig { Name = "Cloudflare", Address = "198.51.100.1", Parent = "ModemA" },
+                new TargetConfig { Name = "Quad9", Address = "198.51.100.9", Parent = "ModemB" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+        });
+        FeedDown(monitors, graph, "ModemB");
+        FeedDown(monitors, graph, "Quad9");
+        Assert.Equal(HostState.Unreachable, monitors[graph.GetByName("Quad9").Id].CurrentState);
+
+        // AUDIT: D5 — pinned as it is today: Healthy, and the count includes the
+        // unreachable Quad9 as "responding". Ruling D5 keeps Healthy but wants an
+        // honest count ("2 anchors responding (Quad9 unreachable behind ModemB)");
+        // Task 32 flips this assertion.
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        Assert.Equal("Healthy: 3 anchors responding", verdict.CurrentDetail);
     }
 }

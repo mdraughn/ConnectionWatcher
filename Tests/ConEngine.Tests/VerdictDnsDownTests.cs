@@ -37,8 +37,14 @@ public class VerdictDnsDownTests
                 new TargetConfig { Name = "Your resolver 192.168.1.1", Address = "192.168.1.1", Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true },
                 new TargetConfig { Name = "Your resolver 192.168.1.2", Address = "192.168.1.2", Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver, SystemManaged = true },
                 new TargetConfig { Name = "9.9.9.9 directly", Address = "9.9.9.9", Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver },
+                // A third anchor, in the pool only for the tests that start with ThreeAnchors.
+                new TargetConfig { Name = "Quad9", Address = "198.51.100.9", Parent = "Router" },
             ],
-            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+            Pools =
+            [
+                new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] },
+                new PoolConfig { Name = ThreeAnchors, Members = ["Google", "Cloudflare", "Quad9"] },
+            ],
         });
         foreach (var target in _graph.Targets.Values)
         {
@@ -46,11 +52,13 @@ public class VerdictDnsDownTests
         }
     }
 
+    private const string ThreeAnchors = "Three anchors";
+
     private TargetMonitor M(string name) => _monitors[_graph.GetByName(name).Id];
 
     /// <summary>Tracking and topology start here, not in the constructor, so a test can
     /// warm-seed monitors first (TargetMonitor.Seed only works before tracking).</summary>
-    private void Start(bool watch = true, bool withUpstream = true, VerdictState? seed = null)
+    private void Start(bool watch = true, bool withUpstream = true, VerdictState? seed = null, string pool = "Internet")
     {
         foreach (var monitor in _monitors.Values)
             monitor.StartTracking(IPAddress.Parse(monitor.Target.Address));
@@ -59,7 +67,7 @@ public class VerdictDnsDownTests
         var dns = new DnsWatch(watch,
             [M("Your resolver 192.168.1.1"), M("Your resolver 192.168.1.2")],
             withUpstream ? [M("9.9.9.9 directly")] : []);
-        _verdict = new VerdictCoordinator(_graph, _graph.GetPoolByName("Internet"), _monitors,
+        _verdict = new VerdictCoordinator(_graph, _graph.GetPoolByName(pool), _monitors,
             weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance, dns, _dnsResults);
         if (seed is { } verdict)
             _verdict.Seed(verdict);
@@ -394,5 +402,93 @@ public class VerdictDnsDownTests
         Feed("Your resolver 192.168.1.1", 20, true);
         Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
         Assert.Null(_verdict.Current.Dns);
+    }
+
+    /// <summary>EV3 (EV-R23): name resolution is checked before quality, so DnsDown
+    /// outranks every reachable verdict, not only Healthy.</summary>
+    [Theory]
+    [InlineData(1, false, VerdictState.SiteIncident)]   // one anchor down
+    [InlineData(2, false, VerdictState.InternetWeather)] // two of three anchors down
+    [InlineData(2, true, VerdictState.LinkDegraded)]    // weather and a Faltering path hop
+    public void DnsDown_outranks_site_incident_weather_and_degraded(int anchorsDown, bool falteringHop, VerdictState without)
+    {
+        Start(pool: ThreeAnchors);
+        AnchorsUp();
+        Feed("Quad9", 10, true);
+        Feed("9.9.9.9 directly", 10, true);
+        foreach (var name in new[] { "Google", "Cloudflare" }.Take(anchorsDown))
+            Feed(name, 20, false);
+        if (falteringHop)
+        {
+            Feed("Router", 3, false);
+            Assert.Equal(HostState.Faltering, M("Router").CurrentState);
+        }
+        Assert.Equal(without, _verdict.CurrentVerdict); // the verdict DnsDown has to outrank
+
+        ResolversDown();
+
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Equal(DnsBlameKind.YourResolver, _verdict.Current.Dns!.Kind);
+    }
+
+    /// <summary>EV3 (EV-R33): with no system resolver determined there is nothing to
+    /// judge. No resolver wait starts, so the cap concludes nothing and nothing throws.</summary>
+    [Fact]
+    public void Resolvers_never_determined_stay_healthy_past_the_cap()
+    {
+        Start();
+        AnchorsUp();
+        _time.Advance(VerdictCoordinator.AnchorWaitCap * 2);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Null(_verdict.Current.Dns);
+
+        // A monitor transition reclassifies after the cap: still nothing to conclude.
+        var thrown = Xunit.Record.Exception(() => Feed("9.9.9.9 directly", 10, true));
+        Assert.Null(thrown);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Null(_verdict.Current.Dns);
+    }
+
+    /// <summary>EV3 (EV-R33): a Faltering resolver still answers. It is determined and
+    /// not Down, so there is no DnsDown, now or after the cap.</summary>
+    [Fact]
+    public void A_faltering_resolver_beside_a_down_one_is_not_DnsDown()
+    {
+        Start();
+        AnchorsUp();
+        Feed("9.9.9.9 directly", 10, true);
+        Feed("Your resolver 192.168.1.2", 10, true);
+        Feed("Your resolver 192.168.1.2", 3, false);
+        Assert.Equal(HostState.Faltering, M("Your resolver 192.168.1.2").CurrentState);
+        Feed("Your resolver 192.168.1.1", 20, false);
+        Assert.Equal(HostState.Down, M("Your resolver 192.168.1.1").CurrentState);
+
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        _time.Advance(VerdictCoordinator.AnchorWaitCap * 2);
+        Assert.Equal(VerdictState.Healthy, _verdict.CurrentVerdict);
+        Assert.Null(_verdict.Current.Dns);
+        Assert.DoesNotContain(_transitions, t => t.Reason.Verdict == "DnsDown");
+    }
+
+    /// <summary>EV7 (EV-R41): the same verdict raises no transition, but the snapshot's
+    /// detail and DNS blame still follow the evidence.</summary>
+    [Fact]
+    public void Dns_blame_refreshes_without_a_transition()
+    {
+        Start();
+        AnchorsUp();
+        Feed("9.9.9.9 directly", 10, true);
+        ResolversDown();
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Equal(DnsBlameKind.YourResolver, _verdict.Current.Dns!.Kind);
+        var count = _transitions.Count;
+
+        Feed("9.9.9.9 directly", 20, false); // the upstream goes Down too
+        Assert.Equal(HostState.Down, M("9.9.9.9 directly").CurrentState);
+
+        Assert.Equal(VerdictState.DnsDown, _verdict.CurrentVerdict);
+        Assert.Equal(DnsBlameKind.NoResolver, _verdict.Current.Dns!.Kind);
+        Assert.Contains("No resolver is answering", _verdict.CurrentDetail);
+        Assert.Equal(count, _transitions.Count);
     }
 }

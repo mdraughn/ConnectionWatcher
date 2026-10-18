@@ -27,6 +27,8 @@ public class VerdictBlameOrderTests : IDisposable
     private readonly VerdictCoordinator _verdict;
     private readonly List<TargetTransition> _transitions = new();
     private readonly List<ModelCheckCoordinator> _checks = new();
+    // What the branching-topology tests build, disposed with the fixture.
+    private readonly List<IDisposable> _branching = new();
 
     public VerdictBlameOrderTests()
     {
@@ -61,6 +63,8 @@ public class VerdictBlameOrderTests : IDisposable
         _verdict.Dispose();
         foreach (var c in _checks)
             c.Dispose();
+        foreach (var d in _branching)
+            d.Dispose();
         _topology.Dispose();
         foreach (var m in _monitors.Values)
             m.Dispose();
@@ -256,5 +260,115 @@ public class VerdictBlameOrderTests : IDisposable
 
         Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
         Assert.Empty(transitions);
+    }
+
+    /// <summary>Two WANs (EV5): Router → ModemA (Comcast) → {Google, Cloudflare};
+    /// Router → ModemB (Verizon) → Inner → Quad9. Paths, root first: Google and
+    /// Cloudflare [Router, ModemA]; Quad9 [Router, ModemB, Inner].</summary>
+    private (VerdictCoordinator Verdict, Dictionary<Guid, TargetMonitor> Monitors, TargetGraph Graph) Branching(
+        string[] pool, params TargetConfig[] extra)
+    {
+        var graph = TargetGraph.FromOptions(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.0.2.1", Profile = "Internal" },
+                new TargetConfig { Name = "ModemA", Address = "192.0.2.2", Parent = "Router", Operator = "Comcast" },
+                new TargetConfig { Name = "ModemB", Address = "192.0.2.3", Parent = "Router", Operator = "Verizon" },
+                new TargetConfig { Name = "Inner", Address = "203.0.113.1", Parent = "ModemB" },
+                new TargetConfig { Name = "Google", Address = "198.51.100.8", Parent = "ModemA" },
+                new TargetConfig { Name = "Cloudflare", Address = "198.51.100.1", Parent = "ModemA" },
+                new TargetConfig { Name = "Quad9", Address = "198.51.100.9", Parent = "Inner" },
+                .. extra,
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = [.. pool] }],
+        });
+        var monitors = new Dictionary<Guid, TargetMonitor>();
+        foreach (var target in graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time), _time, NullLoggerFactory.Instance);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            monitors[target.Id] = monitor;
+            _branching.Add(monitor);
+        }
+        var topology = new TopologyCoordinator(graph, monitors, NullLogger<TopologyCoordinator>.Instance);
+        topology.Start();
+        _branching.Add(topology);
+        var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
+            weatherThreshold: 2, _time, NullLogger<VerdictCoordinator>.Instance);
+        verdict.Start();
+        _branching.Add(verdict);
+        foreach (var m in monitors.Values)
+            for (int i = 0; i < 5; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+            }
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        return (verdict, monitors, graph);
+    }
+
+    private void FeedTo(Dictionary<Guid, TargetMonitor> monitors, TargetGraph graph, string name, int count, bool success)
+    {
+        var monitor = monitors[graph.GetByName(name).Id];
+        for (int i = 0; i < count; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            monitor.RecordPingResult(new PingResult(monitor.ResolvedAddress!, success,
+                success ? 5 : 0, timestamp: _time.GetUtcNow()));
+        }
+    }
+
+    private VerdictCoordinator.VerdictSnapshot EveryAnchorDownBehindAnsweringHops(string[] pool)
+    {
+        var (verdict, monitors, graph) = Branching(pool);
+        foreach (var anchor in pool)
+            FeedTo(monitors, graph, anchor, 20, false);
+        foreach (var hop in new[] { "Router", "ModemA", "ModemB", "Inner" })
+            Assert.Equal(HostState.Responding, monitors[graph.GetByName(hop).Id].CurrentState);
+        return verdict.Current;
+    }
+
+    /// <summary>EV5 (EV-R19): every hop answers, so each failing anchor's frontier is its
+    /// last hop. Google and Cloudflare blame path index 2 (beyond ModemA); Quad9 blames
+    /// index 3 (beyond Inner). The smallest index wins whatever the pool order.</summary>
+    [Fact]
+    public void Blame_takes_the_shallowest_frontier_across_branching_paths()
+    {
+        var forward = EveryAnchorDownBehindAnsweringHops(["Google", "Cloudflare", "Quad9"]);
+        var reversed = EveryAnchorDownBehindAnsweringHops(["Quad9", "Cloudflare", "Google"]);
+
+        Assert.Equal(VerdictState.LinkDown, forward.State);
+        Assert.Contains("nothing answers beyond ModemA", forward.Detail);
+        Assert.Equal("Comcast", forward.Operator);
+        Assert.Contains("nothing answers beyond ModemA", reversed.Detail);
+        Assert.Equal(forward, reversed);
+    }
+
+    /// <summary>EV5 (EV-R30): during weather, a Down hop with nothing answering beyond it
+    /// is a losing hop, and the shallowest losing hop is blamed. ModemB (path index 1) is
+    /// Down with Inner and Quad9 silent behind it; the only Faltering hop, Agg, is at
+    /// index 2 on the other branch. Level3 behind Agg still answers.</summary>
+    [Fact]
+    public void A_down_hop_with_nothing_beyond_is_blamed_for_weather()
+    {
+        var (verdict, monitors, graph) = Branching(["Google", "Cloudflare", "Quad9", "Level3"],
+            new TargetConfig { Name = "Agg", Address = "192.0.2.20", Parent = "ModemA" },
+            new TargetConfig { Name = "Level3", Address = "198.51.100.4", Parent = "Agg" });
+        HostState State(string name) => monitors[graph.GetByName(name).Id].CurrentState;
+
+        FeedTo(monitors, graph, "Google", 20, false);
+        FeedTo(monitors, graph, "Cloudflare", 20, false); // weather level (threshold 2)
+        FeedTo(monitors, graph, "ModemB", 20, false);
+        FeedTo(monitors, graph, "Inner", 20, false);
+        FeedTo(monitors, graph, "Quad9", 20, false);      // nothing answers beyond ModemB
+        FeedTo(monitors, graph, "Agg", 3, false);
+        Assert.Equal(HostState.Down, State("ModemB"));
+        Assert.Equal(HostState.Faltering, State("Agg"));
+        Assert.Equal(HostState.Responding, State("Level3"));
+
+        Assert.Equal(VerdictState.LinkDegraded, verdict.CurrentVerdict);
+        Assert.Contains("ModemB is Down", verdict.CurrentDetail);
+        Assert.Equal("Verizon", verdict.CurrentOperator);
     }
 }
