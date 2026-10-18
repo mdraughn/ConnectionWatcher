@@ -147,6 +147,46 @@ public class TopologyCoordinatorTests
     }
 
     [Fact]
+    public void A_deeper_cause_re_pins_silently()
+    {
+        AllHealthy();
+        Feed("Inside", 20, false);
+        Feed("Edge", 20, false);
+        Feed("Google", 20, false);
+        Feed("Cloudflare", 20, false);
+        Assert.Equal(HostState.Unreachable, State("Google"));
+        Assert.Equal(Id("Inside"), M("Google").ExplainedBy); // Inside Down explains Google
+        int googleBefore;
+        lock (_transitions) googleBefore = _transitions.Count(t => t.TargetName == "Google");
+
+        Feed("Router", 20, false);   // the Switch still answers: Router forwards, Inside stays the root
+        Assert.Equal(Id("Inside"), M("Google").ExplainedBy);
+        Feed("Switch", 20, false);   // nothing beyond Router answers now: Router is the shallower cause
+
+        Assert.Equal(HostState.Down, State("Router"));
+        Assert.Equal(Id("Router"), M("Google").ExplainedBy);
+        Assert.Equal(HostState.Unreachable, State("Google"));
+        lock (_transitions)
+            Assert.Equal(googleBefore, _transitions.Count(t => t.TargetName == "Google"));
+    }
+
+    [Fact]
+    public void A_faltering_ancestor_explains_nothing()
+    {
+        // Edge falters and nothing beyond it answers, so Edge would be unproven:
+        // only a Down ancestor may explain, a Faltering one never does.
+        AllHealthy();
+        Feed("Edge", 2, false);
+        Assert.Equal(HostState.Faltering, State("Edge"));
+        Feed("Cloudflare", 20, false);
+        Feed("Google", 20, false);
+
+        Assert.Equal(HostState.Down, State("Google"));
+        Assert.Null(M("Google").ExplainedBy);
+        Assert.Null(_coordinator.RootCause(Id("Google")));
+    }
+
+    [Fact]
     public void When_proof_of_forwarding_appears_an_explained_target_reproves_and_is_down_on_its_own()
     {
         AllHealthy();

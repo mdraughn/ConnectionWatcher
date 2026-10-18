@@ -198,6 +198,15 @@ public class SuspicionCoordinatorTests
         Assert.Contains("Cloudflare", internet.Detail);
         Assert.Contains("upstream", internet.Detail); // trunk stayed clean
         Assert.Equal(2, _glitches.Count(g => g.Class == GlitchClass.Target));
+        // AUDIT: the Internet glitch is emitted when the FIRST anchor episode closes, and its span covers only
+        // the closed glitches in the cluster. Cloudflare is still open and counts as a contributor, but its
+        // later losses are not in the span (Google 1..3 s, Cloudflare 2..4 s: the span is 1..3 s, not 1..4 s).
+        // Question: should the span include open contributors? Pinned as is.
+        var google = _glitches.Single(g => g.TargetName == "Google");
+        var cloudflare = _glitches.Single(g => g.TargetName == "Cloudflare");
+        Assert.Equal(google.StartUtc, internet.StartUtc);
+        Assert.Equal(google.EndUtc, internet.EndUtc);
+        Assert.True(cloudflare.EndUtc > internet.EndUtc);
     }
 
     [Fact]
@@ -220,6 +229,213 @@ public class SuspicionCoordinatorTests
         }
 
         var internet = Assert.Single(_glitches, g => g.Class == GlitchClass.Internet);
+        Assert.Contains("link/ISP", internet.Detail);
+    }
+
+    /// <summary>A second, custom topology on the same clock; disabled targets get no monitor,
+    /// as in the engine.</summary>
+    private sealed class Rig
+    {
+        private readonly FakeTimeProvider _clock;
+        public readonly TargetGraph Graph;
+        public readonly Dictionary<Guid, TargetMonitor> Monitors = new();
+        public readonly SuspicionCoordinator Suspicion;
+        public readonly List<GlitchEvent> Glitches = new();
+
+        public Rig(FakeTimeProvider clock, WatcherOptions options, string pool)
+        {
+            _clock = clock;
+            Graph = TargetGraph.FromOptions(options);
+            foreach (var target in Graph.Targets.Values.Where(t => t.Enabled))
+            {
+                var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, clock),
+                    clock, NullLoggerFactory.Instance);
+                monitor.StartTracking(IPAddress.Parse(target.Address));
+                Monitors[target.Id] = monitor;
+            }
+            Suspicion = new SuspicionCoordinator(Graph, Graph.GetPoolByName(pool), Monitors,
+                weatherThreshold: 2, clock, NullLogger<SuspicionCoordinator>.Instance);
+            Suspicion.GlitchSource.Subscribe(Glitches.Add);
+        }
+
+        public TargetMonitor Monitor(string name) => Monitors[Graph.GetByName(name).Id];
+
+        public void Feed(string name, bool success, double advanceSeconds = 1)
+        {
+            _clock.Advance(TimeSpan.FromSeconds(advanceSeconds));
+            var monitor = Monitor(name);
+            var result = new PingResult(monitor.ResolvedAddress!, success,
+                success ? 5 : 0, success ? null : "Timed out", timestamp: _clock.GetUtcNow());
+            monitor.Discipline.OnPingResult(success);
+            monitor.RecordPingResult(result);
+            Suspicion.OnPingSample(monitor.Target.Id, result);
+        }
+
+        public void Prime(params string[] names)
+        {
+            foreach (var name in names)
+                for (int i = 0; i < 10; i++)
+                    Feed(name, true, advanceSeconds: 0.01);
+            _clock.Advance(TimeSpan.FromSeconds(120));
+        }
+    }
+
+    [Fact]
+    public void A_trunk_hop_loss_sweeps_anchors_and_trunk()
+    {
+        PrimeAllResponding();
+        _time.Advance(TimeSpan.FromSeconds(120));
+
+        Feed("Modem", false); // a trunk hop, not an anchor
+
+        foreach (var swept in new[] { "Google", "Cloudflare", "Quad9", "Modem", "Router" })
+            Assert.True(Monitor(swept).Discipline.IsBurstActive, $"{swept} should be bursting");
+        Assert.False(Monitor("Printer").Discipline.IsBurstActive, "Printer is not in the sweep set");
+    }
+
+    [Fact]
+    public void An_already_faltering_anchor_does_not_sweep()
+    {
+        PrimeAllResponding();
+        Feed("Google", false);
+        Feed("Google", false);
+        Feed("Google", false); // 7/10 -> Faltering
+        Assert.Equal(HostState.Faltering, Monitor("Google").CurrentState);
+        _time.Advance(TimeSpan.FromSeconds(300)); // that sweep's burst and its guard are long gone
+        foreach (var name in new[] { "Cloudflare", "Quad9", "Modem", "Router" })
+            Assert.False(Monitor(name).Discipline.IsBurstActive, $"{name} should be quiet before the test");
+
+        Feed("Google", false); // lost again, but no longer healthy: not a first sign of trouble
+
+        foreach (var name in new[] { "Cloudflare", "Quad9", "Modem", "Router" })
+            Assert.False(Monitor(name).Discipline.IsBurstActive, $"{name} must not burst");
+    }
+
+    [Fact]
+    public void A_disabled_hop_is_walked_through()
+    {
+        // Router -> Modem (disabled, so unmonitored) -> Google, Cloudflare. Router stays a trunk target.
+        var rig = new Rig(_time, new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1" },
+                new TargetConfig { Name = "Modem", Address = "192.168.100.1", Parent = "Router", Enabled = false },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Modem" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Modem" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        }, "Internet");
+        rig.Prime("Router", "Google", "Cloudflare");
+
+        rig.Feed("Google", false);
+        Assert.True(rig.Monitor("Router").Discipline.IsBurstActive, "Router sits above the disabled hop");
+        Assert.True(rig.Monitor("Cloudflare").Discipline.IsBurstActive);
+    }
+
+    [Fact]
+    public void Episodes_ninety_seconds_apart_do_not_coalesce()
+    {
+        PrimeAllResponding();
+        _time.Advance(TimeSpan.FromSeconds(120));
+
+        Feed("Google", false);
+        Feed("Google", false);
+        for (int i = 0; i < 10; i++)
+            Feed("Google", true); // first glitch emitted; losses age out of the window
+
+        _time.Advance(TimeSpan.FromSeconds(90));
+        Feed("Google", false);
+        Feed("Google", false);
+        for (int i = 0; i < 5; i++)
+            Feed("Google", true);
+
+        Assert.Equal(2, _glitches.Count(g => g.Class == GlitchClass.Target));
+        Assert.False(_glitches[0].Coalesced);
+        Assert.False(_glitches[^1].Coalesced);
+    }
+
+    [Fact]
+    public void Anchor_glitches_thirty_seconds_apart_are_not_an_internet_glitch()
+    {
+        PrimeAllResponding();
+        _time.Advance(TimeSpan.FromSeconds(120));
+
+        Feed("Google", false);
+        Feed("Google", false);
+        for (int i = 0; i < 5; i++)
+            Feed("Google", true);
+        _time.Advance(TimeSpan.FromSeconds(30));
+        Feed("Cloudflare", false);
+        Feed("Cloudflare", false);
+        for (int i = 0; i < 5; i++)
+            Feed("Cloudflare", true);
+
+        Assert.Equal(2, _glitches.Count(g => g.Class == GlitchClass.Target));
+        Assert.DoesNotContain(_glitches, g => g.Class == GlitchClass.Internet);
+    }
+
+    [Fact]
+    public void An_internet_glitch_spans_the_union_of_its_closed_members()
+    {
+        PrimeAllResponding();
+        _time.Advance(TimeSpan.FromSeconds(120));
+
+        // Google's glitch closes first (alone: no Internet glitch yet) ...
+        Feed("Google", false);
+        var start = _time.GetUtcNow();
+        Feed("Google", false);
+        for (int i = 0; i < 5; i++)
+            Feed("Google", true);
+        Assert.DoesNotContain(_glitches, g => g.Class == GlitchClass.Internet);
+        // ... then Cloudflare's, starting within the slack of Google's end, completes the cluster.
+        Feed("Cloudflare", false);
+        Feed("Cloudflare", false);
+        var end = _time.GetUtcNow();
+        for (int i = 0; i < 5; i++)
+            Feed("Cloudflare", true);
+
+        var internet = Assert.Single(_glitches, g => g.Class == GlitchClass.Internet);
+        Assert.Equal(start, internet.StartUtc);
+        Assert.Equal(end, internet.EndUtc);
+    }
+
+    [Fact]
+    public void A_nested_anchor_counts_as_trunk_for_sweeps()
+    {
+        // EV15, observed then pinned (Mark ruled D7 "keep both rules"; no AUDIT).
+        // Here an anchor parented under another anchor IS a trunk target: the suspicion
+        // sweep treats the outer anchor as trunk. The verdict's opposite rule
+        // (A_tagged_anchor_nested_under_another_anchor_does_not_make_its_operator_the_isp,
+        // VerdictCoordinatorTests) -- an anchor is not a path hop -- is deliberate too.
+        var rig = new Rig(_time, new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "Router", Address = "192.168.1.1" },
+                new TargetConfig { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new TargetConfig { Name = "Google DNS", Address = "8.8.4.4", Parent = "Google" },
+                new TargetConfig { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Google DNS", "Cloudflare"] }],
+        }, "Internet");
+        rig.Prime("Router", "Google", "Google DNS", "Cloudflare");
+
+        // (a) a loss on the inner anchor sweeps the whole set.
+        rig.Feed("Google DNS", false);
+        foreach (var name in new[] { "Google", "Google DNS", "Cloudflare", "Router" })
+            Assert.True(rig.Monitor(name).Discipline.IsBurstActive, $"{name} should be bursting");
+
+        // (b) the outer anchor's glitch counts as "trunk involved" in the Internet-glitch wording.
+        rig.Feed("Google DNS", false);
+        rig.Feed("Google", false);
+        rig.Feed("Google", false);
+        for (int i = 0; i < 5; i++)
+        {
+            rig.Feed("Google DNS", true);
+            rig.Feed("Google", true);
+        }
+        var internet = Assert.Single(rig.Glitches, g => g.Class == GlitchClass.Internet);
         Assert.Contains("link/ISP", internet.Detail);
     }
 

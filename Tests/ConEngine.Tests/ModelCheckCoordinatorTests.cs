@@ -373,4 +373,133 @@ public class ModelCheckCoordinatorTests : IDisposable
         var note = Assert.Single(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
         Assert.EndsWith("consider a TCP probe.", note.Message);
     }
+
+    [Fact]
+    public void Real_forwarding_loss_blocks_the_note()
+    {
+        // Inside loses half its probes but everything beyond loses a little too:
+        // some of that loss is real forwarding loss, so it is not probe-only.
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 6, beyondLost: 1);
+        Assert.DoesNotContain(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+    }
+
+    [Theory]
+    [InlineData(2, true)]   // about 17 % of its own probes: raised
+    [InlineData(1, false)]  // about 8 %: below the raise line
+    public void Probe_only_raise_boundary(int insideLost, bool raised)
+    {
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: insideLost);
+        Assert.Equal(raised, _check.Active.Any(c => c.Kind == ModelWarningKind.ProbeOnlyLoss));
+    }
+
+    [Fact]
+    public void Forwarding_loss_clears_a_held_note()
+    {
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 3);
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 6, beyondLost: 1); // own loss stays far above the clear line
+        Assert.DoesNotContain(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+    }
+
+    [Fact]
+    public void A_held_note_survives_a_little_forwarding_loss()
+    {
+        // Hysteresis: forwarding loss may grow past the raise limit and the held note stays.
+        StartCheck();
+        AllHealthy();
+        for (int i = 0; i < ModelCheckCoordinator.ProbeOnlyWindows; i++)
+            CloseWindow(insideLost: 3);
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+
+        for (int i = 0; i < 5; i++)
+            CloseWindow(insideLost: 3, beyondLost: 1); // average forwarding loss about 4 %
+        Assert.Contains(_check.Active, c => c.Kind == ModelWarningKind.ProbeOnlyLoss);
+    }
+
+    [Fact]
+    public void A_refusing_tcp_hop_is_answered_not_never_answered()
+    {
+        StartCheck();
+        foreach (var name in new[] { "Router", "External", "Google", "Cloudflare" })
+            Feed(name, 5, true);
+        // Inside (tcp/80) answered only with refusals, then went quiet.
+        var inside = _monitors[Id("Inside")];
+        for (int i = 0; i < 5; i++)
+        {
+            _time.Advance(TimeSpan.FromSeconds(1));
+            inside.RecordPingResult(new PingResult(inside.ResolvedAddress!, true, 5, "Refused",
+                timestamp: _time.GetUtcNow()));
+        }
+        Assert.Equal(0, inside.AcceptedReplies);
+        Feed("Inside", 20, false);
+
+        while (_time.GetUtcNow() - DateTimeOffset.Parse("2026-10-09T00:00:00Z") < ModelCheckCoordinator.NeverAnsweredAfter)
+            Feed("External", 5, true);
+        _time.Advance(ModelCheckCoordinator.EvaluateEvery);
+
+        var active = Assert.Single(_check.Active);
+        Assert.Equal(ModelWarningKind.HopBypassed, active.Kind);
+        Assert.Equal(Id("Inside"), active.TargetId);
+        Assert.DoesNotContain(_changes, c => c.Condition.Kind == ModelWarningKind.NeverAnswered);
+    }
+
+    [Fact]
+    public void Model_checks_apply_to_a_lan_switch()
+    {
+        var graph = TargetGraph.FromOptions(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "LanRouter", Address = "192.0.2.1", Profile = "Internal", Scope = TargetScope.Local },
+                new TargetConfig { Name = "LanSwitch", Address = "192.0.2.2", Parent = "LanRouter", Profile = "Internal", Scope = TargetScope.Local },
+                new TargetConfig { Name = "LanCamera", Address = "192.0.2.3", Parent = "LanSwitch", Profile = "Internal", Scope = TargetScope.Local },
+            ],
+        });
+        var monitors = new Dictionary<Guid, TargetMonitor>();
+        foreach (var target in graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time), _time, NullLoggerFactory.Instance);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            monitors[target.Id] = monitor;
+        }
+        void LanFeed(string name, int count, bool success)
+        {
+            var monitor = monitors[graph.GetByName(name).Id];
+            for (int i = 0; i < count; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                monitor.RecordPingResult(new PingResult(monitor.ResolvedAddress!, success,
+                    success ? 5 : 0, timestamp: _time.GetUtcNow()));
+            }
+        }
+        using var check = new ModelCheckCoordinator(graph, monitors, false, _time,
+            NullLogger<ModelCheckCoordinator>.Instance);
+        check.Start();
+        try
+        {
+            foreach (var name in new[] { "LanRouter", "LanSwitch", "LanCamera" })
+                LanFeed(name, 5, true);
+            LanFeed("LanSwitch", 20, false); // the switch's probe fails; the camera behind it answers
+
+            var note = Assert.Single(check.Active);
+            Assert.Equal(ModelWarningKind.HopBypassed, note.Kind);
+            Assert.Equal("LanSwitch", note.TargetName);
+        }
+        finally
+        {
+            foreach (var m in monitors.Values)
+                m.Dispose();
+        }
+    }
 }
