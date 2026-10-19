@@ -36,11 +36,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly HttpClient _http = new(ConConfig.LocalServerHttp.CreateHandler()) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly TraySettings _settings = new();
     private readonly Dictionary<(TrayState, bool), Icon> _icons = new();
-    private TrayInfo _last = new(TrayState.Unreachable, null, []);
-    private bool _firstPoll = true;
-    private readonly CriticalWatch _critical = new();
-    private IReadOnlyList<TrayCritical> _criticalShown = [];
-    private IReadOnlyList<string> _notes = [];
+    private readonly TrayModel _model = new();
     private ToolStripItem _notesItem = null!;
     private readonly ScoutRunner _scout = new();
     private readonly ScoutPasswordStore _scoutPasswords = new();
@@ -128,29 +124,17 @@ internal sealed class TrayContext : ApplicationContext
             next = new TrayInfo(TrayState.Unreachable, null, []);
         }
 
-        TrayToast? internetToast = null;
-        bool stateChanged = next.State != _last.State || next.NamesFailing != _last.NamesFailing;
-        bool notesChanged = !next.Notes.SequenceEqual(_notes);
-        bool criticalChanged = !next.Critical.SequenceEqual(_criticalShown);
-        if (stateChanged || notesChanged || criticalChanged)
+        var (redraw, toast) = _model.Apply(next, _settings.NotificationsEnabled, _settings.EffectiveUrl);
+        if (redraw)
         {
-            var previous = _last;
-            _last = next;
-            _notes = next.Notes;
-            _criticalShown = next.Critical;
             _icon.Icon = IconFor(next.State, badge: next.Notes.Count > 0);
             _icon.Text = TrayStatus.Tooltip(next);
             _notesItem.Text = $"ConnectionWatcher notes ({next.Notes.Count})";
             _notesItem.Visible = next.Notes.Count > 0;
-            if (stateChanged)
-                internetToast = MaybeToast(previous, next); // notes never toast (spec D3)
         }
 
-        // Critical devices (spec §4.7): their own failure and recovery toast,
-        // even while the internet is fine. Notes never toast (D3).
-        var critical = _critical.Update(next, announce: !_firstPoll && _settings.NotificationsEnabled);
         // One balloon per poll: a second would replace the first.
-        if (TrayToasts.Combine(internetToast, critical) is { } toast)
+        if (toast is not null)
             Balloon(toast.Title, Truncate(toast.Body, 250),
                 toast.Level switch
                 {
@@ -159,18 +143,6 @@ internal sealed class TrayContext : ApplicationContext
                     _ => ToolTipIcon.Info,
                 },
                 toast.OpenNotes ? "/#notes" : null);
-        _firstPoll = false;
-    }
-
-    /// <summary>
-    /// Toast on changes a person would act on: down (link or name lookups), degraded,
-    /// recovered, monitor lost/back. Never on startup, never for measuring churn.
-    /// </summary>
-    private TrayToast? MaybeToast(TrayInfo previous, TrayInfo next)
-    {
-        if (_firstPoll || !_settings.NotificationsEnabled)
-            return null;
-        return TrayToasts.Internet(previous, next, _settings.EffectiveUrl);
     }
 
     /// <summary>

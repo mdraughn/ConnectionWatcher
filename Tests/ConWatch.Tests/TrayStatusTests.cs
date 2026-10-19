@@ -181,6 +181,28 @@ public class TrayStatusTests
         Assert.StartsWith("Internet: DOWN", TrayStatus.Tooltip(info));
     }
 
+    // TR4: with `verdict: null` the worst non-Local target decides.
+    [Theory]
+    [InlineData("""[]""", TrayState.Measuring, null)]
+    [InlineData("""[{"name":"Router","state":"Down","scope":"Verdict"}]""", TrayState.Down, "Router=Down")]
+    [InlineData("""[{"name":"Router","state":"Unreachable","scope":"Verdict"},{"name":"Google","state":"Responding","scope":"Verdict"}]""", TrayState.Down, "Router=Unreachable")]
+    [InlineData("""[{"name":"Router","state":"Faltering","scope":"Verdict"},{"name":"Google","state":"Recovering","scope":"Verdict"}]""", TrayState.Degraded, "Router=Faltering, Google=Recovering")]
+    [InlineData("""[{"name":"Router","state":"Down","scope":"Verdict"},{"name":"Google","state":"Faltering","scope":"Verdict"}]""", TrayState.Down, "Router=Down")] // Down outranks Faltering
+    [InlineData("""[{"name":"Router","state":"Starting","scope":"Verdict"},{"name":"Google","state":"Initializing","scope":"Verdict"}]""", TrayState.Measuring, null)]
+    [InlineData("""[{"name":"Router","state":"Starting","scope":"Verdict"},{"name":"Google","state":"Responding","scope":"Verdict"}]""", TrayState.Healthy, null)]
+    [InlineData("""[{"name":"Router","state":"Responding","scope":"Verdict"}]""", TrayState.Healthy, null)]
+    // A Local target Down never makes the state Down (it is not the internet).
+    [InlineData("""[{"name":"Printer","state":"Down","scope":"Local"},{"name":"Google","state":"Responding","scope":"Verdict"}]""", TrayState.Healthy, null)]
+    // AUDIT: only Local targets leaves nothing to judge; pinned as Measuring (All() over an empty list).
+    [InlineData("""[{"name":"Printer","state":"Down","scope":"Local"}]""", TrayState.Measuring, null)]
+    public void Without_a_verdict_the_worst_target_decides(string targets, TrayState expected, string? detail)
+    {
+        var info = TrayStatus.FromStatusJson($$"""{"enabled":true,"verdict":null,"targets":{{targets}},"pools":[]}""");
+        Assert.Equal(expected, info.State);
+        Assert.Equal(detail, info.Detail);
+        Assert.Null(info.Verdict);
+    }
+
     // TR3: literal table, so a renamed or added VerdictState fails here instead of falling to Measuring.
     private static readonly Dictionary<VerdictState, TrayState> ExpectedTrayStates = new()
     {
