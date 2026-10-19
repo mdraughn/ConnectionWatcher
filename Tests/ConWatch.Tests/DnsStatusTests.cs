@@ -113,8 +113,9 @@ public class DnsStatusTests : IDisposable
         _factory.Resolvers.Set("192.0.2.53");
         var reconciler = _factory.Services.GetRequiredService<SystemResolverService>();
         await reconciler.ReconcileNowAsync(CancellationToken.None);
-        Assert.DoesNotContain(await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"),
-            t => t.SystemManaged);
+        var before = await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets");
+        Assert.NotNull(before);
+        Assert.DoesNotContain(before, t => t.SystemManaged);
 
         (await _client.PostAsJsonAsync("/api/v1/targets",
             new ConPersistence.Config.TargetDto { Name = "example.org", Address = "example.org", Parent = "Router", Profile = "Fast" }))
