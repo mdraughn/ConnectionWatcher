@@ -42,7 +42,8 @@
 
 // --- verdict pip -------------------------------------------------------------
 // Same answer language as the dashboard slab (see VerdictBanner.tsx): green
-// Up / amber Struggling / red Down / grey Checking / grey Paused (archive).
+// Up / amber Struggling / red Down / grey Checking / grey Paused (archive);
+// during a DNS outage the word is the more specific "DNS down", same red.
 (function () {
     const pip = document.getElementById("cw-pip");
     if (!pip) return;
@@ -70,6 +71,7 @@
                 InternetWeather: ["var(--cw-ok)", "Up"],
                 LinkDegraded: ["var(--cw-warn)", "Struggling"],
                 LinkDown: ["var(--cw-down)", "Down"],
+                DnsDown: ["var(--cw-down)", "DNS down"],
             };
             const m = map[status.verdict.state];
             if (m) [color, text] = m;
