@@ -9,6 +9,17 @@ public static class CliApp
 {
     public const string ServiceName = "ConnectionWatcher";
 
+    /// <summary>Appended (with a temp file path) by the elevated relaunch; stripped before parsing.</summary>
+    public const string OutputOption = "--__output";
+
+    public static (string[] Args, string? OutputFile) StripOutputOption(string[] args)
+    {
+        var at = Array.IndexOf(args, OutputOption);
+        if (at < 0 || at + 1 >= args.Length)
+            return (args, null);
+        return (args.Where((_, i) => i != at && i != at + 1).ToArray(), args[at + 1]);
+    }
+
     public static RootCommand BuildRoot(CliServices s, string[] rawArgs)
     {
         var root = new RootCommand(

@@ -32,11 +32,13 @@ public sealed class FakeHealthProbe : IHealthProbe
     public Task<HealthResult> ProbeAsync(string serverUrl, CancellationToken ct) { ProbedUrl = serverUrl; return Task.FromResult(Result); }
 }
 
-public sealed class FakeFolderLockdown : IFolderLockdown
+/// <param name="callLog">Optional shared log (the FakeServiceManager's Calls) so tests can assert ordering.</param>
+public sealed class FakeFolderLockdown(List<string>? callLog = null) : IFolderLockdown
 {
     public List<(string Directory, bool UsersMayRead)> Locked { get; } = [];
     public void Lock(string directory, bool usersMayRead)
     {
+        callLog?.Add($"lock:{directory}");
         Directory.CreateDirectory(directory);
         Locked.Add((directory, usersMayRead));
     }

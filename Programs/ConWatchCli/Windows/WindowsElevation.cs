@@ -30,7 +30,7 @@ public sealed class WindowsElevation(TextWriter output) : IElevation
         var capture = Path.Combine(Path.GetTempPath(), $"conwatch-{Guid.NewGuid():N}.log");
         var psi = new ProcessStartInfo(exe) { UseShellExecute = true, Verb = "runas" };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        psi.ArgumentList.Add("--__output");
+        psi.ArgumentList.Add(CliApp.OutputOption);
         psi.ArgumentList.Add(capture);
 
         Process child;

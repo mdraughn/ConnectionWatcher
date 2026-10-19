@@ -14,7 +14,7 @@ public sealed class CliHarness : IDisposable
     public FakePortProbe Ports { get; } = new();
     public FakeTrayLauncher TrayLauncher { get; set; } = new();
     public FakeTrayAutostart TrayAutostart { get; } = new();
-    public FakeFolderLockdown Lockdown { get; } = new();
+    public FakeFolderLockdown Lockdown { get; }
     public Dictionary<string, string?> Env { get; } = new();
     public string[]? ServeArgs { get; private set; }
     /// <summary>What `serve` does after recording its arguments; default returns 0 at once.</summary>
@@ -26,6 +26,7 @@ public sealed class CliHarness : IDisposable
     {
         Paths = ConfigPaths.UnderTemp(Root);
         Elevation = new FakeElevation(elevated);
+        Lockdown = new FakeFolderLockdown(Services.Calls);
         Directory.CreateDirectory(AppDir);
     }
 

@@ -5,7 +5,7 @@ using ConWatchCli.Services;
 
 // `--__output <file>`: written by the elevated relaunch so the parent can echo
 // our output into the caller's terminal. Stripped before parsing.
-var (args2, outputFile) = StripOutputOption(args);
+var (args2, outputFile) = CliApp.StripOutputOption(args);
 TextWriter output = Console.Out, error = Console.Error;
 StreamWriter? capture = null;
 if (outputFile is not null)
@@ -51,14 +51,6 @@ try
 finally
 {
     capture?.Dispose();
-}
-
-static (string[] Args, string? OutputFile) StripOutputOption(string[] args)
-{
-    var at = Array.IndexOf(args, "--__output");
-    if (at < 0 || at + 1 >= args.Length)
-        return (args, null);
-    return (args.Where((_, i) => i != at && i != at + 1).ToArray(), args[at + 1]);
 }
 
 /// <summary>Non-Windows: there is no UAC; run inline and let the OS refuse.</summary>

@@ -189,7 +189,8 @@ public sealed class ServiceCommandTests
         using var h = new CliHarness();
         h.Services.Status = new ServiceStatus(ServiceState.Stopped, "\"x\" serve", true);
         h.Health.Result = new HealthResult(null, "refused", 3);
-        var (_, output, _) = await h.RunAsync("service", "status");
+        var (statusCode, output, _) = await h.RunAsync("service", "status");
+        Assert.Equal(0, statusCode);
         Assert.Contains("Stopped", output);
         Assert.Contains("refused", output);
 
@@ -201,6 +202,20 @@ public sealed class ServiceCommandTests
 
     // ProgramData's inherited permissions let every local user read conwatch.db
     // (MQTT password, webhook URLs, admin hash) and the data-protection keys.
+
+    [Fact]
+    public async Task Folders_are_locked_before_the_service_is_installed()
+    {
+        using var h = new CliHarness();
+        var (code, _, _) = await h.RunAsync("service", "install", "--no-start");
+        Assert.Equal(0, code);
+        var calls = h.Services.Calls;
+        var install = calls.IndexOf("install");
+        Assert.True(install >= 0);
+        var locks = calls.Select((c, i) => (c, i)).Where(x => x.c.StartsWith("lock:")).Select(x => x.i).ToList();
+        Assert.Equal(2, locks.Count);
+        Assert.All(locks, i => Assert.True(i < install, $"a folder was locked after the service was installed: {string.Join(", ", calls)}"));
+    }
 
     [Fact]
     public async Task Install_locks_the_config_folder_read_only_for_users_and_the_data_folder_to_admins()
