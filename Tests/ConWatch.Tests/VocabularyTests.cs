@@ -40,7 +40,7 @@ public class VocabularyTests
     private static string Render()
     {
         var doc = new Dictionary<string, object>();
-        foreach (var (name, members) in Actual()) doc[name] = members;
+        foreach (var (name, members) in Actual()) doc[name] = members.Order(StringComparer.Ordinal).ToArray();
         doc["Markers"] = new[] { "HistoryReset" };
         doc["GlitchClass"] = new Dictionary<string, int>
         {
@@ -63,9 +63,14 @@ public class VocabularyTests
         foreach (var (name, members) in Actual())
         {
             var expected = frozen.GetProperty(name).EnumerateArray().Select(e => e.GetString()!).ToArray();
-            Assert.True(expected.SequenceEqual(members),
+            Assert.Equal(members.Length, members.Distinct().Count()); // no duplicates in the enum
+            Assert.Equal(expected.Length, expected.Distinct().Count()); // none in the fixture
+            var missing = expected.Except(members).Order().ToArray();
+            var extra = members.Except(expected).Order().ToArray();
+            Assert.True(missing.Length == 0 && extra.Length == 0,
                 $"{name}: persisted/wire name changed — add a data migration and update every consumer, or keep the name.\n" +
-                $"frozen: {string.Join(", ", expected)}\nactual: {string.Join(", ", members)}");
+                $"missing (in fixture, not in code): {string.Join(", ", missing)}\n" +
+                $"extra (in code, not in fixture): {string.Join(", ", extra)}");
         }
 
         Assert.Equal(0, (int)GlitchClass.Target);

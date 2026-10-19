@@ -1,78 +1,78 @@
 {
   "HostState": [
-    "Initializing",
-    "Starting",
-    "Responding",
-    "Faltering",
     "Down",
+    "Faltering",
+    "Initializing",
     "Recovering",
+    "Responding",
+    "Starting",
     "Unreachable"
   ],
   "TransitionTrigger": [
-    "ThresholdCrossed",
     "ParentDown",
     "ParentRecovered",
-    "ResolutionFailed",
     "PoolMembersChanged",
+    "ResolutionFailed",
+    "ThresholdCrossed",
     "VerdictChanged"
   ],
   "TransitionSubjectKind": [
-    "Target",
     "Pool",
+    "Target",
     "Verdict"
   ],
   "VerdictState": [
-    "Unknown",
+    "DnsDown",
     "Healthy",
-    "SiteIncident",
     "InternetWeather",
     "LinkDegraded",
-    "DnsDown",
-    "LinkDown"
+    "LinkDown",
+    "SiteIncident",
+    "Unknown"
   ],
   "ModelWarningKind": [
     "HopBypassed",
+    "NameUnresolvable",
     "NeverAnswered",
-    "UnprovableUp",
     "ProbeOnlyLoss",
-    "ResolverPartial",
-    "ResolverLying",
     "ResolverFiltered",
-    "UpstreamResolverDown",
-    "NameUnresolvable"
+    "ResolverLying",
+    "ResolverPartial",
+    "UnprovableUp",
+    "UpstreamResolverDown"
   ],
   "TargetScope": [
-    "Verdict",
     "Local",
-    "Resolver"
+    "Resolver",
+    "Verdict"
   ],
   "DiscoveryKind": [
     "Gateway",
-    "NetworkEdge",
-    "LocalDevice"
+    "LocalDevice",
+    "NetworkEdge"
   ],
   "DiscoveryMethod": [
-    "DefaultRoute",
-    "CommonAddress",
-    "Traceroute",
     "ArpTable",
-    "PingSweep"
+    "CommonAddress",
+    "DefaultRoute",
+    "PingSweep",
+    "Traceroute"
   ],
   "DiscoveryStatus": [
-    "New",
     "Adopted",
-    "Dismissed"
+    "Dismissed",
+    "New"
   ],
   "DnsBlameKind": [
-    "YourResolver",
-    "NoResolver"
+    "NoResolver",
+    "YourResolver"
   ],
   "DnsSummaryState": [
-    "Unknown",
-    "Ok",
     "Degraded",
+    "Down",
     "Filtered",
-    "Down"
+    "Ok",
+    "Unknown"
   ],
   "Markers": [
     "HistoryReset"
