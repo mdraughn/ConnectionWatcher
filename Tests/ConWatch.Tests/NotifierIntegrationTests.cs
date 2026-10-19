@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using MQTTnet;
 
 namespace ConWatch.Tests;
@@ -494,6 +495,18 @@ public class NotifierIntegrationTests
             ["Mqtt.Port"] = brokerPort.ToString(),
         });
 
+    /// <summary>Seeds the home config, waits for the rebuilds to settle with the engine running, and only
+    /// then enables MQTT. The notifier's first full refresh then sees every monitor; enabling MQTT first
+    /// races the product's wipe-on-rebuild bug (see the AUDIT in Retained_state_is_what_a_late_subscriber_sees).</summary>
+    private static async Task SeedThenEnableMqttAsync(ConWatchFactory factory, HttpClient client, int brokerPort)
+    {
+        await ConfigApiTests.SeedHomeAsync(client);
+        var host = factory.Services.GetRequiredService<WatcherHostService>();
+        await HostTestWait.Eventually(() => Task.FromResult(host.EngineRunning));
+        await HostTestWait.SettledRebuildCountAsync(host);
+        await EnableMqttAsync(client, brokerPort);
+    }
+
     private static async Task PutSettingAsync(HttpClient client, string key, string value) =>
         (await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?> { [key] = value }))
             .EnsureSuccessStatusCode();
@@ -514,8 +527,15 @@ public class NotifierIntegrationTests
             using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#", "homeassistant/#");
             using var factory = new ConWatchFactory();
             var client = factory.CreateClient();
-            await EnableMqttAsync(client, brokerPort);
-            await ConfigApiTests.SeedHomeAsync(client);
+            await SeedThenEnableMqttAsync(factory, client, brokerPort);
+
+            // The config settled before MQTT came on, so nothing transitions on its own any more: blip one
+            // anchor to put a transition event on the live stream, then let it recover.
+            var google = IPAddress.Parse("8.8.8.8");
+            await HostTestWait.Eventually(() => Task.FromResult(live.Last("conwatch/target/google/state") == "ON"));
+            factory.Pings.SetUp(google, false);
+            await HostTestWait.Eventually(() => Task.FromResult(live.Last("conwatch/target/google/state") == "OFF"));
+            factory.Pings.SetUp(google, true);
 
             await HostTestWait.Eventually(() => Task.FromResult(
                 live.Last("conwatch/availability") == "online"
@@ -568,10 +588,13 @@ public class NotifierIntegrationTests
             var afterDelete = await RetainedSetAsync(brokerPort);
             Assert.DoesNotContain(printerConfig, afterDelete.Keys);
             Assert.DoesNotContain("conwatch/target/printer/state", afterDelete.Keys);
-            // AUDIT: after this delete the other targets' retained entities are wiped too and not republished (observed
-            // 3 of 3 runs): MqttNotifier.Attach queues a Refresh before engine.StartAsync has created the monitors, the
-            // refresh sees none and clears every previously published slug, and a warm rebuild emits no transitions to
-            // heal it. So nothing is asserted about the survivors here; see the report.
+            // AUDIT: product bug, still present: a warm rebuild (here the delete) wipes the other targets'
+            // retained entities and does not republish them (observed 3 of 3 runs before the reorder):
+            // MqttNotifier.Attach queues a Refresh before engine.StartAsync has created the monitors, the
+            // refresh sees none and clears every previously published slug, and a warm rebuild emits no
+            // transitions to heal it. This test avoids the race at the start by ordering (SeedThenEnableMqttAsync
+            // enables MQTT only after the config has settled), so the session's first full refresh sees every
+            // monitor. Nothing is asserted about the survivors after the delete.
         }
         finally
         {
@@ -589,8 +612,7 @@ public class NotifierIntegrationTests
             using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#");
             using var factory = new ConWatchFactory();
             var client = factory.CreateClient();
-            await EnableMqttAsync(client, brokerPort);
-            await ConfigApiTests.SeedHomeAsync(client);
+            await SeedThenEnableMqttAsync(factory, client, brokerPort);
 
             var ip = IPAddress.Parse("203.0.113.9");
             (await client.PostAsJsonAsync("/api/v1/targets", new
@@ -625,8 +647,7 @@ public class NotifierIntegrationTests
             using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#");
             using var factory = new ConWatchFactory();
             var client = factory.CreateClient();
-            await EnableMqttAsync(client, brokerPort);
-            await ConfigApiTests.SeedHomeAsync(client);
+            await SeedThenEnableMqttAsync(factory, client, brokerPort);
             await HostTestWait.Eventually(() => Task.FromResult(
                 live.Last("conwatch/availability") == "online" && live.Last("conwatch/verdict/state") == "Healthy"));
 
