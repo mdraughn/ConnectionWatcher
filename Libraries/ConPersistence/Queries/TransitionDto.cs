@@ -45,6 +45,11 @@ public sealed record TransitionDto
     /// (REST /transitions, MCP get_transitions); omitted on live messages, whose subscribers know their targets.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Scope { get; init; }
+    /// <summary>True only on the rows GET /transitions?opening=true prepends: a subject's latest
+    /// transition before <c>from</c>, sent for its <c>to</c> (the opening state), not as an event in the range.
+    /// Omitted otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Opening { get; init; }
     /// <summary>Present only on a DnsDown verdict transition (live messages); history rows do not keep it.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TransitionDnsBlame? Dns { get; init; }

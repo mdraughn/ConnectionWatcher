@@ -51,6 +51,21 @@ describe("lossPercent", () => {
 });
 
 describe("incidents (split semantics)", () => {
+  it("an opening Down row alone is one outage open the whole range", () => {
+    const opening = { ...t("2026-08-17T00:00:00Z", "Down", "Responding"), opening: true };
+    const stats = incidents([opening], "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(1);
+    expect(stats.longestOutageMs).toBe(6 * 3_600_000);
+  });
+
+  it("an opening row seeds the state; it is not itself an event", () => {
+    const opening = { ...t("2026-08-17T00:00:00Z", "Responding", "Down"), opening: true };
+    const stats = incidents([opening, t("2026-08-20T01:00:00Z", "Down")],
+      "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(1);
+    expect(stats.longestOutageMs).toBe(5 * 3_600_000);
+  });
+
   it("a Down window is an outage, measured to recovery", () => {
     const stats = incidents([
       t("2026-08-20T01:00:00Z", "Down"),

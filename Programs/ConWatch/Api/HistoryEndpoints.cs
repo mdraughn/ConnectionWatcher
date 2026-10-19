@@ -14,7 +14,7 @@ public static class HistoryEndpoints
     {
         api.MapGet("/transitions", async (IDbContextFactory<ConWatchDbContext> dbFactory,
             Guid? subjectId, string? subjectName, string? from, string? to, string? scope,
-            int limit = 100, long? before = null) =>
+            int limit = 100, long? before = null, bool opening = false) =>
         {
             if (!ScopeFilters.TryParse(scope, out var scopeFilter))
                 return ApiResults.Error(StatusCodes.Status400BadRequest, null,
@@ -27,7 +27,17 @@ public static class HistoryEndpoints
             var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
             var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
             var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
-            var items = rows.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds)).ToList();
+            var items = new List<TransitionDto>();
+            // Opt-in, first page only, and only with a lower bound: each subject's latest row
+            // before `from` leads the list, marked. They sit outside `limit` and the paging cursor.
+            if (opening && before is null && fromUtc is { } openFrom)
+            {
+                var openingRows = await HistoryQueries.OpeningTransitionsAsync(db, subjectId,
+                    openFrom, subjectName, scopeFilter);
+                items.AddRange(openingRows.Select(r =>
+                    TransitionDto.From(r, localIds, resolverIds, knownIds) with { Opening = true }));
+            }
+            items.AddRange(rows.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds)));
             long? nextBefore = rows.Count == Math.Clamp(limit, 1, 1000) ? rows.Last().Id : null;
             return Results.Ok(new { Items = items, NextBefore = nextBefore });
         });

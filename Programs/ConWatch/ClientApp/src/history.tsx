@@ -35,11 +35,13 @@ async function fetchRollups(subjectId: string, from: Date, to: Date): Promise<Ro
 }
 
 async function fetchTransitions(subjectId: string, from: Date, to: Date): Promise<TransitionEvent[]> {
-  const url = `/api/v1/transitions?subjectId=${subjectId}&from=${from.toISOString()}&to=${to.toISOString()}&limit=1000`;
+  const url = `/api/v1/transitions?subjectId=${subjectId}&from=${from.toISOString()}&to=${to.toISOString()}&limit=1000&opening=true`;
   const response = await fetch(url);
   if (!response.ok) return [];
   const items = (await response.json()).items as TransitionEvent[];
-  return items.reverse(); // API is newest-first; we want chronological
+  // API is newest-first with the opening rows (the state before `from`) leading; we want
+  // chronological: opening rows first, then the in-range rows oldest-first.
+  return [...items.filter((i) => i.opening).reverse(), ...items.filter((i) => !i.opening).reverse()];
 }
 
 // The recurrence punchcard and the cause-aligned board always cover 30 days,

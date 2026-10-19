@@ -1,4 +1,23 @@
 {
+  "transition.opening[]": [
+    "ancestorId",
+    "avgRtt",
+    "burstLossRate",
+    "detail",
+    "from",
+    "id",
+    "opening",
+    "sampleSize",
+    "scope",
+    "subjectId",
+    "subjectKind",
+    "subjectName",
+    "successRate",
+    "timestamp",
+    "to",
+    "trigger",
+    "verdict"
+  ],
   "transition[]": [
     "ancestorId",
     "avgRtt",

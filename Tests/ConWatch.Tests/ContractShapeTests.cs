@@ -202,8 +202,19 @@ public class ContractShapeTests : IDisposable
             ["transitions"] = Keys(transitions),
         };
         WalkElements(transitions.GetProperty("items"), "transition[]", transitionShape);
+        // opening=true prepends marked rows: their own path, so the plain path stays pinned exactly.
+        var first = transitions.GetProperty("items")[0];
+        var openingFrom = Uri.EscapeDataString(
+            first.GetProperty("timestamp").GetDateTimeOffset().AddSeconds(1).ToString("o"));
+        var withOpening = (await GetJsonAsync(
+            $"/api/v1/transitions?subjectId={first.GetProperty("subjectId").GetGuid()}&from={openingFrom}&opening=true"))!.Value;
+        var openingRows = withOpening.GetProperty("items").EnumerateArray()
+            .Where(e => e.TryGetProperty("opening", out _)).ToList();
+        Assert.NotEmpty(openingRows);
+        foreach (var e in openingRows)
+            Walk(e, "transition.opening[]", transitionShape);
         ContractFiles.AssertMatches("transition.keys.json", Serialize(transitionShape));
-        var timestamp = transitions.GetProperty("items")[0].GetProperty("timestamp").GetString()!;
+        var timestamp = first.GetProperty("timestamp").GetString()!;
         Assert.Matches(@"[+-]\d{2}:\d{2}$", timestamp); // an offset, never a bare local time
         Assert.EndsWith("+00:00", timestamp);
 

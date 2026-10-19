@@ -35,7 +35,7 @@ const blameKeys = ["kind", "message", "resolvers"] as const satisfies readonly (
 const resolverKeys = ["id", "address", "label", "state", "detail", "enabled"] as const satisfies readonly (keyof DnsResolverStatus)[];
 const lookupNameKeys = ["name", "lastResult", "detail"] as const satisfies readonly (keyof DnsLookupNameStatus)[];
 const transitionKeys = ["id", "timestamp", "subjectId", "subjectName", "subjectKind", "from", "to", "trigger", "detail",
-  "verdict", "successRate", "sampleSize", "burstLossRate", "scope"] as const satisfies readonly (keyof TransitionEvent)[];
+  "verdict", "successRate", "sampleSize", "burstLossRate", "scope", "opening"] as const satisfies readonly (keyof TransitionEvent)[];
 const glitchKeys = ["id", "targetId", "targetName", "class", "startUtc", "endUtc", "lostCount", "sampleCount",
   "detail"] as const satisfies readonly (keyof GlitchItem)[];
 const rollupKeys = ["periodStart", "pingCount", "successCount", "rttAvg", "rttMin", "rttMax"] as const satisfies readonly (keyof RollupPoint)[];
@@ -107,9 +107,12 @@ describe("server JSON contracts", () => {
 
   it("transitions match TransitionEvent", () => {
     const f = "transition.keys.json";
-    expectPaths(f, ["transitions", "transition[]"]);
+    expectPaths(f, ["transitions", "transition[]", "transition.opening[]"]);
     expectContract(f, "transitions", transitionsPageKeys, { serverOnly: ["nextBefore"] });
-    expectContract(f, "transition[]", transitionKeys, { serverOnly: ["ancestorId", "avgRtt"] });
+    // `opening` is sent only with ?opening=true, so the plain rows never carry it.
+    expectContract(f, "transition[]", transitionKeys, { serverOnly: ["ancestorId", "avgRtt"], clientOnly: ["opening"] });
+    // ?opening=true rows: the same keys plus the marker.
+    expectContract(f, "transition.opening[]", transitionKeys, { serverOnly: ["ancestorId", "avgRtt"] });
   });
 
   it("glitches match GlitchItem", () => {

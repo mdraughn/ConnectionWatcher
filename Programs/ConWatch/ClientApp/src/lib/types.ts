@@ -81,6 +81,8 @@ export interface TransitionEvent {
   burstLossRate: number | null;
   /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
   scope?: "Verdict" | "Local" | "Resolver" | "Unknown";
+  /** True only on the rows `?opening=true` prepends: the subject's latest transition before `from`. An opening state, not an event. */
+  opening?: boolean;
 }
 
 export interface RollupPoint {

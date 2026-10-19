@@ -228,4 +228,51 @@ public class HistoryApiTests : IDisposable
             $$"""{"id":{{id}},"timestamp":"2026-09-18T10:00:00.123+00:00","subjectId":"11111111-1111-1111-1111-111111111111","subjectName":"Router","subjectKind":"Target","from":"Responding","to":"Down","trigger":"ThresholdCrossed","successRate":0.1,"sampleSize":10,"burstLossRate":null,"ancestorId":null,"detail":null,"verdict":null,"avgRtt":12.5,"scope":"Unknown"}""",
             body.GetProperty("items")[0].GetRawText());
     }
+    [Fact]
+    public async Task Opening_rows_come_first_and_are_marked()
+    {
+        // A target Down 3 days ago with nothing since: the 24 h window holds no rows, but the
+        // opening state is Down. opening=true sends that one row, marked; limit does not count it.
+        var downId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            db.Transitions.AddRange(
+                Row(downId, "Stays down", "Responding", "Down", now.AddDays(-4)),
+                Row(downId, "Stays down", "Down", "Down", now.AddDays(-3)),
+                Row(otherId, "Other", "Responding", "Down", now.AddHours(-2)));
+            await db.SaveChangesAsync();
+        }
+        var from = Uri.EscapeDataString(now.AddHours(-24).ToString("o"));
+
+        var plain = await GetJson($"/api/v1/transitions?subjectId={downId}&from={from}");
+        Assert.Equal(0, plain.GetProperty("items").GetArrayLength());
+
+        var opened = await GetJson($"/api/v1/transitions?subjectId={downId}&from={from}&opening=true");
+        var only = Assert.Single(opened.GetProperty("items").EnumerateArray());
+        Assert.True(only.GetProperty("opening").GetBoolean());
+        Assert.Equal("Down", only.GetProperty("to").GetString());
+        Assert.Equal(now.AddDays(-3), only.GetProperty("timestamp").GetDateTimeOffset().UtcDateTime, TimeSpan.FromSeconds(1));
+
+        // Across subjects: the opening row leads, in-range rows follow unmarked, limit counts only those.
+        var all = await GetJson($"/api/v1/transitions?from={from}&opening=true&limit=1&subjectName=Other");
+        var items = all.GetProperty("items").EnumerateArray().ToList();
+        Assert.Single(items);
+        Assert.False(items[0].TryGetProperty("opening", out _));
+
+        var both = await GetJson($"/api/v1/transitions?from={from}&opening=true&limit=1");
+        var list = both.GetProperty("items").EnumerateArray().ToList();
+        var openers = list.TakeWhile(i => i.TryGetProperty("opening", out _)).ToList();
+        Assert.Contains(openers, i => i.GetProperty("subjectId").GetGuid() == downId);
+        Assert.Equal(1, list.Count - openers.Count); // limit=1 bounds the in-range rows only
+        Assert.DoesNotContain(list.Skip(openers.Count), i => i.TryGetProperty("opening", out _));
+    }
+
+    private static TransitionRow Row(Guid id, string name, string from, string to, DateTime at) => new()
+    {
+        TimestampUtc = at, SubjectId = id, SubjectName = name, SubjectKind = "Target",
+        FromState = from, ToState = to, Trigger = "ThresholdCrossed",
+    };
 }

@@ -46,11 +46,12 @@ export interface IncidentStats {
 }
 
 /**
- * Range-start seeding: the state before the first transition is that
- * transition's `from` (as ribbonSegments assumes). A Down or Unreachable
- * window already open when the range starts counts from rangeStart.
- * Limitation: with no in-range transition the pre-window state is unknown
- * and nothing is counted — the API sends no pre-window row.
+ * Range-start seeding: the state when the range opens is the `to` of an
+ * `opening` row (the API's `opening=true` sends each subject's latest
+ * transition before the range), else the first transition's `from` (as
+ * ribbonSegments assumes). A Down or Unreachable window already open then
+ * counts from rangeStart. Opening rows only seed that state; they are never
+ * counted as events.
  */
 export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
   rangeEndIso: string): IncidentStats {
@@ -58,7 +59,8 @@ export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
   let longestOutageMs = 0;
   let unreachableMs = 0;
   let open: { kind: "outage" | "unreach"; start: number } | null = null;
-  const openingState = transitions[0]?.from;
+  const openingRow = transitions.find((t) => t.opening);
+  const openingState = openingRow ? openingRow.to : transitions[0]?.from;
   if (openingState === "Down") {
     open = { kind: "outage", start: Date.parse(rangeStartIso) };
     outageCount++;
@@ -74,6 +76,7 @@ export function incidents(transitions: TransitionEvent[], rangeStartIso: string,
   };
 
   for (const t of transitions) {
+    if (t.opening) continue;
     const at = Date.parse(t.timestamp);
     if (t.verdict === "DnsDown") {
       // The internet is up; name lookups fail (the user's resolver). Never an

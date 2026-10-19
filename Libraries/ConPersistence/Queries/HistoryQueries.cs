@@ -17,17 +17,38 @@ public static class HistoryQueries
         string? subjectName = null, ScopeFilter scope = ScopeFilter.All)
     {
         limit = Math.Clamp(limit, 1, 1000);
-        IQueryable<TransitionRow> query = db.Transitions.AsNoTracking();
-        if (subjectId is { } sid)
-            query = query.Where(t => t.SubjectId == sid);
-        if (subjectName is { Length: > 0 })
-            query = query.Where(t => t.SubjectName == subjectName);
+        IQueryable<TransitionRow> query = Filtered(db, subjectId, subjectName, scope);
         if (fromUtc is { } from)
             query = query.Where(t => t.TimestampUtc >= from);
         if (toUtc is { } to)
             query = query.Where(t => t.TimestampUtc <= to);
         if (before is { } cursor)
             query = query.Where(t => t.Id < cursor);
+        return await query.OrderByDescending(t => t.Id).Take(limit).ToListAsync();
+    }
+
+    /// <summary>
+    /// Each matching subject's latest transition strictly before <paramref name="fromUtc"/>, newest
+    /// first: the state it was already in when the window opened. Same subject/name/scope filters
+    /// as <see cref="TransitionsAsync"/>; not limited by any page size.
+    /// </summary>
+    public static async Task<List<TransitionRow>> OpeningTransitionsAsync(ConWatchDbContext db,
+        Guid? subjectId, DateTime fromUtc, string? subjectName = null, ScopeFilter scope = ScopeFilter.All)
+    {
+        var latestIds = LatestTransitionIdsPerSubject(db, fromUtc);
+        return await Filtered(db, subjectId, subjectName, scope)
+            .Where(t => latestIds.Contains(t.Id))
+            .OrderByDescending(t => t.Id).ToListAsync();
+    }
+
+    private static IQueryable<TransitionRow> Filtered(ConWatchDbContext db,
+        Guid? subjectId, string? subjectName, ScopeFilter scope)
+    {
+        IQueryable<TransitionRow> query = db.Transitions.AsNoTracking();
+        if (subjectId is { } sid)
+            query = query.Where(t => t.SubjectId == sid);
+        if (subjectName is { Length: > 0 })
+            query = query.Where(t => t.SubjectName == subjectName);
         if (scope != ScopeFilter.All)
         {
             var localIds = db.Targets.Where(t => t.Scope == TargetScope.Local).Select(t => t.Id);
@@ -38,7 +59,7 @@ public static class HistoryQueries
                 : query.Where(t => t.SubjectKind != "Target" ||
                                    (knownIds.Contains(t.SubjectId) && !localIds.Contains(t.SubjectId)));
         }
-        return await query.OrderByDescending(t => t.Id).Take(limit).ToListAsync();
+        return query;
     }
 
     /// <summary>
@@ -128,8 +149,14 @@ public static class HistoryQueries
     /// <summary>
     /// The id of each subject's most recent transition. Every retention and
     /// prune path must keep these rows: warm restart seeds the presumed state
-    /// from them, however old they are.
+    /// from them, however old they are. With <paramref name="beforeUtc"/>: each subject's latest
+    /// transition strictly before that instant (a subject with none is absent).
     /// </summary>
-    public static IQueryable<long> LatestTransitionIdsPerSubject(ConWatchDbContext db) =>
-        db.Transitions.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
+    public static IQueryable<long> LatestTransitionIdsPerSubject(ConWatchDbContext db, DateTime? beforeUtc = null)
+    {
+        IQueryable<TransitionRow> rows = db.Transitions;
+        if (beforeUtc is { } cutoff)
+            rows = rows.Where(t => t.TimestampUtc < cutoff);
+        return rows.GroupBy(t => t.SubjectId).Select(g => g.Max(t => t.Id));
+    }
 }
