@@ -89,4 +89,51 @@ public class DnsStatusTests : IDisposable
         Assert.Contains("conwatch_dns_up 1", metrics);
         Assert.Contains("conwatch_verdict{state=\"DnsDown\"} 0", metrics);
     }
+
+    private async Task<JsonElement?> DnsBlockAsync()
+    {
+        var response = await _client.GetAsync("/api/v1/status"); // 503 while the engine is (re)building
+        if (!response.IsSuccessStatusCode) return null;
+        var status = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return status.TryGetProperty("dns", out var dns) && dns.ValueKind == JsonValueKind.Object ? dns : null;
+    }
+
+    private static List<string?> LookupNamesOf(JsonElement dns) =>
+        dns.GetProperty("lookupNames").EnumerateArray().Select(n => n.GetProperty("name").GetString()).ToList();
+
+    /// <summary>With no configured names, the names the resolver is asked for are the enabled hostname
+    /// targets, exactly: a disabled one adds nothing.</summary>
+    [Fact]
+    public async Task Lookup_names_add_enabled_hostname_targets()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        (await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Dns.LookupNames"] = "[]" })).EnsureSuccessStatusCode();
+        // The OS has a resolver, but with nothing to ask it the reconciler creates no watch for it.
+        _factory.Resolvers.Set("192.0.2.53");
+        var reconciler = _factory.Services.GetRequiredService<SystemResolverService>();
+        await reconciler.ReconcileNowAsync(CancellationToken.None);
+        Assert.DoesNotContain(await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"),
+            t => t.SystemManaged);
+
+        (await _client.PostAsJsonAsync("/api/v1/targets",
+            new ConPersistence.Config.TargetDto { Name = "example.org", Address = "example.org", Parent = "Router", Profile = "Fast" }))
+            .EnsureSuccessStatusCode();
+        (await _client.PostAsJsonAsync("/api/v1/targets",
+            new ConPersistence.Config.TargetDto { Name = "off.example", Address = "off.example", Parent = "Router", Profile = "Fast", Enabled = false }))
+            .EnsureSuccessStatusCode();
+
+        await ConfigApiTests.Eventually(async () =>
+            await DnsBlockAsync() is { } d && d.GetProperty("watched").GetBoolean());
+        var dns = (await DnsBlockAsync())!.Value;
+        Assert.Equal(["example.org"], LookupNamesOf(dns));
+
+        // Removing the only hostname target leaves nothing to ask for: the watch is off again.
+        var targets = (await _client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"))!;
+        var gone = await _client.DeleteAsync($"/api/v1/targets/{targets.Single(t => t.Name == "example.org").Id}");
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, gone.StatusCode);
+        await ConfigApiTests.Eventually(async () =>
+            await DnsBlockAsync() is { } d && !d.GetProperty("watched").GetBoolean());
+        Assert.Empty(LookupNamesOf((await DnsBlockAsync())!.Value));
+    }
 }

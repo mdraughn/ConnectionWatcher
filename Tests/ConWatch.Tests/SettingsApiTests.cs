@@ -175,4 +175,41 @@ public class SettingsApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, good.StatusCode);
         Assert.Equal("true", (await GetSettings())["Traceroute.AsnLookup"]);
     }
+
+    private async Task<string?> VerdictStateAsync()
+    {
+        var response = await _client.GetAsync("/api/v1/status"); // 503 while the engine is (re)building
+        if (!response.IsSuccessStatusCode) return null;
+        var status = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        var verdict = status.GetProperty("verdict");
+        return verdict.ValueKind == JsonValueKind.Object ? verdict.GetProperty("state").GetString() : null;
+    }
+
+    /// <summary>One of the two pool anchors down. Whether that is a site incident or internet weather is
+    /// exactly the Settings-table Verdict.WeatherThreshold (appsettings says 2 in the test factory).</summary>
+    [Theory]
+    [InlineData(1, "InternetWeather")]
+    [InlineData(2, "SiteIncident")]
+    public async Task Weather_threshold_from_settings_reaches_the_verdict(int threshold, string expected)
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await HostTestWait.Eventually(() => HostTestWait.SteadyStateAsync(_client));
+
+        var put = await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Verdict.WeatherThreshold"] = threshold.ToString() });
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+        Assert.Equal(threshold.ToString(), (await GetSettings())["Verdict.WeatherThreshold"]);
+
+        // The rebuild the setting causes may land before or after the outage; the
+        // fake keeps Google down either way, so the verdict converges on the answer.
+        _factory.Pings.SetUp(System.Net.IPAddress.Parse("8.8.8.8"), false);
+        await HostTestWait.Eventually(async () => await VerdictStateAsync() == expected);
+
+        if (threshold == 2)
+        {
+            // Control: with the default threshold one degraded anchor never becomes weather.
+            await Task.Delay(1000); // absence window, after the positive condition above
+            Assert.Equal("SiteIncident", await VerdictStateAsync());
+        }
+    }
 }

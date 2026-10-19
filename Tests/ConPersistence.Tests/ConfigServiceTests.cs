@@ -630,4 +630,35 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.True(result.Success, string.Join("; ", result.Errors ?? []));
         Assert.False((await _store.ExportAsync()).Targets.Single().SystemManaged);
     }
+
+    [Fact]
+    public async Task Deleting_the_anchor_pool_commits_and_signals()
+    {
+        var pool = (await _store.ExportAsync()).Pools.Single(p => p.Name == "Internet");
+        _changeSignals = 0;
+
+        var result = await _service.DeletePoolAsync(pool.Id!.Value);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+        var after = await _store.LoadWatcherOptionsAsync();
+        Assert.Empty(after.Pools);
+        Assert.Contains(after.Targets, t => t.Name == "Google"); // the members stay
+        Assert.Contains(after.Targets, t => t.Name == "Cloudflare");
+    }
+
+    [Fact]
+    public async Task An_unused_custom_profile_deletes()
+    {
+        var created = await _service.UpsertProfileAsync(new ProfileDto { Name = "Spare" });
+        Assert.True(created.Success);
+        _changeSignals = 0;
+
+        var result = await _service.DeleteProfileAsync(created.Id!.Value);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, _changeSignals);
+        Assert.DoesNotContain((await _store.ExportAsync()).Profiles, p => p.Name == "Spare");
+        Assert.Contains((await _store.ExportAsync()).Profiles, p => p.Name == "Slow"); // the used one is untouched
+    }
 }

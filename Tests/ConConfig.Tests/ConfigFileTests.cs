@@ -92,4 +92,19 @@ public sealed class ConfigFileTests : IDisposable
         Assert.Equal("http://b", ConfigFile.TryRead(path, out _)!.ServerUrl);
         Assert.Single(Directory.GetFiles(_root));
     }
+
+    [Fact]
+    public void Default_paths_follow_the_DSoftCo_layout()
+    {
+        if (!OperatingSystem.IsWindows()) return; // the Windows layout is the shipped one; other platforms use /etc
+        var paths = ConfigPaths.Default();
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        Assert.Equal(Path.Combine(programData, "DSoftCo", "ConnectionWatcher", "conwatch.json"), paths.MachineFile);
+        Assert.Equal(Path.Combine(appData, "DSoftCo", "ConnectionWatcher", "tray.json"), paths.UserFile);
+        // The pre-0.10 tray file sits beside the new one.
+        Assert.Equal(Path.Combine(appData, "DSoftCo", "ConnectionWatcher", "contray-settings.json"), paths.LegacyUserFile);
+        Assert.EndsWith(Path.Combine("DSoftCo", "ConnectionWatcher", "data"), paths.DefaultDataDir);
+    }
 }

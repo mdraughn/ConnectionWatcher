@@ -194,4 +194,21 @@ public class ConfigApiTests : IDisposable
         Assert.Equal(["Internal", "Local", "Path", "Public", "Resolver"], profiles!.Select(p => p.Name).OrderBy(n => n));
         Assert.All(profiles!,p => Assert.False(string.IsNullOrWhiteSpace(p.Description)));
     }
+
+    [Fact]
+    public async Task Deleting_the_anchor_pool_turns_the_verdict_off_and_warns()
+    {
+        await SeedHomeAsync(_client);
+        await Eventually(async () => (await GetStatus()) is { Verdict: not null });
+        var pool = (await _client.GetFromJsonAsync<List<PoolDto>>("/api/v1/pools"))!.Single(p => p.Name == "Internet");
+
+        var delete = await _client.DeleteAsync($"/api/v1/pools/{pool.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        // The setting still names the pool; with it gone the verdict layer has nothing to judge by.
+        await Eventually(async () => await GetStatus() is { Verdict: null });
+        var health = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/config/health");
+        Assert.Contains(health.GetProperty("warnings").EnumerateArray(),
+            w => w.GetProperty("code").GetString() == "anchor-pool-missing");
+    }
 }

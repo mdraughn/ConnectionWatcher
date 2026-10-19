@@ -201,4 +201,69 @@ public class HostLifecycleTests
     }
 
     private sealed record InvalidHealthDto(string Status, bool EngineRunning, string? StartFailure);
+
+    /// <summary>The same factory, plus configuration keys set before the host builds.</summary>
+    private sealed class SeededFactory(string dbPath, Dictionary<string, string> keys) : ConWatchFactory(dbPath)
+    {
+        protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            foreach (var (key, value) in keys)
+                builder.UseSetting(key, value);
+        }
+    }
+
+    /// <summary>
+    /// The appsettings "Watcher" section is the first-boot seed: used when the database holds no
+    /// configuration at all, never again (the database is authoritative from then on).
+    /// </summary>
+    [Fact]
+    public async Task Watcher_section_seeds_an_empty_db_only()
+    {
+        var dir = Directory.CreateTempSubdirectory("conwatch-seed").FullName;
+        var dbPath = Path.Combine(dir, "conwatch.db");
+        try
+        {
+            using (var first = new SeededFactory(dbPath, new Dictionary<string, string>
+            {
+                ["Watcher:Profiles:Quick:NormalIntervalSeconds"] = "7",
+                ["Watcher:Targets:0:Name"] = "Router",
+                ["Watcher:Targets:0:Address"] = "192.0.2.1",
+                ["Watcher:Targets:0:Profile"] = "Quick",
+                ["Watcher:Targets:1:Name"] = "Modem",
+                ["Watcher:Targets:1:Address"] = "192.0.2.2",
+                ["Watcher:Targets:1:Parent"] = "Router",
+                ["Watcher:Targets:1:Profile"] = "Internal",
+                ["Watcher:Targets:2:Name"] = "NAS",
+                ["Watcher:Targets:2:Address"] = "192.0.2.60",
+                ["Watcher:Targets:2:Profile"] = "Local",
+                ["Watcher:Targets:2:Scope"] = "Local",
+            }))
+            {
+                var client = first.CreateClient();
+                var targets = (await client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"))!;
+                Assert.Equal(["Modem", "NAS", "Router"], targets.Select(t => t.Name).Order().ToArray());
+                Assert.Equal("Router", targets.Single(t => t.Name == "Modem").Parent);
+                Assert.Equal("Quick", targets.Single(t => t.Name == "Router").Profile);
+                Assert.Equal(ConCore.Targets.TargetScope.Local, targets.Single(t => t.Name == "NAS").Scope);
+                var profiles = (await client.GetFromJsonAsync<List<ConPersistence.Config.ProfileDto>>("/api/v1/profiles"))!;
+                Assert.Equal(7.0, profiles.Single(p => p.Name == "Quick").NormalIntervalSeconds);
+            }
+
+            // A restart on the same database with a different section: the database wins.
+            using var second = new SeededFactory(dbPath, new Dictionary<string, string>
+            {
+                ["Watcher:Targets:0:Name"] = "Other",
+                ["Watcher:Targets:0:Address"] = "192.0.2.99",
+            });
+            var after = (await second.CreateClient()
+                .GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"))!;
+            Assert.Equal(["Modem", "NAS", "Router"], after.Select(t => t.Name).Order().ToArray());
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); }
+            catch (IOException) { /* best-effort, handles may linger on Windows */ }
+        }
+    }
 }

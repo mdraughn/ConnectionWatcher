@@ -141,4 +141,27 @@ public class SystemResolverServiceTests : IDisposable
         Assert.False(await Service.ReconcileNowAsync(CancellationToken.None));
         Assert.DoesNotContain(await TargetsAsync(), t => t.SystemManaged);
     }
+
+    /// <summary>An import replaces the whole config and drops every system-managed row (a foreign node's
+    /// resolvers never come in); this node's own must then come back from the OS list, as a new row.</summary>
+    [Fact]
+    public async Task Import_restores_this_nodes_own_resolvers()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        _factory.Resolvers.Set("192.0.2.53");
+        await Service.ReconcileNowAsync(CancellationToken.None);
+        await ConfigApiTests.Eventually(async () => await ManagedAsync("192.0.2.53") is not null);
+        var before = (await ManagedAsync("192.0.2.53"))!;
+
+        var doc = await _client.GetFromJsonAsync<ConfigDocument>("/api/v1/config/export");
+        Assert.DoesNotContain(doc!.Targets, t => t.SystemManaged); // the export leaves this host's resolvers out
+        var import = await _client.PostAsJsonAsync("/api/v1/config/import", doc);
+        Assert.Equal(HttpStatusCode.NoContent, import.StatusCode);
+
+        // Within 15 s (generous for the wake + reconcile): present again, and a fresh row, not the old one kept.
+        await ConfigApiTests.Eventually(async () =>
+            await ManagedAsync("192.0.2.53") is { } again && again.Id != before.Id, timeoutMs: 15000);
+        Assert.Single(await TargetsAsync(), t => t.SystemManaged);
+        Assert.Contains(await TargetsAsync(), t => t.Name == "Router"); // the rest of the import landed
+    }
 }

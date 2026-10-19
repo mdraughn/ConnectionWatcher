@@ -230,4 +230,74 @@ public class SetupApiTests : IDisposable
         Assert.Equal("Path", targets!.Single(t => t.Address == "203.0.113.23").Profile);
         Assert.Equal("Public", targets!.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Profile);
     }
+
+    private async Task<Dictionary<string, string?>> SettingsAsync() =>
+        (await _client.GetFromJsonAsync<Dictionary<string, string?>>("/api/v1/settings"))!;
+
+    private async Task PutAnchorPoolAsync(string? value) =>
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Verdict.AnchorPool"] = value })).StatusCode);
+
+    // The factory's appsettings already say AnchorPool = "Internet", the very name the wizard
+    // writes, so the setting is cleared first: only then does the wizard's write show.
+    [Fact]
+    public async Task Wizard_sets_the_anchor_pool_when_unset()
+    {
+        await PutAnchorPoolAsync(null);
+        Assert.True(string.IsNullOrEmpty((await SettingsAsync()).GetValueOrDefault("Verdict.AnchorPool")));
+
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8", "1.1.1.1"]));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        Assert.Equal("Internet", (await SettingsAsync())["Verdict.AnchorPool"]);
+        // ... and it reaches the engine: a verdict exists once the engine has rebuilt.
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var r = await _client.GetAsync("/api/v1/status");
+            if (!r.IsSuccessStatusCode) return false;
+            var s = JsonSerializer.Deserialize<JsonElement>(await r.Content.ReadAsStringAsync());
+            return s.GetProperty("verdict").ValueKind == JsonValueKind.Object;
+        });
+    }
+
+    [Fact]
+    public async Task Wizard_leaves_an_existing_anchor_pool_alone()
+    {
+        (await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "Solo", address = "203.0.113.77", profile = "Public",
+        })).EnsureSuccessStatusCode();
+        (await _client.PostAsJsonAsync("/api/v1/pools", new PoolDto { Name = "Mine", Members = ["Solo"] }))
+            .EnsureSuccessStatusCode();
+        await PutAnchorPoolAsync("Mine");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8", "1.1.1.1"]));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        Assert.Equal("Mine", (await SettingsAsync())["Verdict.AnchorPool"]);
+        var pools = (await _client.GetFromJsonAsync<List<PoolDto>>("/api/v1/pools"))!;
+        Assert.Contains(pools, p => p.Name == "Internet"); // the wizard still built its own pool
+    }
+
+    [Fact]
+    public async Task Wizard_suffixes_a_colliding_router_name()
+    {
+        // A different device already carries the name "Router".
+        (await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "Router", address = "10.9.9.9", profile = "Internal",
+        })).EnsureSuccessStatusCode();
+
+        var response = await _client.PostAsJsonAsync("/api/v1/setup/apply",
+            new SetupApplyRequest(Router, null, ["8.8.8.8"]));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var targets = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!;
+        Assert.Equal("10.9.9.9", targets.Single(t => t.Name == "Router").Address);
+        var made = targets.Single(t => t.Name == "Router 2");
+        Assert.Equal("192.168.1.1", made.Address);
+        Assert.Equal("Router 2", targets.Single(t => t.Address == "8.8.8.8" && t.Scope == TargetScope.Verdict).Parent);
+    }
 }
