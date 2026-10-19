@@ -120,6 +120,61 @@ public class SnapshotImporterTests
         await AssertUntouchedAsync(factory, store);
     }
 
+    private static Snapshot OtherSnapshot() => new()
+    {
+        Config = new ConfigDocument
+        {
+            Profiles = [new ProfileDto { Name = "Internal" }],
+            Targets = [new TargetDto { Name = "Other", Address = "192.0.2.9", Profile = "Internal" }],
+        },
+        Transitions = [new TransitionRow { Id = 99, SubjectName = "Other" }],
+    };
+
+    /// <summary>Delegates, but throws on the Nth context request (1-based).</summary>
+    private sealed class FailingOnNthDbFactory(IDbContextFactory<ConWatchDbContext> inner, int failOn)
+        : IDbContextFactory<ConWatchDbContext>
+    {
+        private int _calls;
+
+        public ConWatchDbContext CreateDbContext() => Next() ? throw new InvalidOperationException("simulated SQLITE_BUSY") : inner.CreateDbContext();
+
+        public Task<ConWatchDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
+            Next() ? throw new InvalidOperationException("simulated SQLITE_BUSY") : inner.CreateDbContextAsync(cancellationToken);
+
+        private bool Next() => Interlocked.Increment(ref _calls) == failOn;
+    }
+
+    [Fact]
+    public async Task A_database_failure_in_the_config_write_says_the_config_was_not_committed()
+    {
+        var (real, _, store) = await SeededAsync();
+        using var _ = real;
+        var factory = new FailingOnceDbFactory(real); // the first context request is the config write's
+        var service = new ConfigService(factory, new ConfigStore(factory));
+
+        var ex = await Assert.ThrowsAsync<SnapshotImportException>(() =>
+            SnapshotImporter.ImportAsync(factory, service, OtherSnapshot()));
+
+        Assert.False(ex.ConfigCommitted);
+        Assert.Contains("simulated SQLITE_BUSY", ex.Message);
+        await AssertUntouchedAsync(real, store);
+    }
+
+    [Fact]
+    public async Task A_database_failure_in_the_data_phase_says_the_config_was_committed()
+    {
+        var (real, _, store) = await SeededAsync();
+        using var _ = real;
+        var factory = new FailingOnNthDbFactory(real, failOn: 2); // 1 = config write, 2 = data phase
+        var service = new ConfigService(factory, new ConfigStore(factory));
+
+        var ex = await Assert.ThrowsAsync<SnapshotImportException>(() =>
+            SnapshotImporter.ImportAsync(factory, service, OtherSnapshot()));
+
+        Assert.True(ex.ConfigCommitted);
+        Assert.Equal("Other", Assert.Single((await store.LoadWatcherOptionsAsync()).Targets).Name);
+    }
+
     [Fact]
     public async Task A_2026_09_snapshot_imports()
     {

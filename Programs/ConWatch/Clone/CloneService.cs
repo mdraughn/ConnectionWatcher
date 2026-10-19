@@ -85,16 +85,25 @@ public class CloneService(IHttpClientFactory httpFactory,
         }
         catch (InvalidOperationException ex)
         {
-            // Nothing was imported, so the node must not stay a disabled archive of a clone that never happened.
-            try
-            {
-                await settings.SetManyAsync(previous);
-            }
-            catch (Exception restoreError)
-            {
-                log.LogError(restoreError, "Could not restore the engine and clone settings after a failed clone");
-            }
+            // Refused up front (schema or config validation): nothing was written.
+            await RestoreAsync(previous);
             return CloneOutcome.Fail(400, "import-failed", ex.Message);
+        }
+        catch (SnapshotImportException ex) when (!ex.ConfigCommitted)
+        {
+            // The config write rolled back, so the node is as it was.
+            await RestoreAsync(previous);
+            log.LogError(ex, "Clone import failed before the config was committed");
+            return CloneOutcome.Fail(500, "import-error", ex.Message);
+        }
+        catch (SnapshotImportException ex)
+        {
+            // The node now holds the source's config. Re-enabling would ping the source's
+            // targets, so it stays a disabled archive.
+            log.LogError(ex, "Clone import failed after the config was committed");
+            return CloneOutcome.Fail(500, "import-incomplete",
+                ex.Message + " This node holds the source's config but is left disabled; " +
+                "clone again or reset it before enabling.");
         }
 
         // deterministic parked-archive state before answering; supersedes the import's debounced rebuild
@@ -104,6 +113,18 @@ public class CloneService(IHttpClientFactory httpFactory,
         log.LogInformation("Cloned from {Source}: {Targets} targets, {Transitions} transitions",
             source, snapshot.Config.Targets.Count, snapshot.Transitions.Count);
         return CloneOutcome.Ok(Summary(snapshot, includeSecrets, localSkipped));
+    }
+
+    private async Task RestoreAsync(IReadOnlyDictionary<string, string?> previous)
+    {
+        try
+        {
+            await settings.SetManyAsync(previous);
+        }
+        catch (Exception restoreError)
+        {
+            log.LogError(restoreError, "Could not restore the engine and clone settings after a failed clone");
+        }
     }
 
     public async Task<CloneOutcome> TakeOverAsync(string? sourcePassword, bool allowInsecure, CancellationToken ct)
@@ -177,6 +198,12 @@ public class CloneService(IHttpClientFactory httpFactory,
         {
             return CloneOutcome.Fail(400, "import-failed",
                 ex.Message + " The source has been disabled; this node is unchanged.");
+        }
+        catch (SnapshotImportException ex) when (ex.InnerException is InvalidOperationException inner)
+        {
+            // as before the importer named its phases: an InvalidOperationException is a 400
+            return CloneOutcome.Fail(400, "import-failed",
+                inner.Message + " The source has been disabled; this node is unchanged.");
         }
 
         // 4. Go live. The warm restart seeds from the just-imported data, so
