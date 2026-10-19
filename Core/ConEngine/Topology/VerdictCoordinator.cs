@@ -499,14 +499,27 @@ public class VerdictCoordinator : IDisposable
         var degradedUnits = CountOperators(degraded.Select(a => a.Monitor));
         var grouped = degradedUnits != degraded.Count || determinedUnits != determined.Count;
 
+        // An Unreachable anchor is dead because a hop above it died: it is not
+        // evidence about the internet, so it is neither counted as responding nor
+        // as an independent anchor (ruling D5).
+        var unreachable = determined.Where(a => a.State == HostState.Unreachable).ToList();
+        var counted = determined.Where(a => a.State != HostState.Unreachable).ToList();
+        var countedUnits = CountOperators(counted.Select(a => a.Monitor));
+        var countedGrouped = degradedUnits != degraded.Count || countedUnits != counted.Count;
+
         // With fewer independent anchors than the weather threshold, weather can
         // never be diagnosed — say so rather than implying full confidence.
-        var qualifier = determinedUnits < _weatherThreshold
-            ? $" (only {determinedUnits} {(grouped ? "operator(s)" : "anchor(s)")} — cannot distinguish a site incident from internet weather)"
+        var qualifier = countedUnits < _weatherThreshold
+            ? $" (only {countedUnits} {(countedGrouped ? "operator(s)" : "anchor(s)")} — cannot distinguish a site incident from internet weather)"
             : "";
 
         if (degraded.Count == 0)
-            return (VerdictState.Healthy, $"Healthy: {determined.Count} anchors responding{qualifier}", null);
+        {
+            var responding = counted.Count(a => Answering(a.State));
+            var unreachableNote = unreachable.Count == 0 ? "" :
+                $" ({string.Join(", ", unreachable.Select(a => UnreachableName(a.Monitor)))})";
+            return (VerdictState.Healthy, $"Healthy: {responding} anchors responding{unreachableNote}{qualifier}", null);
+        }
         if (degradedUnits < _weatherThreshold)
         {
             var sharedOperator = degraded.Count > 1 && degradedUnits == 1
@@ -538,6 +551,13 @@ public class VerdictCoordinator : IDisposable
             : $"{degraded.Count} of {determined.Count} anchors";
         return (VerdictState.InternetWeather, $"InternetWeather: {counts} degraded ({List()})", null);
     }
+
+    /// <summary>"Quad9 unreachable behind ModemB": the anchor's name and the target its
+    /// Unreachable state is explained by; just "Quad9 unreachable" with no known cause.</summary>
+    private string UnreachableName(TargetMonitor anchor) =>
+        anchor.ExplainedBy is { } cause && _graph.Targets.TryGetValue(cause, out var target)
+            ? $"{anchor.Target.Name} unreachable behind {target.Name}"
+            : $"{anchor.Target.Name} unreachable";
 
     /// <summary>Frontier blame: along each failing anchor's path, the last hop
     /// with proven forwarding (it or anything beyond it answers) is the

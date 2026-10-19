@@ -364,12 +364,15 @@ public class VerdictCoordinatorTests
         }
         new TopologyCoordinator(graph, monitors, NullLogger<TopologyCoordinator>.Instance).Start();
         var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
-            weatherThreshold: 2, _verdictTime ?? _time, NullLogger<VerdictCoordinator>.Instance);
+            weatherThreshold: _weatherThreshold, _verdictTime ?? _time, NullLogger<VerdictCoordinator>.Instance);
         if (transitions is not null)
             verdict.TransitionSource.Subscribe(transitions.Add);
         verdict.Start();
         return (verdict, monitors, graph);
     }
+
+    // The weather threshold the stacks are built with (WeatherThreshold 3 for the D5 qualifier test).
+    private int _weatherThreshold = 2;
 
     // When set, the verdict coordinators built by ColdStack/Stack use this clock instead of _time.
     private TimeProvider? _verdictTime;
@@ -954,10 +957,12 @@ public class VerdictCoordinatorTests
     }
 
     /// <summary>EV6: Quad9 sits behind a second modem that has died. It is explained
-    /// (Unreachable), so it is neither degraded nor answering.</summary>
+    /// (Unreachable), so it is neither degraded nor answering: Healthy counts only
+    /// the answering anchors and names the unreachable one (D5).</summary>
     [Fact]
     public void An_unreachable_anchor_behind_a_dead_branch()
     {
+        _weatherThreshold = 3;
         var (verdict, monitors, graph) = Stack(new WatcherOptions
         {
             Targets =
@@ -975,11 +980,11 @@ public class VerdictCoordinatorTests
         FeedDown(monitors, graph, "Quad9");
         Assert.Equal(HostState.Unreachable, monitors[graph.GetByName("Quad9").Id].CurrentState);
 
-        // AUDIT: D5 — pinned as it is today: Healthy, and the count includes the
-        // unreachable Quad9 as "responding". Ruling D5 keeps Healthy but wants an
-        // honest count ("2 anchors responding (Quad9 unreachable behind ModemB)");
-        // Task 32 flips this assertion.
+        // Ruling D5: still Healthy, but the count is honest and the dead one is named.
         Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
-        Assert.Equal("Healthy: 3 anchors responding", verdict.CurrentDetail);
+        Assert.StartsWith("Healthy: 2 anchors responding", verdict.CurrentDetail);
+        Assert.Contains("Quad9 unreachable behind ModemB", verdict.CurrentDetail);
+        // The qualifier counts only the 2 independent answering anchors, not 3.
+        Assert.Contains("only 2 anchor(s)", verdict.CurrentDetail);
     }
 }
