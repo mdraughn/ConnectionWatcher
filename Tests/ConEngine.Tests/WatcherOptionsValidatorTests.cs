@@ -190,4 +190,41 @@ public class WatcherOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains("RecoveringThreshold", result.FailureMessage);
     }
+
+    private static PingProfileConfig Bad(Action<PingProfileConfig> mutate)
+    {
+        var p = new PingProfileConfig();
+        mutate(p);
+        return p;
+    }
+
+    // Each row breaks exactly one rule of an otherwise valid home config. The
+    // subject is the name the message must point the user at.
+    public static TheoryData<string, Action<WatcherOptions>, string, string> RuleViolations => new()
+    {
+        { "empty target name", o => o.Targets[2].Name = "", "Name", "empty" },
+        { "empty address", o => o.Targets[2].Address = "", "Google", "empty Address" },
+        { "duplicate pool name", o => o.Pools.Add(new PoolConfig { Name = "internet", Members = ["Google"] }), "internet", "Duplicate pool" },
+        { "pool named like a target", o => o.Pools.Add(new PoolConfig { Name = "Router", Members = ["Google"] }), "Router", "collides" },
+        { "pool member naming a non-target", o => o.Pools[0].Members.Add("Ghost"), "Ghost", "unknown member" },
+        { "pool parent unknown", o => o.Pools[0].Parent = "Ghost", "Ghost", "unknown parent" },
+        { "NormalIntervalSeconds = 0", o => o.Profiles["Bad"] = Bad(p => p.NormalIntervalSeconds = 0), "Bad", "positive" },
+        { "PingTimeoutSeconds = 0", o => o.Profiles["Bad"] = Bad(p => p.PingTimeoutSeconds = 0), "Bad", "positive" },
+        { "FalteringThreshold = -0.1", o => o.Profiles["Bad"] = Bad(p => p.FalteringThreshold = -0.1), "Bad", "FalteringThreshold" },
+        { "MinUsableSample = 0", o => o.Profiles["Bad"] = Bad(p => p.MinUsableSample = 0), "Bad", "MinUsableSample" },
+    };
+
+    [Theory]
+    [MemberData(nameof(RuleViolations))]
+    public void Each_rule_rejects(string rule, Action<WatcherOptions> breakIt, string subject, string keyword)
+    {
+        var o = ValidHome();
+        breakIt(o);
+
+        var result = Validate(o);
+
+        Assert.True(result.Failed, rule);
+        Assert.Contains(subject, result.FailureMessage);
+        Assert.Contains(keyword, result.FailureMessage, StringComparison.OrdinalIgnoreCase);
+    }
 }

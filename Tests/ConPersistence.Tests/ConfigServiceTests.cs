@@ -460,6 +460,46 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         Assert.Contains(result.Errors!, e => e.Contains("Local targets cannot have children"));
     }
 
+    private async Task<string> PoolShapeAsync() =>
+        string.Join("|", (await _store.ExportAsync()).Pools
+            .Select(p => $"{p.Name}:{string.Join(",", p.Members.Order())}@{p.Parent}"));
+
+    [Fact]
+    public async Task UpsertPoolAsync_with_an_unknown_member_is_a_validation_error_and_commits_nothing()
+    {
+        var before = await PoolShapeAsync();
+        var poolId = (await _store.ExportAsync()).Pools.Single().Id;
+
+        var result = await _service.UpsertPoolAsync(new PoolDto
+        {
+            Id = poolId, Name = "Internet", Members = ["Google", "Ghost"], Parent = "Modem",
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("Ghost"));
+        Assert.Equal(before, await PoolShapeAsync());
+        Assert.Equal(0, _changeSignals);
+    }
+
+    [Fact]
+    public async Task UpsertPoolAsync_with_an_unknown_parent_is_a_validation_error_and_commits_nothing()
+    {
+        var before = await PoolShapeAsync();
+        var poolId = (await _store.ExportAsync()).Pools.Single().Id;
+
+        var result = await _service.UpsertPoolAsync(new PoolDto
+        {
+            Id = poolId, Name = "Internet", Members = ["Google", "Cloudflare"], Parent = "Ghost",
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains("Ghost"));
+        Assert.Equal(before, await PoolShapeAsync());
+        Assert.Equal(0, _changeSignals);
+    }
+
     private static TargetDto ManagedResolver(Guid? id = null) => new()
     {
         Id = id, Name = "Your resolver 203.0.113.1", Address = "203.0.113.1", Profile = "Resolver",
@@ -510,6 +550,48 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
         var unmanage = await _service.UpsertTargetAsync(ManagedResolver(id) with { SystemManaged = false });
         Assert.False(unmanage.Success);
         Assert.True((await _store.ExportAsync()).Targets.Single(t => t.Id == id).SystemManaged);
+    }
+
+    [Theory]
+    [InlineData("profile")]
+    [InlineData("scope")]
+    public async Task A_system_managed_target_keeps_its_profile_and_scope(string field)
+    {
+        await _store.SeedAsync(null);
+        var id = await SeedManagedResolverAsync();
+        var before = (await _store.ExportAsync()).Targets.Single(t => t.Id == id);
+        _changeSignals = 0;
+
+        var edited = field == "profile"
+            ? ManagedResolver(id) with { Profile = "Public" }
+            : ManagedResolver(id) with { Scope = TargetScope.Local };
+        var result = await _service.UpsertTargetAsync(edited);
+
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        Assert.Contains(result.Errors!, e => e.Contains(field));
+        var after = (await _store.ExportAsync()).Targets.Single(t => t.Id == id);
+        Assert.Equal(before.Profile, after.Profile);
+        Assert.Equal(before.Scope, after.Scope);
+        Assert.Equal(0, _changeSignals);
+    }
+
+    [Fact]
+    public async Task A_system_managed_target_can_be_renamed_and_have_operator_and_critical_changed()
+    {
+        await _store.SeedAsync(null);
+        var id = await SeedManagedResolverAsync();
+
+        var result = await _service.UpsertTargetAsync(
+            ManagedResolver(id) with { Name = "Home DNS", Operator = "Comcast", Critical = true });
+
+        Assert.True(result.Success, string.Join("; ", result.Errors ?? []));
+        var stored = (await _store.ExportAsync()).Targets.Single(t => t.Id == id);
+        Assert.Equal("Home DNS", stored.Name);
+        Assert.Equal("Comcast", stored.Operator);
+        Assert.True(stored.Critical);
+        Assert.True(stored.SystemManaged);
+        Assert.Equal("203.0.113.1", stored.Address);
     }
 
     [Fact]
