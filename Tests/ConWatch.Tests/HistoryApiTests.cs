@@ -268,6 +268,13 @@ public class HistoryApiTests : IDisposable
         Assert.Contains(openers, i => i.GetProperty("subjectId").GetGuid() == downId);
         Assert.Equal(1, list.Count - openers.Count); // limit=1 bounds the in-range rows only
         Assert.DoesNotContain(list.Skip(openers.Count), i => i.TryGetProperty("opening", out _));
+
+        // Opening rows are first-page only and need a lower bound.
+        var cursor = both.GetProperty("nextBefore").GetInt64();
+        var paged = await GetJson($"/api/v1/transitions?from={from}&opening=true&limit=1&before={cursor}");
+        Assert.DoesNotContain(paged.GetProperty("items").EnumerateArray(), i => i.TryGetProperty("opening", out _));
+        var unbounded = await GetJson($"/api/v1/transitions?subjectId={downId}&opening=true");
+        Assert.DoesNotContain(unbounded.GetProperty("items").EnumerateArray(), i => i.TryGetProperty("opening", out _));
     }
 
     private static TransitionRow Row(Guid id, string name, string from, string to, DateTime at) => new()

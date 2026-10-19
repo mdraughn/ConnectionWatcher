@@ -112,7 +112,7 @@ export function clipAtReset(transitions: TransitionEvent[]):
   { transitions: TransitionEvent[]; resetAt: string | null } {
   let resetIndex = -1;
   for (let i = transitions.length - 1; i >= 0; i--) {
-    if (transitions[i].trigger === "HistoryReset") {
+    if (transitions[i].trigger === "HistoryReset" && !transitions[i].opening) {
       resetIndex = i;
       break;
     }

@@ -167,6 +167,17 @@ describe("incidents (split semantics)", () => {
 });
 
 describe("clipAtReset", () => {
+  it("a reset before the range (an opening row) does not split it", () => {
+    const opening = { ...t("2026-08-17T00:00:00Z", "Starting", "Starting", "HistoryReset"), opening: true };
+    const inRange = t("2026-08-20T01:00:00Z", "Down", "Starting");
+    const { transitions, resetAt } = clipAtReset([opening, inRange]);
+    expect(resetAt).toBeNull();
+    expect(transitions).toEqual([opening, inRange]);
+    const stats = incidents(transitions, "2026-08-20T00:00:00Z", "2026-08-20T06:00:00Z");
+    expect(stats.outageCount).toBe(1);
+    expect(stats.longestOutageMs).toBe(5 * 3_600_000);
+  });
+
   const list = [
     t("2026-08-20T01:00:00Z", "Down"),
     t("2026-08-20T01:30:00Z", "Starting", "Starting", "HistoryReset"),
