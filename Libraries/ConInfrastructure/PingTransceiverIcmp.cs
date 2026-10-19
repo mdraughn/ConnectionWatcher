@@ -48,12 +48,7 @@ public class PingTransceiverIcmp : IPingTransceiver
                 _ = send.ContinueWith(static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                 throw;
             }
-            return new PingResult(
-                _ipAddress,
-                reply.Status == IPStatus.Success,
-                reply.RoundtripTime,
-                reply.Status.ToString()
-            );
+            return FromReply(_ipAddress, reply.Status, reply.RoundtripTime);
         }
         catch (PingException ex)
         {
@@ -64,6 +59,11 @@ public class PingTransceiverIcmp : IPingTransceiver
             return new PingResult(_ipAddress, false, 0, $"Error: {ex.Message}");
         }
     }
+
+    /// <summary>Maps an echo reply status to a result: only <see cref="IPStatus.Success"/> is a
+    /// reply, anything else is a loss carrying the status name.</summary>
+    internal static PingResult FromReply(IPAddress ip, IPStatus status, long rttMs) =>
+        new(ip, status == IPStatus.Success, rttMs, status.ToString());
 
     public void Dispose()
     {

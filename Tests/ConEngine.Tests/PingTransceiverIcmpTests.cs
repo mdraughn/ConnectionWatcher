@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.NetworkInformation;
 using ConInfrastructure;
 
 namespace ConEngine.Tests;
@@ -20,5 +21,29 @@ public class PingTransceiverIcmpTests
         // not come back as a failed sample that the tracker would record.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"took {sw.Elapsed}");
+    }
+
+    [Fact]
+    public async Task Loopback_echo_is_a_reply()
+    {
+        using var ping = new PingTransceiverIcmp(IPAddress.Loopback, CancellationToken.None);
+        var result = await ping.PingAsync(timeoutMs: 5000);
+        Assert.True(result.Success);
+        Assert.Equal("Success", result.Message);
+        Assert.True(result.RoundtripTime >= 0);
+    }
+
+    [Theory]
+    [InlineData(IPStatus.Success, true)]
+    [InlineData(IPStatus.DestinationHostUnreachable, false)]
+    [InlineData(IPStatus.TimedOut, false)]
+    [InlineData(IPStatus.TtlExpired, false)]
+    public void Only_success_status_is_a_reply(IPStatus status, bool success)
+    {
+        var result = PingTransceiverIcmp.FromReply(IPAddress.Loopback, status, 7);
+        Assert.Equal(success, result.Success);
+        Assert.Equal(status.ToString(), result.Message);
+        Assert.Equal(7, result.RoundtripTime);
+        Assert.Equal(IPAddress.Loopback, result.IpAddress);
     }
 }

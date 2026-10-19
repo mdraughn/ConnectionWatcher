@@ -192,4 +192,62 @@ public class DnsQueryTransceiverTests
         using var icmp = factory.Create(IPAddress.Loopback, ProbeSpec.Icmp, CancellationToken.None);
         Assert.IsNotType<DnsQueryTransceiver>(icmp);
     }
+
+    [Theory]
+    [InlineData(DnsRcode.ServFail, "ServFail (dns.google)")]
+    [InlineData(DnsRcode.Refused, "RcodeRefused (dns.google)")]
+    [InlineData(DnsRcode.NotImp, "Rcode4 (dns.google)")]
+    public async Task A_seeded_name_answered_with_an_error_rcode_is_a_miss(DnsRcode rcode, string message)
+    {
+        // Only NXDOMAIN and a blocked NOERROR answer are a working resolver that filters;
+        // an error rcode is a broken resolver and must stay a miss, or DnsDown never fires.
+        using var server = new FakeDnsServer();
+        server.Reply = (id, name) => [FakeDnsWire.Response(id, name, rcode)];
+        using var probe = Probe(server, Names(Google));
+        var result = await probe.PingAsync(2000);
+        Assert.False(result.Success);
+        Assert.Equal(message, result.Message);
+        Assert.False(result.Message.StartsWith("Filtered", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_expected_address_among_others_is_Verified()
+    {
+        using var server = new FakeDnsServer();
+        server.Reply = (id, name) => [FakeDnsWire.Response(id, name, DnsRcode.NoError,
+            IPAddress.Parse("10.0.0.1"), IPAddress.Parse("8.8.4.4"))];
+        using var probe = Probe(server, Names(Google));
+        var result = await probe.PingAsync(2000);
+        Assert.True(result.Success);
+        Assert.Equal("Verified (dns.google)", result.Message);
+    }
+
+    [Fact]
+    public async Task Engine_cancellation_throws_instead_of_reporting_a_miss()
+    {
+        using var server = new FakeDnsServer();
+        server.Reply = (_, _) => null; // a silent resolver
+        using var cts = new CancellationTokenSource();
+        using var probe = new DnsQueryTransceiver(IPAddress.Loopback, Names(Admin), cts.Token, server.Port);
+        var task = probe.PingAsync(5000);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (server.Received < 1 && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+        Assert.Equal(1, server.Received);
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+    }
+
+    [Fact]
+    public async Task Nothing_listening_on_53_is_a_prompt_miss_not_Refused()
+    {
+        int port;
+        using (var closed = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            port = ((IPEndPoint)closed.Client.LocalEndPoint!).Port;
+        using var probe = new DnsQueryTransceiver(IPAddress.Loopback, Names(Admin), CancellationToken.None, port);
+        var result = await probe.PingAsync(2000);
+        Assert.False(result.Success);
+        Assert.NotEqual("Refused", result.Message);
+        Assert.EndsWith("(example.org)", result.Message);
+    }
 }

@@ -20,7 +20,18 @@ public class DomainNameResolverDnsTests
         using var resolver = new DomainNameResolverDns(CancellationToken.None);
         var result = await resolver.ResolveAsync("nonexistent.invalid", 5000);
         Assert.False(result.Success);
-        Assert.NotEqual("Success", result.Status);
+        Assert.Contains(result.Status, new[] { "Host not found", "No DNS data found", "Temporary DNS failure" });
         Assert.Empty(result.IpAddresses);
+    }
+
+    [Fact]
+    public async Task Localhost_resolves_successfully()
+    {
+        using var resolver = new DomainNameResolverDns(CancellationToken.None);
+        var result = await resolver.ResolveAsync("localhost", 5000);
+        Assert.True(result.Success);
+        Assert.Equal("Success", result.Status);
+        Assert.NotEmpty(result.IpAddresses);
+        Assert.All(result.IpAddresses, a => Assert.True(System.Net.IPAddress.IsLoopback(a)));
     }
 }
