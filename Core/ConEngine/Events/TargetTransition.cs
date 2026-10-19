@@ -71,7 +71,7 @@ public record TargetTransition
     public required HostState To { get; init; }
     public required DateTimeOffset Timestamp { get; init; }
     public required TransitionReason Reason { get; init; }
-    public float AverageRoundtripTime { get; init; }
+    public double AverageRoundtripTime { get; init; }
 
     public override string ToString() => $"{TargetName}: {From} -> {To} ({Reason})";
 }

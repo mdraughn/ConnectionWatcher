@@ -337,12 +337,11 @@ public class HostAnalysisEngineTests
         Feed(faltering, time2, 1, success: false);
         Assert.Equal(HostState.Down, faltering.CurrentState);
 
-        // AUDIT: D4, float rate, 19/20 < 0.95: pinned as it is today; Task 31
-        // makes the rate a double and this becomes Responding.
+        // 19/20 = 0.95 meets the 95 % threshold exactly.
         var (starting, time3) = MakeWith(profile);
         Feed(starting, time3, 19, success: true);
         Feed(starting, time3, 1, success: false);
-        Assert.Equal(HostState.Faltering, starting.CurrentState);
+        Assert.Equal(HostState.Responding, starting.CurrentState);
     }
 
     [Fact]
@@ -350,19 +349,17 @@ public class HostAnalysisEngineTests
     {
         var profile = ProfileWith(10, responding: 0.90, faltering: 0.70);
 
-        // AUDIT: D4, float rate, 9/10 < 0.90: pinned as it is today; Task 31
-        // flips this to Responding.
+        // 9/10 = 0.90 meets the 90 % threshold exactly.
         var (starting, time1) = MakeWith(profile);
         Feed(starting, time1, 9, success: true);
         Feed(starting, time1, 1, success: false);
-        Assert.Equal(HostState.Faltering, starting.CurrentState);
+        Assert.Equal(HostState.Responding, starting.CurrentState);
 
-        // AUDIT: D4, float rate, 7/10 < 0.70: pinned as it is today; Task 31
-        // flips this to staying Responding.
+        // 7/10 = 0.70 is not below the 70 % threshold: stays Responding.
         var (responding, time2) = MakeWith(profile);
         Feed(responding, time2, 10, success: true);
         Assert.Equal(HostState.Responding, responding.CurrentState);
         Feed(responding, time2, 3, success: false);
-        Assert.Equal(HostState.Faltering, responding.CurrentState);
+        Assert.Equal(HostState.Responding, responding.CurrentState);
     }
 }

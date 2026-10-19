@@ -25,9 +25,9 @@ public record HostStatus
     public bool Assumed { get; init; }
     public DateTimeOffset TrackingStarted { get; init; }
     public int SampleSize { get; init; }
-    public float SuccessRate { get; init; }
-    public float FailureRate { get; init; }
-    public float AverageRoundtripTime { get; init; }
+    public double SuccessRate { get; init; }
+    public double FailureRate { get; init; }
+    public double AverageRoundtripTime { get; init; }
     public DateTimeOffset Timestamp { get; set; }
 
     public override string ToString()

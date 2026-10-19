@@ -74,11 +74,11 @@ public static class MetricsEndpoint
 
             Family(sb, "conwatch_target_loss_ratio", "gauge", "Packet loss over the sliding sample window (0..1).");
             foreach (var m in targets)
-                Series(sb, "conwatch_target_loss_ratio", m.Target.Name, m.LastStatus?.Host.FailureRate ?? 0f, localNames.Contains(m.Target.Name));
+                Series(sb, "conwatch_target_loss_ratio", m.Target.Name, m.LastStatus?.Host.FailureRate ?? 0d, localNames.Contains(m.Target.Name));
 
             Family(sb, "conwatch_target_rtt_seconds", "gauge", "Average round-trip time over the sliding sample window.");
             foreach (var m in targets)
-                Series(sb, "conwatch_target_rtt_seconds", m.Target.Name, (m.LastStatus?.Host.AverageRoundtripTime ?? 0f) / 1000.0, localNames.Contains(m.Target.Name));
+                Series(sb, "conwatch_target_rtt_seconds", m.Target.Name, (m.LastStatus?.Host.AverageRoundtripTime ?? 0d) / 1000.0, localNames.Contains(m.Target.Name));
 
             Family(sb, "conwatch_target_sample_size", "gauge", "Pings in the sliding sample window.");
             foreach (var m in targets)

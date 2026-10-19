@@ -19,7 +19,7 @@ public class TransitionRow
     public Guid? AncestorId { get; set; }
     public string? Detail { get; set; }
     public string? Verdict { get; set; }
-    public float AvgRtt { get; set; }
+    public double AvgRtt { get; set; }
 }
 
 /// <summary>A sub-Faltering loss episode: trouble too small to move the state

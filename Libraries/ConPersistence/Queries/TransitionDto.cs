@@ -40,7 +40,7 @@ public sealed record TransitionDto
     public Guid? AncestorId { get; init; }
     public string? Detail { get; init; }
     public string? Verdict { get; init; }
-    public float AvgRtt { get; init; }
+    public double AvgRtt { get; init; }
     /// <summary>"Verdict", "Local", "Resolver" or "Unknown" (a target since deleted) on history rows
     /// (REST /transitions, MCP get_transitions); omitted on live messages, whose subscribers know their targets.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

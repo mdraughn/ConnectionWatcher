@@ -57,9 +57,9 @@ internal class HostAnalysisEngine
     public int NumSuccess { get; private set; }
     public int NumFailed { get; private set; }
 
-    public float SuccessRate { get; private set; }
-    public float FailureRate { get; private set; }
-    public float AverageRoundtripTime { get; private set; }
+    public double SuccessRate { get; private set; }
+    public double FailureRate { get; private set; }
+    public double AverageRoundtripTime { get; private set; }
 
     /// <summary>DNS moved the host: later statuses carry the new address.</summary>
     public void UpdateAddress(IPAddress address) => _hostAddress = address;
@@ -152,7 +152,7 @@ internal class HostAnalysisEngine
     public AnalysisOutcome Recalculate(IEnumerable<PingHistoryEntry> samples)
     {
         SampleSize = 0; NumSuccess = 0; NumFailed = 0;
-        float sumRoundtrip = 0f;
+        double sumRoundtrip = 0d;
 
         foreach (PingHistoryEntry item in samples)
         {
@@ -169,9 +169,9 @@ internal class HostAnalysisEngine
             sumRoundtrip += item.RoundtripTime;
         }
 
-        SuccessRate = SampleSize > 0 ? (float)NumSuccess / SampleSize : 0f;
-        FailureRate = SampleSize > 0 ? (float)NumFailed / SampleSize : 0f;
-        AverageRoundtripTime = SampleSize > 0 ? sumRoundtrip / SampleSize : 0f;
+        SuccessRate = SampleSize > 0 ? (double)NumSuccess / SampleSize : 0d;
+        FailureRate = SampleSize > 0 ? (double)NumFailed / SampleSize : 0d;
+        AverageRoundtripTime = SampleSize > 0 ? sumRoundtrip / SampleSize : 0d;
 
         HostState next;
         if (_seeded)
