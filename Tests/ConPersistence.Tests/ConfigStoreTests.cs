@@ -68,6 +68,20 @@ public class ConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task An_edited_builtin_profile_reaches_the_engine()
+    {
+        await _store.SeedAsync(ValidHome());
+        var internalProfile = (await _store.ExportAsync()).Profiles.Single(p => p.Name == "Internal");
+        var result = await new ConfigService(_factory, _store)
+            .UpsertProfileAsync(internalProfile with { NormalIntervalSeconds = 2.5 });
+        Assert.True(result.Success);
+
+        var graph = TargetGraph.FromOptions(await _store.LoadWatcherOptionsAsync());
+
+        Assert.Equal(TimeSpan.FromSeconds(2.5), graph.ProfileFor(graph.GetByName("Router")).NormalInterval);
+    }
+
+    [Fact]
     public async Task Loaded_options_build_identical_graphs_twice()
     {
         await _store.SeedAsync(ValidHome());

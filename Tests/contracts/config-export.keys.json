@@ -1,0 +1,41 @@
+{
+  "document": [
+    "pools",
+    "profiles",
+    "targets"
+  ],
+  "pool": [
+    "id",
+    "members",
+    "name",
+    "parent"
+  ],
+  "profile": [
+    "burstIntervalSeconds",
+    "burstMaxDurationSeconds",
+    "description",
+    "downThreshold",
+    "falteringThreshold",
+    "historySize",
+    "id",
+    "minUsableSample",
+    "name",
+    "normalIntervalSeconds",
+    "pingTimeoutSeconds",
+    "recoveringThreshold",
+    "respondingThreshold"
+  ],
+  "target": [
+    "address",
+    "critical",
+    "enabled",
+    "id",
+    "name",
+    "operator",
+    "parent",
+    "probe",
+    "profile",
+    "scope",
+    "systemManaged"
+  ]
+}

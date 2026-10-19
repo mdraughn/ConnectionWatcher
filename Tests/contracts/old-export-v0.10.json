@@ -1,0 +1,16 @@
+{
+  "profiles": [
+    { "id": "6a1c1f0e-0000-4000-8000-000000000001", "name": "Internal", "normalIntervalSeconds": 1, "pingTimeoutSeconds": 3, "burstIntervalSeconds": 1, "burstMaxDurationSeconds": 60, "historySize": 100, "minUsableSample": 10, "respondingThreshold": 0.95, "falteringThreshold": 0.75, "downThreshold": 0.1, "recoveringThreshold": 0.25 },
+    { "id": "6a1c1f0e-0000-4000-8000-000000000002", "name": "External", "normalIntervalSeconds": 10, "pingTimeoutSeconds": 3, "burstIntervalSeconds": 1, "burstMaxDurationSeconds": 60, "historySize": 100, "minUsableSample": 10, "respondingThreshold": 0.95, "falteringThreshold": 0.75, "downThreshold": 0.1, "recoveringThreshold": 0.25 }
+  ],
+  "targets": [
+    { "id": "6a1c1f0e-0000-4000-8000-000000000011", "name": "Router", "address": "192.0.2.1", "parent": null, "profile": "Internal", "enabled": true, "operator": null, "probe": null },
+    { "id": "6a1c1f0e-0000-4000-8000-000000000012", "name": "Modem", "address": "192.0.2.2", "parent": "Router", "profile": "Internal", "enabled": true, "operator": "Comcast", "probe": null },
+    { "id": "6a1c1f0e-0000-4000-8000-000000000013", "name": "Google", "address": "198.51.100.8", "parent": "Modem", "profile": "External", "enabled": true, "operator": null, "probe": null },
+    { "id": "6a1c1f0e-0000-4000-8000-000000000014", "name": "Cloudflare", "address": "198.51.100.1", "parent": "Modem", "profile": "External", "enabled": true, "operator": null, "probe": null },
+    { "id": "6a1c1f0e-0000-4000-8000-000000000015", "name": "Web", "address": "203.0.113.9", "parent": "Modem", "profile": "External", "enabled": false, "operator": null, "probe": "tcp:443" }
+  ],
+  "pools": [
+    { "id": "6a1c1f0e-0000-4000-8000-000000000021", "name": "Internet", "members": ["Google", "Cloudflare"], "parent": "Modem" }
+  ]
+}
