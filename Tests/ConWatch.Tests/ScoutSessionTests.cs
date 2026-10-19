@@ -171,4 +171,38 @@ public class ScoutSessionTests : IDisposable
         Assert.Equal((other, false), Assert.Single(prompts.Asked));
         Assert.Equal(1, await StoredAsync(admin));
     }
+
+    [Fact]
+    public void A_password_answer_never_prints_the_password()
+    {
+        var text = new ScoutPasswordAnswer("s3cret-sample-pw", Remember: true).ToString();
+        Assert.DoesNotContain("s3cret-sample-pw", text);
+        Assert.Contains("Remember = True", text);
+    }
+
+    /// <summary>The saved-key format: as typed, minus trailing slashes; an explicit port is kept;
+    /// matching ignores case in the host, the scheme and the saved key.</summary>
+    [Theory]
+    [InlineData("http://nas.example.com/", "http://nas.example.com")]
+    [InlineData("https://nas.example.com", "https://nas.example.com")]
+    [InlineData("http://nas.example.com:80/", "http://nas.example.com:80")]
+    [InlineData("https://Nas.Example.com:8443//", "https://Nas.Example.com:8443")]
+    [InlineData("HTTP://NAS.example.com", "HTTP://NAS.example.com")]
+    public void The_saved_key_is_the_url_as_typed_without_trailing_slashes(string typed, string key) =>
+        Assert.Equal(key, ScoutServerKey.Of(new Uri(typed)));
+
+    [Fact]
+    public void The_saved_key_matches_regardless_of_case_but_not_across_ports()
+    {
+        var saved = ScoutServerKey.Of(new Uri("http://Nas.Example.com:8080/"));
+        Assert.True(ScoutServerKey.Matches(saved, new Uri("http://nas.example.com:8080")));
+        Assert.True(ScoutServerKey.Matches(saved.ToUpperInvariant(), new Uri("http://nas.example.com:8080/")));
+        Assert.False(ScoutServerKey.Matches(saved, new Uri("http://nas.example.com:80")));
+        Assert.False(ScoutServerKey.Matches(saved, new Uri("http://nas.example.com")));
+        // The in-memory store (like the tray's DPAPI one) goes through the same rule.
+        var store = new MemoryStore();
+        store.Save(new Uri("http://Nas.Example.com:8080/"), "pw");
+        Assert.Equal("pw", store.Load(new Uri("http://NAS.example.com:8080")));
+        Assert.Null(store.Load(new Uri("http://nas.example.com")));
+    }
 }

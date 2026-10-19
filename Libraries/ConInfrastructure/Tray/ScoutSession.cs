@@ -1,9 +1,18 @@
+using System.Text;
 using ConInfrastructure.Discovery;
 
 namespace ConInfrastructure.Tray;
 
-/// <summary>What the user typed into the password prompt.</summary>
-public sealed record ScoutPasswordAnswer(string Password, bool Remember);
+/// <summary>What the user typed into the password prompt. Printing it (logs, debugger, test output)
+/// never shows the password.</summary>
+public sealed record ScoutPasswordAnswer(string Password, bool Remember)
+{
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("Password = ***, Remember = ").Append(Remember);
+        return true;
+    }
+}
 
 public enum ScoutOutcomeKind
 {
@@ -30,6 +39,11 @@ public sealed record ScoutOutcome(ScoutOutcomeKind Kind, ScoutResult Result);
 /// password was rejected, and returns null on cancel; <paramref name="confirmInsecure"/> returns the
 /// user's yes or no.
 /// </summary>
+/// <remarks>
+/// The delegates run on the caller's synchronization context (the tray's UI thread), because the awaits
+/// in <see cref="SendAsync"/> resume there. Do NOT add ConfigureAwait(false) to them: a prompt shown from
+/// a thread-pool thread would not be a legal UI call.
+/// </remarks>
 public sealed class ScoutSession(
     IScoutPasswordStore store,
     Func<Uri, bool, ScoutPasswordAnswer?> promptPassword,
