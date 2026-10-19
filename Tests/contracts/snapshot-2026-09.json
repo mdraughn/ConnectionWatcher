@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "exportedUtc": "2026-09-25T00:00:00+00:00",
+  "config": {
+    "profiles": [
+      { "id": "6a1c1f0e-0000-4000-8000-000000000002", "name": "External", "normalIntervalSeconds": 10, "pingTimeoutSeconds": 3, "burstIntervalSeconds": 1, "burstMaxDurationSeconds": 60, "historySize": 100, "minUsableSample": 10, "respondingThreshold": 0.95, "falteringThreshold": 0.75, "downThreshold": 0.1, "recoveringThreshold": 0.25 }
+    ],
+    "targets": [
+      { "id": "6a1c1f0e-0000-4000-8000-000000000011", "name": "Modem", "address": "192.0.2.2", "parent": null, "profile": "External", "enabled": true, "operator": "Example ISP", "probe": null },
+      { "id": "6a1c1f0e-0000-4000-8000-000000000013", "name": "Alpha", "address": "198.51.100.8", "parent": "Modem", "profile": "External", "enabled": true, "operator": null, "probe": null },
+      { "id": "6a1c1f0e-0000-4000-8000-000000000014", "name": "Bravo", "address": "198.51.100.1", "parent": "Modem", "profile": "External", "enabled": true, "operator": null, "probe": null }
+    ],
+    "pools": [
+      { "id": "6a1c1f0e-0000-4000-8000-000000000021", "name": "Internet", "members": ["Alpha", "Bravo"], "parent": "Modem" }
+    ]
+  },
+  "settings": { "Verdict.AnchorPool": "Internet" },
+  "redactedSettings": [],
+  "transitions": [
+    { "id": 101, "timestampUtc": "2026-09-24T10:00:00Z", "subjectId": "6a1c1f0e-0000-4000-8000-000000000011", "subjectName": "Modem", "subjectKind": "Target", "fromState": "Starting", "toState": "Responding", "trigger": "ThresholdCrossed", "successRate": 1.0, "sampleSize": 10, "burstLossRate": null, "ancestorId": null, "detail": null, "verdict": null, "avgRtt": 4.5 },
+    { "id": 102, "timestampUtc": "2026-09-24T10:00:05Z", "subjectId": "6a1c1f0e-0000-4000-8000-000000000013", "subjectName": "Alpha", "subjectKind": "Target", "fromState": "Starting", "toState": "Responding", "trigger": "ThresholdCrossed", "successRate": 1.0, "sampleSize": 10, "burstLossRate": null, "ancestorId": null, "detail": null, "verdict": null, "avgRtt": 12.0 },
+    { "id": 103, "timestampUtc": "2026-09-24T10:00:05Z", "subjectId": "6a1c1f0e-0000-4000-8000-000000000014", "subjectName": "Bravo", "subjectKind": "Target", "fromState": "Starting", "toState": "Responding", "trigger": "ThresholdCrossed", "successRate": 1.0, "sampleSize": 10, "burstLossRate": null, "ancestorId": null, "detail": null, "verdict": null, "avgRtt": 11.0 },
+    { "id": 104, "timestampUtc": "2026-09-24T12:30:00Z", "subjectId": "6a1c1f0e-0000-4000-8000-000000000013", "subjectName": "Alpha", "subjectKind": "Target", "fromState": "Responding", "toState": "Down", "trigger": "ThresholdCrossed", "successRate": 0.0, "sampleSize": 10, "burstLossRate": 1.0, "ancestorId": null, "detail": null, "verdict": null, "avgRtt": 0.0 },
+    { "id": 105, "timestampUtc": "2026-09-24T12:35:00Z", "subjectId": "6a1c1f0e-0000-4000-8000-000000000013", "subjectName": "Alpha", "subjectKind": "Target", "fromState": "Down", "toState": "Responding", "trigger": "ThresholdCrossed", "successRate": 1.0, "sampleSize": 10, "burstLossRate": null, "ancestorId": null, "detail": null, "verdict": null, "avgRtt": 13.0 }
+  ],
+  "rollups": [],
+  "glitches": []
+}

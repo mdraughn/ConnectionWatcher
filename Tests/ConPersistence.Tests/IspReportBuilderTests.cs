@@ -42,7 +42,7 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
     public Task DisposeAsync() => Task.CompletedTask;
     public void Dispose() => _factory.Dispose();
 
-    private async Task AddVerdict(DateTime at, string verdict, string? detail = null)
+    private async Task AddVerdict(DateTime at, string? verdict, string? detail = null)
     {
         await using var db = _factory.CreateDbContext();
         db.Transitions.Add(new TransitionRow
@@ -66,12 +66,12 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         await db.SaveChangesAsync();
     }
 
-    private async Task AddRollup(Guid target, DateTime period, int pings, int successes)
+    private async Task AddRollup(Guid target, DateTime period, int pings, int successes, string resolution = "Hour")
     {
         await using var db = _factory.CreateDbContext();
         db.Rollups.Add(new RollupRow
         {
-            TargetId = target, PeriodStartUtc = period, Resolution = "Hour",
+            TargetId = target, PeriodStartUtc = period, Resolution = resolution,
             PingCount = pings, SuccessCount = successes, RttAvg = 10, RttMin = 5, RttMax = 20,
         });
         await db.SaveChangesAsync();
@@ -308,5 +308,55 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
 
         Assert.Equal(2, report.Glitches.TotalCount);
         Assert.Equal(1, report.Glitches.InternetCount);
+    }
+
+    [Fact]
+    public async Task A_verdict_row_without_a_verdict_continues_the_episode()
+    {
+        // A marker row on the verdict subject (a HistoryReset) carries no verdict: the
+        // state in force before it stays in force, so the outage is not cut short.
+        await AddVerdict(From.AddHours(1), "LinkDown", "LinkDown: Modem is Down");
+        await AddVerdict(From.AddHours(2), null);
+        await AddVerdict(From.AddHours(4), "Healthy");
+
+        var report = await _builder.BuildAsync(From, To);
+
+        // AUDIT: the marker row splits the outage into two episodes and the second one loses
+        // its evidence text (the marker's Detail replaces it). Totals are right; the listing
+        // is not one continuous episode. Pinned as totals and contiguity, not the split.
+        Assert.Equal(TimeSpan.FromHours(3), report.LinkDownTime);
+        Assert.All(report.Episodes, e => Assert.Equal("LinkDown", e.Kind));
+        Assert.Equal(From.AddHours(1), report.Episodes.Min(e => e.StartUtc));
+        Assert.Equal(From.AddHours(4), report.Episodes.Max(e => e.EndUtc));
+        Assert.Equal(TimeSpan.FromHours(3), report.Episodes.Aggregate(TimeSpan.Zero, (sum, e) => sum + e.Duration));
+    }
+
+    [Fact]
+    public async Task Uptime_counts_hour_rows_and_minute_rows_across_one_window()
+    {
+        // The retention pass folds minutes into hours as they age, so one report window
+        // straddling the boundary holds both resolutions; both count.
+        await AddRollup(_googleId, From.AddHours(1), 100, 90, "Hour");
+        await AddRollup(_googleId, From.AddHours(20), 100, 100, "Minute");
+
+        var report = await _builder.BuildAsync(From, To);
+
+        var google = report.Targets.Single(t => t.Name == "Google");
+        Assert.Equal(95.0, google.UptimePercent!.Value, 3); // (90+100)/200
+        Assert.Equal(95.0, report.AnchorUptimePercent!.Value, 3);
+    }
+
+    [Fact]
+    public async Task LinkDegraded_time_is_attributed_and_totalled()
+    {
+        await AddVerdict(From.AddHours(1), "LinkDegraded", "LinkDegraded: Modem is Faltering");
+        await AddVerdict(From.AddHours(3), "Healthy");
+
+        var report = await _builder.BuildAsync(From, To);
+
+        Assert.Equal(TimeSpan.FromHours(2), report.LinkDegradedTime);
+        Assert.Equal(TimeSpan.Zero, report.LinkDownTime);
+        var episode = Assert.Single(report.Episodes);
+        Assert.Equal("LinkDegraded", episode.Kind);
     }
 }

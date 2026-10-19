@@ -5,6 +5,10 @@ using ConCore.Targets;
 using ConEngine;
 using ConEngine.Events;
 using ConEngine.Scheduling;
+using ConEngine.Tests.Fakes;
+using ConEngine.Topology;
+using ConPersistence.Entities;
+using ConPersistence.Queries;
 using ConEngine.Tracking;
 using ConPersistence.Recording;
 using Microsoft.EntityFrameworkCore;
@@ -362,6 +366,156 @@ public class RecorderCollectorTests : IDisposable
         Assert.False(recorder.ExecuteTask!.IsFaulted, "the pump must not fault");
         await using var db = _factory.CreateDbContext();
         Assert.Equal(1, await db.Transitions.CountAsync());
+    }
+
+    /// <summary>Fails every context request while <see cref="Failing"/>, counting the attempts.</summary>
+    private sealed class SwitchableFactory(IDbContextFactory<ConWatchDbContext> inner) : IDbContextFactory<ConWatchDbContext>
+    {
+        private int _failed;
+        public volatile bool Failing = true;
+        public int FailedAttempts => Volatile.Read(ref _failed);
+
+        public ConWatchDbContext CreateDbContext()
+        {
+            if (!Failing)
+                return inner.CreateDbContext();
+            Interlocked.Increment(ref _failed);
+            throw new InvalidOperationException("simulated SQLITE_BUSY");
+        }
+    }
+
+    [Fact]
+    public async Task Stopping_drains_queued_and_failed_batches()
+    {
+        var factory = new SwitchableFactory(_factory);
+        // A retry delay far beyond the test: the loop sits in its retry wait until stopped.
+        var recorder = new TransitionRecorder(factory, NullLogger<TransitionRecorder>.Instance,
+            retryDelay: TimeSpan.FromHours(1));
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        await recorder.StartAsync(CancellationToken.None);
+
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Failed", HostState.Down));
+        await TestWait.Eventually(() => factory.FailedAttempts >= 1, what: "the first write was never attempted");
+        source.OnNext(Transition(TransitionSubjectKind.Target, "Queued", HostState.Down));
+        factory.Failing = false;
+        await recorder.StopAsync(CancellationToken.None);
+
+        await using var db = _factory.CreateDbContext();
+        var names = await db.Transitions.Select(t => t.SubjectName).OrderBy(n => n).ToListAsync();
+        Assert.Equal(["Failed", "Queued"], names);
+    }
+
+    [Fact]
+    public async Task Bursts_larger_than_a_batch_all_land()
+    {
+        // The default batch is 500: 1,200 queued events take three writes from one flush.
+        var recorder = new TransitionRecorder(_factory, NullLogger<TransitionRecorder>.Instance, capacity: 2000);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        for (var i = 0; i < 1200; i++)
+            source.OnNext(Transition(TransitionSubjectKind.Target, $"T{i}", HostState.Down));
+
+        await recorder.FlushAsync();
+
+        await using var db = _factory.CreateDbContext();
+        Assert.Equal(1200, await db.Transitions.CountAsync());
+    }
+
+    /// <summary>Advances fake time one 15 s loop tick at a time, waiting for the woken loop to
+    /// arm its next timer, until the target's minute row exists. Returns the ticks it took.</summary>
+    private async Task<int> TicksUntilRolledUpAsync(TimerCountingTime time, Guid target)
+    {
+        for (var tick = 1; tick <= 10; tick++)
+        {
+            var before = time.TimersCreated;
+            time.Advance(TimeSpan.FromSeconds(15));
+            await time.NewTimerArmedSince(before);
+            await using var db = _factory.CreateDbContext();
+            if (await db.Rollups.AnyAsync(r => r.TargetId == target))
+                return tick;
+        }
+        throw new Xunit.Sdk.XunitException("the collector loop never wrote the closed minute");
+    }
+
+    [Fact]
+    public async Task The_collector_loop_writes_closed_minutes()
+    {
+        var time = new TimerCountingTime();
+        time.SetUtcNow(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var collector = new RollupCollector(_factory, time, NullLogger<RollupCollector>.Instance);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source);
+        var target = Guid.NewGuid();
+        await collector.StartAsync(CancellationToken.None);
+        await time.WaitForTimersAsync(1);
+
+        source.OnNext((target, new PingResult(Ip, true, 10, timestamp: time.GetUtcNow().AddSeconds(5))));
+        var ticks = await TicksUntilRolledUpAsync(time, target);
+
+        // Minute 00:00 closes at 00:01:00, the fourth 15 s tick; no flush before that.
+        Assert.Equal(4, ticks);
+        await using (var db = _factory.CreateDbContext())
+            Assert.Equal(1, (await db.Rollups.SingleAsync(r => r.TargetId == target)).PingCount);
+        await collector.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task The_collector_loop_writes_a_failed_minute_on_the_next_tick()
+    {
+        var time = new TimerCountingTime();
+        time.SetUtcNow(DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
+        var collector = new RollupCollector(new FailingOnceDbFactory(_factory), time,
+            NullLogger<RollupCollector>.Instance);
+        using var source = new Subject<(Guid, PingResult)>();
+        collector.Attach(source);
+        var target = Guid.NewGuid();
+        await collector.StartAsync(CancellationToken.None);
+        await time.WaitForTimersAsync(1);
+
+        source.OnNext((target, new PingResult(Ip, true, 10, timestamp: time.GetUtcNow().AddSeconds(5))));
+        var ticks = await TicksUntilRolledUpAsync(time, target);
+
+        Assert.Equal(5, ticks); // the 4th tick's write failed; the loop survived and the 5th landed it
+        await using (var db = _factory.CreateDbContext())
+            Assert.Equal(1, await db.Rollups.CountAsync(r => r.TargetId == target));
+        await collector.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task A_recorded_transition_reads_back_as_its_live_dto()
+    {
+        var evt = new TargetTransition
+        {
+            Kind = TransitionSubjectKind.Verdict, TargetId = Guid.NewGuid(), TargetName = "Internet",
+            From = HostState.Responding, To = HostState.Faltering,
+            Timestamp = new DateTimeOffset(2026, 9, 18, 10, 0, 0, 123, TimeSpan.FromHours(-7)),
+            Reason = new TransitionReason
+            {
+                Trigger = TransitionTrigger.VerdictChanged, SuccessRate = 0.8125, SampleSize = 40,
+                BurstLossRate = 0.25, AncestorId = Guid.NewGuid(), Detail = "2 of 3 anchors degraded",
+                Verdict = "DnsDown",
+                Dns = new DnsBlame(DnsBlameKind.YourResolver, "resolver silent", ["192.0.2.53"]),
+            },
+            AverageRoundtripTime = 12.5f,
+        };
+        var recorder = new TransitionRecorder(_factory, NullLogger<TransitionRecorder>.Instance);
+        using var source = new Subject<TargetTransition>();
+        recorder.Attach(source);
+        source.OnNext(evt);
+        await recorder.FlushAsync();
+
+        TransitionRow row;
+        await using (var db = _factory.CreateDbContext())
+            row = await db.Transitions.AsNoTracking().SingleAsync();
+        var recorded = TransitionDto.From(row);
+        var live = TransitionDto.From(evt);
+
+        Assert.NotNull(recorded.Id);
+        Assert.Equal(TimeSpan.Zero, recorded.Timestamp.Offset);
+        Assert.Equal(TimeSpan.Zero, live.Timestamp.Offset);
+        // History rows keep neither the row id on live messages nor the DNS blame on rows.
+        Assert.Equal(live with { Dns = null }, recorded with { Id = null });
     }
 
     private sealed class CapturingLogger : ILogger

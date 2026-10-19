@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Libraries\ConPersistence\ConPersistence.csproj" />
+    <ProjectReference Include="..\ConEngine.Tests\ConEngine.Tests.csproj" />
   </ItemGroup>
 
 </Project>

@@ -173,4 +173,29 @@ public class RetentionTests : IDisposable
         await using (var db = _factory.CreateDbContext())
             Assert.Equal(["old-open", "recent"], db.ModelWarnings.OrderBy(w => w.Key).Select(w => w.Key).ToArray());
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_all_failure_minute_does_not_zero_the_hours_min_rtt(bool failuresFirst)
+    {
+        // A minute with no replies stores RttMin 0 meaning "none", not "0 ms". Merged into an
+        // hour, in either order, it must not drag the hour's fastest reply down to 0.
+        var oldHour = Now.AddDays(-91).Date;
+        var failureStart = failuresFirst ? oldHour : oldHour.AddMinutes(30);
+        var successStart = failuresFirst ? oldHour.AddMinutes(30) : oldHour;
+        await AddMinuteRows(failureStart, 30, 6, 0, 0.0, 0, 0);
+        await AddMinuteRows(successStart, 30, 6, 5, 10.0, 8, 15);
+
+        await using (var db = _factory.CreateDbContext())
+            await _pass.RunAsync(db, Now, _windows, CancellationToken.None);
+
+        await using var check = _factory.CreateDbContext();
+        var hourRow = Assert.Single(await check.Rollups.Where(r => r.Resolution == "Hour").ToListAsync());
+        Assert.Equal(360, hourRow.PingCount);
+        Assert.Equal(150, hourRow.SuccessCount);
+        Assert.Equal(10.0, hourRow.RttAvg, 3); // failures carry no weight
+        Assert.Equal(8, hourRow.RttMin);
+        Assert.Equal(15, hourRow.RttMax);
+    }
 }

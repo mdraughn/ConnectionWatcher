@@ -275,4 +275,57 @@ public sealed class WarmStartSeederTests : IAsyncLifetime
         Assert.Null(seed.Verdict);
         Assert.True(seed.Targets.ContainsKey(h.Id("Router")));
     }
+
+    private async Task RecordRollup(string resolution, DateTime periodStartUtc)
+    {
+        await using var db = _db.CreateDbContext();
+        db.Rollups.Add(new RollupRow
+        {
+            TargetId = Guid.NewGuid(), PeriodStartUtc = periodStartUtc, Resolution = resolution,
+            PingCount = 6, SuccessCount = 6, RttAvg = 10, RttMin = 9, RttMax = 11,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task A_recent_minute_rollup_keeps_a_quiet_target_warm()
+    {
+        // A quiet link records no transitions for days; the rollup collector is the only
+        // heartbeat. Without it every restart of a stable link would cold-start.
+        var router = await AddTarget("Router", "192.0.2.1");
+        var now = DateTime.UtcNow;
+        await Record(router, "Target", "Responding", now.AddDays(-3));
+        await RecordRollup(RollupResolution.Minute, now.AddMinutes(-2));
+
+        var seed = await _seeder.FromDbAsync();
+
+        Assert.NotNull(seed);
+        Assert.Equal(HostState.Responding, seed.Targets[router].State);
+    }
+
+    [Theory]
+    [InlineData(RollupResolution.Hour)]
+    [InlineData(RollupResolution.Day)]
+    public async Task Only_minute_rollups_count(string resolution)
+    {
+        var router = await AddTarget("Router", "192.0.2.1");
+        var now = DateTime.UtcNow;
+        await Record(router, "Target", "Responding", now.AddDays(-3));
+        await RecordRollup(resolution, now.AddMinutes(-2));
+
+        Assert.Null(await _seeder.FromDbAsync());
+    }
+
+    [Fact]
+    public async Task A_rollup_is_alive_at_its_end()
+    {
+        // A minute rollup that STARTED just beyond the gap ENDED a minute later, inside it.
+        var router = await AddTarget("Router", "192.0.2.1");
+        var now = DateTime.UtcNow;
+        await Record(router, "Target", "Responding", now.AddDays(-3));
+        await RecordRollup(RollupResolution.Minute,
+            now.AddMinutes(-SettingsDefaults.WarmRestartMaxGapMinutes).AddSeconds(-30));
+
+        Assert.NotNull(await _seeder.FromDbAsync());
+    }
 }
