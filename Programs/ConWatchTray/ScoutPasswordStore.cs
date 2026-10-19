@@ -2,15 +2,16 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ConConfig;
+using ConInfrastructure.Tray;
 
 namespace ConWatchTray;
 
 /// <summary>
 /// The admin password the scout uses, protected with DPAPI for the current Windows user and stored
-/// next to tray.json. It is bound to the server URL it was entered for: a different URL never reuses it.
-/// A file that cannot be read or decrypted is treated as "no saved password".
+/// next to tray.json. It is bound to the server URL it was entered for (<see cref="ScoutServerKey"/>):
+/// a different URL never reuses it. A file that cannot be read or decrypted is treated as "no saved password".
 /// </summary>
-internal sealed class ScoutPasswordStore
+internal sealed class ScoutPasswordStore : IScoutPasswordStore
 {
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("ConnectionWatcher.Scout.v1");
 
@@ -24,14 +25,14 @@ internal sealed class ScoutPasswordStore
         _path = Path.Combine(dir, "scout.json");
     }
 
-    public string? Load(string serverUrl)
+    public string? Load(Uri server)
     {
         try
         {
             if (!File.Exists(_path))
                 return null;
             var stored = JsonSerializer.Deserialize<Stored>(File.ReadAllText(_path));
-            if (stored is null || !string.Equals(Normalize(stored.Server), Normalize(serverUrl), StringComparison.OrdinalIgnoreCase))
+            if (stored is null || !ScoutServerKey.Matches(stored.Server, server))
                 return null;
             var bytes = ProtectedData.Unprotect(Convert.FromBase64String(stored.Protected), Entropy,
                 DataProtectionScope.CurrentUser);
@@ -43,14 +44,14 @@ internal sealed class ScoutPasswordStore
         }
     }
 
-    public void Save(string serverUrl, string password)
+    public void Save(Uri server, string password)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(password), Entropy,
                 DataProtectionScope.CurrentUser);
-            var json = JsonSerializer.Serialize(new Stored(Normalize(serverUrl), Convert.ToBase64String(protectedBytes)));
+            var json = JsonSerializer.Serialize(new Stored(ScoutServerKey.Of(server), Convert.ToBase64String(protectedBytes)));
             File.WriteAllText(_path, json);
         }
         catch (Exception)
@@ -65,6 +66,4 @@ internal sealed class ScoutPasswordStore
     {
         try { File.Delete(_path); } catch (Exception) { }
     }
-
-    private static string Normalize(string url) => url.TrimEnd('/');
 }

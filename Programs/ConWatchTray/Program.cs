@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ConConfig;
 using ConInfrastructure.Discovery;
 using ConInfrastructure.Tray;
 
@@ -42,12 +43,13 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ScoutPasswordStore _scoutPasswords = new();
     // One cookie-enabled, no-redirect client for the scout (its own, longer timeout): a sign-in is reused by later sends.
     private readonly HttpClient _scoutHttp = new(ScoutClient.CreateHandler()) { Timeout = TimeSpan.FromSeconds(20) };
-    private string? _scoutInsecureAuthority;   // the one server the user said yes to for plain HTTP, this session only
+    private readonly ScoutSession _scoutSession;   // the send loop; holds this session's plain-HTTP yes
     private bool _scouting;
     private string? _balloonUrl;
 
     public TrayContext()
     {
+        _scoutSession = new ScoutSession(_scoutPasswords, PromptForPassword, ConfirmInsecure);
         var menu = new ContextMenuStrip();
         var open = menu.Items.Add("Open ConnectionWatcher", null, (_, _) => Open(""));
         open.Font = new Font(open.Font, FontStyle.Bold);
@@ -183,50 +185,22 @@ internal sealed class TrayContext : ApplicationContext
                 Balloon("Could not send", "The server address in the tray settings is not a valid URL.", ToolTipIcon.Warning);
                 return;
             }
-            var client = new ScoutClient(_scoutHttp, serverUri);
-            var password = _scoutPasswords.Load(server);
-            string? toRemember = null;               // a typed password, saved only once the server accepts it
-            var prompts = 0;                       // only password prompts count against the budget
-            while (true)
+            var outcome = await _scoutSession.SendAsync(new ScoutClient(_scoutHttp, serverUri), items, CancellationToken.None);
+            switch (outcome.Kind)
             {
-                var allowInsecure = _scoutInsecureAuthority == serverUri.Authority.ToLowerInvariant();
-                var result = await client.SendAsync(items, password, allowInsecure, CancellationToken.None);
-                switch (result.Failure)
-                {
-                    case ScoutFailure.None:
-                        if (toRemember is not null)
-                            _scoutPasswords.Save(server, toRemember);
-                        Balloon("Sent to ConnectionWatcher",
-                            $"{items.Count} found, {result.Created} new{(partial ? " (the scan was cut short)" : "")}. Click to review.",
-                            ToolTipIcon.Info, "/Config/Discoveries");
-                        return;
-                    case ScoutFailure.PasswordRequired:
-                    case ScoutFailure.WrongPassword:
-                        var reason = result.Failure == ScoutFailure.WrongPassword ? "That password was not accepted." : null;
-                        if (prompts == 3)
-                        {
-                            Balloon("Could not send", "The admin password was not accepted.", ToolTipIcon.Warning);
-                            return;                   // budget spent
-                        }
-                        prompts++;
-                        (password, var remember) = PromptForPassword(server, reason);
-                        if (password is null)
-                            return;                       // cancelled
-                        toRemember = remember ? password : null;
-                        break;
-                    case ScoutFailure.InsecureTransport:
-                        var yes = MessageBox.Show(
-                            $"{result.Message}\n\nSend it anyway? (Anyone on your network could read it. Prefer an https:// server address.)",
-                            "ConnectionWatcher — unencrypted password",
-                            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
-                        if (!yes)
-                            return;
-                        _scoutInsecureAuthority = serverUri.Authority.ToLowerInvariant();
-                        break;
-                    default:
-                        Balloon("Could not send", result.Message, ToolTipIcon.Warning);
-                        return;
-                }
+                case ScoutOutcomeKind.Sent:
+                    Balloon("Sent to ConnectionWatcher",
+                        $"{items.Count} found, {outcome.Result.Created} new{(partial ? " (the scan was cut short)" : "")}. Click to review.",
+                        ToolTipIcon.Info, "/Config/Discoveries");
+                    break;
+                case ScoutOutcomeKind.PasswordNotAccepted:
+                    Balloon("Could not send", "The admin password was not accepted.", ToolTipIcon.Warning);
+                    break;
+                case ScoutOutcomeKind.Cancelled:
+                    break;                                // the user said no; nothing to report
+                default:
+                    Balloon("Could not send", outcome.Result.Message, ToolTipIcon.Warning);
+                    break;
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -240,14 +214,22 @@ internal sealed class TrayContext : ApplicationContext
         }
     }
 
-    /// <summary>Asks for the password; the caller saves it (DPAPI) only if Remember was ticked and the server accepts it.</summary>
-    private static (string? Password, bool Remember) PromptForPassword(string server, string? reason)
+    /// <summary>Asks for the password; the session saves it (DPAPI) only if Remember was ticked and the server accepts it.</summary>
+    private static ScoutPasswordAnswer? PromptForPassword(Uri server, bool rejected)
     {
-        using var prompt = new PasswordPrompt(server, reason);
+        using var prompt = new PasswordPrompt(ScoutServerKey.Of(server), rejected ? "That password was not accepted." : null);
         if (prompt.ShowDialog() != DialogResult.OK || prompt.Password.Length == 0)
-            return (null, false);
-        return (prompt.Password, prompt.Remember);
+            return null;
+        return new ScoutPasswordAnswer(prompt.Password, prompt.Remember);
     }
+
+    /// <summary>Asks before the admin password crosses plain HTTP to another machine; default No.</summary>
+    private static bool ConfirmInsecure(Uri server) =>
+        MessageBox.Show(
+            $"Signing in would send your admin password to {server.Host} unencrypted over plain HTTP." +
+            "\n\nSend it anyway? (Anyone on your network could read it. Prefer an https:// server address.)",
+            "ConnectionWatcher — unencrypted password",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
 
     private void Balloon(string title, string text, ToolTipIcon icon, string? openPath = null)
     {
@@ -257,7 +239,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowSettings()
     {
-        using var dialog = new SettingsForm(_settings, _http, _scoutPasswords, () => _scoutInsecureAuthority = null);
+        using var dialog = new SettingsForm(_settings, _http, _scoutPasswords, _scoutSession.ForgetConsent);
         if (dialog.ShowDialog() == DialogResult.OK)
             _ = RefreshAsync(); // apply immediately
     }

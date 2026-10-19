@@ -1,3 +1,5 @@
+using ConConfig;
+
 namespace ConWatchTray;
 
 /// <summary>
@@ -113,16 +115,11 @@ internal sealed class SettingsForm : Form
 
     private void Apply()
     {
-        var url = _urlBox.Text.Trim().TrimEnd('/');
-        if (url.Length == 0 || url == _settings.InstalledDefaultUrl ||
-            (_settings.InstalledDefaultUrl is null && url == TraySettings.FallbackUrl))
-        {
-            _settings.ClearOverride();
-        }
-        else
-        {
+        // Typing the default clears the override instead of pinning it (TraySettings.ApplyUrl).
+        if (TraySettings.ApplyUrl(_urlBox.Text, _settings.InstalledDefaultUrl, TraySettings.FallbackUrl) is { } url)
             _settings.SetOverride(url);
-        }
+        else
+            _settings.ClearOverride();
         _settings.SetNotifications(_notifications.Checked);
     }
 }

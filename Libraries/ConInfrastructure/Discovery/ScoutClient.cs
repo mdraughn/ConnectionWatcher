@@ -38,6 +38,9 @@ public sealed class ScoutClient(HttpClient http, Uri server)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>The node this client posts to, exactly as it was given.</summary>
+    public Uri Server => server;
+
     /// <summary>
     /// The transport this class requires: redirects are never followed (a redirect must not re-send the
     /// admin password anywhere) and cookies are kept in the handler's own container so one sign-in
