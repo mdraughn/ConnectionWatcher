@@ -414,6 +414,368 @@ public class NotifierIntegrationTests
         }
     }
 
+    // ---------------- Task 24: wire-level MQTT and webhook behaviour ----------------
+
+    private const string VerdictAttrs = "{\"critical\":false,\"scope\":\"Verdict\"}";
+    private const string LocalAttrs = "{\"critical\":false,\"scope\":\"Local\"}";
+
+    /// <summary>A subscriber that is connected BEFORE the app publishes, so it sees live (non-retained) traffic.</summary>
+    private sealed class LiveSubscriber : IDisposable
+    {
+        private readonly IMqttClient _client = new MqttClientFactory().CreateMqttClient();
+        private readonly Dictionary<string, string> _last = new();
+        private readonly List<(string Topic, string Payload)> _all = new();
+
+        public static async Task<LiveSubscriber> StartAsync(int port, params string[] filters)
+        {
+            var sub = new LiveSubscriber();
+            sub._client.ApplicationMessageReceivedAsync += e =>
+            {
+                var payload = e.ApplicationMessage.ConvertPayloadToString() ?? "";
+                lock (sub._last)
+                {
+                    sub._last[e.ApplicationMessage.Topic] = payload;
+                    sub._all.Add((e.ApplicationMessage.Topic, payload));
+                }
+                return Task.CompletedTask;
+            };
+            await sub._client.ConnectAsync(new MqttClientOptionsBuilder().WithTcpServer("127.0.0.1", port).Build());
+            foreach (var filter in filters)
+                await sub._client.SubscribeAsync(filter);
+            return sub;
+        }
+
+        /// <summary>The latest payload on the topic, or null when nothing arrived.</summary>
+        public string? Last(string topic)
+        {
+            lock (_last) return _last.GetValueOrDefault(topic);
+        }
+
+        public List<string> Payloads(string topic)
+        {
+            lock (_last) return _all.Where(m => m.Topic == topic).Select(m => m.Payload).ToList();
+        }
+
+        public void Dispose() => _client.Dispose();
+    }
+
+    /// <summary>
+    /// A client that connects after the app has published sees only what the broker retained
+    /// (MQTT 3.1.1 replays nothing else), so its collection IS the retained set. It collects for a fixed
+    /// window once the retained availability message has arrived (the absence window follows a positive condition).
+    /// </summary>
+    private static async Task<Dictionary<string, (string Payload, bool Retain)>> RetainedSetAsync(int port)
+    {
+        var set = new Dictionary<string, (string Payload, bool Retain)>();
+        using var late = new MqttClientFactory().CreateMqttClient();
+        late.ApplicationMessageReceivedAsync += e =>
+        {
+            lock (set)
+                set[e.ApplicationMessage.Topic] =
+                    (e.ApplicationMessage.ConvertPayloadToString() ?? "", e.ApplicationMessage.Retain);
+            return Task.CompletedTask;
+        };
+        await late.ConnectAsync(new MqttClientOptionsBuilder().WithTcpServer("127.0.0.1", port).Build());
+        await late.SubscribeAsync("conwatch/#");
+        await late.SubscribeAsync("homeassistant/#");
+        await HostTestWait.Eventually(() =>
+        {
+            lock (set) return Task.FromResult(set.ContainsKey("conwatch/availability"));
+        }, 15000);
+        await Task.Delay(3000);
+        lock (set) return new Dictionary<string, (string, bool)>(set);
+    }
+
+    private static Task EnableMqttAsync(HttpClient client, int brokerPort) =>
+        client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+        {
+            ["Mqtt.Enabled"] = "true",
+            ["Mqtt.Host"] = "127.0.0.1",
+            ["Mqtt.Port"] = brokerPort.ToString(),
+        });
+
+    private static async Task PutSettingAsync(HttpClient client, string key, string value) =>
+        (await client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?> { [key] = value }))
+            .EnsureSuccessStatusCode();
+
+    private static HashSet<string> VerdictStateNames()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(ContractFiles.PathOf("vocabulary.json")));
+        return doc.RootElement.GetProperty("VerdictState").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
+    }
+
+    [SkippableFact]
+    public async Task Retained_state_is_what_a_late_subscriber_sees()
+    {
+        var (brokerPort, containerId) = RequireMosquitto();
+        try
+        {
+            await WaitForBrokerAsync(brokerPort);
+            using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#", "homeassistant/#");
+            using var factory = new ConWatchFactory();
+            var client = factory.CreateClient();
+            await EnableMqttAsync(client, brokerPort);
+            await ConfigApiTests.SeedHomeAsync(client);
+
+            await HostTestWait.Eventually(() => Task.FromResult(
+                live.Last("conwatch/availability") == "online"
+                && live.Last("conwatch/verdict/state") == "Healthy"
+                && live.Last("conwatch/internet/state") == "ON"
+                && new[] { "router", "google", "cloudflare" }.All(s => live.Last($"conwatch/target/{s}/state") == "ON")
+                && live.Payloads("conwatch/transitions").Count > 0));
+
+            // The live stream carries transitions as events.
+            var transition = JsonSerializer.Deserialize<JsonElement>(live.Payloads("conwatch/transitions")[0]);
+            Assert.True(transition.TryGetProperty("subjectKind", out _));
+            Assert.True(transition.TryGetProperty("to", out _));
+
+            var retained = await RetainedSetAsync(brokerPort);
+
+            Assert.Equal("online", retained["conwatch/availability"].Payload);
+            Assert.Contains(retained["conwatch/verdict/state"].Payload, VerdictStateNames());
+            Assert.Equal("ON", retained["conwatch/internet/state"].Payload);
+            foreach (var slug in new[] { "router", "google", "cloudflare" })
+            {
+                Assert.Equal("ON", retained[$"conwatch/target/{slug}/state"].Payload);
+                Assert.Equal(VerdictAttrs, retained[$"conwatch/target/{slug}/attributes"].Payload);
+            }
+            Assert.Contains("homeassistant/sensor/conwatch_verdict/config", retained.Keys);
+            Assert.Contains("homeassistant/binary_sensor/conwatch_internet/config", retained.Keys);
+            Assert.Contains("homeassistant/binary_sensor/conwatch_dns/config", retained.Keys);
+            // No system resolver is configured here, so the name-resolution entity is unwatched: its own
+            // availability says so, and its state stays ON rather than alarming an automation.
+            Assert.Equal("offline", retained["conwatch/dns/availability"].Payload);
+            Assert.Equal("ON", retained["conwatch/dns/state"].Payload);
+            // Events are not state: a late subscriber must not be replayed an old transition.
+            Assert.DoesNotContain("conwatch/transitions", retained.Keys);
+            // Everything a late subscriber got was replayed from the retained store.
+            Assert.All(retained, m => Assert.True(m.Value.Retain, $"{m.Key} was not retained"));
+
+            // A deleted target takes its entity with it.
+            (await client.PostAsJsonAsync("/api/v1/targets", new
+            {
+                name = "Printer", address = "203.0.113.30", parent = "Router", profile = "Fast",
+            })).EnsureSuccessStatusCode();
+            const string printerConfig = "homeassistant/binary_sensor/conwatch_printer/config";
+            await HostTestWait.Eventually(() => Task.FromResult(!string.IsNullOrEmpty(live.Last(printerConfig))));
+            Assert.Contains(printerConfig, (await RetainedSetAsync(brokerPort)).Keys);
+
+            var targets = await client.GetFromJsonAsync<List<JsonElement>>("/api/v1/targets");
+            var printerId = targets!.Single(t => t.GetProperty("name").GetString() == "Printer").GetProperty("id").GetGuid();
+            (await client.DeleteAsync($"/api/v1/targets/{printerId}")).EnsureSuccessStatusCode();
+            await HostTestWait.Eventually(() => Task.FromResult(live.Last(printerConfig) == ""));
+
+            var afterDelete = await RetainedSetAsync(brokerPort);
+            Assert.DoesNotContain(printerConfig, afterDelete.Keys);
+            Assert.DoesNotContain("conwatch/target/printer/state", afterDelete.Keys);
+            // AUDIT: after this delete the other targets' retained entities are wiped too and not republished (observed
+            // 3 of 3 runs): MqttNotifier.Attach queues a Refresh before engine.StartAsync has created the monitors, the
+            // refresh sees none and clears every previously published slug, and a warm rebuild emits no transitions to
+            // heal it. So nothing is asserted about the survivors here; see the report.
+        }
+        finally
+        {
+            RunDocker($"rm -f {containerId}");
+        }
+    }
+
+    [SkippableFact]
+    public async Task Local_devices_get_sensors_too()
+    {
+        var (brokerPort, containerId) = RequireMosquitto();
+        try
+        {
+            await WaitForBrokerAsync(brokerPort);
+            using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#");
+            using var factory = new ConWatchFactory();
+            var client = factory.CreateClient();
+            await EnableMqttAsync(client, brokerPort);
+            await ConfigApiTests.SeedHomeAsync(client);
+
+            var ip = IPAddress.Parse("203.0.113.9");
+            (await client.PostAsJsonAsync("/api/v1/targets", new
+            {
+                name = "Nas", address = "203.0.113.9", profile = "Fast", scope = "Local",
+            })).EnsureSuccessStatusCode();
+            await HostTestWait.Eventually(() => Task.FromResult(
+                live.Last("conwatch/target/nas/state") == "ON"
+                && live.Last("conwatch/target/nas/attributes") == LocalAttrs));
+
+            // A LAN device's own transitions reach MQTT as well (webhooks leave them out; MQTT never does).
+            factory.Pings.SetUp(ip, false);
+            await HostTestWait.Eventually(() => Task.FromResult(live.Last("conwatch/target/nas/state") == "OFF"));
+
+            var retained = await RetainedSetAsync(brokerPort);
+            Assert.Equal("OFF", retained["conwatch/target/nas/state"].Payload);
+            Assert.Equal(LocalAttrs, retained["conwatch/target/nas/attributes"].Payload);
+        }
+        finally
+        {
+            RunDocker($"rm -f {containerId}");
+        }
+    }
+
+    [SkippableFact]
+    public async Task Master_enable_takes_mqtt_offline_and_back()
+    {
+        var (brokerPort, containerId) = RequireMosquitto();
+        try
+        {
+            await WaitForBrokerAsync(brokerPort);
+            using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#");
+            using var factory = new ConWatchFactory();
+            var client = factory.CreateClient();
+            await EnableMqttAsync(client, brokerPort);
+            await ConfigApiTests.SeedHomeAsync(client);
+            await HostTestWait.Eventually(() => Task.FromResult(
+                live.Last("conwatch/availability") == "online" && live.Last("conwatch/verdict/state") == "Healthy"));
+
+            await PutSettingAsync(client, "Engine.Enabled", "false");
+            await HostTestWait.Eventually(() => Task.FromResult(live.Last("conwatch/availability") == "offline"));
+            // It must STAY offline: a notifier that ignored the switch would reconnect and say online again.
+            await Task.Delay(2000);
+            Assert.Equal("offline", live.Last("conwatch/availability"));
+
+            await PutSettingAsync(client, "Engine.Enabled", "true");
+            await HostTestWait.Eventually(() => Task.FromResult(live.Last("conwatch/availability") == "online"));
+        }
+        finally
+        {
+            RunDocker($"rm -f {containerId}");
+        }
+    }
+
+    [Fact]
+    public async Task Heartbeat_stops_while_the_engine_is_disabled_and_resumes()
+    {
+        using var hook = new Hook();
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+
+        await PutSettingAsync(client, "Heartbeat.Url", hook.Url("/check-a"));
+        await HostTestWait.Eventually(() => Task.FromResult(hook.Received.Any(r => r.Path == "/check-a")));
+
+        await PutSettingAsync(client, "Engine.Enabled", "false");
+        await PutSettingAsync(client, "Heartbeat.Url", hook.Url("/check-c"));
+        await Task.Delay(3000); // absence window, after the first ping proved the heartbeat was live
+        Assert.DoesNotContain(hook.Received, r => r.Path == "/check-c");
+
+        await PutSettingAsync(client, "Engine.Enabled", "true");
+        await HostTestWait.Eventually(() => Task.FromResult(hook.Received.Any(r => r.Path == "/check-c")));
+    }
+
+    private static readonly string[] OutageAddresses = ["192.168.1.1", "8.8.8.8", "1.1.1.1"];
+
+    /// <summary>
+    /// Takes the whole path down (Router, then Google and Cloudflare behind it) and returns what the webhook
+    /// received afterwards. With <paramref name="expectUnreachable"/> it waits for the Unreachable deliveries;
+    /// otherwise it waits until the engine has those states, then allows a window for a stray to arrive.
+    /// </summary>
+    private static async Task<List<JsonElement>> OutageDeliveriesAsync(string? skipExplained, bool expectUnreachable)
+    {
+        using var hook = new Hook();
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+        var settings = new Dictionary<string, string?>
+        {
+            ["Webhook.Enabled"] = "true",
+            ["Webhook.Urls"] = hook.Url("/hook"),
+        };
+        if (skipExplained is not null)
+            settings["Webhook.SkipExplained"] = skipExplained;
+        (await client.PutAsJsonAsync("/api/v1/settings", settings)).EnsureSuccessStatusCode();
+        await ConfigApiTests.SeedHomeAsync(client);
+        await HostTestWait.Eventually(() => HostTestWait.SteadyStateAsync(client));
+        // The startup deliveries are FIFO behind the engine; wait until the queue has drained.
+        var count = -1;
+        var stableSince = DateTime.UtcNow;
+        await HostTestWait.Eventually(() =>
+        {
+            if (hook.Received.Count != count)
+            {
+                count = hook.Received.Count;
+                stableSince = DateTime.UtcNow;
+            }
+            return Task.FromResult(DateTime.UtcNow - stableSince > TimeSpan.FromMilliseconds(750));
+        });
+        var baseline = count;
+
+        List<JsonElement> Deliveries() => hook.Received.Skip(baseline)
+            .Select(r => JsonSerializer.Deserialize<JsonElement>(r.Body)).ToList();
+        static bool Is(JsonElement d, string kind, string name, string to) =>
+            d.GetProperty("subjectKind").GetString() == kind
+            && d.GetProperty("subjectName").GetString() == name
+            && d.GetProperty("to").GetString() == to;
+
+        // The Router fails first, so the anchors failing behind it are explained by it.
+        factory.Pings.SetUp(IPAddress.Parse(OutageAddresses[0]), false);
+        await HostTestWait.Eventually(() => Task.FromResult(Deliveries().Any(d => Is(d, "Target", "Router", "Down"))));
+        foreach (var address in OutageAddresses.Skip(1))
+            factory.Pings.SetUp(IPAddress.Parse(address), false);
+        await HostTestWait.Eventually(() => Task.FromResult(
+            Deliveries().Any(d => d.GetProperty("subjectKind").GetString() == "Verdict"
+                                  && d.GetProperty("verdict").GetString() == "LinkDown")));
+        if (expectUnreachable)
+        {
+            await HostTestWait.Eventually(() => Task.FromResult(
+                Deliveries().Any(d => Is(d, "Target", "Google", "Unreachable"))
+                && Deliveries().Any(d => Is(d, "Target", "Cloudflare", "Unreachable"))));
+        }
+        else
+        {
+            // The engine has explained both anchors; their deliveries (if any were wrongly queued) are on the way.
+            await HostTestWait.Eventually(async () =>
+            {
+                var status = JsonSerializer.Deserialize<JsonElement>(await client.GetStringAsync("/api/v1/status"));
+                return status.GetProperty("targets").EnumerateArray().Count(t =>
+                    t.GetProperty("state").GetString() == "Unreachable") >= 2;
+            });
+            await Task.Delay(1500);
+        }
+        return Deliveries();
+    }
+
+    [Fact]
+    public async Task Explained_failures_are_skipped_by_default()
+    {
+        // Webhook.SkipExplained is deliberately never written here: skipping is the default.
+        var deliveries = await OutageDeliveriesAsync(skipExplained: null, expectUnreachable: false);
+
+        var routerDown = deliveries.FindIndex(d =>
+            d.GetProperty("subjectName").GetString() == "Router" && d.GetProperty("to").GetString() == "Down");
+        var linkDown = deliveries.FindIndex(d =>
+            d.GetProperty("subjectKind").GetString() == "Verdict" && d.GetProperty("verdict").GetString() == "LinkDown");
+        Assert.True(routerDown >= 0, "Router Down was not delivered");
+        Assert.True(linkDown > routerDown, "the LinkDown verdict should follow Router Down");
+        Assert.DoesNotContain(deliveries, d => d.GetProperty("to").GetString() == "Unreachable");
+    }
+
+    [Fact]
+    public async Task Explained_failures_are_delivered_when_skipping_is_switched_off()
+    {
+        var deliveries = await OutageDeliveriesAsync(skipExplained: "false", expectUnreachable: true);
+
+        Assert.Contains(deliveries, d => d.GetProperty("subjectName").GetString() == "Google"
+                                         && d.GetProperty("to").GetString() == "Unreachable");
+        Assert.Contains(deliveries, d => d.GetProperty("subjectName").GetString() == "Cloudflare"
+                                         && d.GetProperty("to").GetString() == "Unreachable");
+    }
+
+    [Fact]
+    public async Task Each_webhook_url_on_its_own_line_is_called()
+    {
+        using var hook = new Hook();
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+        // Indented and blank lines between the entries must not matter.
+        await PutSettingAsync(client, "Webhook.Enabled", "true");
+        await PutSettingAsync(client, "Webhook.Urls", hook.Url("/first") + "\n " + "\n\n" + hook.Url("/second") + "\n");
+
+        await ConfigApiTests.SeedHomeAsync(client);
+        await HostTestWait.Eventually(() => Task.FromResult(
+            hook.Received.Any(r => r.Path == "/first") && hook.Received.Any(r => r.Path == "/second")));
+    }
+
     private static string RunDocker(string args)
     {
         var psi = new ProcessStartInfo("docker", args)

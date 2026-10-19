@@ -96,6 +96,18 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Engine_keys_poke_the_notifiers()
+    {
+        // The master switch must reach the MQTT and heartbeat notifiers: each wakes on this signal.
+        int notifierSignals = 0;
+        _store.NotifierSettingsChanged += () => notifierSignals++;
+
+        await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.EngineEnabled] = "false" });
+
+        Assert.Equal(1, notifierSignals);
+    }
+
+    [Fact]
     public async Task Null_value_deletes_key()
     {
         await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.AnchorPool] = "Internet" });
