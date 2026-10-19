@@ -272,13 +272,16 @@ public class HostAnalysisEngineTests
     [Fact]
     public void Average_rtt_counts_only_answered_pings()
     {
-        // 7 answers at 20 ms and 3 losses (which carry 0 ms): the average is
-        // over the answered pings, so 20 - not the diluted 14.
+        // 7 answers at 20 ms and 3 losses (one carries a stray 500 ms): the average is
+        // over the answered pings only, so 20 - neither the diluted 14 nor a sum that takes the 500.
         var (mixed, time) = MakeWith(ProfileWith(10));
+        var strayRtt = 500;   // only the first loss; a failed sample's RTT must never reach the average
         foreach (bool success in new[] { true, true, true, true, true, true, true, false, false, false })
         {
             time.Advance(TimeSpan.FromSeconds(1));
-            mixed.RecordPingResult(new PingResult(Ip, success, success ? 20 : 0, timestamp: time.GetUtcNow()));
+            var rtt = success ? 20 : strayRtt;
+            if (!success) strayRtt = 0;
+            mixed.RecordPingResult(new PingResult(Ip, success, rtt, timestamp: time.GetUtcNow()));
         }
         var faltering = mixed.Transitions.Last();
         Assert.Equal(HostState.Faltering, faltering.To);

@@ -14,8 +14,9 @@ namespace ConWatch.Tests;
 /// in THIS class: xUnit runs the tests of one class one after another, and
 /// <see cref="Dispose"/> puts the default schedule back, so the static never
 /// holds a shortened schedule while another test of this class runs. Failed
-/// rebuilds in other classes only ever read the delay, and a sooner retry is
-/// harmless to them.
+/// rebuilds in other classes only ever read the delay; some overrides here are
+/// sooner than the default and some later, but no other class depends on the
+/// timing of a retry.
 /// </summary>
 public class RebuildRetryTests : IDisposable
 {

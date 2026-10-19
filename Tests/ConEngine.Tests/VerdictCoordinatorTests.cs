@@ -987,4 +987,73 @@ public class VerdictCoordinatorTests
         // The qualifier counts only the 2 independent answering anchors, not 3.
         Assert.Contains("only 2 anchor(s)", verdict.CurrentDetail);
     }
+
+    private static WatcherOptions BranchedInternet() => new()
+    {
+        Targets =
+        [
+            new TargetConfig { Name = "Router", Address = "192.0.2.1", Profile = "Internal" },
+            new TargetConfig { Name = "ModemA", Address = "192.0.2.2", Parent = "Router", Operator = "Comcast" },
+            new TargetConfig { Name = "ModemB", Address = "192.0.2.3", Parent = "Router", Operator = "Verizon" },
+            new TargetConfig { Name = "Google", Address = "198.51.100.8", Parent = "ModemA" },
+            new TargetConfig { Name = "Cloudflare", Address = "198.51.100.1", Parent = "ModemA" },
+            new TargetConfig { Name = "Quad9", Address = "198.51.100.9", Parent = "ModemB" },
+        ],
+        Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare", "Quad9"] }],
+    };
+
+    /// <summary>Ruling D5, SiteIncident branch: with Quad9 Unreachable behind a dead ModemB and Google
+    /// Down, the "(only N ...)" qualifier counts the 2 anchors that can speak (Google, Cloudflare),
+    /// not the 3 determined ones.</summary>
+    [Fact]
+    public void The_site_incident_qualifier_excludes_an_unreachable_anchor()
+    {
+        _weatherThreshold = 3;
+        var (verdict, monitors, graph) = Stack(BranchedInternet());
+        FeedDown(monitors, graph, "ModemB");
+        FeedDown(monitors, graph, "Quad9");
+        Assert.Equal(HostState.Unreachable, monitors[graph.GetByName("Quad9").Id].CurrentState);
+        FeedDown(monitors, graph, "Google");
+
+        Assert.Equal(VerdictState.SiteIncident, verdict.CurrentVerdict);
+        Assert.Contains("Google=Down", verdict.CurrentDetail);
+        Assert.Contains("only 2 anchor(s)", verdict.CurrentDetail);
+        Assert.DoesNotContain("only 3", verdict.CurrentDetail);
+    }
+
+    /// <summary>An Unreachable anchor whose cause is not known (a seeded Unreachable that topology has
+    /// not explained) is named in the Healthy detail without "behind".</summary>
+    [Fact]
+    public void An_unreachable_anchor_with_no_known_cause_is_named_without_behind()
+    {
+        // No TopologyCoordinator: nothing ever explains Quad9, so its seeded Unreachable keeps the
+        // placeholder cause (ExplainedBy stays null).
+        var graph = TargetGraph.FromOptions(BranchedInternet());
+        var monitors = new Dictionary<Guid, TargetMonitor>();
+        foreach (var target in graph.Targets.Values)
+        {
+            var monitor = new TargetMonitor(target, Fast, new PingDiscipline(Fast, _time),
+                _time, NullLoggerFactory.Instance);
+            if (target.Name == "Quad9")
+                monitor.Seed(HostState.Unreachable);
+            monitor.StartTracking(IPAddress.Parse(target.Address));
+            monitors[target.Id] = monitor;
+        }
+        var verdict = new VerdictCoordinator(graph, graph.GetPoolByName("Internet"), monitors,
+            weatherThreshold: 3, _time, NullLogger<VerdictCoordinator>.Instance);
+        verdict.Start();
+        foreach (var m in monitors.Values.Where(m => m.Target.Name != "Quad9"))
+            for (int i = 0; i < 5; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));
+                m.RecordPingResult(new PingResult(m.ResolvedAddress!, true, 5, timestamp: _time.GetUtcNow()));
+            }
+        var quad9 = monitors[graph.GetByName("Quad9").Id];
+        Assert.Equal(HostState.Unreachable, quad9.CurrentState);
+        Assert.Null(quad9.ExplainedBy);
+
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        Assert.Contains("Quad9 unreachable", verdict.CurrentDetail);
+        Assert.DoesNotContain("behind", verdict.CurrentDetail);
+    }
 }
