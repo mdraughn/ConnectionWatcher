@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConEngine;
 using ConWatch.Clone;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,13 +26,16 @@ public class CloneTests : IDisposable
         _source.Dispose();
     }
 
-    private ConWatchFactory MakeTarget()
+    private ConWatchFactory MakeTarget(Action<IServiceCollection>? extra = null)
     {
         _target = new ConWatchFactory
         {
-            TestServices = services => services
-                .AddHttpClient(CloneService.HttpClientName)
-                .ConfigurePrimaryHttpMessageHandler(() => _source.Server.CreateHandler()),
+            TestServices = services =>
+            {
+                services.AddHttpClient(CloneService.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => _source.Server.CreateHandler());
+                extra?.Invoke(services);
+            },
         };
         return _target;
     }
@@ -344,5 +348,34 @@ public class CloneTests : IDisposable
                     return true;
             return false;
         });
+    }
+
+    /// <summary>
+    /// The import has landed but the archive rebuild fails: the clone must say
+    /// so (500, code rebuild-failed), not report success on a node that is
+    /// not in the state the caller was told.
+    /// </summary>
+    [Fact]
+    public async Task Clone_import_with_a_failing_rebuild_answers_500()
+    {
+        await SeedSourceAsync();
+        var bomb = new DetachBombObserver();
+        var target = MakeTarget(s => s.AddSingleton<IEngineObserver>(bomb));
+        var client = target.CreateClient();
+        // Long debounce: the import's own change events must not rebuild (and
+        // eat the one-shot failure) before the clone's direct rebuild runs.
+        HostTestWait.SetRebuildDebounce(target.Services, 60);
+        bomb.Arm();
+
+        var response = await client.PostAsJsonAsync("/api/v1/setup/clone", new
+        {
+            sourceUrl = "http://source.test/", includeSecrets = true, allowInsecure = true,
+        });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal("rebuild-failed", body.GetProperty("code").GetString());
+        Assert.Contains("archive", body.GetProperty("errors")[0].GetString());
+        Assert.True(bomb.Fired);
     }
 }

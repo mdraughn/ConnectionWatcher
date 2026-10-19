@@ -61,8 +61,10 @@ public class WatcherHostService(
     private long _servicedGeneration;
     // A rebuild that threw leaves the node engine-less; nothing else would
     // bring it back before the next config write. Retry on these delays
-    // (the last repeats) until one succeeds. Both guarded by _rebuildLock.
-    private static readonly TimeSpan[] RetryDelays =
+    // (the last repeats) until one succeeds. _lastRebuildThrew and
+    // _retryAttempt are guarded by _rebuildLock. Test seam: internal so the
+    // test project can shorten the schedule instead of waiting real seconds.
+    internal static TimeSpan[] RetryDelays =
         [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60)];
     private bool _lastRebuildThrew;
     private int _retryAttempt;

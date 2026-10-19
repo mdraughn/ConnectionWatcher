@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConEngine;
 using ConPersistence;
 using ConPersistence.Recording;
 using ConPersistence.Settings;
@@ -11,10 +12,15 @@ namespace ConWatch.Tests;
 
 public class AdminApiTests : IDisposable
 {
-    private readonly ConWatchFactory _factory = new();
+    private readonly DetachBombObserver _detachBomb = new();
+    private readonly ConWatchFactory _factory;
     private readonly HttpClient _client;
 
-    public AdminApiTests() => _client = _factory.CreateClient();
+    public AdminApiTests()
+    {
+        _factory = new ConWatchFactory { TestServices = s => s.AddSingleton<IEngineObserver>(_detachBomb) };
+        _client = _factory.CreateClient();
+    }
 
     public void Dispose() => _factory.Dispose();
 
@@ -180,5 +186,48 @@ public class AdminApiTests : IDisposable
         foreach (var key in keys)
             Assert.True(after!.TryGetValue(key, out var value) && value == firstBoot![key],
                 $"{key}: first boot '{firstBoot![key]}', after reset '{value}'");
+    }
+
+    /// <summary>A running node with a real engine, and a long debounce so only the endpoint's own rebuild runs.</summary>
+    private async Task<WatcherHostService> RunningNodeAsync()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await HostTestWait.Eventually(() => Task.FromResult(host.EngineRunning));
+        await HostTestWait.SettledRebuildCountAsync(host);
+        // A debounced rebuild racing the endpoint's own would eat the one-shot
+        // failure and let the endpoint's rebuild succeed.
+        HostTestWait.SetRebuildDebounce(_factory.Services, 60);
+        return host;
+    }
+
+    private static async Task AssertRebuildFailedBody(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal(["errors"], body.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Contains("rebuilt", body.GetProperty("errors")[0].GetString());
+    }
+
+    [Fact]
+    public async Task A_failed_archive_rebuild_answers_500()
+    {
+        await RunningNodeAsync();
+        _detachBomb.Arm();
+
+        // Engine.Enabled=false takes the archive path, which detaches the observers first.
+        await AssertRebuildFailedBody(await _client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false }));
+        Assert.True(_detachBomb.Fired);
+    }
+
+    [Fact]
+    public async Task A_failed_rebuild_after_factory_reset_answers_500()
+    {
+        await RunningNodeAsync();
+        _detachBomb.Arm();
+
+        await AssertRebuildFailedBody(
+            await _client.PostAsJsonAsync("/api/v1/admin/factory-reset", new { confirm = "RESET" }));
+        Assert.True(_detachBomb.Fired);
     }
 }

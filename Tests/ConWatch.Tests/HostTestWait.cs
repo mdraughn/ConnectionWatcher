@@ -1,4 +1,7 @@
 using System.Text.Json;
+using ConPersistence;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit.Sdk;
 
 namespace ConWatch.Tests;
@@ -18,6 +21,15 @@ internal static class HostTestWait
         }
         throw new XunitException("Condition not met within timeout");
     }
+
+    /// <summary>
+    /// Changes the rebuild debounce of a running app. Seed with the factory's
+    /// instant debounce, settle, then call this: the host reads the value for
+    /// every write, so a test gets seeding without delay and the real debounce
+    /// (or a long one that only a direct rebuild can pre-empt) afterwards.
+    /// </summary>
+    public static void SetRebuildDebounce(IServiceProvider services, double seconds) =>
+        services.GetRequiredService<IOptions<PersistenceOptions>>().Value.RebuildDebounceSeconds = seconds;
 
     /// <summary>
     /// Seeding debounces several rebuilds; a baseline taken while one is still
