@@ -147,4 +147,43 @@ public class TracerouteRunnerTests
         Assert.False(hops.Last().ReachedDestination);
         Assert.NotNull(hops.Last().Kind);   // the stopped walk is still classified
     }
+
+    /// <summary>Answers each TTL's three probes from a script, in call order, and counts calls per TTL.</summary>
+    private sealed class ScriptedProbe(Func<int, int, TtlProbeResult> answer) : ITtlProbe
+    {
+        public Dictionary<int, int> CallsPerTtl { get; } = [];
+        public Task<TtlProbeResult> ProbeAsync(IPAddress destination, int ttl, int timeoutMs, CancellationToken ct)
+        {
+            int n;
+            lock (CallsPerTtl)
+            {
+                n = CallsPerTtl.GetValueOrDefault(ttl);
+                CallsPerTtl[ttl] = n + 1;
+            }
+            return Task.FromResult(answer(ttl, n));
+        }
+    }
+
+    [Fact]
+    public async Task Each_hop_is_probed_three_times_first_address_best_rtt()
+    {
+        // TTL 1: timeout, then 192.0.2.1 at 12 ms, then 192.0.2.2 at 30 ms; only the 2nd probe "reached".
+        // (The best rtt is deliberately not the last one answered, so "last wins" cannot pass.)
+        // Addresses stay in documentation ranges; reverse DNS is real here, so nothing asserts on the host name.
+        var probe = new ScriptedProbe((_, n) => n switch
+        {
+            0 => new TtlProbeResult(null, 0, false, TimedOut: true),
+            1 => new TtlProbeResult(IPAddress.Parse("192.0.2.1"), 12, ReachedDestination: true, TimedOut: false),
+            _ => new TtlProbeResult(IPAddress.Parse("192.0.2.2"), 30, false, false),
+        });
+        var runner = new TracerouteRunner(probe, NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
+
+        var hops = await runner.RunAsync("198.51.100.9", CancellationToken.None);
+
+        var hop = Assert.Single(hops);
+        Assert.Equal(3, probe.CallsPerTtl[1]);
+        Assert.Equal("192.0.2.1", hop.Address);   // the first address seen, not the last
+        Assert.Equal(12, hop.RttMs);              // the best rtt across the probes that answered
+        Assert.True(hop.ReachedDestination);      // any one probe reaching is enough
+    }
 }

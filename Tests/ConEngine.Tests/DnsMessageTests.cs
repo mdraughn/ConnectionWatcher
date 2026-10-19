@@ -85,4 +85,22 @@ public class DnsMessageTests
         Assert.True(DnsMessage.TryParseAnswer(bytes.ToArray(), out var answer));
         Assert.Equal([IPAddress.Parse("192.0.2.1")], answer.Addresses);
     }
+
+    [Fact]
+    public void An_rdlength_longer_than_the_datagram_is_malformed()
+    {
+        var bytes = FakeDnsWire.Response(5, "dns.google", DnsRcode.NoError, IPAddress.Parse("8.8.8.8"));
+        bytes[^6] = 0xFF; bytes[^5] = 0xFF;   // RDLENGTH 0xFFFF
+
+        Assert.False(DnsMessage.TryParseAnswer(bytes, out _));
+    }
+
+    [Fact]
+    public void A_label_longer_than_the_bytes_left_is_malformed()
+    {
+        byte[] header = [0, 1, 0x81, 0x80, 0, 1, 0, 0, 0, 0, 0, 0];   // a response with one question
+        var bytes = header.Concat(new byte[] { 63, (byte)'a', (byte)'b', (byte)'c' }).ToArray();   // 63 promised, 3 left
+
+        Assert.False(DnsMessage.TryParseAnswer(bytes, out _));
+    }
 }

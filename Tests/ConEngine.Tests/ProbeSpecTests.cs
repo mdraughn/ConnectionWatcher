@@ -108,4 +108,54 @@ public class ProbeSpecTests
     [InlineData("dns.example.net")]
     public void Dns_is_allowed_everywhere(string address) =>
         Assert.True(ProbePolicy.IsAllowed(address, new ProbeSpec(ProbeKind.Dns), out _));
+
+    [Theory]
+    [InlineData("172.15.255.255", false, false, false)]
+    [InlineData("172.16.0.0", true, true, true)]
+    [InlineData("172.31.255.255", true, true, true)]
+    [InlineData("172.32.0.0", false, false, false)]
+    [InlineData("192.168.0.1", true, true, true)]
+    [InlineData("192.169.0.1", false, false, false)]
+    [InlineData("100.63.255.255", false, false, false)]
+    [InlineData("100.64.0.0", false, true, false)]        // CGNAT: carrier only, on purpose
+    [InlineData("100.127.255.255", false, true, false)]
+    [InlineData("100.128.0.0", false, false, false)]
+    [InlineData("127.0.0.1", true, true, false)]           // loopback and link-local are not RFC1918
+    [InlineData("169.254.1.1", true, true, false)]
+    // AUDIT: an IPv4-mapped IPv6 address is not unwrapped by any of the three predicates (all treat IPv6 as
+    // public); pinned as-is. Is that intended for an address a dual-stack socket could report?
+    [InlineData("::ffff:10.0.0.1", false, false, false)]
+    public void Private_address_predicates_by_range_edge(string address, bool isPrivate, bool isPrivateOrCarrier, bool isRfc1918)
+    {
+        // The three predicates differ on purpose; merging them would change the TCP port policy,
+        // the traceroute/ASN classification or the LAN sweep.
+        Assert.Equal(isPrivate, ProbePolicy.IsPrivate(address));
+        Assert.Equal(isPrivateOrCarrier, ProbePolicy.IsPrivateOrCarrier(address));
+        Assert.Equal(isRfc1918, ConInfrastructure.Discovery.LanScanner.IsRfc1918(System.Net.IPAddress.Parse(address)));
+    }
+
+    [Theory]
+    [InlineData("icmp")]
+    [InlineData("dns")]
+    [InlineData("tcp:1")]
+    [InlineData("tcp:65535")]
+    public void A_printed_spec_parses_back_to_itself(string text)
+    {
+        Assert.True(ProbeSpec.TryParse(text, out var spec));
+        Assert.Equal(text, spec.ToString());
+        Assert.True(ProbeSpec.TryParse(spec.ToString(), out var again));
+        Assert.Equal(spec, again);
+        Assert.True(ProbeSpec.TryParse(spec.ToConfigString(), out var viaConfig));
+        Assert.Equal(spec, viaConfig);
+    }
+
+    [Theory]
+    [InlineData("tcp:+80")]
+    [InlineData("tcp: 80")]
+    public void A_sign_or_space_before_the_port_is_tolerated(string text)
+    {
+        // Pins today's leniency (int.TryParse accepts both); Mark's call, not an accident to fix here.
+        Assert.True(ProbeSpec.TryParse(text, out var spec));
+        Assert.Equal(new ProbeSpec(ProbeKind.Tcp, 80), spec);
+    }
 }

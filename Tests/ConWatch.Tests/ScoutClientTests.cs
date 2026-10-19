@@ -239,4 +239,55 @@ public class ScoutClientTests : IDisposable
         Assert.NotNull(handler.CookieContainer);
         Assert.NotEqual(Timeout.InfiniteTimeSpan, handler.PooledConnectionLifetime);
     }
+
+    private static HttpResponseMessage Text(HttpStatusCode code, string body) =>
+        new(code) { Content = new StringContent(body) };
+
+    [Fact]
+    public async Task A_server_under_a_sub_path_without_a_trailing_slash_gets_the_post_under_that_path()
+    {
+        var stub = new RecordingStub(_ => Text(HttpStatusCode.OK, """{"created":1,"updated":0}"""));
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("https://scout-test.example.com/conwatch"))
+            .SendAsync(OneDevice, null, false, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal("/conwatch/api/v1/discoveries", Assert.Single(stub.Requests).AbsolutePath);
+    }
+
+    [Fact]
+    public async Task A_200_that_is_not_a_node_answer_is_ServerError()
+    {
+        var stub = new RecordingStub(_ => Text(HttpStatusCode.OK, "<html>"));
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("https://scout-test.example.com/"))
+            .SendAsync(OneDevice, null, false, CancellationToken.None);
+
+        Assert.Equal(ScoutFailure.ServerError, result.Failure);
+    }
+
+    [Fact]
+    public async Task A_400_without_an_errors_list_is_Rejected()
+    {
+        var stub = new RecordingStub(_ => Text(HttpStatusCode.BadRequest, "{}"));
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("https://scout-test.example.com/"))
+            .SendAsync(OneDevice, null, false, CancellationToken.None);
+
+        Assert.Equal(ScoutFailure.Rejected, result.Failure);
+    }
+
+    [Fact]
+    public async Task A_sign_in_the_server_answers_with_503_is_ServerError_and_the_message_lacks_the_password()
+    {
+        var stub = new RecordingStub(r => r.RequestUri!.AbsolutePath.EndsWith("/discoveries")
+            ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+        var result = await new ScoutClient(new HttpClient(stub), new Uri("https://scout-test.example.com/"))
+            .SendAsync(OneDevice, "hunter2", false, CancellationToken.None);
+
+        Assert.Equal(ScoutFailure.ServerError, result.Failure);
+        Assert.DoesNotContain("hunter2", result.Message);
+    }
 }
