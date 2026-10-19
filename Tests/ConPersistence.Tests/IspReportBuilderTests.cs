@@ -163,9 +163,9 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         string Trigger = "ThresholdCrossed", string? Verdict = null);
 
     private sealed record IncidentCase(Step[] Steps, int RangeMinutes, int Outages,
-        int LongestMinutes, int UnreachableMinutes);
+        int LongestMinutes, int UnreachableMinutes, int LinkDownMinutes = 0, int DnsDownMinutes = 0);
 
-    // Mirrors the nine cases of "incidents (split semantics)" in
+    // Mirrors the ten cases of "incidents (split semantics)" in
     // ClientApp/src/lib/historyData.test.ts, in the same order, same range.
     private static readonly Dictionary<string, IncidentCase> IncidentCases = new()
     {
@@ -197,28 +197,36 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         // opening state from the row's FromState. The report reads the opening
         // state from the last row at or before the range start, and there is none,
         // so it counts nothing. Ruling D6: the report's rule is right; Task 33
-        // aligns History to it. Pinned at the report's answer.
+        // aligns History to it. Pinned at the report's answer. The positive half of
+        // D6 (a prior Down row opens the outage at the range start) is pinned by
+        // Target_outage_open_at_the_window_start_counts_from_the_window_start.
         ["7 an outage already open at the range start (no row before it)"] = new(
             [new(60, "Responding", "Down")], 360, 0, 0, 0),
-        // AUDIT: the report's per-target rows read target transitions only. A
-        // Verdict-kind row (DnsDown) lives under the verdict's own subject and
-        // can never reach a target's incident count, so the client's DnsDown rule
-        // holds structurally here, not by an explicit check.
-        ["8 a DnsDown verdict is never an outage"] = new(
+        // AUDIT: the client asserts no outage for DnsDown verdict rows. The report
+        // keeps target stats and verdict episodes apart: the verdict rows live under
+        // the verdict's own subject and never reach Google's stats (0/0/0), and
+        // BuildEpisodesAsync totals DnsDown on its own, with no episode.
+        ["8 a DnsDown verdict is its own total, never a target outage"] = new(
             [new(60, "Down", "Responding", "VerdictChanged", "DnsDown"),
              new(80, "Responding", "Down", "VerdictChanged", "Healthy")],
-            360, 0, 0, 0),
-        // AUDIT: same structural exclusion. The client expects 2 outages / 5 min
-        // for verdict rows; the report's target rows see none of them.
-        ["9 DnsDown closes a LinkDown outage; LinkDown after it opens one"] = new(
+            360, 0, 0, 0, LinkDownMinutes: 0, DnsDownMinutes: 20),
+        // AUDIT: the client expects 2 outages / 5 min from these verdict rows. The
+        // report has no verdict outage count; it totals the same rows as LinkDown
+        // time (5 + 2 min) and DnsDown time (65 -> 120), and Google stays 0/0/0.
+        ["9 DnsDown cuts a LinkDown episode short; LinkDown after it starts another"] = new(
             [new(60, "Down", "Responding", "VerdictChanged", "LinkDown"),
              new(65, "Down", "Down", "VerdictChanged", "DnsDown"),
              new(120, "Down", "Down", "VerdictChanged", "LinkDown"),
              new(122, "Responding", "Down", "VerdictChanged", "Healthy")],
-            360, 0, 0, 0),
+            360, 0, 0, 0, LinkDownMinutes: 7, DnsDownMinutes: 55),
+        // Same D6 rule as row 7, for the unreachable window: the client infers an
+        // open window from the row's FromState and counts it from the range start
+        // (30 min); the report finds no row at or before the range start, so 0.
+        ["10 an unreachable window already open at the range start (no row before it)"] = new(
+            [new(30, "Starting", "Unreachable", "ParentRecovered")], 360, 0, 0, 0),
         // Not a client case: the report's own rule when a target goes from
         // Unreachable straight to Down (the explained window closes, an outage opens).
-        ["10 report only: Unreachable -> Down closes the window and opens an outage"] = new(
+        ["11 report only: Unreachable -> Down closes the window and opens an outage"] = new(
             [new(60, "Unreachable", "Responding", "ParentDown"),
              new(70, "Down", "Unreachable"),
              new(90, "Responding", "Down")],
@@ -256,6 +264,8 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(c.Outages, google.OutageCount);
         Assert.Equal(TimeSpan.FromMinutes(c.LongestMinutes), google.LongestOutage);
         Assert.Equal(TimeSpan.FromMinutes(c.UnreachableMinutes), google.UnreachableTime);
+        Assert.Equal(TimeSpan.FromMinutes(c.LinkDownMinutes), report.LinkDownTime);
+        Assert.Equal(TimeSpan.FromMinutes(c.DnsDownMinutes), report.DnsDownTime);
     }
 
     [Fact]
