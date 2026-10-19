@@ -206,8 +206,9 @@ public class WatcherEngineTests : IAsyncLifetime
         // Router fails its probe while the targets behind it keep answering.
         _factory.SetUp(RouterIp, false);
         await Eventually(() => _engine.ModelConditions.Any(c => c.Kind == ModelWarningKind.HopBypassed));
-        lock (changes)
-            Assert.Contains(changes, c => c.Active && c.Condition.TargetName == "Router");
+        // The change is published after the coordinator's lock is released, so
+        // the stream can trail ModelConditions: wait for it rather than assert.
+        await Eventually(() => { lock (changes) return changes.Any(c => c.Active && c.Condition.TargetName == "Router"); });
         Assert.NotNull(_engine.ModelCheck);
 
         _factory.SetUp(RouterIp, true);
