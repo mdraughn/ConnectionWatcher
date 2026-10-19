@@ -47,6 +47,7 @@ public class VocabularyTests
             [nameof(GlitchClass.Target)] = (int)GlitchClass.Target,
             [nameof(GlitchClass.Internet)] = (int)GlitchClass.Internet,
         };
+        doc["VerdictSubjectId"] = VerdictCoordinator.SubjectId.ToString();
         return JsonSerializer.Serialize(doc, Pretty);
     }
 
@@ -79,6 +80,7 @@ public class VocabularyTests
         Assert.Equal(0, glitch.GetProperty("Target").GetInt32());
         Assert.Equal(1, glitch.GetProperty("Internet").GetInt32());
         Assert.Equal(2, glitch.EnumerateObject().Count());
+        Assert.Equal(VerdictCoordinator.SubjectId.ToString(), frozen.GetProperty("VerdictSubjectId").GetString());
         Assert.Equal(["HistoryReset"], frozen.GetProperty("Markers").EnumerateArray().Select(e => e.GetString()!).ToArray());
     }
 
@@ -86,7 +88,7 @@ public class VocabularyTests
     public void The_fixture_holds_exactly_the_agreed_keys()
     {
         var keys = Frozen().EnumerateObject().Select(p => p.Name).Order().ToArray();
-        var expected = Actual().Keys.Concat(["Markers", "GlitchClass"]).Order().ToArray();
+        var expected = Actual().Keys.Concat(["Markers", "GlitchClass", "VerdictSubjectId"]).Order().ToArray();
         Assert.Equal(expected, keys);
     }
 

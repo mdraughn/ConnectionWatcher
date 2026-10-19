@@ -43,6 +43,11 @@ public class VerdictCoordinator : IDisposable
     /// glitches and the metrics series.</summary>
     public const string SubjectName = "Internet";
 
+    /// <summary>The verdict's <c>name</c> label in the metrics series. Distinct
+    /// from <see cref="SubjectName"/> so the setup wizard's "Internet" pool does
+    /// not add up with the verdict; reserved, so no target or pool can take it.</summary>
+    public const string MetricsName = "verdict";
+
     /// <summary>The longest the verdict waits for undetermined anchors that
     /// could still answer before concluding LinkDown from the ones that have
     /// reported (spec §4.2): a stuck anchor — an address that

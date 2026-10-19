@@ -212,8 +212,10 @@ public class MetricsEndpointTests : IDisposable
         Assert.Contains($"conwatch_transitions_total{{name=\"{Escaped}\"}} ", body);
         Assert.DoesNotContain($"name=\"{Nasty}\"", body);   // never the raw name: it would break the line
 
-        // AUDIT: D9 - the pool "Internet" and the verdict subject "Internet" share one
-        // transitions_total series (the counter is keyed by name alone). Two subjects, one line.
-        Assert.Single(body.Split('\n'), l => l.StartsWith("conwatch_transitions_total{name=\"Internet\"}"));
+        // The pool "Internet" and the verdict are different subjects: each has its own
+        // transitions_total series, never summed into one.
+        var lines = body.Split('\n');
+        Assert.Single(lines, l => l.StartsWith("conwatch_transitions_total{name=\"Internet\"}"));
+        Assert.Single(lines, l => l.StartsWith("conwatch_transitions_total{name=\"verdict\"}"));
     }
 }

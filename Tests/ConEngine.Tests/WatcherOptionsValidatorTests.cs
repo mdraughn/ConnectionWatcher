@@ -206,6 +206,8 @@ public class WatcherOptionsValidatorTests
         { "empty address", o => o.Targets[2].Address = "", "Google", "empty Address" },
         { "duplicate pool name", o => o.Pools.Add(new PoolConfig { Name = "internet", Members = ["Google"] }), "internet", "Duplicate pool" },
         { "pool named like a target", o => o.Pools.Add(new PoolConfig { Name = "Router", Members = ["Google"] }), "Router", "collides" },
+        { "target named verdict", o => o.Targets[2].Name = "verdict", "verdict", "reserved" },
+        { "pool named verdict, any case", o => o.Pools.Add(new PoolConfig { Name = "VERDICT", Members = ["Google"] }), "VERDICT", "reserved" },
         { "pool member naming a non-target", o => o.Pools[0].Members.Add("Ghost"), "Ghost", "unknown member" },
         { "pool parent unknown", o => o.Pools[0].Parent = "Ghost", "Ghost", "unknown parent" },
         { "NormalIntervalSeconds = 0", o => o.Profiles["Bad"] = Bad(p => p.NormalIntervalSeconds = 0), "Bad", "positive" },

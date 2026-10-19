@@ -13,6 +13,7 @@ import type {
   DnsBlame, DnsLookupNameStatus, DnsResolverStatus, DnsStatus, ModelWarning, PoolStatus,
   RollupPoint, Snapshot, TargetStatus, TransitionEvent, VerdictStatus,
 } from "./types";
+import { VERDICT_SUBJECT_ID } from "./verdictSubject";
 import { answerClassOf, type AnswerClass } from "./verdictClock";
 
 // __dirname, not import.meta.url: under happy-dom the module URL is not a file: URL.
@@ -138,6 +139,11 @@ describe("server JSON contracts", () => {
 
 describe("server vocabulary", () => {
   const vocabulary = fixture("vocabulary.json");
+
+  it("the dashboard's verdict trail fetches the id the server gives the verdict", () => {
+    const frozen = JSON.parse(readFileSync(resolve(contracts, "vocabulary.json"), "utf-8")) as { VerdictSubjectId: string };
+    expect(VERDICT_SUBJECT_ID).toBe(frozen.VerdictSubjectId);
+  });
 
   it("every VerdictState has an answer class, and only Unknown is still checking", () => {
     const expected = {

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using ConEngine;
+using ConEngine.Events;
+using ConEngine.Topology;
 
 namespace ConWatch.Metrics;
 
@@ -33,11 +35,14 @@ public class MetricsCounters : IEngineObserver
                 subscription.Dispose();
             _subscriptions.Clear();
             _subscriptions.Add(engine.TransitionSource.Subscribe(t =>
-                _transitions.AddOrUpdate(t.TargetName, 1, (_, n) => n + 1)));
+                _transitions.AddOrUpdate(KeyOf(t), 1, (_, n) => n + 1)));
             _subscriptions.Add(engine.GlitchSource.Subscribe(_ =>
                 Interlocked.Increment(ref _glitches)));
         }
     }
+
+    private static string KeyOf(TargetTransition t) =>
+        t.Kind == TransitionSubjectKind.Verdict ? VerdictCoordinator.MetricsName : t.TargetName;
 
     /// <summary>Drops the subscription; the accumulated totals are process-lifetime
     /// counters and are kept.</summary>

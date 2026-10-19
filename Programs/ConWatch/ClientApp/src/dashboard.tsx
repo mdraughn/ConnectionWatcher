@@ -14,6 +14,7 @@ import { startHub } from "./lib/hub";
 import { isInternetTarget } from "./lib/lan";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
+import { VERDICT_SUBJECT_ID } from "./lib/verdictSubject";
 import { fetchStory, type Story } from "./lib/story";
 import type { Snapshot, TransitionEvent } from "./lib/types";
 
@@ -63,7 +64,7 @@ function App({ store, topology, initial }: {
   const [trail, setTrail] = useState<{ items: TransitionEvent[]; complete: boolean } | null>(null);
   useEffect(() => {
     let live = true;
-    fetch(`/api/v1/transitions?subjectName=Internet&limit=${TRAIL_LIMIT}`)
+    fetch(`/api/v1/transitions?subjectId=${VERDICT_SUBJECT_ID}&limit=${TRAIL_LIMIT}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
         if (live && body?.items)

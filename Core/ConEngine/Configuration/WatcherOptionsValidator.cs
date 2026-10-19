@@ -1,5 +1,6 @@
 using ConCore;
 using ConCore.Targets;
+using ConEngine.Topology;
 using Microsoft.Extensions.Options;
 
 namespace ConEngine.Configuration;
@@ -22,6 +23,8 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
         {
             if (string.IsNullOrWhiteSpace(t.Name))
                 failures.Add("A target has an empty Name.");
+            else if (IsReserved(t.Name))
+                failures.Add($"Target name '{t.Name}' is reserved.");
             else if (!targetNames.Add(t.Name))
                 failures.Add($"Duplicate target name '{t.Name}'.");
 
@@ -59,6 +62,8 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
         {
             if (string.IsNullOrWhiteSpace(p.Name))
                 failures.Add("A pool has an empty Name.");
+            else if (IsReserved(p.Name))
+                failures.Add($"Pool name '{p.Name}' is reserved.");
             else if (!poolNames.Add(p.Name))
                 failures.Add($"Duplicate pool name '{p.Name}'.");
             else if (targetNames.Contains(p.Name))
@@ -142,6 +147,11 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
             ? ValidateOptionsResult.Fail(failures)
             : ValidateOptionsResult.Success;
     }
+
+    /// <summary>"verdict" labels the verdict's metrics series; a target or pool
+    /// of that name would add into it.</summary>
+    private static bool IsReserved(string name) =>
+        name.Trim().Equals(VerdictCoordinator.MetricsName, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsKnownProfile(WatcherOptions options, string profileName) =>
         ConCore.Targets.PingProfile.IsBuiltIn(profileName) ||

@@ -102,7 +102,7 @@ public static class MetricsEndpoint
             foreach (var p in engine.PoolCoordinators)
                 totals.TryAdd(p.Pool.Name, 0);
             if (engine.Verdict is not null)
-                totals.TryAdd(VerdictCoordinator.SubjectName, 0);
+                totals.TryAdd(VerdictCoordinator.MetricsName, 0);
         }
         foreach (var (name, count) in totals.OrderBy(kv => kv.Key))
             Series(sb, "conwatch_transitions_total", name, count, localNames.Contains(name));
