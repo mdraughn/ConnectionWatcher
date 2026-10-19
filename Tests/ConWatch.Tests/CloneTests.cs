@@ -3,7 +3,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ConEngine;
 using ConWatch.Clone;
+using ConPersistence;
+using ConPersistence.Recording;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace ConWatch.Tests;
 
@@ -359,13 +364,19 @@ public class CloneTests : IDisposable
     public async Task Clone_import_with_a_failing_rebuild_answers_500()
     {
         await SeedSourceAsync();
-        var bomb = new DetachBombObserver();
-        var target = MakeTarget(s => s.AddSingleton<IEngineObserver>(bomb));
+        FlushBombRecorder? bomb = null;
+        var target = MakeTarget(s =>
+        {
+            s.RemoveAll<TransitionRecorder>();
+            s.AddSingleton<TransitionRecorder>(sp => bomb = new FlushBombRecorder(
+                sp.GetRequiredService<IDbContextFactory<ConWatchDbContext>>(),
+                sp.GetRequiredService<ILogger<TransitionRecorder>>()));
+        });
         var client = target.CreateClient();
         // Long debounce: the import's own change events must not rebuild (and
         // eat the one-shot failure) before the clone's direct rebuild runs.
         HostTestWait.SetRebuildDebounce(target.Services, 60);
-        bomb.Arm();
+        bomb!.Arm();
 
         var response = await client.PostAsJsonAsync("/api/v1/setup/clone", new
         {
@@ -376,7 +387,7 @@ public class CloneTests : IDisposable
         var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
         Assert.Equal("rebuild-failed", body.GetProperty("code").GetString());
         Assert.Contains("archive", body.GetProperty("errors")[0].GetString());
-        Assert.True(bomb.Fired);
+        Assert.True(bomb.Fired > 0);
     }
 
     /// <summary>Answers every request with one fixed JSON body: a source node whose snapshot we control.</summary>

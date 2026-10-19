@@ -31,25 +31,44 @@ internal sealed class AttachBombObserver : IEngineObserver
 }
 
 /// <summary>
-/// Throws from <see cref="Detach"/> exactly once, once armed. Once only: the
-/// host's own cleanup calls Detach again from its finally block, and a second
-/// throw there would escape the rebuild with the lock still held.
+/// A transition recorder whose database write fails once armed. The archive
+/// path flushes the recorders, so this fails an archive rebuild (a throwing
+/// observer Detach no longer can: the host logs it and carries on). Arm
+/// queues one event, so there is a batch to write and the flush really throws.
 /// </summary>
-internal sealed class DetachBombObserver : IEngineObserver
+internal sealed class FlushBombRecorder(
+    Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
+    ILogger<ConPersistence.Recording.TransitionRecorder> log)
+    : ConPersistence.Recording.TransitionRecorder(dbFactory, log)
 {
     private int _armed;
     private int _fired;
 
-    public bool Fired => Volatile.Read(ref _fired) == 1;
+    /// <summary>How many batch writes have thrown so far.</summary>
+    public int Fired => Volatile.Read(ref _fired);
 
-    public void Arm() => Volatile.Write(ref _armed, 1);
-
-    public void Attach(WatcherEngine engine) { }
-
-    public void Detach()
+    public void Arm()
     {
-        if (Volatile.Read(ref _armed) == 1 && Interlocked.Exchange(ref _fired, 1) == 0)
-            throw new InvalidOperationException("injected detach failure");
+        Volatile.Write(ref _armed, 1);
+        Attach(System.Reactive.Linq.Observable.Return(new ConEngine.Events.TargetTransition
+        {
+            TargetId = Guid.NewGuid(),
+            TargetName = "bomb",
+            From = default,
+            To = default,
+            Timestamp = DateTimeOffset.UtcNow,
+            Reason = new ConEngine.Events.TransitionReason { Trigger = default },
+        }));
+    }
+
+    protected override Task WriteBatchAsync(IReadOnlyList<ConEngine.Events.TargetTransition> batch, CancellationToken ct)
+    {
+        if (Volatile.Read(ref _armed) == 1)
+        {
+            Interlocked.Increment(ref _fired);
+            throw new InvalidOperationException("injected flush failure");
+        }
+        return base.WriteBatchAsync(batch, ct);
     }
 }
 
@@ -82,4 +101,40 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
                 owner._entries.Add(new Entry(category, logLevel, formatter(state, exception)));
         }
     }
+}
+
+/// <summary>
+/// Throws from <see cref="Detach"/> on EVERY call once armed, and counts the
+/// calls: it throws from the host's own cleanup too, which is what exposes a
+/// lock released after it.
+/// </summary>
+internal sealed class AlwaysThrowDetachObserver : IEngineObserver
+{
+    private int _armed;
+    private int _calls;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    public void Arm() => Volatile.Write(ref _armed, 1);
+
+    public void Attach(WatcherEngine engine) { }
+
+    public void Detach()
+    {
+        Interlocked.Increment(ref _calls);
+        if (Volatile.Read(ref _armed) == 1)
+            throw new InvalidOperationException("injected detach failure");
+    }
+}
+
+/// <summary>Counts <see cref="Detach"/> calls and never throws.</summary>
+internal sealed class DetachCountingObserver : IEngineObserver
+{
+    private int _calls;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    public void Attach(WatcherEngine engine) { }
+
+    public void Detach() => Interlocked.Increment(ref _calls);
 }

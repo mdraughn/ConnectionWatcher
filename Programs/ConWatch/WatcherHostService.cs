@@ -86,10 +86,24 @@ public class WatcherHostService(
     /// validation. The health endpoint reports it as "ConfigInvalid".</summary>
     public string? LastStartFailure { get; private set; }
 
+    /// <summary>
+    /// Detaches every observer; never throws. One observer's failure is logged
+    /// and the rest still detach — it runs in cleanup paths where a throw would
+    /// skip them and, in a finally, the release of <c>_rebuildLock</c>.
+    /// </summary>
     private void DetachObservers()
     {
         foreach (var observer in observers)
-            observer.Detach();
+        {
+            try
+            {
+                observer.Detach();
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Observer {Observer} failed to detach", observer.GetType().Name);
+            }
+        }
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -301,9 +315,15 @@ public class WatcherHostService(
             // Detach() is idempotent, so the harmless double call just
             // guarantees no observer is left attached whenever the rebuild
             // didn't end with a running engine.
-            if (Engine is null)
-                DetachObservers();
-            _rebuildLock.Release();
+            try
+            {
+                if (Engine is null)
+                    DetachObservers();
+            }
+            finally
+            {
+                _rebuildLock.Release();
+            }
         }
     }
 

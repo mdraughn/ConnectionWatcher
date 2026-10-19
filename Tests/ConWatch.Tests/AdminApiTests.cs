@@ -7,18 +7,31 @@ using ConPersistence.Recording;
 using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace ConWatch.Tests;
 
 public class AdminApiTests : IDisposable
 {
-    private readonly DetachBombObserver _detachBomb = new();
+    private readonly AttachBombObserver _attachBomb = new();
+    private FlushBombRecorder? _flushBomb;
     private readonly ConWatchFactory _factory;
     private readonly HttpClient _client;
 
     public AdminApiTests()
     {
-        _factory = new ConWatchFactory { TestServices = s => s.AddSingleton<IEngineObserver>(_detachBomb) };
+        _factory = new ConWatchFactory
+        {
+            TestServices = s =>
+            {
+                s.AddSingleton<IEngineObserver>(_attachBomb);
+                s.RemoveAll<TransitionRecorder>();
+                s.AddSingleton<TransitionRecorder>(sp => _flushBomb = new FlushBombRecorder(
+                    sp.GetRequiredService<IDbContextFactory<ConWatchDbContext>>(),
+                    sp.GetRequiredService<ILogger<TransitionRecorder>>()));
+            },
+        };
         _client = _factory.CreateClient();
     }
 
@@ -213,21 +226,21 @@ public class AdminApiTests : IDisposable
     public async Task A_failed_archive_rebuild_answers_500()
     {
         await RunningNodeAsync();
-        _detachBomb.Arm();
+        _flushBomb!.Arm();
 
-        // Engine.Enabled=false takes the archive path, which detaches the observers first.
+        // Engine.Enabled=false takes the archive path, which flushes the recorders.
         await AssertRebuildFailedBody(await _client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false }));
-        Assert.True(_detachBomb.Fired);
+        Assert.True(_flushBomb.Fired > 0);
     }
 
     [Fact]
     public async Task A_failed_rebuild_after_factory_reset_answers_500()
     {
         await RunningNodeAsync();
-        _detachBomb.Arm();
+        _attachBomb.Arm(1);
 
         await AssertRebuildFailedBody(
             await _client.PostAsJsonAsync("/api/v1/admin/factory-reset", new { confirm = "RESET" }));
-        Assert.True(_detachBomb.Fired);
+        Assert.Equal(1, _attachBomb.Fired);
     }
 }
