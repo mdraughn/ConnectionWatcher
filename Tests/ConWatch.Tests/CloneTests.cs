@@ -396,6 +396,41 @@ public class CloneTests : IDisposable
     [Fact]
     public async Task A_clone_whose_config_is_invalid_changes_nothing()
     {
+        var (before, after) = await FailedCloneAsync(engineEnabledBefore: null);
+
+        Assert.True(EngineEnabled(after));
+        AssertSettingsRestored(before, after);
+        // monitoring is running again, not parked as a disabled archive
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson(_target!.CreateClient(), "/api/v1/health"))
+                .GetProperty("status").GetString() == "Healthy");
+    }
+
+    [Fact]
+    public async Task A_failed_clone_leaves_an_already_disabled_engine_disabled()
+    {
+        var (before, after) = await FailedCloneAsync(engineEnabledBefore: false);
+
+        Assert.False(EngineEnabled(before));
+        Assert.False(EngineEnabled(after));
+        AssertSettingsRestored(before, after);
+    }
+
+    private static void AssertSettingsRestored(JsonElement before, JsonElement after)
+    {
+        foreach (var key in new[] { "Engine.Enabled", "Clone.SourceUrl", "Clone.IncludeLocalDevices" })
+        {
+            var had = before.TryGetProperty(key, out var b);
+            var has = after.TryGetProperty(key, out var a);
+            Assert.Equal(had, has);
+            if (had)
+                Assert.Equal(b.GetString(), a.GetString());
+        }
+    }
+
+    /// <summary>Runs a clone whose snapshot fails validation; returns the settings before and after.</summary>
+    private async Task<(JsonElement Before, JsonElement After)> FailedCloneAsync(bool? engineEnabledBefore)
+    {
         await SeedSourceAsync();
         // The source's own snapshot, with a parent cycle written into it (Google's parent is Router).
         var snapshot = System.Text.Json.Nodes.JsonNode.Parse(
@@ -413,9 +448,14 @@ public class CloneTests : IDisposable
         {
             name = "Mine", address = "192.0.2.7", profile = "Internal",
         })).EnsureSuccessStatusCode();
+        if (engineEnabledBefore == false)
+        {
+            var engineOff = await client.PostAsJsonAsync("/api/v1/admin/engine", new { enabled = false });
+            engineOff.EnsureSuccessStatusCode();
+        }
         var targetsBefore = await client.GetStringAsync("/api/v1/targets");
         var settingsBefore = await GetJson(client, "/api/v1/settings");
-        Assert.True(EngineEnabled(settingsBefore));
+        Assert.Equal(engineEnabledBefore != false, EngineEnabled(settingsBefore));
 
         var response = await client.PostAsJsonAsync("/api/v1/setup/clone", new
         {
@@ -426,13 +466,6 @@ public class CloneTests : IDisposable
         var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
         Assert.Equal("import-failed", body.GetProperty("code").GetString());
         Assert.Equal(targetsBefore, await client.GetStringAsync("/api/v1/targets"));
-        var settingsAfter = await GetJson(client, "/api/v1/settings");
-        // AUDIT: the brief expects Engine.Enabled unchanged after a failed import, but CloneService.CloneAsync
-        // writes Engine.Enabled=false, Clone.SourceUrl and Clone.IncludeLocalDevices BEFORE it imports. A
-        // clone whose snapshot fails validation therefore leaves this node's config intact but its monitoring
-        // switched off, with a source URL recorded for a take-over that never had a clone behind it. Pinned
-        // as it is; whether the settings write belongs after the import is a question for the owner.
-        Assert.False(EngineEnabled(settingsAfter));
-        Assert.Equal("http://source.test/", settingsAfter.GetProperty("Clone.SourceUrl").GetString());
+        return (settingsBefore, await GetJson(client, "/api/v1/settings"));
     }
 }

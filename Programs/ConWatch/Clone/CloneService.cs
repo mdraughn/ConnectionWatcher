@@ -65,6 +65,13 @@ public class CloneService(IHttpClientFactory httpFactory,
 
         // Arrive as a disabled archive: the source keeps monitoring; nothing
         // double-pings and MQTT entities don't fight. Take-over flips this.
+        // The previous values are kept so a failed import can put them back.
+        var previous = new Dictionary<string, string?>
+        {
+            [SettingKeys.EngineEnabled] = await settings.GetAsync(SettingKeys.EngineEnabled),
+            [SettingKeys.CloneSourceUrl] = await settings.GetAsync(SettingKeys.CloneSourceUrl),
+            [SettingKeys.CloneIncludeLocalDevices] = await settings.GetAsync(SettingKeys.CloneIncludeLocalDevices),
+        };
         await settings.SetManyAsync(new Dictionary<string, string?>
         {
             [SettingKeys.EngineEnabled] = "false",
@@ -78,6 +85,15 @@ public class CloneService(IHttpClientFactory httpFactory,
         }
         catch (InvalidOperationException ex)
         {
+            // Nothing was imported, so the node must not stay a disabled archive of a clone that never happened.
+            try
+            {
+                await settings.SetManyAsync(previous);
+            }
+            catch (Exception restoreError)
+            {
+                log.LogError(restoreError, "Could not restore the engine and clone settings after a failed clone");
+            }
             return CloneOutcome.Fail(400, "import-failed", ex.Message);
         }
 
