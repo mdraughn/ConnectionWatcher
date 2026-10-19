@@ -123,9 +123,9 @@ public static class AdminEndpoints
                 await db.Transitions.ExecuteDeleteAsync();
                 await db.Rollups.ExecuteDeleteAsync();
                 await db.ModelWarnings.ExecuteDeleteAsync();
+                await db.Glitches.ExecuteDeleteAsync();
                 await tx.CommitAsync();
             }
-            await db.Database.ExecuteSqlRawAsync("PRAGMA incremental_vacuum;");
             loggerFactory.CreateLogger("Admin").LogWarning("Measurement history CLEARED by administrator");
             return Results.NoContent();
         });
@@ -144,6 +144,7 @@ public static class AdminEndpoints
                 await db.Transitions.ExecuteDeleteAsync();
                 await db.Rollups.ExecuteDeleteAsync();
                 await db.ModelWarnings.ExecuteDeleteAsync();
+                await db.Glitches.ExecuteDeleteAsync();
                 await db.PoolMembers.ExecuteDeleteAsync();
                 await db.Pools.ExecuteDeleteAsync();
                 await db.Targets.ExecuteDeleteAsync();
