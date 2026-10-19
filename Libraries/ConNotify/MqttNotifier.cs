@@ -61,23 +61,38 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
     private DnsPublication? _lastDns;
 
     private WatcherEngine? _engine;
+    // Set once the attached engine has started: until then its monitors are still being
+    // created, and a refresh would read a partial dictionary and clear every target it missed.
+    private bool _engineStarted;
     private IDisposable? _subscription;
     private MqttTopics? _topics;
     private Dictionary<Guid, string> _slugsById = new();
     private HashSet<string> _publishedSlugs = new();
 
-    /// <summary>Called by the host on every engine (re)start.</summary>
+    /// <summary>Called by the host on every engine (re)start, before the engine starts.</summary>
     public void Attach(WatcherEngine engine)
     {
         lock (_lock)
         {
             _subscription?.Dispose();
             _engine = engine;
+            _engineStarted = false;
             _subscription = engine.TransitionSource.Subscribe(
                 // Every target is published, LAN devices included: MQTT never notifies
                 // by itself; Home Assistant automations decide (Mark, 2026-10-10).
                 t => _inbox.Post(t),
                 ex => log.LogError(ex, "Transition stream error in MQTT notifier"));
+        }
+    }
+
+    /// <summary>The full refresh waits for this: a warm rebuild emits no transitions to heal a partial one.</summary>
+    public void Started(WatcherEngine engine)
+    {
+        lock (_lock)
+        {
+            if (!ReferenceEquals(_engine, engine))
+                return;
+            _engineStarted = true;
         }
         _inbox.Refresh();
     }
@@ -89,6 +104,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
             _subscription?.Dispose();
             _subscription = null;
             _engine = null;
+            _engineStarted = false;
         }
         // The session itself ends on the Engine.Enabled reconfigure poke and
         // publishes availability=offline on the way out (Task 1.1).
@@ -221,7 +237,8 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
     private async Task RefreshAllAsync(IMqttClient client, CancellationToken ct)
     {
         WatcherEngine? engine;
-        lock (_lock) { engine = _engine; }
+        // A (re)connect during a rebuild lands here too; Started posts the refresh that counts.
+        lock (_lock) { engine = _engineStarted ? _engine : null; }
         if (engine is null || _topics is null)
             return;
 

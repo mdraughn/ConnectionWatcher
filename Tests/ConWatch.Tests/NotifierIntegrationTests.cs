@@ -496,8 +496,9 @@ public class NotifierIntegrationTests
         });
 
     /// <summary>Seeds the home config, waits for the rebuilds to settle with the engine running, and only
-    /// then enables MQTT. The notifier's first full refresh then sees every monitor; enabling MQTT first
-    /// races the product's wipe-on-rebuild bug (see the AUDIT in Retained_state_is_what_a_late_subscriber_sees).</summary>
+    /// then enables MQTT, so the session starts against a quiet engine. This ordering once also dodged the
+    /// wipe-on-rebuild bug (audit defect 1); that is fixed, and
+    /// A_rebuild_that_adds_no_target_keeps_every_target_entity_retained pins it.</summary>
     private static async Task SeedThenEnableMqttAsync(ConWatchFactory factory, HttpClient client, int brokerPort)
     {
         await ConfigApiTests.SeedHomeAsync(client);
@@ -588,13 +589,62 @@ public class NotifierIntegrationTests
             var afterDelete = await RetainedSetAsync(brokerPort);
             Assert.DoesNotContain(printerConfig, afterDelete.Keys);
             Assert.DoesNotContain("conwatch/target/printer/state", afterDelete.Keys);
-            // AUDIT: product bug, still present: a warm rebuild (here the delete) wipes the other targets'
-            // retained entities and does not republish them (observed 3 of 3 runs before the reorder):
-            // MqttNotifier.Attach queues a Refresh before engine.StartAsync has created the monitors, the
-            // refresh sees none and clears every previously published slug, and a warm rebuild emits no
-            // transitions to heal it. This test avoids the race at the start by ordering (SeedThenEnableMqttAsync
-            // enables MQTT only after the config has settled), so the session's first full refresh sees every
-            // monitor. Nothing is asserted about the survivors after the delete.
+            // The survivors keep theirs: the rebuild's refresh waits for the engine to start (it used to read
+            // the monitors before StartAsync had created them and clear every target; audit defect 1, fixed).
+            foreach (var slug in new[] { "router", "google", "cloudflare" })
+            {
+                Assert.Contains($"homeassistant/binary_sensor/conwatch_{slug}/config", afterDelete.Keys);
+                Assert.Equal("ON", afterDelete[$"conwatch/target/{slug}/state"].Payload);
+                Assert.Equal(VerdictAttrs, afterDelete[$"conwatch/target/{slug}/attributes"].Payload);
+            }
+        }
+        finally
+        {
+            RunDocker($"rm -f {containerId}");
+        }
+    }
+
+    [SkippableFact]
+    public async Task A_rebuild_that_adds_no_target_keeps_every_target_entity_retained()
+    {
+        var (brokerPort, containerId) = RequireMosquitto();
+        try
+        {
+            await WaitForBrokerAsync(brokerPort);
+            using var live = await LiveSubscriber.StartAsync(brokerPort, "conwatch/#", "homeassistant/#");
+            using var factory = new ConWatchFactory();
+            var client = factory.CreateClient();
+            await SeedThenEnableMqttAsync(factory, client, brokerPort);
+            var slugs = new[] { "router", "google", "cloudflare" };
+            await HostTestWait.Eventually(() => Task.FromResult(
+                slugs.All(s => live.Last($"conwatch/target/{s}/state") == "ON")));
+
+            var host = factory.Services.GetRequiredService<WatcherHostService>();
+            var rebuilds = host.RebuildCount;
+            // Every refresh republishes the verdict's discovery, so its count marks the refreshes.
+            const string verdictConfig = "homeassistant/sensor/conwatch_verdict/config";
+            var refreshes = live.Payloads(verdictConfig).Count;
+
+            // A warm rebuild that adds no target and makes none transition: flag the Router critical.
+            var router = (await client.GetFromJsonAsync<List<ConPersistence.Config.TargetDto>>("/api/v1/targets"))!
+                .Single(t => t.Name == "Router");
+            (await client.PutAsJsonAsync($"/api/v1/targets/{router.Id}", router with { Critical = true }))
+                .EnsureSuccessStatusCode();
+            await HostTestWait.Eventually(() => Task.FromResult(host.RebuildCount > rebuilds && host.EngineRunning));
+            await HostTestWait.SettledRebuildCountAsync(host);
+            await HostTestWait.Eventually(() => Task.FromResult(live.Payloads(verdictConfig).Count > refreshes));
+
+            var retained = await RetainedSetAsync(brokerPort);
+            foreach (var slug in slugs)
+            {
+                Assert.Contains($"homeassistant/binary_sensor/conwatch_{slug}/config", retained.Keys);
+                Assert.Contains($"conwatch/target/{slug}/state", retained.Keys);
+                Assert.Equal("ON", retained[$"conwatch/target/{slug}/state"].Payload);
+            }
+            // The rebuild's own change reached Home Assistant too.
+            Assert.Equal("{\"critical\":true,\"scope\":\"Verdict\"}", retained["conwatch/target/router/attributes"].Payload);
+            Assert.Equal(VerdictAttrs, retained["conwatch/target/google/attributes"].Payload);
+            Assert.Equal(VerdictAttrs, retained["conwatch/target/cloudflare/attributes"].Payload);
         }
         finally
         {

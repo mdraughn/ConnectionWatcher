@@ -214,6 +214,8 @@ public class WatcherHostService(
         foreach (var observer in observers)
             observer.Attach(engine);
         await engine.StartAsync(_appStopping, seed);
+        foreach (var observer in observers)
+            observer.Started(engine);
         Engine = engine;
         _log.LogInformation("Engine started with {Count} targets{Warm}",
             options.Targets.Count, seed is { IsEmpty: false } ? " (warm start)" : "");

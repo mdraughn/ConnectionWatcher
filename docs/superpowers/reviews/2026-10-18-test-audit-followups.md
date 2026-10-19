@@ -44,6 +44,7 @@ Companion to `2026-10-18-test-coverage-audit.md`, written when the plan `../plan
    - **Scope:** every rebuild that adds no fresh target, including delete, disable, rename, parent, profile, critical or scope edits, pool edits and setting edits.
    - **Fix direction:** refresh after StartAsync, or don't clear until the engine has started.
    - **Pin:** NotifierIntegrationTests ~571.
+   - **FIXED 2026-10-19:** `IEngineObserver` gained `Started(engine)`, which the host calls after `engine.StartAsync` returns. `MqttNotifier` posts its full refresh from `Started`, not `Attach`, and `RefreshAllAsync` does nothing until the attached engine has started (this also covers a reconnect that lands mid-rebuild, and the mid-insert dictionary read). Topics, payloads and retain flags are unchanged. New red-then-green test: `A_rebuild_that_adds_no_target_keeps_every_target_entity_retained`; the delete case at ~571 now asserts the survivors.
 2. **A failed clone leaves monitoring switched off.** `CloneService.CloneAsync` (`CloneService.cs:68-82`) writes `Engine.Enabled=false`, `Clone.SourceUrl` and `Clone.IncludeLocalDevices` before importing, and never restores them when the import fails (400 import-failed). Take-over (`:154-164`) imports first and is fine. Pin: CloneTests (CF19).
 3. **A throwing observer Detach leaves the rebuild lock held for good.**
    - **Cause:** the finally block at `WatcherHostService.cs:302-304` calls `DetachObservers()` before `_rebuildLock.Release()`.
