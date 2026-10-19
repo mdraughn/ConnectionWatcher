@@ -1,0 +1,24 @@
+{
+  "transition[]": [
+    "ancestorId",
+    "avgRtt",
+    "burstLossRate",
+    "detail",
+    "from",
+    "id",
+    "sampleSize",
+    "scope",
+    "subjectId",
+    "subjectKind",
+    "subjectName",
+    "successRate",
+    "timestamp",
+    "to",
+    "trigger",
+    "verdict"
+  ],
+  "transitions": [
+    "items",
+    "nextBefore"
+  ]
+}

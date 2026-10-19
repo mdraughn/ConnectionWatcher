@@ -1,0 +1,14 @@
+{
+  "rollup[]": [
+    "periodStart",
+    "pingCount",
+    "rttAvg",
+    "rttMax",
+    "rttMin",
+    "successCount"
+  ],
+  "rollups": [
+    "points",
+    "resolution"
+  ]
+}

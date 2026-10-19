@@ -1,0 +1,80 @@
+{
+  "status": [
+    "dns",
+    "enabled",
+    "pools",
+    "targets",
+    "verdict",
+    "warnings"
+  ],
+  "status.dns": [
+    "blame",
+    "lookupNames",
+    "state",
+    "systemResolvers",
+    "upstreamResolvers",
+    "watched"
+  ],
+  "status.dns.blame": [
+    "kind",
+    "message",
+    "resolvers"
+  ],
+  "status.dns.lookupNames[]": [
+    "detail",
+    "lastResult",
+    "name"
+  ],
+  "status.dns.systemResolvers[]": [
+    "address",
+    "detail",
+    "enabled",
+    "id",
+    "label",
+    "state"
+  ],
+  "status.dns.upstreamResolvers[]": [
+    "address",
+    "detail",
+    "enabled",
+    "id",
+    "label",
+    "state"
+  ],
+  "status.pools[]": [
+    "id",
+    "name",
+    "state"
+  ],
+  "status.targets[]": [
+    "address",
+    "assumed",
+    "avgRtt",
+    "critical",
+    "explainedBy",
+    "id",
+    "name",
+    "operator",
+    "pingCount",
+    "probe",
+    "sampleSize",
+    "scope",
+    "state",
+    "successRate",
+    "systemManaged"
+  ],
+  "status.verdict": [
+    "detail",
+    "operator",
+    "state"
+  ],
+  "status.warnings[]": [
+    "acknowledged",
+    "key",
+    "kind",
+    "message",
+    "since",
+    "targetId",
+    "targetName"
+  ]
+}

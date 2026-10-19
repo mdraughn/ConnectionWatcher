@@ -1,0 +1,13 @@
+{
+  "index.island": [
+    "admin",
+    "anchorNames",
+    "cloneSource",
+    "engineDisabled",
+    "parents",
+    "poolMembers",
+    "snapshot",
+    "trunkNames",
+    "weatherThreshold"
+  ]
+}

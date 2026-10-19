@@ -1,0 +1,17 @@
+{
+  "glitch[]": [
+    "class",
+    "detail",
+    "endUtc",
+    "id",
+    "lostCount",
+    "sampleCount",
+    "scope",
+    "startUtc",
+    "targetId",
+    "targetName"
+  ],
+  "glitches": [
+    "items"
+  ]
+}
