@@ -38,6 +38,9 @@ public class NotifierIntegrationTests
         private readonly HttpListener _listener = new();
         private readonly Task _pump;
         private readonly List<(string Path, string Body)> _received = new();
+        // Set before Stop(), which aborts the pending GetContextAsync before IsListening
+        // turns false: asking the listener lost that race and faulted the pump.
+        private volatile bool _stopping;
 
         public int Port { get; }
         public string Prefix { get; } = "/t-" + Guid.NewGuid().ToString("N")[..8];
@@ -53,11 +56,11 @@ public class NotifierIntegrationTests
 
         private async Task PumpAsync()
         {
-            while (_listener.IsListening)
+            while (!_stopping)
             {
                 HttpListenerContext ctx;
                 try { ctx = await _listener.GetContextAsync(); }
-                catch (Exception) when (!_listener.IsListening) { return; }
+                catch (Exception) when (_stopping) { return; }
                 try
                 {
                     var path = ctx.Request.Url!.AbsolutePath;
@@ -80,7 +83,7 @@ public class NotifierIntegrationTests
                     // abort a connection mid-read under load; drop that request
                     // and keep serving. If Dispose stopped us mid-request, the
                     // listener is gone and Abort itself throws: just end.
-                    if (!_listener.IsListening)
+                    if (_stopping)
                         return;
                     try { ctx.Response.Abort(); }
                     catch (ObjectDisposedException) { return; }
@@ -95,6 +98,7 @@ public class NotifierIntegrationTests
 
         public void Dispose()
         {
+            _stopping = true;
             _listener.Stop();
             _pump.Wait(TimeSpan.FromSeconds(5));
             _listener.Close();
@@ -115,6 +119,16 @@ public class NotifierIntegrationTests
         await Task.Delay(300); // let the pump start reading the body it will never finish
 
         hook.Dispose();
+    }
+
+    [Fact]
+    public void Hook_disposes_cleanly_while_waiting_for_a_request()
+    {
+        // Stop() aborts the pending GetContextAsync before IsListening turns false, so a
+        // pump that asked the listener whether it was stopping could fault and fail
+        // whichever test's Dispose it was. Every dispose is a chance at that race.
+        for (var i = 0; i < 200; i++)
+            new Hook().Dispose();
     }
 
     [Fact]
