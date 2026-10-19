@@ -1,7 +1,12 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ConEngine.Topology;
+using ConPersistence;
 using ConPersistence.Config;
+using ConPersistence.Entities;
+using ConPersistence.Report;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -292,4 +297,63 @@ public class PageSmokeTests : IDisposable
         Assert.Contains("Router", parent.Groups[1].Value);
         Assert.DoesNotContain("NasBox", parent.Groups[1].Value);
     }
+
+    [Fact]
+    public async Task The_report_renders_its_incident_table()
+    {
+        // A window in the recent past: the live engine's own rows (at "now") stay outside it.
+        var hour = DateTime.UtcNow.AddHours(-5);
+        hour = new DateTime(hour.Year, hour.Month, hour.Day, hour.Hour, 0, 0, DateTimeKind.Utc);
+        var from = hour;
+        var to = hour.AddHours(4);
+        var downAt = hour.AddHours(1);
+        var upAt = hour.AddHours(2);
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            db.Transitions.AddRange(
+                VerdictRow(from.AddMinutes(-1), "Healthy", null),
+                VerdictRow(downAt, "LinkDown", "LinkDown: Modem is Down"),
+                VerdictRow(upAt, "Healthy", null));
+            db.Glitches.AddRange(
+                new GlitchRow { TargetId = VerdictCoordinator.SubjectId, TargetName = "Internet", Class = 1,
+                    StartUtc = hour.AddMinutes(30), EndUtc = hour.AddMinutes(30).AddSeconds(8), Detail = "anchors: A, B" },
+                new GlitchRow { TargetId = VerdictCoordinator.SubjectId, TargetName = "Internet", Class = 1,
+                    StartUtc = hour.AddMinutes(200), EndUtc = hour.AddMinutes(200).AddSeconds(5), Detail = "anchors: A, B" });
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync($"/Report?from={from:yyyy-MM-ddTHH:mm:ssZ}&to={to:yyyy-MM-ddTHH:mm:ssZ}");
+
+        // Exactly one incident row, labelled for a person, carrying the pair's own times.
+        Assert.Single(Regex.Matches(html, "<td>Line down</td>"));
+        Assert.DoesNotContain("<td>Widespread</td>", html);
+        Assert.Contains("Modem is Down", html);
+        Assert.Contains($"datetime=\"{new DateTimeOffset(downAt):O}\"", html);
+        Assert.Contains($"datetime=\"{new DateTimeOffset(upAt):O}\"", html);
+        Assert.Contains("+00:00\"", html);
+        Assert.Contains("<td>60 minutes</td>", html);                 // the duration of the pair
+        // Glitches: the count sentence, with how many were corroborated.
+        Assert.Matches(@"<b>2</b> brief loss episodes\s+too short to register as outages\s+\(2 of them corroborated", html);
+
+        // The data the page was built from is UTC-kinded all the way (a local-kinded DateTime
+        // would print a local offset instead of +00:00 on any machine not on UTC).
+        var report = await _factory.Services.GetRequiredService<IspReportBuilder>().BuildAsync(from, to);
+        var episode = Assert.Single(report.Episodes);
+        Assert.Equal("LinkDown", episode.Kind);
+        Assert.Equal(DateTimeKind.Utc, episode.StartUtc.Kind);
+        Assert.Equal(DateTimeKind.Utc, episode.EndUtc.Kind);
+        Assert.Equal(downAt, episode.StartUtc);
+        Assert.Equal(upAt, episode.EndUtc);
+        Assert.Equal(DateTimeKind.Utc, report.FromUtc.Kind);
+        Assert.Equal(DateTimeKind.Utc, report.ToUtc.Kind);
+    }
+
+    private static TransitionRow VerdictRow(DateTime at, string verdict, string? detail) => new()
+    {
+        TimestampUtc = at, SubjectId = VerdictCoordinator.SubjectId, SubjectName = "Internet",
+        SubjectKind = "Verdict", FromState = "Responding", ToState = "Responding",
+        Trigger = "VerdictChanged", Verdict = verdict, Detail = detail,
+    };
 }

@@ -9,7 +9,7 @@ import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
 import { isInternetTarget } from "./lib/lan";
 import { fetchStory, type Story, type StoryTopology } from "./lib/story";
-import { clipAtReset, incidents, ribbonSegments, subjectsForScope, uptimePercent, type HistoryScope } from "./lib/historyData";
+import { clipAtReset, incidents, lossPercent, ribbonSegments, subjectsForScope, uptimePercent, weightedRtt, type HistoryScope } from "./lib/historyData";
 import type { RollupPoint, TransitionEvent } from "./lib/types";
 
 interface Subject {
@@ -152,14 +152,11 @@ function App({ subjects }: { subjects: Subject[] }) {
 
   const stats = incidents(clipped, (resetAt ?? from.toISOString()), to.toISOString());
   const uptime = subject.kind === "target" ? uptimePercent(measuredRollups) : null;
-  const totalSuccess = measuredRollups.reduce((n, p) => n + p.successCount, 0);
-  const avgRtt = totalSuccess > 0
-    ? measuredRollups.reduce((n, p) => n + p.rttAvg * p.successCount, 0) / totalSuccess
-    : null;
+  const avgRtt = weightedRtt(measuredRollups);
   const latency = measuredRollups.map((p) => ({ x: new Date(p.periodStart), y: p.rttAvg }));
   const lossBars = measuredRollups.map((p) => ({
     x: new Date(p.periodStart),
-    y: p.pingCount > 0 ? (100 * (p.pingCount - p.successCount)) / p.pingCount : null,
+    y: lossPercent(p),
   }));
   const segments = ribbonSegments(transitions, from.toISOString(), to.toISOString());
 

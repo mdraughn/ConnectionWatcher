@@ -1,5 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using ConEngine.Configuration;
+using ConEngine.Tests.Fakes;
+using ConEngine.Tracking;
+using ConWatch.Api;
+using ConWatch.Metrics;
+using Microsoft.Extensions.Time.Testing;
 
 namespace ConWatch.Tests;
 
@@ -158,5 +164,56 @@ public class MetricsEndpointTests : IDisposable
         Assert.Contains("conwatch_target_sample_size{name=\"NAS\",scope=\"local\"}", body);
         Assert.Contains("conwatch_transitions_total{name=\"NAS\",scope=\"local\"}", body);
         Assert.DoesNotContain("name=\"Router\",scope=", body);
+    }
+
+    [Fact]
+    public async Task Render_golden()
+    {
+        // A target whose name needs all the escaping the exposition format has: quote and backslash.
+        const string Nasty = "a\"b\\c";
+        await using var harness = EngineHarness.Home(h =>
+        {
+            h.Verdict.DnsWatch = false;
+            h.Targets.Add(new TargetConfig { Name = Nasty, Address = "192.0.2.77", Profile = "Fast" });
+        });
+        await harness.StartAsync();
+        var counters = new MetricsCounters();
+        counters.Attach(harness.Engine);
+        await harness.WaitStateAsync(Nasty, HostState.Responding);
+        await TestWait.Eventually(() => harness.Engine.LastResultUtc is not null && harness.Engine.Verdict is not null,
+            what: "the engine never produced a result");
+        using var ledger = new TestLedger(new FakeTimeProvider());
+
+        var body = MetricsEndpoint.Render(harness.Engine, counters, ledger.Ledger, enabled: true,
+            DateTimeOffset.UtcNow);
+
+        // Mark's Grafana contract: these families, in this order, and no others.
+        var families = body.Split('\n').Where(l => l.StartsWith("# TYPE ")).Select(l => l["# TYPE ".Length..]).ToList();
+        Assert.Equal(
+        [
+            "conwatch_build_info gauge",
+            "conwatch_engine_enabled gauge",
+            "conwatch_model_warnings gauge",
+            "conwatch_last_sample_age_seconds gauge",
+            "conwatch_verdict gauge",
+            "conwatch_target_up gauge",
+            "conwatch_target_loss_ratio gauge",
+            "conwatch_target_rtt_seconds gauge",
+            "conwatch_target_sample_size gauge",
+            "conwatch_pool_up gauge",
+            "conwatch_transitions_total counter",
+            "conwatch_glitches_total counter",
+        ], families);
+
+        // The label value is escaped exactly: backslash-quote for the quote, double backslash for the backslash.
+        const string Escaped = "a\\\"b\\\\c";
+        Assert.Contains($"conwatch_target_up{{name=\"{Escaped}\"}} 1\n", body);
+        Assert.Contains($"conwatch_target_loss_ratio{{name=\"{Escaped}\"}} ", body);
+        Assert.Contains($"conwatch_transitions_total{{name=\"{Escaped}\"}} ", body);
+        Assert.DoesNotContain($"name=\"{Nasty}\"", body);   // never the raw name: it would break the line
+
+        // AUDIT: D9 - the pool "Internet" and the verdict subject "Internet" share one
+        // transitions_total series (the counter is keyed by name alone). Two subjects, one line.
+        Assert.Single(body.Split('\n'), l => l.StartsWith("conwatch_transitions_total{name=\"Internet\"}"));
     }
 }

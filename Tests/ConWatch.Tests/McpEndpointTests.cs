@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -320,4 +321,81 @@ public class McpEndpointTests : IDisposable
         var tools = (await RpcWithAsync(anonymous, "tools/list")).GetProperty("tools").EnumerateArray()
             .Select(t => t.GetProperty("name").GetString()).ToList();
         Assert.Contains("list_discoveries", tools);
-    }}
+    }
+
+    [Fact]
+    public async Task Every_listed_tool_is_annotated_read_only()
+    {
+        await InitializeAsync();
+
+        var tools = (await RpcAsync("tools/list")).GetProperty("tools").EnumerateArray().ToList();
+
+        Assert.NotEmpty(tools);
+        foreach (var tool in tools)
+        {
+            var name = tool.GetProperty("name").GetString();
+            Assert.True(tool.TryGetProperty("annotations", out var annotations), $"{name} has no annotations");
+            Assert.True(annotations.TryGetProperty("readOnlyHint", out var hint) && hint.ValueKind == JsonValueKind.True,
+                $"{name} is not annotated readOnlyHint=true");
+        }
+    }
+
+    [Fact]
+    public async Task get_glitches_rows_keep_their_shape_and_utc_timestamps()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var status = await _client.GetAsync("/api/v1/status");
+            return status.IsSuccessStatusCode && (await status.Content.ReadAsStringAsync()).Contains("Healthy");
+        });
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConPersistence.ConWatchDbContext>>();
+        var t0 = new DateTime(2026, 9, 4, 3, 34, 0, DateTimeKind.Utc);
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            var googleId = await db.Targets.Where(t => t.Name == "Google").Select(t => t.Id).SingleAsync();
+            db.Glitches.AddRange(
+                new ConPersistence.Entities.GlitchRow { TargetId = googleId, TargetName = "Google", Class = 0,
+                    StartUtc = t0, EndUtc = t0.AddSeconds(9), LostCount = 2, SampleCount = 8, Detail = "2 of 8 lost" },
+                new ConPersistence.Entities.GlitchRow { TargetId = ConEngine.Topology.VerdictCoordinator.SubjectId,
+                    TargetName = "Internet", Class = 1, StartUtc = t0.AddMinutes(1), EndUtc = t0.AddMinutes(1).AddSeconds(70),
+                    Detail = "anchors: Google, Quad9" },
+                new ConPersistence.Entities.GlitchRow { TargetId = Guid.NewGuid(), TargetName = "Gone", Class = 0,
+                    StartUtc = t0.AddMinutes(2), EndUtc = t0.AddMinutes(2).AddSeconds(3), LostCount = 1, SampleCount = 5 });
+            await db.SaveChangesAsync();
+        }
+        await InitializeAsync();
+
+        var rows = JsonSerializer.Deserialize<JsonElement>(ToolText(await RpcAsync("tools/call", new
+        {
+            name = "get_glitches",
+            arguments = new { fromUtc = "2026-09-04T00:00:00Z", toUtc = "2026-09-05T00:00:00Z" },
+        }))).EnumerateArray().ToList();
+
+        // Newest first; every row has exactly these keys.
+        Assert.Equal(["Gone", "Internet", "Google"], rows.Select(r => r.GetProperty("targetName").GetString()));
+        foreach (var row in rows)
+            Assert.Equal(["startUtc", "endUtc", "targetName", "class", "lostCount", "sampleCount", "detail", "scope"],
+                row.EnumerateObject().Select(p => p.Name));
+        var google = rows[2];
+        Assert.Equal("Target", google.GetProperty("class").GetString());
+        Assert.Equal("Verdict", google.GetProperty("scope").GetString());
+        Assert.Equal(2, google.GetProperty("lostCount").GetInt32());
+        Assert.Equal(8, google.GetProperty("sampleCount").GetInt32());
+        Assert.Equal("2 of 8 lost", google.GetProperty("detail").GetString());
+        Assert.Equal("Internet", rows[1].GetProperty("class").GetString());
+        Assert.Equal("Verdict", rows[1].GetProperty("scope").GetString());
+        Assert.Equal("Unknown", rows[0].GetProperty("scope").GetString());     // a target since deleted
+        // Timestamps are UTC-marked ISO-8601 and round-trip to the seeded instant.
+        // AUDIT: this tool writes DateTime values, so the suffix is "Z"; get_transitions and the REST
+        // glitches endpoint write DateTimeOffset values, so theirs is "+00:00". Same instant, two
+        // spellings across the MCP surface: is that wanted? (Pinned as it is; Kind=Utc is what matters.)
+        foreach (var row in rows)
+        {
+            Assert.EndsWith("Z", row.GetProperty("startUtc").GetString());
+            Assert.EndsWith("Z", row.GetProperty("endUtc").GetString());
+        }
+        Assert.Equal(t0, DateTime.Parse(google.GetProperty("startUtc").GetString()!, null,
+            System.Globalization.DateTimeStyles.AdjustToUniversal));
+    }
+}

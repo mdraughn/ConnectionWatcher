@@ -12,6 +12,19 @@ export function uptimePercent(points: RollupPoint[]): number | null {
   return pings > 0 ? (100 * successes) / pings : null;
 }
 
+/** Average RTT weighted by each bucket's successful pings, or null when nothing succeeded. */
+export function weightedRtt(points: RollupPoint[]): number | null {
+  const totalSuccess = points.reduce((n, p) => n + p.successCount, 0);
+  return totalSuccess > 0
+    ? points.reduce((n, p) => n + p.rttAvg * p.successCount, 0) / totalSuccess
+    : null;
+}
+
+/** One bar's loss percentage (0..100), or null for a bucket with no pings. */
+export function lossPercent(point: RollupPoint): number | null {
+  return point.pingCount > 0 ? (100 * (point.pingCount - point.successCount)) / point.pingCount : null;
+}
+
 /**
  * Split incident semantics:
  * - An OUTAGE (`Down`) is the target's own problem: counted, with the longest

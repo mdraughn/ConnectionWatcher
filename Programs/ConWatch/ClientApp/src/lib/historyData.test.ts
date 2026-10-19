@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipAtReset, incidents, ribbonSegments, subjectsForScope, uptimePercent } from "./historyData";
+import { clipAtReset, incidents, lossPercent, ribbonSegments, subjectsForScope, uptimePercent, weightedRtt } from "./historyData";
 import type { RollupPoint, TransitionEvent } from "./types";
 
 function point(success: number, count: number): RollupPoint {
@@ -20,6 +20,33 @@ describe("uptimePercent", () => {
   });
   it("null when no pings", () => {
     expect(uptimePercent([])).toBeNull();
+  });
+});
+
+describe("weightedRtt", () => {
+  it("weights each bucket's average by its successful pings", () => {
+    const a = { ...point(10, 10), rttAvg: 10 };
+    const b = { ...point(30, 30), rttAvg: 50 };
+    expect(weightedRtt([a, b])).toBeCloseTo((10 * 10 + 50 * 30) / 40);
+  });
+  it("a bucket with no successes carries no weight", () => {
+    const dead = { ...point(0, 10), rttAvg: 999 };
+    expect(weightedRtt([dead, { ...point(5, 5), rttAvg: 20 }])).toBeCloseTo(20);
+  });
+  it("null when nothing succeeded or there are no buckets", () => {
+    expect(weightedRtt([point(0, 10)])).toBeNull();
+    expect(weightedRtt([])).toBeNull();
+  });
+});
+
+describe("lossPercent", () => {
+  it("is the failed share of pings, as a percentage", () => {
+    expect(lossPercent(point(75, 100))).toBeCloseTo(25);
+    expect(lossPercent(point(100, 100))).toBe(0);
+    expect(lossPercent(point(0, 8))).toBe(100);
+  });
+  it("null for a bucket with no pings (a gap, not 0% loss)", () => {
+    expect(lossPercent(point(0, 0))).toBeNull();
   });
 });
 
