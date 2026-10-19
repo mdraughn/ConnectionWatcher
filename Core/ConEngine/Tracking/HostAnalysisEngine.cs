@@ -165,13 +165,21 @@ internal class HostAnalysisEngine
                 LastUpdated = item.Timestamp;
 
             SampleSize++;
-            if (item.Success) NumSuccess++; else NumFailed++;
-            sumRoundtrip += item.RoundtripTime;
+            if (item.Success)
+            {
+                NumSuccess++;
+                sumRoundtrip += item.RoundtripTime;
+            }
+            else
+            {
+                NumFailed++;
+            }
         }
 
         SuccessRate = SampleSize > 0 ? (double)NumSuccess / SampleSize : 0d;
         FailureRate = SampleSize > 0 ? (double)NumFailed / SampleSize : 0d;
-        AverageRoundtripTime = SampleSize > 0 ? sumRoundtrip / SampleSize : 0d;
+        // Answered pings only: a loss carries 0 ms and would drag the mean down.
+        AverageRoundtripTime = NumSuccess > 0 ? sumRoundtrip / NumSuccess : 0d;
 
         HostState next;
         if (_seeded)

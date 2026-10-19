@@ -269,6 +269,29 @@ public class HostAnalysisEngineTests
         Assert.Equal(3, tracker.EntriesSince(cutoff.AddTicks(1)).Count());
     }
 
+    [Fact]
+    public void Average_rtt_counts_only_answered_pings()
+    {
+        // 7 answers at 20 ms and 3 losses (which carry 0 ms): the average is
+        // over the answered pings, so 20 - not the diluted 14.
+        var (mixed, time) = MakeWith(ProfileWith(10));
+        foreach (bool success in new[] { true, true, true, true, true, true, true, false, false, false })
+        {
+            time.Advance(TimeSpan.FromSeconds(1));
+            mixed.RecordPingResult(new PingResult(Ip, success, success ? 20 : 0, timestamp: time.GetUtcNow()));
+        }
+        var faltering = mixed.Transitions.Last();
+        Assert.Equal(HostState.Faltering, faltering.To);
+        Assert.Equal(20, faltering.Status.AverageRoundtripTime, 6);
+
+        // Nothing answered: no round trips to average, so a plain 0.
+        var (silent, silentTime) = MakeWith(ProfileWith(10));
+        Feed(silent, silentTime, 10, success: false);
+        var down = silent.Transitions.Last();
+        Assert.Equal(HostState.Down, down.To);
+        Assert.Equal(0, down.Status.AverageRoundtripTime);
+    }
+
     private static void FeedPattern(TrackerProbe tracker, FakeTimeProvider time, string pattern)
     {
         foreach (var c in pattern)
