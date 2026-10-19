@@ -83,6 +83,6 @@ public class ObserverDetachTests
         await HostTestWait.Eventually(() => Task.FromResult(host.RebuildCount > before && thrower.Calls > 0), 15000);
 
         await HostTestWait.Eventually(() => Task.FromResult(counter.Calls > detachesBefore), 15000);
-        await DisposesWithinBoundAsync(factory);
+        Assert.True(await DisposesWithinBoundAsync(factory), "shutdown hung");
     }
 }

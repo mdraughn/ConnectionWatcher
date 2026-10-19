@@ -208,8 +208,8 @@ public class AdminApiTests : IDisposable
         var host = _factory.Services.GetRequiredService<WatcherHostService>();
         await HostTestWait.Eventually(() => Task.FromResult(host.EngineRunning));
         await HostTestWait.SettledRebuildCountAsync(host);
-        // A debounced rebuild racing the endpoint's own would eat the one-shot
-        // failure and let the endpoint's rebuild succeed.
+        // A debounced rebuild racing the endpoint's own could take the armed
+        // failure (factory reset's bomb is one-shot) and let the endpoint's rebuild succeed.
         HostTestWait.SetRebuildDebounce(_factory.Services, 60);
         return host;
     }

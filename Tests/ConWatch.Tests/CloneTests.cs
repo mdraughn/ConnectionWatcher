@@ -374,7 +374,7 @@ public class CloneTests : IDisposable
         });
         var client = target.CreateClient();
         // Long debounce: the import's own change events must not rebuild (and
-        // eat the one-shot failure) before the clone's direct rebuild runs.
+        // hit the armed flush failure) before the clone's direct rebuild runs.
         HostTestWait.SetRebuildDebounce(target.Services, 60);
         bomb!.Arm();
 
