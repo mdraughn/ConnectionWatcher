@@ -1,0 +1,84 @@
+{
+  "HostState": [
+    "Initializing",
+    "Starting",
+    "Responding",
+    "Faltering",
+    "Down",
+    "Recovering",
+    "Unreachable"
+  ],
+  "TransitionTrigger": [
+    "ThresholdCrossed",
+    "ParentDown",
+    "ParentRecovered",
+    "ResolutionFailed",
+    "PoolMembersChanged",
+    "VerdictChanged"
+  ],
+  "TransitionSubjectKind": [
+    "Target",
+    "Pool",
+    "Verdict"
+  ],
+  "VerdictState": [
+    "Unknown",
+    "Healthy",
+    "SiteIncident",
+    "InternetWeather",
+    "LinkDegraded",
+    "DnsDown",
+    "LinkDown"
+  ],
+  "ModelWarningKind": [
+    "HopBypassed",
+    "NeverAnswered",
+    "UnprovableUp",
+    "ProbeOnlyLoss",
+    "ResolverPartial",
+    "ResolverLying",
+    "ResolverFiltered",
+    "UpstreamResolverDown",
+    "NameUnresolvable"
+  ],
+  "TargetScope": [
+    "Verdict",
+    "Local",
+    "Resolver"
+  ],
+  "DiscoveryKind": [
+    "Gateway",
+    "NetworkEdge",
+    "LocalDevice"
+  ],
+  "DiscoveryMethod": [
+    "DefaultRoute",
+    "CommonAddress",
+    "Traceroute",
+    "ArpTable",
+    "PingSweep"
+  ],
+  "DiscoveryStatus": [
+    "New",
+    "Adopted",
+    "Dismissed"
+  ],
+  "DnsBlameKind": [
+    "YourResolver",
+    "NoResolver"
+  ],
+  "DnsSummaryState": [
+    "Unknown",
+    "Ok",
+    "Degraded",
+    "Filtered",
+    "Down"
+  ],
+  "Markers": [
+    "HistoryReset"
+  ],
+  "GlitchClass": {
+    "Target": 0,
+    "Internet": 1
+  }
+}

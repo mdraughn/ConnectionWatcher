@@ -1,4 +1,9 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using ConEngine.Topology;
 using ConInfrastructure.Tray;
+using ConPersistence.Config;
 
 namespace ConWatch.Tests;
 
@@ -174,5 +179,69 @@ public class TrayStatusTests
         Assert.False(info.NamesFailing);
         Assert.Equal(TrayState.Down, info.State);
         Assert.StartsWith("Internet: DOWN", TrayStatus.Tooltip(info));
+    }
+
+    // TR3: literal table, so a renamed or added VerdictState fails here instead of falling to Measuring.
+    private static readonly Dictionary<VerdictState, TrayState> ExpectedTrayStates = new()
+    {
+        [VerdictState.Unknown] = TrayState.Measuring,
+        [VerdictState.Healthy] = TrayState.Healthy,
+        [VerdictState.SiteIncident] = TrayState.Healthy,
+        [VerdictState.InternetWeather] = TrayState.Healthy,
+        [VerdictState.LinkDegraded] = TrayState.Degraded,
+        [VerdictState.DnsDown] = TrayState.Down,
+        [VerdictState.LinkDown] = TrayState.Down,
+    };
+
+    [Fact]
+    public void Every_verdict_state_has_a_tray_state()
+    {
+        foreach (var verdict in Enum.GetValues<VerdictState>())
+        {
+            Assert.True(ExpectedTrayStates.TryGetValue(verdict, out var expected),
+                $"{verdict} has no row in the expected tray table — decide what the tray shows for it.");
+            Assert.Equal(expected, TrayStatus.FromStatusJson(Status("Responding", verdict: verdict.ToString())).State);
+        }
+        Assert.Equal(Enum.GetValues<VerdictState>().Length, ExpectedTrayStates.Count);
+    }
+
+    [Fact]
+    public void Every_warning_kind_has_a_note_label()
+    {
+        foreach (var kind in Enum.GetValues<ModelWarningKind>())
+        {
+            var warning = JsonSerializer.Deserialize<JsonElement>(
+                $$"""{"key":"k","kind":"{{kind}}","targetName":"Thing","message":"m","since":"x","acknowledged":false}""");
+            var label = TrayStatus.NoteLabel(warning);
+            Assert.NotEqual("ConnectionWatcher note", label); // the generic fallback: the kind has no short label
+        }
+    }
+
+    [Fact]
+    public async Task Real_status_json_drives_the_tray()
+    {
+        using var factory = new ConWatchFactory();
+        var client = factory.CreateClient();
+        await ConfigApiTests.SeedHomeAsync(client);
+        var router = (await client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!.Single(t => t.Name == "Router");
+        var put = await client.PutAsJsonAsync($"/api/v1/targets/{router.Id}", router with { Critical = true });
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+
+        async Task<TrayInfo?> Poll()
+        {
+            var response = await client.GetAsync("/api/v1/status"); // 503 while the engine rebuilds
+            return response.IsSuccessStatusCode
+                ? TrayStatus.FromStatusJson(await response.Content.ReadAsStringAsync()) : null;
+        }
+
+        TrayInfo? info = null;
+        await HostTestWait.Eventually(async () =>
+            (info = await Poll()) is { State: TrayState.Healthy, Critical: [{ Name: "Router" }] });
+        var entry = Assert.Single(info!.Critical);
+        Assert.False(entry.IsDown);
+
+        factory.Pings.SetUp(IPAddress.Parse("192.168.1.1"), false);
+        await HostTestWait.Eventually(async () =>
+            (info = await Poll()) is { Critical: [{ Name: "Router", IsDown: true }] });
     }
 }

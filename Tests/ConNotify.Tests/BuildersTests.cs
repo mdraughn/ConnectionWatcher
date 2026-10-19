@@ -71,6 +71,32 @@ public class StateMappingTests
         Assert.Equal(expected, StateMapping.InternetPayload(verdict));
     }
 
+    // HA6: literal table, so a renamed or added VerdictState fails here instead of silently reading ON.
+    private static readonly Dictionary<VerdictState, string> ExpectedInternetPayloads = new()
+    {
+        [VerdictState.Unknown] = "ON",
+        [VerdictState.Healthy] = "ON",
+        [VerdictState.SiteIncident] = "ON",
+        [VerdictState.InternetWeather] = "ON",
+        [VerdictState.LinkDegraded] = "ON",
+        [VerdictState.DnsDown] = "OFF",
+        [VerdictState.LinkDown] = "OFF",
+    };
+
+    [Fact]
+    public void Every_verdict_state_has_an_internet_payload()
+    {
+        foreach (var verdict in Enum.GetValues<VerdictState>())
+        {
+            Assert.True(ExpectedInternetPayloads.TryGetValue(verdict, out var expected),
+                $"{verdict} has no row in the expected payload table — decide whether it reads ON or OFF.");
+            Assert.Equal(expected, StateMapping.InternetPayload(verdict.ToString()));
+        }
+        Assert.Equal(Enum.GetValues<VerdictState>().Length, ExpectedInternetPayloads.Count);
+        Assert.Equal(["DnsDown", "LinkDown"],
+            ExpectedInternetPayloads.Where(kv => kv.Value == "OFF").Select(kv => kv.Key.ToString()).Order().ToArray());
+    }
+
     [Theory]
     [InlineData(DnsSummaryState.Ok, "ON")]
     [InlineData(DnsSummaryState.Degraded, "ON")]
