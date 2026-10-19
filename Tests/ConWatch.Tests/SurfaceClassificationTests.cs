@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -171,6 +172,17 @@ public class SurfaceClassificationTests : IDisposable
     private readonly ConWatchFactory _factory = new();
 
     public void Dispose() => _factory.Dispose();
+
+    [Fact]
+    public void The_status_hub_has_no_methods_of_its_own()
+    {
+        var methods = typeof(ConWatch.StatusHub)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Select(m => m.Name).ToList();
+        Assert.True(methods.Count == 0,
+            "StatusHub is server-to-client only. A hub method would be callable anonymously while the " +
+            "dashboard is locked, so classify it first (and decide how it is gated). Found: " + string.Join(", ", methods));
+    }
 
     [Fact]
     public async Task Every_endpoint_and_page_is_classified()

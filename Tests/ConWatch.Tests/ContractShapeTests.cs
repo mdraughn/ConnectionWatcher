@@ -106,10 +106,14 @@ public class ContractShapeTests : IDisposable
         && Count(dns, "systemResolvers") > 0 && Count(dns, "upstreamResolvers") > 0 && Count(dns, "lookupNames") > 0
         && Count(status, "targets") > 0 && Count(status, "pools") > 0;
 
-    /// <summary>Waits for <paramref name="ready"/>, but on timeout hands back the last answer
-    /// anyway: a renamed key then fails on the contract diff, which names it, rather than on
-    /// "condition not met".</summary>
-    private static async Task<JsonElement> SettledAsync(Func<Task<JsonElement?>> read, Func<JsonElement, bool> ready,
+    /// <summary>Set when <see cref="SettledAsync"/> timed out and fell through to a comparison.</summary>
+    private string? _unsettled;
+
+    /// <summary>Waits for <paramref name="ready"/>. On timeout it hands back the last answer
+    /// anyway, so a renamed key fails on the contract diff, which names it, rather than on
+    /// "condition not met"; the diff then also says the settle timed out. With UPDATE_CONTRACTS=1
+    /// it rethrows instead, so a regeneration never writes a partial shape.</summary>
+    private async Task<JsonElement> SettledAsync(Func<Task<JsonElement?>> read, Func<JsonElement, bool> ready,
         int timeoutMs = 30000)
     {
         JsonElement? last = null;
@@ -117,11 +121,24 @@ public class ContractShapeTests : IDisposable
         {
             await ConfigApiTests.Eventually(async () => (last = await read() ?? last) is { } v && ready(v), timeoutMs);
         }
-        catch (XunitException) when (last is not null)
+        catch (XunitException) when (last is not null && Environment.GetEnvironmentVariable("UPDATE_CONTRACTS") != "1")
         {
-            // Fall through to the comparison with what the server last said.
+            _unsettled = $"settle condition not met within {timeoutMs} ms; this is the last answer the server gave.";
         }
         return last ?? throw new XunitException("No answer to compare.");
+    }
+
+    /// <summary>Checks a fixture, adding the settle timeout (if any) to a mismatch message.</summary>
+    private void AssertMatches(string name, string actual)
+    {
+        try
+        {
+            ContractFiles.AssertMatches(name, actual);
+        }
+        catch (XunitException e) when (_unsettled is not null)
+        {
+            throw new XunitException($"{_unsettled}\n{e.Message}");
+        }
     }
 
     /// <summary>Home topology plus an upstream resolver and a system resolver on the fast profile,
@@ -187,7 +204,7 @@ public class ContractShapeTests : IDisposable
         var status = await SettledAsync(() => GetJsonAsync("/api/v1/status"), FullyPopulated, 10000);
         var statusShape = new SortedDictionary<string, string[]>(StringComparer.Ordinal);
         Walk(status, "status", statusShape);
-        ContractFiles.AssertMatches("status.keys.json", Serialize(statusShape));
+        AssertMatches("status.keys.json", Serialize(statusShape));
 
         // ---- transitions ----
         var recorder = _factory.Services.GetRequiredService<TransitionRecorder>();
@@ -213,20 +230,22 @@ public class ContractShapeTests : IDisposable
         Assert.NotEmpty(openingRows);
         foreach (var e in openingRows)
             Walk(e, "transition.opening[]", transitionShape);
-        ContractFiles.AssertMatches("transition.keys.json", Serialize(transitionShape));
+        AssertMatches("transition.keys.json", Serialize(transitionShape));
         var timestamp = first.GetProperty("timestamp").GetString()!;
         Assert.Matches(@"[+-]\d{2}:\d{2}$", timestamp); // an offset, never a bare local time
         Assert.EndsWith("+00:00", timestamp);
 
         // ---- glitches ----
-        var glitches = (await GetJsonAsync("/api/v1/glitches"))!.Value;
+        JsonElement glitches = default;
+        await ConfigApiTests.Eventually(async () =>
+            await GetJsonAsync("/api/v1/glitches") is { } g && Count(glitches = g, "items") > 0);
         Assert.True(Count(glitches, "items") > 0, "The seeded glitch is missing.");
         var glitchShape = new SortedDictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["glitches"] = Keys(glitches),
         };
         WalkElements(glitches.GetProperty("items"), "glitch[]", glitchShape);
-        ContractFiles.AssertMatches("glitch.keys.json", Serialize(glitchShape));
+        AssertMatches("glitch.keys.json", Serialize(glitchShape));
 
         // ---- rollups (minute resolution, for an answering anchor) ----
         var google = (await _client.GetFromJsonAsync<List<TargetDto>>("/api/v1/targets"))!.Single(t => t.Name == "Google");
@@ -246,7 +265,7 @@ public class ContractShapeTests : IDisposable
             ["rollups"] = Keys(rollups),
         };
         WalkElements(rollups.GetProperty("points"), "rollup[]", rollupShape);
-        ContractFiles.AssertMatches("rollup.keys.json", Serialize(rollupShape));
+        AssertMatches("rollup.keys.json", Serialize(rollupShape));
         Assert.All(rollups.GetProperty("points").EnumerateArray(),
             p => Assert.EndsWith("+00:00", p.GetProperty("periodStart").GetString()));
 
@@ -265,7 +284,7 @@ public class ContractShapeTests : IDisposable
         var islandShape = new SortedDictionary<string, string[]>(StringComparer.Ordinal);
         Walk(island, "index.island", islandShape,
             new HashSet<string> { "index.island.parents", "index.island.poolMembers", "index.island.snapshot" });
-        ContractFiles.AssertMatches("index-island.keys.json", Serialize(islandShape));
+        AssertMatches("index-island.keys.json", Serialize(islandShape));
         var snapshotShape = new SortedDictionary<string, string[]>(StringComparer.Ordinal);
         Walk(island.GetProperty("snapshot"), "status", snapshotShape);
         Assert.Equal(Serialize(statusShape), Serialize(snapshotShape));
