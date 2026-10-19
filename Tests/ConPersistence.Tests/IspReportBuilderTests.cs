@@ -158,6 +158,106 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(0, google.OutageCount);
     }
 
+    // One step: minutes after From, the target (or verdict) transition it records.
+    private sealed record Step(int Minute, string To, string From = "Responding",
+        string Trigger = "ThresholdCrossed", string? Verdict = null);
+
+    private sealed record IncidentCase(Step[] Steps, int RangeMinutes, int Outages,
+        int LongestMinutes, int UnreachableMinutes);
+
+    // Mirrors the nine cases of "incidents (split semantics)" in
+    // ClientApp/src/lib/historyData.test.ts, in the same order, same range.
+    private static readonly Dictionary<string, IncidentCase> IncidentCases = new()
+    {
+        ["1 a Down window is an outage, measured to recovery"] = new(
+            [new(60, "Down"), new(70, "Recovering", "Down"), new(72, "Responding", "Recovering")],
+            360, 1, 12, 0),
+        ["2 unreachable time ends at the release, not at re-prove"] = new(
+            [new(300, "Unreachable", "Responding", "ParentDown"),
+             new(301, "Starting", "Unreachable", "ParentRecovered"),
+             new(303, "Responding", "Starting")],
+            360, 0, 0, 1),
+        ["3 unreachable time ends when the target answers again"] = new(
+            [new(300, "Unreachable", "Faltering", "ParentDown"),
+             new(302, "Recovering", "Unreachable"),
+             new(310, "Responding", "Recovering")],
+            360, 0, 0, 2),
+        ["4 an open outage runs to range end"] = new(
+            [new(60, "Down")], 120, 1, 60, 0),
+        ["5 an outage superseded by unreachable splits into both buckets"] = new(
+            [new(60, "Down"), new(65, "Unreachable", "Down", "ParentDown"),
+             new(70, "Starting", "Unreachable", "ParentRecovered"),
+             new(72, "Responding", "Starting")],
+            360, 1, 5, 5),
+        ["6 a renumber marker does not end an open outage"] = new(
+            [new(60, "Down"), new(63, "Starting", "Starting", "AddressChanged"),
+             new(65, "Responding", "Starting")],
+            360, 1, 5, 0),
+        // The client counts this as an outage from the range start, inferring the
+        // opening state from the row's FromState. The report reads the opening
+        // state from the last row at or before the range start, and there is none,
+        // so it counts nothing. Ruling D6: the report's rule is right; Task 33
+        // aligns History to it. Pinned at the report's answer.
+        ["7 an outage already open at the range start (no row before it)"] = new(
+            [new(60, "Responding", "Down")], 360, 0, 0, 0),
+        // AUDIT: the report's per-target rows read target transitions only. A
+        // Verdict-kind row (DnsDown) lives under the verdict's own subject and
+        // can never reach a target's incident count, so the client's DnsDown rule
+        // holds structurally here, not by an explicit check.
+        ["8 a DnsDown verdict is never an outage"] = new(
+            [new(60, "Down", "Responding", "VerdictChanged", "DnsDown"),
+             new(80, "Responding", "Down", "VerdictChanged", "Healthy")],
+            360, 0, 0, 0),
+        // AUDIT: same structural exclusion. The client expects 2 outages / 5 min
+        // for verdict rows; the report's target rows see none of them.
+        ["9 DnsDown closes a LinkDown outage; LinkDown after it opens one"] = new(
+            [new(60, "Down", "Responding", "VerdictChanged", "LinkDown"),
+             new(65, "Down", "Down", "VerdictChanged", "DnsDown"),
+             new(120, "Down", "Down", "VerdictChanged", "LinkDown"),
+             new(122, "Responding", "Down", "VerdictChanged", "Healthy")],
+            360, 0, 0, 0),
+        // Not a client case: the report's own rule when a target goes from
+        // Unreachable straight to Down (the explained window closes, an outage opens).
+        ["10 report only: Unreachable -> Down closes the window and opens an outage"] = new(
+            [new(60, "Unreachable", "Responding", "ParentDown"),
+             new(70, "Down", "Unreachable"),
+             new(90, "Responding", "Down")],
+            360, 1, 20, 10),
+    };
+
+    public static TheoryData<string> IncidentCaseNames => new(IncidentCases.Keys);
+
+    [Theory]
+    [MemberData(nameof(IncidentCaseNames))]
+    public async Task Incidents_match_the_history_page_cases(string name)
+    {
+        var c = IncidentCases[name];
+        foreach (var step in c.Steps)
+        {
+            var at = From.AddMinutes(step.Minute);
+            if (step.Verdict is null)
+            {
+                await AddTransition(_googleId, "Google", at, step.To, step.Trigger, step.From);
+                continue;
+            }
+            await using var db = _factory.CreateDbContext();
+            db.Transitions.Add(new TransitionRow
+            {
+                TimestampUtc = at, SubjectId = VerdictCoordinator.SubjectId, SubjectName = "Internet",
+                SubjectKind = "Verdict", FromState = step.From, ToState = step.To,
+                Trigger = step.Trigger, Verdict = step.Verdict,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var report = await _builder.BuildAsync(From, From.AddMinutes(c.RangeMinutes));
+
+        var google = report.Targets.Single(t => t.Name == "Google");
+        Assert.Equal(c.Outages, google.OutageCount);
+        Assert.Equal(TimeSpan.FromMinutes(c.LongestMinutes), google.LongestOutage);
+        Assert.Equal(TimeSpan.FromMinutes(c.UnreachableMinutes), google.UnreachableTime);
+    }
+
     [Fact]
     public async Task Target_down_for_the_whole_window_is_one_outage_the_length_of_the_window()
     {
