@@ -1,5 +1,7 @@
 using ConPersistence;
 using ConPersistence.Queries;
+using ConPersistence.Retention;
+using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -31,7 +33,7 @@ public static class HistoryEndpoints
         });
 
         api.MapGet("/rollups/{targetId:guid}", async (IDbContextFactory<ConWatchDbContext> dbFactory,
-            IOptions<PersistenceOptions> options, TimeProvider time,
+            IOptions<PersistenceOptions> options, SettingsStore settings, TimeProvider time,
             Guid targetId, string? from, string? to, string resolution = "auto") =>
         {
             if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
@@ -42,8 +44,8 @@ public static class HistoryEndpoints
             string resolved;
             try
             {
-                resolved = HistoryQueries.ResolveResolution(resolution,
-                    fromUtc.Value, time.GetUtcNow().UtcDateTime, options.Value);
+                resolved = HistoryQueries.ResolveResolution(resolution, fromUtc.Value,
+                    time.GetUtcNow().UtcDateTime, await RetentionWindows.EffectiveAsync(settings, options.Value));
             }
             catch (ArgumentException ex)
             {

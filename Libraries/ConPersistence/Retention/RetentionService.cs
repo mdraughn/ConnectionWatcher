@@ -20,13 +20,9 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
         if (settingsStore is null)
             return (RetentionWindows.From(o), o.RetentionRunHourUtc);
         var all = await settingsStore.GetAllAsync().ConfigureAwait(false);
-        int Get(string key, int fallback) =>
-            all.TryGetValue(key, out var text) && int.TryParse(text, out var value) ? value : fallback;
-        return (new RetentionWindows(
-                Get(SettingKeys.MinuteRetentionDays, o.MinuteRetentionDays),
-                Get(SettingKeys.HourlyRetentionMonths, o.HourlyRetentionMonths),
-                Get(SettingKeys.TransitionRetentionMonths, o.TransitionRetentionMonths)),
-            Get(SettingKeys.RetentionRunHourUtc, o.RetentionRunHourUtc));
+        var hour = all.TryGetValue(SettingKeys.RetentionRunHourUtc, out var text) && int.TryParse(text, out var value)
+            ? value : o.RetentionRunHourUtc;
+        return (RetentionWindows.FromSettings(all, o), hour);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

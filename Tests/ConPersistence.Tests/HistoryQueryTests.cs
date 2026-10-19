@@ -1,5 +1,6 @@
 using ConPersistence.Entities;
 using ConPersistence.Queries;
+using ConPersistence.Retention;
 
 namespace ConPersistence.Tests;
 
@@ -18,7 +19,7 @@ public class HistoryQueryTests : IDisposable
     [InlineData("auto", -420, "Day")]        // ~14 months: past hourly retention
     public void ResolveResolution_picks_finest_stored(string requested, int fromDaysOffset, string expected)
     {
-        var result = HistoryQueries.ResolveResolution(requested, Now.AddDays(fromDaysOffset), Now, _options);
+        var result = HistoryQueries.ResolveResolution(requested, Now.AddDays(fromDaysOffset), Now, RetentionWindows.From(_options));
         Assert.Equal(expected, result);
     }
 

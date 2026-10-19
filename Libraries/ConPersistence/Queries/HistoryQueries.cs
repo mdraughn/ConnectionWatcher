@@ -1,5 +1,6 @@
 using ConCore.Targets;
 using ConPersistence.Entities;
+using ConPersistence.Retention;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConPersistence.Queries;
@@ -42,10 +43,11 @@ public static class HistoryQueries
 
     /// <summary>
     /// Picks the finest resolution whose retention window still contains
-    /// <paramref name="fromUtc"/>; explicit requests pass through.
+    /// <paramref name="fromUtc"/> under the <paramref name="effective"/> retention (the Settings
+    /// table over appsettings); explicit requests pass through.
     /// </summary>
     public static string ResolveResolution(string requested, DateTime fromUtc, DateTime nowUtc,
-        PersistenceOptions options)
+        RetentionWindows effective)
     {
         if (!requested.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
@@ -57,9 +59,9 @@ public static class HistoryQueries
                 _ => throw new ArgumentException($"Unknown resolution '{requested}'."),
             };
         }
-        if (fromUtc >= nowUtc.AddDays(-options.MinuteRetentionDays))
+        if (fromUtc >= nowUtc.AddDays(-effective.MinuteDays))
             return RollupResolution.Minute;
-        if (fromUtc >= nowUtc.AddMonths(-options.HourlyRetentionMonths))
+        if (fromUtc >= nowUtc.AddMonths(-effective.HourlyMonths))
             return RollupResolution.Hour;
         return RollupResolution.Day;
     }

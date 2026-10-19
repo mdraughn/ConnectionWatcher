@@ -84,6 +84,69 @@ public class HistoryApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Auto_resolution_follows_the_settings_retention()
+    {
+        // The Settings page edits the Settings table, and retention applies that, not
+        // appsettings: with minute rows kept 7 days, a 30-day chart must read hour rows.
+        var settings = _factory.Services.GetRequiredService<ConPersistence.Settings.SettingsStore>();
+        await settings.SetManyAsync(new Dictionary<string, string?>
+        {
+            [ConPersistence.Settings.SettingKeys.MinuteRetentionDays] = "7",
+        });
+        var targetId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            for (int day = 8; day <= 30; day++)
+                db.Rollups.Add(new RollupRow
+                {
+                    TargetId = targetId, PeriodStartUtc = now.AddDays(-day), Resolution = RollupResolution.Hour,
+                    PingCount = 3600, SuccessCount = 3600, RttAvg = 10, RttMin = 5, RttMax = 20,
+                });
+            for (int day = 1; day <= 6; day++)
+                db.Rollups.Add(new RollupRow
+                {
+                    TargetId = targetId, PeriodStartUtc = now.AddDays(-day), Resolution = RollupResolution.Minute,
+                    PingCount = 60, SuccessCount = 60, RttAvg = 10, RttMin = 5, RttMax = 20,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var from = Uri.EscapeDataString(now.AddDays(-30).AddHours(-1).ToString("o"));
+        var to = Uri.EscapeDataString(now.AddHours(1).ToString("o"));
+        var auto = await GetJson($"/api/v1/rollups/{targetId}?from={from}&to={to}&resolution=auto");
+        Assert.Equal("Hour", auto.GetProperty("resolution").GetString());
+        Assert.Equal(23, auto.GetProperty("points").GetArrayLength());
+
+        // A 3-day chart is still inside the 7-day minute window.
+        var recent = Uri.EscapeDataString(now.AddDays(-3).AddHours(-1).ToString("o"));
+        var near = await GetJson($"/api/v1/rollups/{targetId}?from={recent}&to={to}&resolution=auto");
+        Assert.Equal("Minute", near.GetProperty("resolution").GetString());
+    }
+
+    [Theory]
+    [InlineData("hour", "Hour")]
+    [InlineData("day", "Day")]
+    [InlineData("minute", "Minute")]
+    public async Task Explicit_resolution_passes_through(string requested, string expected)
+    {
+        var from = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-30).ToString("o"));
+        var to = Uri.EscapeDataString(DateTime.UtcNow.AddHours(1).ToString("o"));
+        var body = await GetJson($"/api/v1/rollups/{Guid.NewGuid()}?from={from}&to={to}&resolution={requested}");
+        Assert.Equal(expected, body.GetProperty("resolution").GetString());
+    }
+
+    [Fact]
+    public async Task Bogus_resolution_is_a_400()
+    {
+        var from = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-1).ToString("o"));
+        var to = Uri.EscapeDataString(DateTime.UtcNow.AddHours(1).ToString("o"));
+        var response = await _client.GetAsync($"/api/v1/rollups/{Guid.NewGuid()}?from={from}&to={to}&resolution=bogus");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Rollups_require_time_range()
     {
         var response = await _client.GetAsync($"/api/v1/rollups/{Guid.NewGuid()}");
