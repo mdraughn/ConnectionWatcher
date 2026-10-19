@@ -81,17 +81,18 @@ public class RebuildRetryTests : IDisposable
     [Fact]
     public async Task Failures_escalate_through_the_schedule()
     {
-        WatcherHostService.RetryDelays = [TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(800), TimeSpan.FromSeconds(2)];
+        WatcherHostService.RetryDelays = [TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5)];
         var before = await SeedAndSettleAsync();
 
         _bomb.Arm(2);
         await WriteSettingAsync("1");
-        await HostTestWait.Eventually(() => Task.FromResult(_bomb.Fired >= 1));
+        // Wait for the SECOND failure: the window below is measured from it.
+        await HostTestWait.Eventually(() => Task.FromResult(_bomb.Fired >= 2));
 
-        // Absence window: the second retry waits 800 ms after the second
-        // failure, so the engine cannot be back this soon. A schedule that
-        // kept using the first delay would have it back in about 400 ms.
-        await Task.Delay(500);
+        // Absence window: the next retry waits 3 s after the second failure,
+        // so the engine cannot be back 1 s later. A schedule that kept using
+        // the first delay would have it back in about 200 ms.
+        await Task.Delay(1000);
         Assert.False(_host.EngineRunning, "the engine came back before the second delay could elapse");
 
         await HostTestWait.Eventually(() => Task.FromResult(_host.EngineRunning), timeoutMs: 10000);
@@ -103,7 +104,7 @@ public class RebuildRetryTests : IDisposable
     [Fact]
     public async Task A_later_good_rebuild_cancels_the_pending_retry()
     {
-        WatcherHostService.RetryDelays = [TimeSpan.FromMilliseconds(300)];
+        WatcherHostService.RetryDelays = [TimeSpan.FromSeconds(2)];
         var before = await SeedAndSettleAsync();
 
         _bomb.Arm(1);
@@ -114,8 +115,9 @@ public class RebuildRetryTests : IDisposable
         await HostTestWait.Eventually(() => Task.FromResult(_host.EngineRunning && _host.RebuildCount >= before + 2));
 
         // Absence window, entered after the positive condition: well past the
-        // 300 ms the retry would have fired at.
-        await Task.Delay(1200);
+        // 2 s the retry would have fired at. The long delay also keeps the
+        // second write comfortably ahead of the retry on a slow runner.
+        await Task.Delay(2500);
         Assert.Equal(before + 2, await HostTestWait.SettledRebuildCountAsync(_host));
         Assert.True(_host.EngineRunning);
     }
