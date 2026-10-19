@@ -3,9 +3,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ConCore.Discovery;
 using ConInfrastructure.Discovery;
+using ConPersistence.Discoveries;
+using ConWatch.Discoveries;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConWatch.Tests;
 
@@ -21,6 +24,7 @@ public class DiscoveryApiTests : IDisposable
 
         public static TaskCompletionSource<bool>? HoldEdge { get; set; }
         public static TaskCompletionSource<bool> EdgeStarted { get; set; } = new();
+        public static Exception? EdgeThrows { get; set; }
 
         public Task<IReadOnlyList<DiscoveryCandidate>> FindRouterAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<DiscoveryCandidate>>(Router);
@@ -36,6 +40,8 @@ public class DiscoveryApiTests : IDisposable
         public async Task<IReadOnlyList<DiscoveryCandidate>> FindNetworkEdgeAsync(string host, CancellationToken ct)
         {
             EdgeStarted.TrySetResult(true);
+            if (EdgeThrows is { } thrown)
+                throw thrown;
             if (HoldEdge is { } hold)
                 await hold.Task.WaitAsync(ct);
             return [new("203.0.113.5", null, DiscoveryKind.NetworkEdge, DiscoveryMethod.Traceroute, $"hop 3 toward {host}")];
@@ -63,6 +69,7 @@ public class DiscoveryApiTests : IDisposable
         FakeScanner.HoldEdge = null;
         FakeScanner.Lan = FakeScanner.DefaultLan();
         FakeScanner.EdgeStarted = new();
+        FakeScanner.EdgeThrows = null;
         _client = _factory.CreateClient();
     }
 
@@ -265,6 +272,37 @@ public class DiscoveryApiTests : IDisposable
         var edge = Assert.Single(Items(await GetJson("/api/v1/discoveries")));
         Assert.Equal("NetworkEdge", edge.GetProperty("kind").GetString());
         Assert.Contains("1.1.1.1", edge.GetProperty("evidence").GetString());   // the default host
+    }
+
+    [Fact]
+    public async Task A_search_held_past_its_cap_is_a_504_search_timeout()
+    {
+        FakeScanner.HoldEdge = new TaskCompletionSource<bool>();   // never released: only the cap ends it
+        using var factory = new Factory
+        {
+            TestServices = s => s.AddSingleton(sp => new DiscoverySearchService(
+                sp.GetRequiredService<IDiscoveryScanner>(), sp.GetRequiredService<DiscoveryStore>(),
+                NullLogger<DiscoverySearchService>.Instance, cap: TimeSpan.FromMilliseconds(200))),
+        };
+
+        var response = await factory.CreateClient().PostAsync("/api/v1/discoveries/search/edge", null);
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal("search-timeout", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task A_scanner_error_is_a_400_naming_the_problem()
+    {
+        FakeScanner.EdgeThrows = new ArgumentException("not-a-host is not an address");
+
+        var response = await _client.PostAsJsonAsync("/api/v1/discoveries/search/edge", new { host = "not-a-host" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Contains("not-a-host", Assert.Single(Items(body.GetProperty("errors"))).GetString());
+        Assert.Empty(Items(await GetJson("/api/v1/discoveries?status=all")));   // nothing stored
     }
 
     private async Task<string> PostDeviceAsync(string address, string kind = "LocalDevice")

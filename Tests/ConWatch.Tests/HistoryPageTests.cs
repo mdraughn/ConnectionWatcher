@@ -10,10 +10,12 @@ public class HistoryPageTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private static string Island(string html, string id)
+    /// <summary>A JSON island's body as a browser would cut it: up to the first
+    /// "&lt;/script" in any case, which is where the HTML parser ends the element.</summary>
+    internal static string Island(string html, string id)
     {
         var match = Regex.Match(html,
-            $"<script id=\"{id}\" type=\"application/json\">(.*?)</script>", RegexOptions.Singleline);
+            $"<script id=\"{id}\" type=\"application/json\">(.*?)</script", RegexOptions.Singleline | RegexOptions.IgnoreCase);
         Assert.True(match.Success, $"no '{id}' island in the page");
         return match.Groups[1].Value;
     }

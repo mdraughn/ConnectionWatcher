@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ConPersistence.Config;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
 
@@ -175,6 +177,40 @@ public class PageSmokeTests : IDisposable
         Assert.Contains("<b>WanA</b>", html);
         Assert.Contains("<b>WanB</b>", html);
     }
+
+    /// <summary>Both OPEN pages embed config-derived names in a JSON island via Html.Raw;
+    /// only the serializer's escaping keeps a name from closing the script element.</summary>
+    [Theory]
+    [InlineData("/", "initial-data")]
+    [InlineData("/History", "history-data")]
+    public async Task A_hostile_target_name_cannot_break_out_of_a_script_island(string url, string islandId)
+    {
+        const string hostile = "x</script><script>alert(1)</script>";
+        var client = _factory.CreateClient();
+        await ConfigApiTests.SeedHomeAsync(client);
+        (await client.PostAsJsonAsync("/api/v1/targets", new { name = hostile, address = "192.0.2.77", profile = "Fast" }))
+            .EnsureSuccessStatusCode();
+        // The dashboard renders from the running engine: wait for the rebuilt graph to carry the name.
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await HostTestWait.Eventually(() => Task.FromResult(
+            host.Engine?.Monitors.Values.Any(m => m.Target.Name == hostile) == true));
+
+        var html = await client.GetStringAsync(url);
+        var body = HistoryPageTests.Island(html, islandId);   // cut where a browser would end the element
+
+        Assert.DoesNotContain("<!--", body);                   // no switch into the script-data-escaped state
+        using var doc = JsonDocument.Parse(body);              // a breakout leaves a truncated, unparsable body
+        Assert.Contains(hostile, Strings(doc.RootElement));    // and the name survives intact
+        Assert.DoesNotContain("<script>alert(1)", html);       // nowhere else on the page either
+    }
+
+    private static IEnumerable<string> Strings(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.String => [e.GetString()!],
+        JsonValueKind.Array => e.EnumerateArray().SelectMany(Strings),
+        JsonValueKind.Object => e.EnumerateObject().SelectMany(p => Strings(p.Value)),
+        _ => [],
+    };
 
     [Fact]
     public async Task Dashboard_embeds_initial_data_blob()

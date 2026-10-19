@@ -75,6 +75,51 @@ public class GlitchApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Glitch_json_bytes_are_pinned()
+    {
+        var target = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var internet = Guid.Parse("6E7E12E7-0000-4000-8000-000000000001");
+        long first, second;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var a = new GlitchRow
+            {
+                // The API's JSON goes out with relaxed escaping ('<' raw): fine for an
+                // application/json download; the HTML islands are pinned in PageSmokeTests.
+                TargetId = target, TargetName = "Google <edge>", Class = 0,
+                StartUtc = new DateTime(2026, 9, 18, 10, 0, 0, 500, DateTimeKind.Utc),
+                EndUtc = new DateTime(2026, 9, 18, 10, 0, 9, DateTimeKind.Utc),
+                LostCount = 2, SampleCount = 8,
+            };
+            var b = new GlitchRow
+            {
+                TargetId = internet, TargetName = "Internet", Class = 1,
+                StartUtc = new DateTime(2026, 9, 18, 10, 1, 0, 250, DateTimeKind.Utc),
+                EndUtc = new DateTime(2026, 9, 18, 10, 2, 10, DateTimeKind.Utc),
+                Detail = "anchors: Google, Quad9; trunk clean (upstream)",
+            };
+            db.Glitches.AddRange(a, b);
+            await db.SaveChangesAsync();
+            (first, second) = (a.Id, b.Id);
+        }
+
+        var response = await _client.GetAsync("/api/v1/export/glitches?format=json");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal(
+            "[{\"id\":" + first + ",\"targetId\":\"" + target + "\",\"targetName\":\"Google <edge>\"," +
+            "\"class\":0,\"startUtc\":\"2026-09-18T10:00:00.5Z\",\"endUtc\":\"2026-09-18T10:00:09Z\"," +
+            "\"lostCount\":2,\"sampleCount\":8,\"detail\":null}," +
+            "{\"id\":" + second + ",\"targetId\":\"" + internet.ToString() + "\",\"targetName\":\"Internet\"," +
+            "\"class\":1,\"startUtc\":\"2026-09-18T10:01:00.25Z\",\"endUtc\":\"2026-09-18T10:02:10Z\"," +
+            "\"lostCount\":0,\"sampleCount\":0,\"detail\":\"anchors: Google, Quad9; trunk clean (upstream)\"}]",
+            await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Glitch_reads_stay_open_when_admin_gate_is_on()
     {
         await SeedAsync();

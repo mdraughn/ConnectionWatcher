@@ -54,6 +54,22 @@ public class AuthApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Login_cookie_is_the_admin_cookie_httponly_and_samesite_lax()
+    {
+        await _client.PostAsJsonAsync("/api/v1/auth/set-password", new { password = "hunter2" });
+        await _client.PostAsync("/api/v1/auth/logout", null);
+
+        var login = await _client.PostAsJsonAsync("/api/v1/auth/login", new { password = "hunter2" });
+
+        Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+        var cookie = Assert.Single(login.Headers.GetValues("Set-Cookie"),
+            c => c.StartsWith("conwatch.admin=", StringComparison.Ordinal));
+        var attributes = cookie.Split(';').Skip(1).Select(a => a.Trim().ToLowerInvariant()).ToList();
+        Assert.Contains("httponly", attributes);
+        Assert.Contains("samesite=lax", attributes);
+    }
+
+    [Fact]
     public async Task Change_requires_current_and_remove_requires_current()
     {
         await _client.PostAsJsonAsync("/api/v1/auth/set-password", new { password = "old-pass" });
