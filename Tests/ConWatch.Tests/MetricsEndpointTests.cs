@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using ConCore.Targets;
 using ConEngine.Configuration;
+using ConEngine.Events;
 using ConEngine.Tests.Fakes;
 using ConEngine.Tracking;
 using ConWatch.Api;
@@ -164,6 +166,26 @@ public class MetricsEndpointTests : IDisposable
         Assert.Contains("conwatch_target_sample_size{name=\"NAS\",scope=\"local\"}", body);
         Assert.Contains("conwatch_transitions_total{name=\"NAS\",scope=\"local\"}", body);
         Assert.DoesNotContain("name=\"Router\",scope=", body);
+    }
+
+    [Fact]
+    public void Verdict_and_pool_transitions_count_in_separate_series()
+    {
+        TargetTransition Make(TransitionSubjectKind kind, string name) => new()
+        {
+            Kind = kind, TargetId = Guid.NewGuid(), TargetName = name,
+            From = HostState.Responding, To = HostState.Down, Timestamp = DateTimeOffset.UtcNow,
+            Reason = new TransitionReason { Trigger = TransitionTrigger.ThresholdCrossed },
+        };
+        var counters = new MetricsCounters();
+
+        counters.Record(Make(TransitionSubjectKind.Pool, "Internet"));
+        counters.Record(Make(TransitionSubjectKind.Verdict, "Internet"));
+        counters.Record(Make(TransitionSubjectKind.Verdict, "Internet"));
+
+        var snapshot = counters.TransitionsSnapshot().ToDictionary(kv => kv.Key, kv => kv.Value);
+        Assert.Equal(1, snapshot["Internet"]);   // the pool's own count, not summed with the verdict's
+        Assert.Equal(2, snapshot["verdict"]);
     }
 
     [Fact]

@@ -34,12 +34,14 @@ public class MetricsCounters : IEngineObserver
             foreach (var subscription in _subscriptions)
                 subscription.Dispose();
             _subscriptions.Clear();
-            _subscriptions.Add(engine.TransitionSource.Subscribe(t =>
-                _transitions.AddOrUpdate(KeyOf(t), 1, (_, n) => n + 1)));
+            _subscriptions.Add(engine.TransitionSource.Subscribe(Record));
             _subscriptions.Add(engine.GlitchSource.Subscribe(_ =>
                 Interlocked.Increment(ref _glitches)));
         }
     }
+
+    internal void Record(TargetTransition t) =>
+        _transitions.AddOrUpdate(KeyOf(t), 1, (_, n) => n + 1);
 
     private static string KeyOf(TargetTransition t) =>
         t.Kind == TransitionSubjectKind.Verdict ? VerdictCoordinator.MetricsName : t.TargetName;
