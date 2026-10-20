@@ -59,8 +59,10 @@
   </Target>
   <Target Name="EnsureClientBuild" BeforeTargets="BeforeBuild" DependsOnTargets="EnsureClientDeps" Inputs="@(ClientSource)" Outputs="wwwroot\js\dashboard.js;wwwroot\js\history.js" Condition="'$(SkipClientBuild)' != 'true'">
     <Exec Command="npm run build" WorkingDirectory="ClientApp" />
+    <!-- RelativeDir keeps the OS separator: wwwroot/js/ on Linux. Missing it there
+         leaves the default items in place and the re-include duplicates them (NETSDK1022). -->
     <ItemGroup>
-      <_StaleBundle Include="@(Content)" Condition="'%(RelativeDir)' == 'wwwroot\js\'" />
+      <_StaleBundle Include="@(Content)" Condition="'%(RelativeDir)' == 'wwwroot\js\' Or '%(RelativeDir)' == 'wwwroot/js/'" />
       <Content Remove="@(_StaleBundle)" />
       <Content Include="wwwroot\js\**" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     </ItemGroup>
