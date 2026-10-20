@@ -76,8 +76,13 @@ public class DnsStatusTests : IDisposable
         Assert.Equal(4, dns.GetProperty("lookupNames").GetArrayLength());
         Assert.Equal("dns.google", dns.GetProperty("lookupNames")[0].GetProperty("name").GetString());
 
-        var mcp = await CallToolAsync("get_current_status");
-        Assert.True(mcp.TryGetProperty("dns", out var mcpDns) && mcpDns.ValueKind == JsonValueKind.Object);
+        // The tool reads the live engine, so a rebuild still settling after the status poll leaves dns null
+        // for a moment: wait for the block rather than asserting on one call.
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var mcp = await CallToolAsync("get_current_status");
+            return mcp.TryGetProperty("dns", out var mcpDns) && mcpDns.ValueKind == JsonValueKind.Object;
+        });
 
         // The gauge is absent while the summary is Unknown (no lookup results yet); wait for the first answers.
         var metrics = "";
@@ -124,9 +129,10 @@ public class DnsStatusTests : IDisposable
             new ConPersistence.Config.TargetDto { Name = "off.example", Address = "off.example", Parent = "Router", Profile = "Fast", Enabled = false }))
             .EnsureSuccessStatusCode();
 
+        // Assert on the block the condition saw: a rebuild landing before a second fetch would 503 it.
+        JsonElement dns = default;
         await ConfigApiTests.Eventually(async () =>
-            await DnsBlockAsync() is { } d && d.GetProperty("watched").GetBoolean());
-        var dns = (await DnsBlockAsync())!.Value;
+            await DnsBlockAsync() is { } d && (dns = d).GetProperty("watched").GetBoolean());
         Assert.Equal(["example.org"], LookupNamesOf(dns));
 
         // Removing the only hostname target leaves nothing to ask for: the watch is off again.
@@ -134,7 +140,7 @@ public class DnsStatusTests : IDisposable
         var gone = await _client.DeleteAsync($"/api/v1/targets/{targets.Single(t => t.Name == "example.org").Id}");
         Assert.Equal(System.Net.HttpStatusCode.NoContent, gone.StatusCode);
         await ConfigApiTests.Eventually(async () =>
-            await DnsBlockAsync() is { } d && !d.GetProperty("watched").GetBoolean());
-        Assert.Empty(LookupNamesOf((await DnsBlockAsync())!.Value));
+            await DnsBlockAsync() is { } d && !(dns = d).GetProperty("watched").GetBoolean());
+        Assert.Empty(LookupNamesOf(dns));
     }
 }
