@@ -194,7 +194,10 @@ public class RecorderCollectorTests : IDisposable
     [Fact]
     public async Task Background_loop_retries_a_failed_batch_without_waiting_for_another_event()
     {
-        var recorder = new TransitionRecorder(new FailingOnceDbFactory(_factory),
+        // The test polls while the loop writes: two connections, so not the shared in-memory one.
+        using var factory = new FileDbFactory();
+        await factory.PrepareAsync();
+        var recorder = new TransitionRecorder(new FailingOnceDbFactory(factory),
             NullLogger<TransitionRecorder>.Instance, retryDelay: TimeSpan.FromMilliseconds(50));
         using var source = new Subject<TargetTransition>();
         recorder.Attach(source);
@@ -206,14 +209,14 @@ public class RecorderCollectorTests : IDisposable
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline)
         {
-            await using var check = _factory.CreateDbContext();
+            await using var check = factory.CreateDbContext();
             if (await check.Transitions.CountAsync() == 1)
                 break;
             await Task.Delay(25);
         }
         await recorder.StopAsync(CancellationToken.None);
 
-        await using var db = _factory.CreateDbContext();
+        await using var db = factory.CreateDbContext();
         Assert.Equal(1, await db.Transitions.CountAsync());
     }
 
