@@ -75,7 +75,7 @@
                 <label>Parent
                     <select name="parent">
                         <option value="">(none)</option>
-                        @foreach (var t in Model.Config.Targets.Where(t => t.Scope != TargetScope.Local).OrderBy(t => t.Name))
+                        @foreach (var t in Model.Config.Targets.Where(t => t.Scope.IsTree()).OrderBy(t => t.Name))
                         {
                             <option>@t.Name</option>
                         }
@@ -87,7 +87,7 @@
                 <div class="cw-duallist-grid">
                     <label>Available
                         <select id="available-list" multiple size="7" aria-label="Available targets">
-                            @foreach (var t in Model.Config.Targets.Where(t => t.Scope != TargetScope.Local).OrderBy(t => t.Name))
+                            @foreach (var t in Model.Config.Targets.Where(t => t.Scope.IsTree()).OrderBy(t => t.Name))
                             {
                                 <option>@t.Name</option>
                             }
@@ -119,7 +119,7 @@
     <script>
         const form = document.getElementById("pool-form");
         const dialog = document.getElementById("pool-dialog");
-        const allTargets = @Html.Raw(json(Model.Config.Targets.Where(t => t.Scope != TargetScope.Local).OrderBy(t => t.Name).Select(t => t.Name)));
+        const allTargets = @Html.Raw(json(Model.Config.Targets.Where(t => t.Scope.IsTree()).OrderBy(t => t.Name).Select(t => t.Name)));
         const availableList = document.getElementById("available-list");
         const memberList = document.getElementById("member-list");
         let members = [];

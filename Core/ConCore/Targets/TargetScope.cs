@@ -20,3 +20,12 @@ public enum TargetScope
     Local = 1,
     Resolver = 2,
 }
+
+public static class TargetScopeExtensions
+{
+    /// <summary>
+    /// A member of the reachability tree: may have a parent, be a parent,
+    /// be a pool parent or member. True only for <see cref="TargetScope.Verdict"/>.
+    /// </summary>
+    public static bool IsTree(this TargetScope scope) => scope == TargetScope.Verdict;
+}
