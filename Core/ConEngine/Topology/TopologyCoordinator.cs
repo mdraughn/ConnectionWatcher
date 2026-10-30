@@ -31,17 +31,8 @@ public class TopologyCoordinator : IDisposable
         _log = log;
         foreach (var id in monitors.Keys)
         {
-            var chain = new List<Guid>();
-            var parent = graph.Targets[id].ParentId;
-            while (parent is { } pid)
-            {
-                if (monitors.ContainsKey(pid))
-                    chain.Add(pid);
-                parent = graph.Targets[pid].ParentId;
-            }
-            chain.Reverse();
-            _ancestors[id] = chain;
-            _descendants[id] = graph.GetDescendants(id).Select(d => d.Id).Where(monitors.ContainsKey).ToList();
+            _ancestors[id] = graph.AncestorIds(id, monitors.ContainsKey).ToList();
+            _descendants[id] = graph.DescendantIds(id, monitors.ContainsKey).ToList();
         }
     }
 

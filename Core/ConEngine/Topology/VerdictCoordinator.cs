@@ -129,48 +129,20 @@ public class VerdictCoordinator : IDisposable
         _anchors = anchorPool.MemberTargetIds
             .Where(monitors.ContainsKey).Select(id => monitors[id]).ToList();
 
-        // Union of ancestors of all anchors, with depth (root = 0). An anchor
-        // nested under another anchor is not a path hop: it never names the
-        // ISP and is never the losing hop (final review T4 M1).
-        var anchorIds = _anchors.Select(a => a.Target.Id).ToHashSet();
-        var seen = new Dictionary<Guid, int>();
-        foreach (var anchor in _anchors)
-        {
-            var chain = new List<Guid>();
-            var parent = _graph.Targets[anchor.Target.Id].ParentId;
-            while (parent is { } pid)
-            {
-                chain.Add(pid);
-                parent = _graph.Targets[pid].ParentId;
-            }
-            chain.Reverse(); // root first => index == depth
-            for (int depth = 0; depth < chain.Count; depth++)
-                if (!anchorIds.Contains(chain[depth]))
-                    seen[chain[depth]] = depth;
-        }
-        _ancestors = seen.Where(kv => monitors.ContainsKey(kv.Key))
-            .Select(kv => (monitors[kv.Key], kv.Value)).ToList();
+        // The trunk excludes every anchor (T4 M1, ruling 2026-10-28): a nested anchor never names
+        // the ISP and is never the losing hop. Depth (root = 0) counts every ancestor, monitored or not.
+        var anchorIds = _anchors.Select(a => a.Target.Id).ToList();
+        _ancestors = _graph.TrunkIds(anchorIds, monitors.ContainsKey)
+            .Select(id => (monitors[id], _graph.AncestorIds(id).Count)).ToList();
 
         _all = monitors;
         foreach (var anchor in _anchors)
-        {
-            var path = new List<TargetMonitor>();
-            var parent = _graph.Targets[anchor.Target.Id].ParentId;
-            while (parent is { } pid)
-            {
-                if (monitors.TryGetValue(pid, out var hop))
-                    path.Add(hop);
-                parent = _graph.Targets[pid].ParentId;
-            }
-            path.Reverse();
-            _paths.Add((anchor, path));
-        }
+            _paths.Add((anchor, _graph.AncestorIds(anchor.Target.Id, monitors.ContainsKey).Select(id => monitors[id]).ToList()));
         // Every hop on any anchor's path (a nested anchor included: it still
         // proves forwarding for what lies beyond it).
         foreach (var hop in _paths.SelectMany(p => p.Path))
         {
-            _descendants.TryAdd(hop.Target.Id, _graph.GetDescendants(hop.Target.Id)
-                .Select(d => d.Id).Where(monitors.ContainsKey).ToList());
+            _descendants.TryAdd(hop.Target.Id, _graph.DescendantIds(hop.Target.Id, monitors.ContainsKey).ToList());
         }
         // The ISP is whoever operates the path; an anchor sharing that tag is
         // the ISP's and never proves the internet is up. Untagged anchors are

@@ -47,4 +47,13 @@ public static class TreeWalk
         }
         return result;
     }
+
+    /// <summary>The trunk above these anchors: <see cref="AncestorsOf"/> minus the anchors themselves
+    /// (ruling 2026-10-28: an anchor nested under another anchor is never trunk). First-seen order.</summary>
+    public static List<T> TrunkOf<T>(IReadOnlyCollection<T> anchors, Func<T, T?> parentOf,
+        IEqualityComparer<T>? comparer = null) where T : class
+    {
+        var anchorSet = new HashSet<T>(anchors, comparer ?? EqualityComparer<T>.Default);
+        return AncestorsOf(anchors, parentOf, comparer).Where(a => !anchorSet.Contains(a)).ToList();
+    }
 }

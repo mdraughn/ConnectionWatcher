@@ -10,6 +10,16 @@ public class TreeWalkTests
         n => map.TryGetValue(n.Name, out var p) ? new Node(p) : null;
 
     [Fact]
+    public void TrunkOf_is_every_anchor_ancestor_minus_the_anchors()
+    {
+        // Router <- Google (anchor) <- Google DNS (anchor); Router <- Cloudflare (anchor)
+        var map = new Dictionary<string, string> { ["Google"] = "Router", ["Google DNS"] = "Google", ["Cloudflare"] = "Router" };
+        var anchors = new[] { new Node("Google"), new Node("Google DNS"), new Node("Cloudflare") };
+        var trunk = TreeWalk.TrunkOf(anchors, Parents(map));
+        Assert.Equal(["Router"], trunk.Select(n => n.Name));
+    }
+
+    [Fact]
     public void A_self_loop_terminates_with_the_node_once()
     {
         var chain = TreeWalk.ChainToRoot(new Node("a"), Parents(new() { ["a"] = "a" }));

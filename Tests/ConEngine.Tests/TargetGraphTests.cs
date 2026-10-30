@@ -42,9 +42,54 @@ public class TargetGraphTests
     {
         var g = Home();
         var router = g.GetByName("Router");
-        var names = g.GetDescendants(router.Id).Select(t => t.Name).Order().ToArray();
+        var names = g.DescendantIds(router.Id).Select(id => g.Targets[id].Name).Order().ToArray();
         Assert.Equal(new[] { "Cloudflare", "Google", "Modem", "TV" }, names);
         Assert.DoesNotContain("Router", names);
+    }
+
+    [Fact]
+    public void AncestorIds_are_root_first_and_filtered_walking_through_the_rest()
+    {
+        var g = Home();
+        var google = g.GetByName("Google").Id;
+        Assert.Equal([g.GetByName("Router").Id, g.GetByName("Modem").Id], g.AncestorIds(google));
+        var router = g.GetByName("Router").Id;
+        Assert.Equal([router], g.AncestorIds(google, id => id == router)); // Modem skipped, walked through
+    }
+
+    [Fact]
+    public void DescendantIds_are_breadth_first()
+    {
+        var g = Home();
+        var names = g.DescendantIds(g.GetByName("Router").Id).Select(id => g.Targets[id].Name).ToList();
+        Assert.Equal(["Modem", "TV"], names.Take(2).Order());   // depth 1 before depth 2
+        Assert.Equal(["Cloudflare", "Google"], names.Skip(2).Order());
+    }
+
+    [Fact]
+    public void Trunk_comes_only_from_the_anchors_given()
+    {
+        var g = Home();
+        var trunk = g.TrunkIds([g.GetByName("Google").Id]).Select(id => g.Targets[id].Name);
+        Assert.Equal(["Modem", "Router"], trunk);
+        Assert.Empty(g.TrunkIds([g.GetByName("Router").Id])); // a root anchor has no trunk
+    }
+
+    [Fact]
+    public void Walks_end_on_a_parent_cycle()
+    {
+        // FromOptions does not validate, so a cycle can reach the graph.
+        var g = TargetGraph.FromOptions(new WatcherOptions
+        {
+            Targets =
+            [
+                new TargetConfig { Name = "A", Address = "10.0.0.1", Parent = "B" },
+                new TargetConfig { Name = "B", Address = "10.0.0.2", Parent = "A" },
+            ],
+        });
+        var a = g.GetByName("A").Id;
+        Assert.Equal([g.GetByName("B").Id], g.AncestorIds(a));
+        Assert.Equal([g.GetByName("B").Id], g.DescendantIds(a));
     }
 
     [Fact]

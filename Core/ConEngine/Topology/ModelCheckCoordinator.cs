@@ -134,8 +134,8 @@ public class ModelCheckCoordinator : IDisposable
         _dnsResults = dnsResults;
         foreach (var id in monitors.Keys)
         {
-            // GetDescendants is breadth-first: the first answering one is the nearest witness.
-            var beyond = graph.GetDescendants(id).Select(d => d.Id).Where(monitors.ContainsKey).ToList();
+            // DescendantIds is breadth-first: the first answering one is the nearest witness.
+            var beyond = graph.DescendantIds(id, monitors.ContainsKey).ToList();
             if (beyond.Count > 0)
                 _beyond[id] = beyond;
         }

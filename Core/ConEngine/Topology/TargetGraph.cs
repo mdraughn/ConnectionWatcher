@@ -82,20 +82,46 @@ public class TargetGraph
     /// <summary>Direct children of a target.</summary>
     public IReadOnlyList<Target> GetChildren(Guid parentId) => _childrenByParent[parentId].ToList();
 
-    /// <summary>All transitive descendants of a target (excluding itself).</summary>
-    public IReadOnlyList<Target> GetDescendants(Guid ancestorId)
+    /// <summary>The target's ancestors, root first, itself excluded; only those <paramref name="include"/>
+    /// accepts (all when null), walking through the rest. Cycle-safe; capped at TreeWalk.MaxDepth.</summary>
+    public IReadOnlyList<Guid> AncestorIds(Guid targetId, Func<Guid, bool>? include = null)
     {
-        var result = new List<Target>();
+        var chain = TreeWalk.ChainToRoot(_targets[targetId], ParentOf);
+        var ids = new List<Guid>(chain.Count);
+        for (var i = chain.Count - 1; i >= 1; i--)
+            if (include is null || include(chain[i].Id))
+                ids.Add(chain[i].Id);
+        return ids;
+    }
+
+    /// <summary>Transitive descendants, breadth-first (nearest first), itself excluded; filtered like
+    /// AncestorIds. Cycle-safe.</summary>
+    public IReadOnlyList<Guid> DescendantIds(Guid targetId, Func<Guid, bool>? include = null)
+    {
+        var result = new List<Guid>();
+        var visited = new HashSet<Guid> { targetId };
         var queue = new Queue<Guid>();
-        queue.Enqueue(ancestorId);
+        queue.Enqueue(targetId);
         while (queue.Count > 0)
         {
             foreach (var child in _childrenByParent[queue.Dequeue()])
             {
-                result.Add(child);
+                if (!visited.Add(child.Id))
+                    continue;
+                if (include is null || include(child.Id))
+                    result.Add(child.Id);
                 queue.Enqueue(child.Id);
             }
         }
         return result;
     }
+
+    /// <summary>Every ancestor of any of <paramref name="anchorIds"/>, minus those anchors, first-seen
+    /// order walking each anchor upward; filtered like AncestorIds. Callers pass the anchors they monitor.</summary>
+    public IReadOnlyList<Guid> TrunkIds(IEnumerable<Guid> anchorIds, Func<Guid, bool>? include = null) =>
+        TreeWalk.TrunkOf(anchorIds.Select(id => _targets[id]).ToList(), ParentOf)
+            .Select(t => t.Id).Where(id => include is null || include(id)).ToList();
+
+    private Target? ParentOf(Target t) =>
+        t.ParentId is { } p && _targets.TryGetValue(p, out var parent) ? parent : null;
 }
