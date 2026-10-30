@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using ConInfrastructure.Net;
 
@@ -6,24 +7,34 @@ namespace ConEngine.Tests;
 
 public class NetHelpersTests
 {
+    private static readonly IPAddress Target = IPAddress.Parse("192.0.2.1");
+
     [Fact]
     public async Task A_cancelled_echo_throws_rather_than_reporting_no_answer()
     {
+        var never = new TaskCompletionSource<PingReply>();
         using var cts = new CancellationTokenSource();
-        var task = IcmpEcho.TryPingAsync(IPAddress.Parse("192.0.2.1"), TimeSpan.FromSeconds(10), cts.Token);
+        var task = IcmpEcho.TryPingAsync(Target, TimeSpan.FromSeconds(10), (_, _, _) => never.Task, cts.Token);
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task).WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public async Task A_pre_cancelled_echo_throws_without_touching_the_network()
+    public async Task A_pre_cancelled_echo_never_sends()
     {
+        var sent = false;
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => IcmpEcho.TryPingAsync(IPAddress.Parse("192.0.2.1"), TimeSpan.FromSeconds(10), cts.Token))
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => IcmpEcho.TryPingAsync(Target,
+            TimeSpan.FromSeconds(10), (_, _, _) => { sent = true; return new TaskCompletionSource<PingReply>().Task; }, cts.Token))
             .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(sent);
     }
+
+    [Fact]
+    public async Task A_failing_echo_is_no_answer() =>
+        Assert.Null(await IcmpEcho.TryPingAsync(Target, TimeSpan.FromSeconds(10),
+            (_, _, _) => Task.FromException<PingReply>(new PingException("x")), CancellationToken.None));
 
     [Fact]
     public async Task A_lookup_slower_than_the_cap_is_null()

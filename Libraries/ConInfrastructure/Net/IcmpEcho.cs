@@ -13,17 +13,32 @@ public static class IcmpEcho
         try
         {
             using var ping = new Ping();
+            return await TryPingAsync(address, timeout,
+                (a, t, token) => ping.SendPingAsync(a, t, buffer: null, options: null, token), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;       // e.g. a Ping that cannot be created
+        }
+    }
+
+    internal static async Task<long?> TryPingAsync(IPAddress address, TimeSpan timeout,
+        Func<IPAddress, TimeSpan, CancellationToken, Task<PingReply>> send, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
             // Windows only checks the token after the native call returns, so WaitAsync makes cancellation
             // prompt there too; the abandoned request finishes on its own and Ping.Dispose defers cleanup.
-            var send = ping.SendPingAsync(address, timeout, buffer: null, options: null, ct);
+            var sending = send(address, timeout, ct);
             PingReply reply;
             try
             {
-                reply = await send.WaitAsync(ct).ConfigureAwait(false);
+                reply = await sending.WaitAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                _ = send.ContinueWith(static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                _ = sending.ContinueWith(static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                 throw;
             }
             return reply.Status == IPStatus.Success ? reply.RoundtripTime : null;
