@@ -39,8 +39,9 @@ public static class TrayCommands
             if (pr.GetValue(url) is { } u)
             {
                 if (!ConfigResolver.ValidateUrl(u, out var error)) throw new ConfigException(error!);
-                CliConfig.Update(s, s.Paths.UserFile, current => (current ?? new ConWatchConfig()) with { ServerUrl = u.TrimEnd('/') });
-                s.Out.WriteLine($"server-url = {u.TrimEnd('/')}  written to {s.Paths.UserFile}");
+                var normalized = ConfigResolver.NormalizeServerUrl(u);
+                CliConfig.Update(s, s.Paths.UserFile, current => (current ?? new ConWatchConfig()) with { ServerUrl = normalized });
+                s.Out.WriteLine($"server-url = {normalized}  written to {s.Paths.UserFile}");
             }
             s.TrayAutostart.Install(s.TrayExePath);
             s.Out.WriteLine("Tray companion will start when you sign in.");

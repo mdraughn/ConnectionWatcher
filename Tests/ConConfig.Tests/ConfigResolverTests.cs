@@ -6,6 +6,14 @@ public sealed class ConfigResolverTests
 {
     private static readonly ConfigPaths Paths = ConfigPaths.UnderTemp(@"C:\t");
 
+    [Theory]
+    [InlineData(" http://a:8080/ ", "http://a:8080")]
+    [InlineData("http://a//", "http://a")]
+    [InlineData("http://a", "http://a")]
+    [InlineData("", "")]
+    public void NormalizeServerUrl_trims_whitespace_then_trailing_slashes(string raw, string expected) =>
+        Assert.Equal(expected, ConfigResolver.NormalizeServerUrl(raw));
+
     [Fact]
     public void Listen_url_precedence_is_flag_env_machine_default()
     {

@@ -38,5 +38,5 @@ public sealed record CliServices(
     TextWriter Err,
     string Version)
 {
-    public string TrayExePath => Path.Combine(AppDir, OperatingSystem.IsWindows() ? "conwatch-tray.exe" : "conwatch-tray");
+    public string TrayExePath => Path.Combine(AppDir, OperatingSystem.IsWindows() ? CliApp.TrayProcessName + ".exe" : CliApp.TrayProcessName);
 }

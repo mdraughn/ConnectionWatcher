@@ -80,7 +80,7 @@ public static class ConfigCommands
                 case "listen-url":
                 case "server-url":
                     if (!ConfigResolver.ValidateUrl(value, out var urlError)) throw new ConfigException(urlError!);
-                    stored = value.TrimEnd('/');
+                    stored = ConfigResolver.NormalizeServerUrl(value);
                     if (key == "listen-url")
                     {
                         next = current with { ListenUrl = stored };

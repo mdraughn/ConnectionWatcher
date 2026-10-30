@@ -7,7 +7,8 @@ namespace ConWatchCli;
 
 public static class CliApp
 {
-    public const string ServiceName = "ConnectionWatcher";
+    public const string ServiceName = ConWatch.ConWatchApp.ServiceName;
+    public const string TrayProcessName = "conwatch-tray";
 
     /// <summary>Appended (with a temp file path) by the elevated relaunch; stripped before parsing.</summary>
     public const string OutputOption = "--__output";

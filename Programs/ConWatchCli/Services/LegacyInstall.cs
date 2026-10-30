@@ -1,4 +1,4 @@
-using System.Text.Json;
+using ConConfig;
 using System.Text.RegularExpressions;
 
 namespace ConWatchCli.Services;
@@ -17,18 +17,12 @@ public static partial class LegacyInstall
         string? server = null;
         foreach (var sub in new[] { "Watcher", "Tray" })
         {
-            var path = Path.Combine(appDir, sub, "contray.json");
-            if (!File.Exists(path)) continue;
-            try
+            // Unreadable or a non-string url → nothing to migrate from this file.
+            if (LegacyTrayFile.TryRead(Path.Combine(appDir, sub, "contray.json"))?.ServerUrl is { Length: > 0 } value)
             {
-                var json = JsonDocument.Parse(File.ReadAllText(path));
-                if (json.RootElement.TryGetProperty("url", out var url) && url.GetString() is { Length: > 0 } value)
-                {
-                    server = value.TrimEnd('/');
-                    break;
-                }
+                server = value;
+                break;
             }
-            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { /* unreadable → nothing to migrate */ }
         }
 
         string? listen = null;

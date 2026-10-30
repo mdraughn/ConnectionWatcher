@@ -18,14 +18,14 @@ public sealed class ProcessTrayLauncher : ITrayLauncher
     /// </summary>
     public string? RunningInstance()
     {
-        foreach (var (name, legacy) in new[] { ("conwatch-tray", false), ("ConTray", true) })
+        foreach (var (name, legacy) in new[] { (CliApp.TrayProcessName, false), ("ConTray", true) })
         {
             var processes = Process.GetProcessesByName(name);
             try
             {
                 if (processes.Length == 0) continue;
                 var pid = processes[0].Id;
-                return legacy ? $"ConTray.exe (PID {pid}, the 0.9 tray)" : $"conwatch-tray.exe (PID {pid})";
+                return legacy ? $"ConTray.exe (PID {pid}, the 0.9 tray)" : $"{CliApp.TrayProcessName}.exe (PID {pid})";
             }
             finally
             {

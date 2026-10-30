@@ -23,6 +23,16 @@ public sealed class LegacyInstallTests : IDisposable
         Assert.Equal("http://nas:9090", LegacyInstall.Detect(_app, null).ServerUrl);
     }
 
+    [Fact]
+    public void A_non_string_url_is_skipped_not_thrown()
+    {
+        Directory.CreateDirectory(Path.Combine(_app, "Watcher"));
+        Directory.CreateDirectory(Path.Combine(_app, "Tray"));
+        File.WriteAllText(Path.Combine(_app, "Watcher", "contray.json"), """{"url": 5}""");
+        File.WriteAllText(Path.Combine(_app, "Tray", "contray.json"), """{"url": "http://old:9000/"}""");
+        Assert.Equal("http://old:9000", LegacyInstall.Detect(_app, null).ServerUrl);
+    }
+
     [Theory]
     [InlineData("\"C:\\Program Files\\DSoftCo\\ConnectionWatcher\\Watcher\\ConWatch.exe\" --urls http://0.0.0.0:8081 --Persistence:DbPath \"C:\\x\\conwatch.db\"", "http://0.0.0.0:8081")]
     [InlineData("\"C:\\app\\conwatch.exe\" serve", null)]

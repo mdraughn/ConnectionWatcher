@@ -180,7 +180,7 @@ internal sealed class TrayContext : ApplicationContext
             }
 
             var server = _settings.EffectiveUrl;
-            if (!Uri.TryCreate(server.TrimEnd('/') + "/", UriKind.Absolute, out var serverUri))
+            if (!Uri.TryCreate(ConfigResolver.NormalizeServerUrl(server) + "/", UriKind.Absolute, out var serverUri))
             {
                 Balloon("Could not send", "The server address in the tray settings is not a valid URL.", ToolTipIcon.Warning);
                 return;

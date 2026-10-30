@@ -10,6 +10,9 @@ namespace ConWatch;
 /// </summary>
 public static class ConWatchApp
 {
+    /// <summary>The Windows service name; the CLI installs and controls the service under it.</summary>
+    public const string ServiceName = "ConnectionWatcher";
+
     /// <param name="args">Host configuration arguments (--urls, --Persistence:DbPath, ...).</param>
     /// <param name="pinContentRoot">True to use the exe folder as content root
     /// regardless of the working directory (the CLI always passes true; the SCM
@@ -35,7 +38,7 @@ public static class ConWatchApp
             // who calls RunAsync.
             ApplicationName = typeof(ConWatchApp).Assembly.GetName().Name,
         });
-        builder.Services.AddWindowsService(options => options.ServiceName = "ConnectionWatcher");
+        builder.Services.AddWindowsService(options => options.ServiceName = ServiceName);
         builder.Services.AddSystemd();
 
         // Shutdown budget (see docs/superpowers/reviews/2026-09-18-codebase-review.md, H5):

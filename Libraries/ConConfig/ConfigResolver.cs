@@ -21,13 +21,16 @@ public static class ConfigResolver
     public static Resolved<string> ServerUrl(ConfigPaths paths, ConWatchConfig? user, ConWatchConfig? machine)
     {
         if (user?.ServerUrl is { Length: > 0 } u)
-            return new(u.TrimEnd('/'), ConfigSource.User, paths.UserFile);
+            return new(NormalizeServerUrl(u), ConfigSource.User, paths.UserFile);
         if (machine?.ServerUrl is { Length: > 0 } m)
-            return new(m.TrimEnd('/'), ConfigSource.Machine, paths.MachineFile);
+            return new(NormalizeServerUrl(m), ConfigSource.Machine, paths.MachineFile);
         if (machine?.ListenUrl is { Length: > 0 } l)
             return new(ListenToServerUrl(l), ConfigSource.Machine, paths.MachineFile);
         return new(FallbackServerUrl, ConfigSource.Default);
     }
+
+    /// <summary>The stored form of a server URL: surrounding whitespace and trailing slashes removed.</summary>
+    public static string NormalizeServerUrl(string url) => url.Trim().TrimEnd('/');
 
     public static bool Notifications(ConWatchConfig? user) => user?.Notifications ?? true;
 

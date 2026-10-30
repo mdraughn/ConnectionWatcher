@@ -93,7 +93,7 @@ internal sealed class SettingsForm : Form
         _testResult.Text = "testing…";
         try
         {
-            var url = _urlBox.Text.TrimEnd('/');
+            var url = ConfigResolver.NormalizeServerUrl(_urlBox.Text);
             var response = await _http.GetAsync($"{url}/api/v1/health");
             if (response.IsSuccessStatusCode)
             {

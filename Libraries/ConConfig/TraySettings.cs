@@ -51,12 +51,12 @@ public sealed class TraySettings
     /// </summary>
     public static string? ApplyUrl(string typed, string? installedDefault, string fallback)
     {
-        var url = typed.Trim().TrimEnd('/');
-        var standing = (installedDefault ?? fallback).Trim().TrimEnd('/');
+        var url = ConfigResolver.NormalizeServerUrl(typed);
+        var standing = ConfigResolver.NormalizeServerUrl(installedDefault ?? fallback);
         return url.Length == 0 || string.Equals(url, standing, StringComparison.OrdinalIgnoreCase) ? null : url;
     }
 
-    public void SetOverride(string url) => Save(_user with { ServerUrl = url.TrimEnd('/') });
+    public void SetOverride(string url) => Save(_user with { ServerUrl = ConfigResolver.NormalizeServerUrl(url) });
     public void ClearOverride() => Save(_user with { ServerUrl = null });
     public void SetNotifications(bool enabled) => Save(_user with { Notifications = enabled });
 
