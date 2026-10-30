@@ -147,17 +147,8 @@ public class VerdictCoordinator : IDisposable
         // The ISP is whoever operates the path; an anchor sharing that tag is
         // the ISP's and never proves the internet is up. Untagged anchors are
         // not the ISP's — with no ISP tag anywhere, every anchor counts.
-        var isp = _ancestors.Select(a => Normalize(a.Monitor.Target.Operator))
-            .OfType<string>().ToHashSet();
-        _counted = _anchors.Where(a => Normalize(a.Target.Operator) is not { } op || !isp.Contains(op)).ToList();
-        // Decision (a): if every anchor is the ISP's, they are all there is —
-        // count them all. A weaker check (the ISP's own servers can answer
-        // while the ISP is cut off from the rest of the internet).
-        if (_counted.Count == 0)
-        {
-            UsingIspFallback = _anchors.Count > 0;
-            _counted = _anchors.ToList();
-        }
+        _counted = IspRule.CountedAnchors(_anchors, _ancestors.Select(a => a.Monitor), m => m.Target.Operator, out var fallback);
+        UsingIspFallback = fallback;
     }
 
     // Guarded by _lock. The model check whose ProbeOnlyLoss notes veto blaming a
@@ -356,9 +347,6 @@ public class VerdictCoordinator : IDisposable
     }
 
 
-
-    private static string? Normalize(string? op) =>
-        op?.Trim() is { Length: > 0 } t ? t.ToLowerInvariant() : null;
 
     private (VerdictState, string, string? Operator, DnsBlame? Dns) Classify(IReadOnlyDictionary<Guid, HostState> states)
     {
@@ -584,8 +572,8 @@ public class VerdictCoordinator : IDisposable
 
     /// <summary>Distinct operators among the anchors; an untagged anchor is its own.</summary>
     private static int CountOperators(IEnumerable<TargetMonitor> anchors) =>
-        anchors.Select(a => a.Target.Operator?.Trim() is { Length: > 0 } op
-                ? "op:" + op.ToLowerInvariant()
+        anchors.Select(a => IspRule.OperatorKey(a.Target.Operator) is { } key
+                ? "op:" + key
                 : "id:" + a.Target.Id)
             .Distinct().Count();
 
