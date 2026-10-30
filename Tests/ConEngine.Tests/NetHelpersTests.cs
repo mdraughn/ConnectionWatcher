@@ -11,8 +11,18 @@ public class NetHelpersTests
     {
         using var cts = new CancellationTokenSource();
         var task = IcmpEcho.TryPingAsync(IPAddress.Parse("192.0.2.1"), TimeSpan.FromSeconds(10), cts.Token);
-        cts.CancelAfter(200);
+        cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task).WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task A_pre_cancelled_echo_throws_without_touching_the_network()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => IcmpEcho.TryPingAsync(IPAddress.Parse("192.0.2.1"), TimeSpan.FromSeconds(10), cts.Token))
+            .WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
