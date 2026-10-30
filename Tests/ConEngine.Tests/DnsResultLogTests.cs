@@ -32,18 +32,46 @@ public class DnsResultLogTests
     }
 
     [Theory]
-    [InlineData("Answered (dns.google)", "Answered", "dns.google")]
-    [InlineData("Verified (dns.google)", "Verified", "dns.google")]
-    [InlineData("Filtered: NXDOMAIN (dns.google)", "Filtered", "dns.google")]
-    [InlineData("WrongAnswer: 10.0.0.1, 10.0.0.2 (one.one.one.one)", "WrongAnswer", "one.one.one.one")]
-    [InlineData("TimedOut (example.org)", "TimedOut", "example.org")]
-    [InlineData("NoLookupNames", "NoLookupNames", null)]
-    [InlineData("ConnectionReset (dns.quad9.net)", "ConnectionReset", "dns.quad9.net")]
-    public void Outcome_and_name_are_parsed_from_the_message(string message, string outcome, string? name)
+    [InlineData("Answered (dns.google)", "Answered", "dns.google", "")]
+    [InlineData("Verified (dns.google)", "Verified", "dns.google", "")]
+    [InlineData("Filtered: NXDOMAIN (dns.google)", "Filtered", "dns.google", "NXDOMAIN")]
+    [InlineData("WrongAnswer: 10.0.0.1, 10.0.0.2 (one.one.one.one)", "WrongAnswer", "one.one.one.one", "10.0.0.1, 10.0.0.2")]
+    [InlineData("TimedOut (example.org)", "TimedOut", "example.org", "")]
+    [InlineData("NoLookupNames", "NoLookupNames", null, "")]
+    [InlineData("ConnectionReset (dns.quad9.net)", "ConnectionReset", "dns.quad9.net", "")]
+    public void Outcome_and_name_are_parsed_from_the_message(string message, string outcome, string? name, string detail)
     {
-        var (parsedOutcome, parsedName) = DnsResultLog.Parse(message);
+        var (parsedOutcome, parsedName, parsedDetail) = DnsResultLog.Parse(message);
         Assert.Equal(outcome, parsedOutcome);
         Assert.Equal(name, parsedName);
+        Assert.Equal(detail, parsedDetail);
+    }
+
+    [Theory]
+    [InlineData("Filtered: NXDOMAIN (dns.google)", "NXDOMAIN")]
+    [InlineData("WrongAnswer: 10.99.0.1, 10.99.0.2 (dns.google)", "10.99.0.1, 10.99.0.2")]
+    [InlineData("WrongAnswer: 10.99.0.1", "10.99.0.1")]
+    [InlineData("Filtered (dns.google)", "")]
+    [InlineData("WrongAnswer", "")]
+    public void Detail_is_the_text_between_the_outcome_and_the_name(string message, string detail) =>
+        Assert.Equal(detail, DnsResultLog.Parse(message).Detail);
+
+    [Fact]
+    public void A_group_that_does_not_end_the_message_is_not_a_name()
+    {
+        var (outcome, name, detail) = DnsResultLog.Parse("WrongAnswer: 10.0.0.1 (x) more");
+        Assert.Equal("WrongAnswer", outcome);
+        Assert.Null(name);
+        Assert.Equal("10.0.0.1 (x) more", detail);
+    }
+
+    [Fact]
+    public void Record_keeps_the_detail()
+    {
+        var log = new DnsResultLog();
+        var id = Guid.NewGuid();
+        log.Record(id, new PingResult(IPAddress.Loopback, true, 5, "Filtered: NXDOMAIN (dns.google)", DateTimeOffset.UnixEpoch));
+        Assert.Equal("NXDOMAIN", log.Recent(id)[0].Detail);
     }
 
     [Fact]

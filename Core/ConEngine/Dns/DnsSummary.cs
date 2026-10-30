@@ -1,3 +1,4 @@
+using ConCore.Dns;
 using ConEngine.Topology;
 using ConEngine.Tracking;
 
@@ -13,7 +14,7 @@ public enum DnsSummaryState { Unknown, Ok, Degraded, Filtered, Down }
 /// </summary>
 public sealed record DnsSummary(bool Watched, DnsSummaryState State)
 {
-    public const int FilteredWindow = 10;
+    public const int JudgedWindow = 10;
     public const int FilteredRaise = 3;
 
     public static DnsSummary Compute(DnsWatch watch, DnsResultLog log)
@@ -34,18 +35,22 @@ public sealed record DnsSummary(bool Watched, DnsSummaryState State)
         return new DnsSummary(true, DnsSummaryState.Ok);
     }
 
-    /// <summary>Over the last <see cref="FilteredWindow"/> judged results — seeded-name
+    /// <summary>The last <see cref="JudgedWindow"/> judged results, oldest first — seeded-name
     /// outcomes: Filtered, WrongAnswer or Verified (an admin/hostname name's Answered is
-    /// unjudged and never dilutes the window): at least <see cref="FilteredRaise"/> Filtered, and
+    /// unjudged and never dilutes the window).</summary>
+    public static List<DnsResult> Judged(IReadOnlyList<DnsResult> recent) =>
+        recent.Where(r => DnsOutcome.IsJudged(r.Outcome)).TakeLast(JudgedWindow).ToList();
+
+    /// <summary>Over the <see cref="Judged"/> window: at least <see cref="FilteredRaise"/> Filtered, and
     /// every name seen Filtered is still Filtered at its latest ask.</summary>
     public static bool IsFiltered(IReadOnlyList<DnsResult> recent)
     {
-        var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Verified").TakeLast(FilteredWindow).ToList();
-        if (judged.Count(r => r.Outcome == "Filtered") < FilteredRaise)
+        var judged = Judged(recent);
+        if (judged.Count(r => r.Outcome == DnsOutcome.Filtered) < FilteredRaise)
             return false;
         var latestByName = judged.Where(r => r.Name is not null).GroupBy(r => r.Name!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Last().Outcome, StringComparer.OrdinalIgnoreCase);
-        var filteredNames = judged.Where(r => r.Outcome == "Filtered" && r.Name is not null).Select(r => r.Name!).Distinct(StringComparer.OrdinalIgnoreCase);
-        return filteredNames.All(n => latestByName[n] == "Filtered");
+        var filteredNames = judged.Where(r => r.Outcome == DnsOutcome.Filtered && r.Name is not null).Select(r => r.Name!).Distinct(StringComparer.OrdinalIgnoreCase);
+        return filteredNames.All(n => latestByName[n] == DnsOutcome.Filtered);
     }
 }

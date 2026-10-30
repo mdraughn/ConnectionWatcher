@@ -2,6 +2,7 @@ using System.Reactive.Disposables;
 using System.Globalization;
 using System.Reactive.Subjects;
 using ConCore;
+using ConCore.Dns;
 using ConCore.Targets;
 using ConEngine.Events;
 using ConEngine.Tracking;
@@ -290,21 +291,6 @@ public class ModelCheckCoordinator : IDisposable
 
     private static string Pct(double value) => value.ToString("P0", CultureInfo.InvariantCulture);
 
-    /// <summary>A DNS result's detail: "Filtered: NXDOMAIN (dns.google)" → "NXDOMAIN", the
-    /// text between the first ": " and the last " (" — or, with no name suffix, the rest
-    /// after the first ": " (or after the outcome token). Never throws on an odd message.</summary>
-    public static string DetailOf(ConEngine.Dns.DnsResult result)
-    {
-        var message = result.Message.Trim();
-        var colon = message.IndexOf(": ", StringComparison.Ordinal);
-        var start = colon >= 0 ? colon + 2 : Math.Min(result.Outcome.Length, message.Length);
-        var end = message.LastIndexOf(" (", StringComparison.Ordinal);
-        if (end < start)
-            end = message.Length;
-        return message[start..end].Trim();
-    }
-
-    public const int ResolverWindow = 10;
     public const int ResolverRaise = 3;
     public const int NameMisses = 3;
 
@@ -337,19 +323,19 @@ public class ModelCheckCoordinator : IDisposable
         foreach (var monitor in system.Select(s => s.Monitor).Concat(upstream))
         {
             var recent = _dnsResults.Recent(monitor.Target.Id);
-            var judged = recent.Where(r => r.Outcome is "Filtered" or "WrongAnswer" or "Verified").TakeLast(ResolverWindow).ToList();
-            var lies = judged.Where(r => r.Outcome == "WrongAnswer").ToList();
+            var judged = ConEngine.Dns.DnsSummary.Judged(recent);
+            var lies = judged.Where(r => r.Outcome == DnsOutcome.WrongAnswer).ToList();
             if (lies.Count >= ResolverRaise)
             {
                 var last = lies[^1];
                 Add(found, ModelWarningKind.ResolverLying, monitor.Target,
-                    $"{monitor.Target.Name} answered {last.Name ?? "a lookup name"} with {DetailOf(last)} — a captive portal or interception?");
+                    $"{monitor.Target.Name} answered {last.Name ?? "a lookup name"} with {last.Detail} — a captive portal or interception?");
             }
             else if (ConEngine.Dns.DnsSummary.IsFiltered(recent))
             {
-                var last = judged.Last(r => r.Outcome == "Filtered");
+                var last = judged.Last(r => r.Outcome == DnsOutcome.Filtered);
                 Add(found, ModelWarningKind.ResolverFiltered, monitor.Target,
-                    $"{monitor.Target.Name} blocks {last.Name ?? "a lookup name"} (answered {DetailOf(last)}) — a Pi-hole or AdGuard blocklist? " +
+                    $"{monitor.Target.Name} blocks {last.Name ?? "a lookup name"} (answered {last.Detail}) — a Pi-hole or AdGuard blocklist? " +
                     "Name resolution still works; the seeded lookup names can't prove it. Add a lookup name your resolver allows.");
             }
         }

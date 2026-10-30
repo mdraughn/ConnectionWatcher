@@ -7,8 +7,8 @@ public class StatusResolverDetailTests
 {
     private static DnsResult R(int minute, bool success, string message)
     {
-        var (outcome, name) = DnsResultLog.Parse(message);
-        return new DnsResult(DateTimeOffset.Parse("2026-10-16T00:00:00Z").AddMinutes(minute), success, outcome, name, message);
+        var (outcome, name, detail) = DnsResultLog.Parse(message);
+        return new DnsResult(DateTimeOffset.Parse("2026-10-16T00:00:00Z").AddMinutes(minute), success, outcome, name, message) { Detail = detail };
     }
 
     [Fact]

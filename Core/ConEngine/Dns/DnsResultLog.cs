@@ -4,8 +4,12 @@ namespace ConEngine.Dns;
 
 /// <summary>One DNS probe outcome. Outcome is the message's leading token
 /// ("Verified", "Answered", "Filtered", "WrongAnswer", "TimedOut", …); Name is the asked
-/// lookup name, null for a probe that sent nothing.</summary>
-public sealed record DnsResult(DateTimeOffset At, bool Success, string Outcome, string? Name, string Message);
+/// lookup name, null for a probe that sent nothing; Detail is the text between them
+/// ("NXDOMAIN", "10.99.0.1, 10.99.0.2"), empty when there is none.</summary>
+public sealed record DnsResult(DateTimeOffset At, bool Success, string Outcome, string? Name, string Message)
+{
+    public string Detail { get; init; } = "";
+}
 
 /// <summary>
 /// The last <see cref="Keep"/> DNS results per Resolver target, in memory and
@@ -21,12 +25,12 @@ public sealed class DnsResultLog
 
     public void Record(Guid targetId, PingResult result)
     {
-        var (outcome, name) = Parse(result.Message);
+        var (outcome, name, detail) = Parse(result.Message);
         lock (_lock)
         {
             if (!_results.TryGetValue(targetId, out var queue))
                 _results[targetId] = queue = new Queue<DnsResult>(Keep);
-            queue.Enqueue(new DnsResult(result.Timestamp, result.Success, outcome, name, result.Message));
+            queue.Enqueue(new DnsResult(result.Timestamp, result.Success, outcome, name, result.Message) { Detail = detail });
             while (queue.Count > Keep)
                 queue.Dequeue();
         }
@@ -39,10 +43,11 @@ public sealed class DnsResultLog
             return _results.TryGetValue(targetId, out var queue) ? queue.ToList() : [];
     }
 
-    /// <summary>"Filtered: NXDOMAIN (dns.google)" → ("Filtered", "dns.google").
-    /// The name is the last parenthesised group; the outcome ends at the first
-    /// space or colon.</summary>
-    public static (string Outcome, string? Name) Parse(string message)
+    /// <summary>"Filtered: NXDOMAIN (dns.google)" → ("Filtered", "dns.google", "NXDOMAIN").
+    /// The name is the last parenthesised group when it ends the message; the outcome ends
+    /// at the first space or colon; the detail is what lies between the outcome and the
+    /// name. Never throws on an odd message.</summary>
+    public static (string Outcome, string? Name, string Detail) Parse(string message)
     {
         var text = message.Trim();
         string? name = null;
@@ -53,6 +58,9 @@ public sealed class DnsResultLog
         }
         var end = text.IndexOfAny([' ', ':']);
         var outcome = end < 0 ? text : text[..end];
-        return (outcome, name is { Length: > 0 } ? name : null);
+        var rest = end < 0 ? "" : text[end..];
+        if (rest.StartsWith(':'))
+            rest = rest[1..];
+        return (outcome, name is { Length: > 0 } ? name : null, rest.Trim());
     }
 }

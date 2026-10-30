@@ -83,7 +83,7 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
         if (lookup.HasExpected)
         {
             if (answer.Rcode == DnsRcode.NoError && answer.Addresses.Any(a => lookup.Expected.Contains(a.ToString())))
-                return new PingResult(resolver, true, elapsedMs, "Verified" + suffix);
+                return new PingResult(resolver, true, elapsedMs, DnsOutcome.Verified + suffix);
             var detail = answer.Rcode switch
             {
                 DnsRcode.NoError when answer.Addresses.Count > 0 => string.Join(", ", answer.Addresses),
@@ -96,14 +96,14 @@ public sealed class DnsQueryTransceiver(IPAddress ipAddress, IDnsLookupNames nam
             var blocked = answer.Rcode == DnsRcode.NxDomain ||
                 (answer.Rcode == DnsRcode.NoError && answer.Addresses.All(a => BlockedAddresses.Contains(a.ToString())));
             if (blocked)
-                return new PingResult(resolver, true, elapsedMs, $"Filtered: {detail}{suffix}");
+                return new PingResult(resolver, true, elapsedMs, $"{DnsOutcome.Filtered}: {detail}{suffix}");
             return answer.Rcode == DnsRcode.NoError
-                ? new PingResult(resolver, false, 0, $"WrongAnswer: {detail}{suffix}")
+                ? new PingResult(resolver, false, 0, $"{DnsOutcome.WrongAnswer}: {detail}{suffix}")
                 : Miss(answer.Rcode);
         }
         return answer.Rcode switch
         {
-            DnsRcode.NoError => new PingResult(resolver, true, elapsedMs, "Answered" + suffix),
+            DnsRcode.NoError => new PingResult(resolver, true, elapsedMs, DnsOutcome.Answered + suffix),
             DnsRcode.NxDomain => new PingResult(resolver, true, elapsedMs, "NxDomain" + suffix),
             var rcode => Miss(rcode),
         };

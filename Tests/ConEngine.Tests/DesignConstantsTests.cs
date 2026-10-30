@@ -32,7 +32,7 @@ public class DesignConstantsTests
 
         // DNS watch design (2026-10-10): resolver window 10, raise at 3 misses, name misses 3.
         // Controller ruling from the audit; the code agrees.
-        Assert.Equal(10, ModelCheckCoordinator.ResolverWindow);
+        Assert.Equal(10, DnsSummary.JudgedWindow);
         Assert.Equal(3, ModelCheckCoordinator.ResolverRaise);
         Assert.Equal(3, ModelCheckCoordinator.NameMisses);
 

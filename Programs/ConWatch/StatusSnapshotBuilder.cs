@@ -1,3 +1,4 @@
+using ConCore.Dns;
 using ConCore.Targets;
 using ConEngine;
 using ConEngine.Topology;
@@ -101,7 +102,7 @@ public static class StatusSnapshotBuilder
         var names = lookupNames.Select(n =>
         {
             var last = allRecent.LastOrDefault(r => string.Equals(r.Name, n.Name, StringComparison.OrdinalIgnoreCase));
-            var result = last is null ? "none" : last.Outcome == "Filtered" ? "filtered" : last.Success ? "ok" : "miss";
+            var result = last is null ? "none" : last.Outcome == DnsOutcome.Filtered ? "filtered" : last.Success ? "ok" : "miss";
             return new StatusLookupName(n.Name, result, last?.Message);
         }).ToList();
         var dns = new StatusDns(summary.Watched, summary.State.ToString(),

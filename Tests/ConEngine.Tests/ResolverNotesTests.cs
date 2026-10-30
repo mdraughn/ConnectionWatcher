@@ -118,18 +118,6 @@ public class ResolverNotesTests : IDisposable
         Assert.True(Active(ModelWarningKind.ResolverLying, "Your resolver 10.0.0.1"));
     }
 
-    [Theory]
-    [InlineData("Filtered: NXDOMAIN (dns.google)", "NXDOMAIN")]
-    [InlineData("WrongAnswer: 10.99.0.1, 10.99.0.2 (dns.google)", "10.99.0.1, 10.99.0.2")]
-    [InlineData("WrongAnswer: 10.99.0.1", "10.99.0.1")]
-    [InlineData("Filtered (dns.google)", "")]
-    [InlineData("WrongAnswer", "")]
-    public void DetailOf_strips_the_outcome_and_the_name_without_ever_throwing(string message, string detail)
-    {
-        var (outcome, name) = DnsResultLog.Parse(message);
-        Assert.Equal(detail, ModelCheckCoordinator.DetailOf(new DnsResult(DateTimeOffset.UnixEpoch, false, outcome, name, message)));
-    }
-
     [Fact]
     public void Wrong_answers_for_a_seeded_name_are_ResolverLying()
     {
