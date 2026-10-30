@@ -8,7 +8,6 @@ namespace ConWatch.Pages;
 
 public class HistoryModel(SettingsStore settingsStore, ConfigStore configStore) : PageModel
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public string SubjectsJson { get; private set; } = "[]";
     public string TopologyJson { get; private set; } = "{}";
@@ -51,12 +50,12 @@ public class HistoryModel(SettingsStore settingsStore, ConfigStore configStore) 
                 Kind = "verdict", Parent = (string?)null, Role = "other", Scope = "Verdict",
             });
 
-        SubjectsJson = JsonSerializer.Serialize(subjects, JsonOptions);
+        SubjectsJson = JsonSerializer.Serialize(subjects, WebJson.Options);
         TopologyJson = JsonSerializer.Serialize(new
         {
             TrunkNames = names.TrunkNames,
             AnchorNames = names.AnchorNames,
             WeatherThreshold = names.WeatherThreshold,
-        }, JsonOptions);
+        }, WebJson.Options);
     }
 }

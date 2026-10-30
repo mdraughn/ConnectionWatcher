@@ -4,7 +4,7 @@
 @model ConWatch.Pages.Config.ProfilesModel
 @{
     ViewData["Title"] = "Profiles — ConnectionWatcher";
-    var json = (object o) => JsonSerializer.Serialize(o, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    var json = (object o) => WebJson.Serialize(o);
 }
 
 <div class="cw-pageband">

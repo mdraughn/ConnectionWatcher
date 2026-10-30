@@ -11,7 +11,6 @@ public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport he
     ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
     ConPersistence.Config.ConfigStore configStore, StatusSource status) : PageModel
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public string InitialDataJson { get; private set; } = "{}";
     public int WarningCount { get; private set; }
@@ -107,7 +106,7 @@ public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport he
             EngineDisabled,
             Admin = !gate.IsLocked(User),
             CloneSource = await settingsStore.GetAsync(ConPersistence.Settings.SettingKeys.CloneSourceUrl),
-        }, JsonOptions);
+        }, WebJson.Options);
         return Page();
     }
 }

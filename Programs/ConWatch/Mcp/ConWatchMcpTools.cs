@@ -28,7 +28,6 @@ public class ConWatchMcpTools(WatcherHostService host,
     DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http,
     StatusSource status)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     [McpServerTool(Name = "get_current_status", ReadOnly = true)]
     [Description("Live status right now: the overall internet verdict (Healthy, " +
@@ -60,7 +59,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             targets = snapshot?.Targets,
             warnings = snapshot?.Warnings,
             dns = snapshot?.Dns,
-        }, Json));
+        }, WebJson.Options));
     }
 
     [McpServerTool(Name = "get_connection_report", ReadOnly = true)]
@@ -78,7 +77,7 @@ public class ConWatchMcpTools(WatcherHostService host,
     {
         var report = await reportBuilder.BuildAsync(
             TimeRange.AsUtc(fromUtc), TimeRange.AsUtc(toUtc));
-        return JsonSerializer.Serialize(report, Json);
+        return JsonSerializer.Serialize(report, WebJson.Options);
     }
 
     [McpServerTool(Name = "get_transitions", ReadOnly = true)]
@@ -107,7 +106,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
             Math.Clamp(limit, 1, 500), before: null, subjectName, scopeFilter);
         var tags = await ScopeTags.LoadAsync(db);
-        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, tags)), Json);
+        return JsonSerializer.Serialize(rows.Select(r => TransitionDto.From(r, tags)), WebJson.Options);
     }
 
     [McpServerTool(Name = "get_glitches", ReadOnly = true)]
@@ -132,7 +131,7 @@ public class ConWatchMcpTools(WatcherHostService host,
             toUtc is { } u ? TimeRange.AsUtc(u) : null,
             Math.Clamp(limit, 1, 500), scopeFilter);
         var tags = await ScopeTags.LoadAsync(db);
-        return JsonSerializer.Serialize(rows.Select(g => GlitchDto.From(g, tags)), Json);
+        return JsonSerializer.Serialize(rows.Select(g => GlitchDto.From(g, tags)), WebJson.Options);
     }
 
     [McpServerTool(Name = "list_discoveries", ReadOnly = true)]
@@ -154,6 +153,6 @@ public class ConWatchMcpTools(WatcherHostService host,
                 "or ask the owner to remove the password.");
         if (!DiscoveryStatuses.TryParseFilter(status, out var filter))
             throw new McpException("status must be 'new', 'hidden', 'adopted' or 'all'.");
-        return JsonSerializer.Serialize(await discoveries.ListAsync(filter), Json);
+        return JsonSerializer.Serialize(await discoveries.ListAsync(filter), WebJson.Options);
     }
 }

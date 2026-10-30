@@ -33,7 +33,6 @@ public class CloneService(IHttpClientFactory httpFactory,
 {
     public const string HttpClientName = "clone";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<CloneOutcome> CloneAsync(string? sourceUrl, string? sourcePassword,
         bool includeSecrets, bool allowInsecure, bool includeLocalDevices, CancellationToken ct)
@@ -147,7 +146,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         try
         {
             disable = await client.PostAsJsonAsync(new Uri(source, "api/v1/admin/engine"),
-                new { enabled = false, password = sourcePassword }, Json, ct);
+                new { enabled = false, password = sourcePassword }, WebJson.Options, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -231,7 +230,7 @@ public class CloneService(IHttpClientFactory httpFactory,
             {
                 response = await client.PostAsJsonAsync(
                     new Uri(source, "api/v1/export/snapshot/full"),
-                    new { password }, Json, ct);
+                    new { password }, WebJson.Options, ct);
             }
             else
             {
@@ -246,7 +245,7 @@ public class CloneService(IHttpClientFactory httpFactory,
                     $"The source node answered {(int)response.StatusCode} for the snapshot. " +
                     "Is the URL a ConnectionWatcher node?"));
 
-            var snapshot = await response.Content.ReadFromJsonAsync<Snapshot>(Json, ct);
+            var snapshot = await response.Content.ReadFromJsonAsync<Snapshot>(WebJson.Options, ct);
             if (snapshot is null)
                 return (null, CloneOutcome.Fail(502, "source-error",
                     "The source node returned an empty snapshot document."));
