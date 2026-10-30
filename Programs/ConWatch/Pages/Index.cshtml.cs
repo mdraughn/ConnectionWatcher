@@ -9,9 +9,7 @@ namespace ConWatch.Pages;
 public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHealth health,
     Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
     ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
-    ConPersistence.Config.ConfigStore configStore,
-    ConPersistence.Warnings.ModelWarningLedger warnings,
-    ConInfrastructure.NameResolution.DnsLookupNames lookupNames) : PageModel
+    ConPersistence.Config.ConfigStore configStore, StatusSource status) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -100,7 +98,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
 
         InitialDataJson = JsonSerializer.Serialize(new
         {
-            Snapshot = StatusSnapshotBuilder.Build(engine, warnings, lookupNames.Current),
+            Snapshot = status.Current(),
             Parents = parents,
             PoolMembers = poolMembers,
             TrunkNames = names.TrunkNames,

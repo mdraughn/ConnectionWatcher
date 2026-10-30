@@ -26,8 +26,7 @@ namespace ConWatch.Mcp;
 public class ConWatchMcpTools(WatcherHostService host,
     IDbContextFactory<ConWatchDbContext> dbFactory, IspReportBuilder reportBuilder,
     DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http,
-    ConPersistence.Warnings.ModelWarningLedger warnings,
-    ConInfrastructure.NameResolution.DnsLookupNames lookupNames)
+    StatusSource status)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -51,7 +50,7 @@ public class ConWatchMcpTools(WatcherHostService host,
         " dns is the name-resolution watch: watched, state (Ok, Degraded, Filtered = the resolver blocks the seeded names but works, Down, Unknown), the host's resolvers and any upstream ones, the blame when the verdict is DnsDown, and each lookup name's last result.")]
     public Task<string> GetCurrentStatus()
     {
-        var snapshot = StatusSnapshotBuilder.Build(host.Engine, warnings, lookupNames.Current);
+        var snapshot = status.Live();
         return Task.FromResult(JsonSerializer.Serialize(new
         {
             monitoringEnabled = host.EngineEnabled,

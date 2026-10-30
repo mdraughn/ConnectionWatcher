@@ -163,6 +163,7 @@ public static class ConWatchServices
         });
         services.AddSignalR();
         services.AddSingleton<StatusBroadcaster>();
+        services.AddSingleton<StatusSource>();
         services.AddSingleton<Metrics.MetricsCounters>();
         return services;
     }

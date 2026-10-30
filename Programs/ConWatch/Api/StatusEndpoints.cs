@@ -5,14 +5,11 @@ public static class StatusEndpoints
 {
     public static void MapStatus(this RouteGroupBuilder api)
     {
-        api.MapGet("/status", (WatcherHostService host, ConPersistence.Warnings.ModelWarningLedger warnings,
-            ConInfrastructure.NameResolution.DnsLookupNames lookupNames) =>
+        api.MapGet("/status", (StatusSource status) =>
         {
-            if (StatusSnapshotBuilder.Build(host.Engine, warnings, lookupNames.Current) is { } snapshot)
+            // Archive mode is a healthy answer (the disabled snapshot), not an error: no live states.
+            if (status.Current() is { } snapshot)
                 return Results.Ok(snapshot);
-            // Archive mode is a healthy answer, not an error: no live states.
-            if (!host.EngineEnabled)
-                return Results.Ok(StatusSnapshot.Disabled);
             return ApiResults.Error(StatusCodes.Status503ServiceUnavailable, null, "Engine is not running");
         });
 
