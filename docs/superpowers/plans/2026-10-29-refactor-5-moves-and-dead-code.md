@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Carry out survey items O1–O8 and X1–X5 as behavior-preserving moves, renames and deletions on branch `refactor-5-moves-and-dead-code`, one commit per task.
+**Goal:** Carry out survey items O1–O8 and X1–X6 as behavior-preserving moves, renames and deletions on branch `refactor-5-moves-and-dead-code`, one commit per task.
 
-**Architecture:** Five groups. A: repo-root housekeeping (O7). B: dead code (X1–X4). C: test-only members become internal behind `InternalsVisibleTo` (X5, ruling 5). D: misplaced code moves to where it belongs (O1–O6, ruling 6). E: the `Core/ConEngine/Topology/` folder split, namespace unchanged (O8, ruling 7). Every task pins current behavior with a named test (existing or new) before it moves or deletes anything; no wire shape changes.
+**Architecture:** Five groups. A: repo-root housekeeping (O7). B: dead code (X1–X4, X6). C: test-only members become internal behind `InternalsVisibleTo` (X5, ruling 5). D: misplaced code moves to where it belongs (O1–O6, ruling 6). E: the `Core/ConEngine/Topology/` folder split, namespace unchanged (O8, ruling 7). Every task pins current behavior with a named test (existing or new) before it moves or deletes anything; no wire shape changes.
 
 **Tech Stack:** .NET 10, ASP.NET Core Razor Pages + minimal APIs, EF Core 10.0.13 on SQLite, System.Reactive 6.1.0, xUnit 2.9.3, React/TypeScript with vitest (happy-dom).
 
@@ -47,7 +47,7 @@
 | O6 | Move `IEngineObserver` to the recorders that honor it | A new `EngineChannelRecorder<TEvent> : ChannelRecorder<TEvent>, IEngineObserver` carries `SourceOf` and `Attach(WatcherEngine)`; `TransitionRecorder` and `GlitchRecorder` derive from it; `ModelWarningRecorder` stays on `ChannelRecorder` and loses its throwing `SourceOf`. |
 | O7 `APM/` | Delete the empty tree | Confirmed empty (four nested empty directories, untracked). Plan B left it as a possible placeholder; nothing in the repo, CI or docs references it, and git cannot track an empty directory, so it is local clutter only. Deleted; no commit results. |
 | O7 extra | — | `Core/ConEngine/Examples/` is also an empty folder, kept alive only by `<Folder Include="Examples\" />` in `ConEngine.csproj`. Both go in Task 1. |
-| O7 `.idea/` | Untrack | Four files under `.idea/.idea.ConnectionWatcher/.idea/` are tracked and `.gitignore` has no `.idea` rule. `git rm -r --cached` plus a `.idea/` ignore line; local files stay. (`.vscode/` is untracked today; left alone, see owner questions.) |
+| O7 `.idea/` | Untrack | Four files under `.idea/.idea.ConnectionWatcher/.idea/` are tracked and `.gitignore` has no `.idea` rule. `git rm -r --cached` plus a `.idea/` ignore line; local files stay. `.vscode/` (untracked; holds only the owner's window colors) gets an ignore line too, by owner ruling 2026-10-30. |
 | O8 | Split `Topology/` | Ruling 7: folders `Topology/`, `Verdict/`, `Diagnostics/`, all keeping `namespace ConEngine.Topology`; the README Development table gets one sentence saying so. |
 | X1 `HostAnalysisEngine` | Remove `LastUpdated/NumSuccess/NumFailed` | `LastUpdated` is write-only: deleted. `NumSuccess`/`NumFailed` are read inside `Recalculate` only: they become locals there. |
 | X1 `CliApp.Guarded` | Remove the redundant catch | Pinned first with a new `GuardedTests` case, since nothing tests that path today. |
@@ -111,7 +111,7 @@ Expected: `0`. Anything listed: stop and report it.
 Remove-Item -Recurse APM, Core/ConEngine/Examples
 git rm -r --cached .idea
 ```
-Add `.idea/` to `.gitignore` in the "User-specific files" block.
+Add `.idea/` and `.vscode/` to `.gitignore` in the "User-specific files" block. `.vscode/` was never tracked, so there is nothing to untrack; `git status --short` stops listing it.
 
 - [ ] **Step 3: Move the script and fix its output path**
 
@@ -140,6 +140,7 @@ git commit -m "chore: move Get-NasSnapshot to tools/, untrack .idea, drop the em
 - Modify: `Core/ConEngine/Tracking/HostAnalysisEngine.cs` (delete `LastUpdated`; `NumSuccess`/`NumFailed` become locals of `Recalculate`, and the two other reset statements drop them)
 - Modify: `Libraries/ConInfrastructure/Traceroute/IcmpTtlProbe.cs` (delete the `IPStatus.TimedOut` arm, identical to `_`)
 - Modify: `Programs/ConWatchCli/CliApp.cs` (delete the `catch (PlatformNotSupportedException)` in `Guarded`)
+- Modify: `Core/ConCore/DomainResolutionResult.cs` (X6, owner ruling 2026-10-30: delete `FirstAddress`, `IPv6Addresses` and `ToDetailedString`; `AddressCount` stays, `ToString` uses it)
 - Test: `Tests/ConWatchCli.Tests/GuardedTests.cs`
 
 **Interfaces:** none produced. Plan 2 (D10 `IcmpEcho`) may have rewritten `IcmpTtlProbe`; if its switch is gone, skip that bullet.
@@ -150,8 +151,9 @@ git commit -m "chore: move Get-NasSnapshot to tools/, untrack .idea, drop the em
 rg -n --type cs "\.Capacity\b|\.ToArray\(\)" Core/ConEngine Libraries Programs Tests | rg -i "buffer"
 rg -n --type cs "\bLastUpdated\b|\bNumSuccess\b|\bNumFailed\b" Core Libraries Programs Tests
 rg -n --type cs "\.Task\b" Core/ConEngine Programs Tests | rg -i "controller"
+rg -n --type cs "\bFirstAddress\b|\bIPv6Addresses\b|\bToDetailedString\b" Core Libraries Programs Tests
 ```
-Expected: the first and third print nothing; the second prints only lines inside `HostAnalysisEngine.cs`.
+Expected: the first and third print nothing; the second prints only lines inside `HostAnalysisEngine.cs`; the fourth prints only lines inside `DomainResolutionResult.cs`.
 
 - [ ] **Step 2: Pin `Guarded`'s mapping for `PlatformNotSupportedException`**
 
@@ -173,7 +175,7 @@ Run `dotnet test Tests/ConWatchCli.Tests -c Debug --filter GuardedTests`. Expect
 
 Full build and test. Expected: `HostAnalysisEngineTests`, `GuardedTests`, `TracerouteRunnerTests` pass.
 ```bash
-git commit -m "refactor: delete dead engine members, the duplicate TimedOut arm and the redundant Guarded catch"
+git commit -m "refactor: delete dead engine and resolution-result members, the duplicate TimedOut arm and the redundant Guarded catch"
 ```
 
 ---
@@ -186,6 +188,7 @@ git commit -m "refactor: delete dead engine members, the duplicate TimedOut arm 
 - Modify: `Libraries/ConPersistence/Config/ConfigMapping.cs` (`ToDto(this PingProfile p)`: drop `Guid? id = null`; the `Id = id` initializer goes, `ProfileDto.Id` defaults to null)
 - Modify: `Libraries/ConPersistence/Discoveries/DiscoveryStore.cs` (delete `public const int MaxBatch`; uses become `DiscoveryLimits.MaxBatch`)
 - Modify callers: `Programs/ConWatch/Discoveries/DiscoverySearchService.cs`, `Tests/ConPersistence.Tests/DiscoveryStoreTests.cs`, `Tests/ConWatch.Tests/DiscoverySearchServiceTests.cs`
+- Modify: `Tests/ConPersistence.Tests/ConfigHealthTests.cs`: `A_disabled_anchor_also_falls_below_the_recommended_count` passes vacuously (its fixture has 2 anchors, below `RecommendedAnchors` 3, before anything is disabled). Give the fixture a third enabled anchor, assert no `anchors-below-recommended` first, then disable one and assert it appears. Owner ruling 2026-10-30 keeps enabled-only counting, so this test is its pin.
 
 **Interfaces:** `RollupMerge.ToRow(RollupBucket)`, `ConfigMapping.ToDto(this PingProfile)`.
 
@@ -204,7 +207,7 @@ Expected: only the declarations print.
 - [ ] **Step 3: Build, test, commit**
 
 ```bash
-git commit -m "refactor: drop never-passed parameters, GlitchLines and the MaxBatch alias"
+git commit -m "refactor: drop never-passed parameters, GlitchLines and the MaxBatch alias; pin enabled-only anchor counting"
 ```
 
 ---
@@ -645,10 +648,11 @@ git commit -m "refactor(engine): split Topology/ into Topology, Verdict and Diag
 
 ---
 
-## Owner questions (not planned)
+## Owner rulings (2026-10-30)
 
-- **X6:** `DomainResolutionResult.AddressCount`, `FirstAddress`, `IPv6Addresses`, `ToDetailedString` are still unused. You kept them in September (decision 6); the survey asks whether to revisit. No task until you rule.
-- **`.vscode/`:** untracked in the working tree today. Ignore it like `.idea/`, commit shared settings from it, or leave it as is?
+- **X6:** delete `FirstAddress`, `IPv6Addresses` and `ToDetailedString` (Task 2). `AddressCount` stays: `ToString` uses it.
+- **`.vscode/`:** ignore it like `.idea/` (Task 1). It holds only the owner's window colors.
+- **Anchor counting (from plan 2):** config warnings keep counting enabled anchors only. Task 3 fixes the vacuous test that was meant to pin it.
 
 ## Wire changes
 

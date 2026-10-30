@@ -1129,7 +1129,7 @@ git add -A; git commit -m "refactor: target-role defaults and built-in profile n
 - [ ] Run the full gate once more: `dotnet build ConnectionWatcher.sln -c Debug` (no new warnings), `dotnet test ConnectionWatcher.sln -c Debug` (0 failed), and `npx vitest run` from `Programs/ConWatch/ClientApp`.
 - [ ] Hand the branch back for review and merge. Do not push.
 
-## Owner questions
+## Owner rulings (2026-10-30)
 
-1. **Ruling 1 and the Targets-page pipeline.** The pipeline still draws a nested anchor inside the path chain of the anchor below it, as the ruling's wording says. Only the trunk/anchor *roles* change. If the pipeline should drop it too, that is a one-line change in Task 3.
-2. **Task 6 counts only enabled targets in `ConfigHealth`.** This includes `anchors-below-recommended`. The survey named the drift but did not rule on it, so it is decided here to match the engine. Veto it if a disabled anchor should still count toward "you have enough anchors".
+1. **Ruling 1 and the Targets-page pipeline:** keep drawing a nested anchor inside the path chain of the anchor below it. The drawing shows the real path; only the trunk/anchor *roles* change.
+2. **`ConfigHealth` counts only enabled targets,** `anchors-below-recommended` included: kept. A disabled anchor proves nothing about the internet. Plan 5 Task 3 fixes the vacuous test meant to pin this.
