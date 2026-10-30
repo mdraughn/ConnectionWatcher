@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
+using ConInfrastructure.Net;
 
 namespace ConInfrastructure.Discovery;
 
@@ -54,20 +54,8 @@ public class GatewayDiscovery : IGatewayDiscovery
         .ThenByDescending(r => r.Reachable)
         .ToList();
 
-    private static IEnumerable<IPAddress> DefaultRouteGateways()
-    {
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (nic.OperationalStatus != OperationalStatus.Up ||
-                nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                continue;
-            foreach (var gateway in nic.GetIPProperties().GatewayAddresses)
-            {
-                if (gateway.Address.AddressFamily == AddressFamily.InterNetwork)
-                    yield return gateway.Address;
-            }
-        }
-    }
+    private static IEnumerable<IPAddress> DefaultRouteGateways() =>
+        HostInterfaces.Read().SelectMany(i => i.Gateways);
 
     private static async Task<long?> IcmpProbeAsync(IPAddress address, CancellationToken ct)
     {

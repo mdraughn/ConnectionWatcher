@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using ConCore.Discovery;
+using ConInfrastructure.Net;
 
 namespace ConInfrastructure.Discovery;
 
@@ -16,30 +17,9 @@ public interface ILocalNetworks
 
 public sealed class SystemLocalNetworks : ILocalNetworks
 {
-    public IReadOnlyList<LocalNetwork> Read()
-    {
-        var result = new List<LocalNetwork>();
-        try
-        {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up ||
-                    nic.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel)
-                    continue;
-                var properties = nic.GetIPProperties();
-                var gateways = properties.GatewayAddresses
-                    .Select(g => g.Address).Where(a => a.AddressFamily == AddressFamily.InterNetwork).ToList();
-                foreach (var unicast in properties.UnicastAddresses)
-                    if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
-                        result.Add(new LocalNetwork(unicast.Address, unicast.PrefixLength, gateways));
-            }
-        }
-        catch (NetworkInformationException)
-        {
-            // No interface information: nothing to scan.
-        }
-        return result;
-    }
+    public IReadOnlyList<LocalNetwork> Read() => HostInterfaces.Read()
+        .SelectMany(i => i.UnicastV4.Select(a => new LocalNetwork(a.Address, a.PrefixLength, i.Gateways)))
+        .ToList();
 }
 
 public sealed record LanScanResult(IReadOnlyList<DiscoveryCandidate> Found, bool Complete);

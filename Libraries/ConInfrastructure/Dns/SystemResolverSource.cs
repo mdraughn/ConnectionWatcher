@@ -1,6 +1,6 @@
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using ConInfrastructure.Net;
 
 namespace ConInfrastructure.NameResolution;
 
@@ -52,23 +52,10 @@ public sealed class SystemResolverSource(Func<IEnumerable<IPAddress>> raw) : ISy
         address.AddressFamily == AddressFamily.InterNetworkV6 &&
         address.GetAddressBytes().AsSpan(0, 8).SequenceEqual(new byte[] { 0xfe, 0xc0, 0, 0, 0, 0, 0xff, 0xff });
 
-    internal static IEnumerable<IPAddress> WindowsResolvers()
-    {
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (nic.OperationalStatus != OperationalStatus.Up ||
-                nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                continue;
-            var properties = nic.GetIPProperties();
-            // Only interfaces that carry a real IPv4 default route resolve for the host; some VPN
-            // adapters list 0.0.0.0 as a gateway.
-            if (!properties.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork &&
-                    !g.Address.Equals(IPAddress.Any)))
-                continue;
-            foreach (var address in properties.DnsAddresses)
-                yield return address;
-        }
-    }
+    internal static IEnumerable<IPAddress> WindowsResolvers() =>
+        // Only interfaces that carry a real IPv4 default route resolve for the host; some VPN
+        // adapters list 0.0.0.0 as a gateway.
+        HostInterfaces.Read().Where(i => i.Gateways.Count > 0).SelectMany(i => i.DnsServers);
 
     internal static IEnumerable<IPAddress> LinuxResolvers() =>
         ParseResolvConf(File.ReadLines("/etc/resolv.conf"));
