@@ -131,7 +131,7 @@ public class ProbeSpecTests
         // the traceroute/ASN classification or the LAN sweep.
         Assert.Equal(isPrivate, ProbePolicy.IsPrivate(address));
         Assert.Equal(isPrivateOrCarrier, ProbePolicy.IsPrivateOrCarrier(address));
-        Assert.Equal(isRfc1918, ConInfrastructure.Discovery.LanScanner.IsRfc1918(System.Net.IPAddress.Parse(address)));
+        Assert.Equal(isRfc1918, ProbePolicy.IsRfc1918(System.Net.IPAddress.Parse(address)));
     }
 
     [Theory]

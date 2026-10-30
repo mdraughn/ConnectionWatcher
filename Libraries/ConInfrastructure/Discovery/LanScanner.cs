@@ -44,7 +44,7 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
 
     public async Task<LanScanResult> ScanAsync(CancellationToken ct)
     {
-        var nets = networks.Read().Where(n => IsRfc1918(n.Address)).ToList();
+        var nets = networks.Read().Where(n => ConCore.ProbePolicy.IsRfc1918(n.Address)).ToList();
         // Virtual adapters (WSL, docker bridges) have no default gateway; when any network does, the real
         // LAN is among those, so sweep only them. With no gateway anywhere, an isolated LAN still gets swept.
         if (nets.Any(n => n.Gateways.Count > 0))
@@ -158,14 +158,6 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
                 if (seen.Add(host))
                     yield return UIntToIp(host);
         }
-    }
-
-    public static bool IsRfc1918(IPAddress ip)
-    {
-        if (ip.AddressFamily != AddressFamily.InterNetwork)
-            return false;
-        var b = ip.GetAddressBytes();
-        return b[0] == 10 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168);
     }
 
     private static uint IpToUInt(IPAddress ip)

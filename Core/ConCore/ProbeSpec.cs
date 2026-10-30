@@ -69,19 +69,30 @@ public static class ProbePolicy
         return false;
     }
 
-    public static bool IsPrivate(string address)
+    public static bool IsPrivate(string address) =>
+        IPAddress.TryParse(address, out var ip) && IsPrivate(ip); // hostname: treat as public
+
+    /// <summary>RFC 1918 space (IPv4 10/8, 172.16/12, 192.168/16) and nothing else.</summary>
+    public static bool IsRfc1918(IPAddress ip)
     {
-        if (!IPAddress.TryParse(address, out var ip))
-            return false; // hostname: treat as public
         if (ip.AddressFamily != AddressFamily.InterNetwork)
-            return false; // IPv6 unsupported end to end
+            return false;
+        var b = ip.GetAddressBytes();
+        return b[0] == 10 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168);
+    }
+
+    /// <summary>
+    /// RFC 1918, loopback, or IPv4 link-local (169.254/16). IPv6 is not private
+    /// (IPv6 unsupported end to end).
+    /// </summary>
+    public static bool IsPrivate(IPAddress ip)
+    {
+        if (ip.AddressFamily != AddressFamily.InterNetwork)
+            return false;
         if (IPAddress.IsLoopback(ip))
             return true;
         var b = ip.GetAddressBytes();
-        return b[0] == 10
-            || (b[0] == 172 && b[1] is >= 16 and <= 31)
-            || (b[0] == 192 && b[1] == 168)
-            || (b[0] == 169 && b[1] == 254);
+        return IsRfc1918(ip) || (b[0] == 169 && b[1] == 254);
     }
 
     /// <summary>
@@ -97,7 +108,7 @@ public static class ProbePolicy
     {
         if (ip.AddressFamily != AddressFamily.InterNetwork)
             return false;
-        if (IsPrivate(ip.ToString()))
+        if (IsPrivate(ip))
             return true;
         var b = ip.GetAddressBytes();
         return b[0] == 100 && b[1] is >= 64 and <= 127;
