@@ -170,32 +170,10 @@ public sealed class LanScanner(ILocalNetworks networks, INeighborTable neighbors
         new([(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value]);
 
     /// <summary>One ICMP echo with <see cref="PingTimeout"/>; null when there is no reply.</summary>
-    public static async Task<long?> IcmpPing(IPAddress address, CancellationToken ct)
-    {
-        try
-        {
-            using var pinger = new Ping();
-            var reply = await pinger.SendPingAsync(address, PingTimeout, cancellationToken: ct).ConfigureAwait(false);
-            return reply.Status == IPStatus.Success ? reply.RoundtripTime : null;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return null;       // PingException, SocketException, ...: no answer
-        }
-    }
+    public static Task<long?> IcmpPing(IPAddress address, CancellationToken ct) =>
+        IcmpEcho.TryPingAsync(address, PingTimeout, ct);
 
     /// <summary>Reverse DNS with a 1 s cap; null when there is no name.</summary>
-    public static async Task<string?> ReverseDns(IPAddress address, CancellationToken ct)
-    {
-        try
-        {
-            var lookup = Dns.GetHostEntryAsync(address.ToString(), ct);
-            var winner = await Task.WhenAny(lookup, Task.Delay(1000, ct)).ConfigureAwait(false);
-            return winner == lookup ? (await lookup.ConfigureAwait(false)).HostName : null;
-        }
-        catch (Exception ex) when (ex is SocketException or ArgumentException)
-        {
-            return null;
-        }
-    }
+    public static Task<string?> ReverseDns(IPAddress address, CancellationToken ct) =>
+        Net.ReverseDns.LookupAsync(address, TimeSpan.FromSeconds(1), ct);
 }

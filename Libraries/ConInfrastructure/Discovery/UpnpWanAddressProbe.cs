@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using ConInfrastructure.Net;
 
 namespace ConInfrastructure.Discovery;
 
@@ -115,17 +116,8 @@ public partial class UpnpWanAddressProbe : IWanAddressProbe
 
     private static async Task<(bool Ok, long? RttMs)> TestPingAsync(string address, CancellationToken ct)
     {
-        try
-        {
-            using var ping = new Ping();
-            var reply = await ping.SendPingAsync(IPAddress.Parse(address),
-                TimeSpan.FromSeconds(2), cancellationToken: ct).ConfigureAwait(false);
-            return (reply.Status == IPStatus.Success, reply.Status == IPStatus.Success ? reply.RoundtripTime : null);
-        }
-        catch (Exception)
-        {
-            return (false, null);
-        }
+        var rtt = await IcmpEcho.TryPingAsync(IPAddress.Parse(address), TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+        return (rtt is not null, rtt);
     }
 
     [GeneratedRegex(@"(?im)^LOCATION:\s*(\S+)\s*$")]

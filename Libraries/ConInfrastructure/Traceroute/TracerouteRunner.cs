@@ -1,5 +1,6 @@
 using System.Net;
 using ConInfrastructure.Asn;
+using ConInfrastructure.Net;
 using Microsoft.Extensions.Logging;
 
 namespace ConInfrastructure.Traceroute;
@@ -66,7 +67,7 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
             }
 
             var hopRow = new TracerouteHop(ttl, hopAddress?.ToString(),
-                hopAddress is null ? null : await ReverseDnsAsync(hopAddress, ct).ConfigureAwait(false),
+                hopAddress is null ? null : await ReverseDns.LookupAsync(hopAddress, TimeSpan.FromSeconds(1), ct).ConfigureAwait(false),
                 bestRtt, reached, null, null, null);
             hops.Add(hopRow);
             if (reached || (stopWhen?.Invoke(hopRow) ?? false))
@@ -104,19 +105,5 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
         });
         await Task.WhenAll(tasks).ConfigureAwait(false);
         return result;
-    }
-
-    private static async Task<string?> ReverseDnsAsync(IPAddress address, CancellationToken ct)
-    {
-        try
-        {
-            var lookup = Dns.GetHostEntryAsync(address.ToString(), ct);
-            var winner = await Task.WhenAny(lookup, Task.Delay(1000, ct)).ConfigureAwait(false);
-            return winner == lookup ? (await lookup.ConfigureAwait(false)).HostName : null;
-        }
-        catch
-        {
-            return null;
-        }
     }
 }

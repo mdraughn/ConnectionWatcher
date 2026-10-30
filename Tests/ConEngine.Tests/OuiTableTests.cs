@@ -43,4 +43,13 @@ public class OuiTableTests
         Assert.True(table.Count > 10_000, $"only {table.Count} entries — was the table generated?");
         Assert.Contains("Cisco", table.Describe("00:00:0c:12:34:56") ?? "", StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void An_unpadded_mac_finds_its_vendor() => Assert.Equal("Example Networks", Small.Describe("a4:bb:cc:0:1:2"));
+
+    [Theory]
+    [InlineData("00:00:00:00:00:00")]
+    [InlineData("ff:ff:ff:ff:ff:ff")]
+    [InlineData("01:00:5e:00:00:01")]
+    public void Zero_broadcast_and_multicast_macs_have_no_vendor(string mac) => Assert.Null(Small.Describe(mac));
 }

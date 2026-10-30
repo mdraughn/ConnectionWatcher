@@ -18,7 +18,7 @@ public class GatewayDiscovery : IGatewayDiscovery
     private readonly Func<IPAddress, CancellationToken, Task<long?>> _probe;
 
     /// <summary>Production wiring: the host's default routes and a 1 s ICMP echo.</summary>
-    public GatewayDiscovery() : this(DefaultRouteGateways, IcmpProbeAsync)
+    public GatewayDiscovery() : this(DefaultRouteGateways, (a, ct) => IcmpEcho.TryPingAsync(a, TimeSpan.FromSeconds(1), ct))
     {
     }
 
@@ -56,19 +56,4 @@ public class GatewayDiscovery : IGatewayDiscovery
 
     private static IEnumerable<IPAddress> DefaultRouteGateways() =>
         HostInterfaces.Read().SelectMany(i => i.Gateways);
-
-    private static async Task<long?> IcmpProbeAsync(IPAddress address, CancellationToken ct)
-    {
-        try
-        {
-            using var ping = new Ping();
-            var reply = await ping.SendPingAsync(address, TimeSpan.FromSeconds(1),
-                cancellationToken: ct).ConfigureAwait(false);
-            return reply.Status == IPStatus.Success ? reply.RoundtripTime : (long?)null;
-        }
-        catch (PingException)
-        {
-            return null; // unreachable
-        }
-    }
 }

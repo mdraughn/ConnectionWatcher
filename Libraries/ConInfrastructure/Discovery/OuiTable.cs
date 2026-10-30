@@ -1,3 +1,5 @@
+using ConInfrastructure.Net;
+
 namespace ConInfrastructure.Discovery;
 
 public interface IVendorLookup
@@ -33,9 +35,9 @@ public sealed class OuiTable : IVendorLookup
 
     public string? Describe(string mac)
     {
-        var hex = new string((mac ?? "").Where(Uri.IsHexDigit).ToArray());
-        if (hex.Length != 12 || (mac ?? "").Any(c => !Uri.IsHexDigit(c) && c is not (':' or '-')))
+        if (!MacAddress.TryNormalize(mac ?? "", out var normal))
             return null;
+        var hex = normal.Replace(":", "");
         // Locally administered bit (0x02 of the first octet): randomized/private, not a registered maker.
         if ((Convert.ToByte(hex[..2], 16) & 0x02) != 0)
             return Randomized;

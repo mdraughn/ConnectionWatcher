@@ -30,7 +30,7 @@ public static partial class NeighborParser
             var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 4 || parts[2] == "0x0")
                 continue;
-            if (IsIpv4(parts[0]) && TryNormalizeMac(parts[3], out var mac))
+            if (IsIpv4(parts[0]) && Net.MacAddress.TryNormalize(parts[3], out var mac))
                 entries.Add(new NeighborEntry(parts[0], mac));
         }
         return entries;
@@ -46,7 +46,7 @@ public static partial class NeighborParser
             var macMatch = MacAddress().Match(line);
             if (!ip.Success || !macMatch.Success || !IsIpv4(ip.Groups[1].Value))
                 continue;
-            if (TryNormalizeMac(macMatch.Value, out var mac))
+            if (Net.MacAddress.TryNormalize(macMatch.Value, out var mac))
                 entries.Add(new NeighborEntry(ip.Groups[1].Value, mac));
         }
         return entries;
@@ -55,27 +55,6 @@ public static partial class NeighborParser
     private static bool IsIpv4(string text) =>
         IPAddress.TryParse(text, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
         && text.Count(c => c == '.') == 3;
-
-    /// <summary>Normalizes "AA-BB-..", "a:b:c:d:e:f" (macOS drops leading zeros) to "aa:bb:..";
-    /// false for malformed, all-zero, broadcast and multicast MACs.</summary>
-    internal static bool TryNormalizeMac(string text, out string mac)
-    {
-        mac = "";
-        var octets = text.Split(':', '-');
-        if (octets.Length != 6)
-            return false;
-        var bytes = new byte[6];
-        for (var i = 0; i < 6; i++)
-        {
-            if (octets[i].Length is < 1 or > 2 || !byte.TryParse(octets[i], System.Globalization.NumberStyles.HexNumber,
-                    System.Globalization.CultureInfo.InvariantCulture, out bytes[i]))
-                return false;
-        }
-        if (bytes.All(b => b == 0) || bytes.All(b => b == 0xff) || (bytes[0] & 1) == 1)   // zero, broadcast, multicast
-            return false;
-        mac = string.Join(':', bytes.Select(b => b.ToString("x2")));
-        return true;
-    }
 }
 
 /// <summary>The machine's own neighbor table. Any failure — no <c>arp</c>, no permission, a hang — is an empty list:
