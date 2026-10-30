@@ -143,14 +143,17 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
             .OrderBy(m => m.MemberIndex)
             .Select(m => targets[m.TargetId].Name).ToList();
 
-        // Trunk: pool parent (or unique shared member parent) walked to the root.
-        var leafId = pool.ParentId ?? pool.Members
-            .Select(m => targets.GetValueOrDefault(m.TargetId)?.ParentId)
-            .Distinct().SingleOrDefault();
-        var leaf = leafId is { } id ? targets.GetValueOrDefault(id) : null;
-        var chain = leaf is null
-            ? []
-            : TreeWalk.ChainToRoot(leaf, n => n.ParentId is { } pid ? targets.GetValueOrDefault(pid) : null);
+        // Trunk: the pool parent, else the members' nearest common ancestor (where
+        // ConfigHealth's drift check says the pool belongs), walked to the root. An
+        // anchor nested under another member is never trunk: no chain holds itself.
+        TargetRow? ParentOf(TargetRow n) => n.ParentId is { } pid ? targets.GetValueOrDefault(pid) : null;
+        var memberChains = pool.Members
+            .Select(m => targets.GetValueOrDefault(m.TargetId)).OfType<TargetRow>()
+            .Select(t => TreeWalk.AncestorsOf([t], ParentOf)).ToList();
+        var leaf = pool.ParentId is { } id
+            ? targets.GetValueOrDefault(id)
+            : memberChains.FirstOrDefault()?.FirstOrDefault(a => memberChains.All(c => c.Contains(a)));
+        var chain = leaf is null ? [] : TreeWalk.ChainToRoot(leaf, ParentOf);
         var path = chain.Select(n => n.Name).ToList();
         path.Reverse();
         var operators = chain.Select(n => n.Operator).OfType<string>()

@@ -307,6 +307,34 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task An_unparented_pool_with_a_nested_anchor_walks_the_trunk_from_the_members_common_ancestor()
+    {
+        // Router <- Modem <- Google (anchor) <- Google DNS (anchor), and the pool has no
+        // parent: the members' parents differ, and the nested anchor is never trunk.
+        await using (var db = _factory.CreateDbContext())
+        {
+            var google = await db.Targets.SingleAsync(t => t.Id == _googleId);
+            var googleDns = new TargetRow
+            {
+                Id = Guid.NewGuid(), Name = "Google DNS", Address = "8.8.4.4",
+                ParentId = google.Id, ProfileId = google.ProfileId,
+            };
+            db.Targets.Add(googleDns);
+            var pool = await db.Pools.Include(p => p.Members).SingleAsync(p => p.Name == "Internet");
+            pool.ParentId = null;
+            var cloudflare = pool.Members.Single(m => m.TargetId == _cloudflareId);
+            pool.Members.Remove(cloudflare);
+            pool.Members.Add(new PoolMemberRow { TargetId = googleDns.Id, MemberIndex = cloudflare.MemberIndex });
+            await db.SaveChangesAsync();
+        }
+
+        var report = await _builder.BuildAsync(From, To);
+
+        Assert.Equal(["Router", "Modem"], report.PathNames);
+        Assert.Equal(["Google", "Google DNS"], report.AnchorNames);
+    }
+
+    [Fact]
     public async Task Report_names_the_operator_from_the_trunk()
     {
         var before = await _builder.BuildAsync(From, To);
