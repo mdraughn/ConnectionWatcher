@@ -52,16 +52,18 @@ public class PoolConfig
 /// <summary>Seconds-based configuration mirror of <see cref="PingProfile"/>.</summary>
 public class PingProfileConfig
 {
-    public double NormalIntervalSeconds { get; set; } = 10;
-    public double PingTimeoutSeconds { get; set; } = 3;
-    public double BurstIntervalSeconds { get; set; } = 1;
-    public double BurstMaxDurationSeconds { get; set; } = 60;
-    public int HistorySize { get; set; } = 100;
-    public int MinUsableSample { get; set; } = 10;
-    public double RespondingThreshold { get; set; } = 0.95;
-    public double FalteringThreshold { get; set; } = 0.75;
-    public double DownThreshold { get; set; } = 0.10;
-    public double RecoveringThreshold { get; set; } = 0.25;
+    private static readonly PingProfile Default = new() { Name = "" };
+
+    public double NormalIntervalSeconds { get; set; } = Default.NormalInterval.TotalSeconds;
+    public double PingTimeoutSeconds { get; set; } = Default.PingTimeout.TotalSeconds;
+    public double BurstIntervalSeconds { get; set; } = Default.BurstInterval.TotalSeconds;
+    public double BurstMaxDurationSeconds { get; set; } = Default.BurstMaxDuration.TotalSeconds;
+    public int HistorySize { get; set; } = Default.HistorySize;
+    public int MinUsableSample { get; set; } = Default.MinUsableSample;
+    public double RespondingThreshold { get; set; } = Default.RespondingThreshold;
+    public double FalteringThreshold { get; set; } = Default.FalteringThreshold;
+    public double DownThreshold { get; set; } = Default.DownThreshold;
+    public double RecoveringThreshold { get; set; } = Default.RecoveringThreshold;
 
     public PingProfile ToProfile(string name) => new()
     {

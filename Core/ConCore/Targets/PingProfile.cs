@@ -50,13 +50,10 @@ public record PingProfile
         NormalInterval = TimeSpan.FromSeconds(30),
         PingTimeout = TimeSpan.FromSeconds(5),
         BurstInterval = TimeSpan.FromSeconds(2),
-        BurstMaxDuration = TimeSpan.FromSeconds(60),
         HistorySize = 30,
         MinUsableSample = 6,
         RespondingThreshold = 0.80,
         FalteringThreshold = 0.50,
-        DownThreshold = 0.10,
-        RecoveringThreshold = 0.25,
     };
 
     /// <summary>The presets every configuration has, in display order.</summary>

@@ -58,20 +58,20 @@
                 <textarea name="description" rows="2" maxlength="500"></textarea>
             </label>
             <div class="grid">
-                <label>Normal interval (s) <input name="normalIntervalSeconds" type="number" step="any" value="10" /></label>
-                <label>Burst interval (s) <input name="burstIntervalSeconds" type="number" step="any" value="1" /></label>
-                <label>Burst max duration (s) <input name="burstMaxDurationSeconds" type="number" step="any" value="60" /></label>
-                <label>Ping timeout (s) <input name="pingTimeoutSeconds" type="number" step="any" value="3" /></label>
+                <label>Normal interval (s) <input name="normalIntervalSeconds" type="number" step="any" value="@ProfilesModel.DialogDefaults["normalIntervalSeconds"]" /></label>
+                <label>Burst interval (s) <input name="burstIntervalSeconds" type="number" step="any" value="@ProfilesModel.DialogDefaults["burstIntervalSeconds"]" /></label>
+                <label>Burst max duration (s) <input name="burstMaxDurationSeconds" type="number" step="any" value="@ProfilesModel.DialogDefaults["burstMaxDurationSeconds"]" /></label>
+                <label>Ping timeout (s) <input name="pingTimeoutSeconds" type="number" step="any" value="@ProfilesModel.DialogDefaults["pingTimeoutSeconds"]" /></label>
             </div>
             <div class="grid">
-                <label>History size <input name="historySize" type="number" value="100" /></label>
-                <label>Min usable sample <input name="minUsableSample" type="number" value="10" /></label>
+                <label>History size <input name="historySize" type="number" value="@ProfilesModel.DialogDefaults["historySize"]" /></label>
+                <label>Min usable sample <input name="minUsableSample" type="number" value="@ProfilesModel.DialogDefaults["minUsableSample"]" /></label>
             </div>
             <div class="grid">
-                <label>Responding ≥ <input name="respondingThreshold" type="number" step="any" value="0.95" /></label>
-                <label>Faltering &lt; <input name="falteringThreshold" type="number" step="any" value="0.75" /></label>
-                <label>Down &lt; <input name="downThreshold" type="number" step="any" value="0.10" /></label>
-                <label>Recovering ≥ <input name="recoveringThreshold" type="number" step="any" value="0.25" /></label>
+                <label>Responding ≥ <input name="respondingThreshold" type="number" step="any" value="@ProfilesModel.DialogDefaults["respondingThreshold"]" /></label>
+                <label>Faltering &lt; <input name="falteringThreshold" type="number" step="any" value="@ProfilesModel.DialogDefaults["falteringThreshold"]" /></label>
+                <label>Down &lt; <input name="downThreshold" type="number" step="any" value="@ProfilesModel.DialogDefaults["downThreshold"]" /></label>
+                <label>Recovering ≥ <input name="recoveringThreshold" type="number" step="any" value="@ProfilesModel.DialogDefaults["recoveringThreshold"]" /></label>
             </div>
             <footer>
                 <button type="button" class="secondary outline" data-cancel>Cancel</button>
