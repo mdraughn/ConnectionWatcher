@@ -1,3 +1,4 @@
+using ConConfig;
 using ConWatchCli.Services;
 
 namespace ConWatchCli.Tests;

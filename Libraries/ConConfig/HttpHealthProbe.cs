@@ -1,8 +1,16 @@
 using System.Diagnostics;
 using System.Text.Json;
-using ConConfig;
 
-namespace ConWatchCli.Services;
+namespace ConConfig;
+
+/// <param name="Status">The `status` word from /api/v1/health, or null on failure.</param>
+/// <param name="Failure">"refused", "timed out", "HTTP 503", ... or null on success.</param>
+public sealed record HealthResult(string? Status, string? Failure, long ElapsedMs);
+
+public interface IHealthProbe
+{
+    Task<HealthResult> ProbeAsync(string serverUrl, CancellationToken ct);
+}
 
 /// <summary>GET {serverUrl}/api/v1/health, 3 s budget. Read-only; the CLI's only HTTP call.</summary>
 public sealed class HttpHealthProbe(HttpMessageHandler? handler = null, TimeSpan? timeout = null) : IHealthProbe
@@ -34,6 +42,11 @@ public sealed class HttpHealthProbe(HttpMessageHandler? handler = null, TimeSpan
         catch (HttpRequestException)
         {
             return new HealthResult(null, "refused", watch.ElapsedMilliseconds);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UriFormatException or ArgumentException or NotSupportedException)
+        {
+            // A URL HttpClient cannot use: no scheme ("localhost:8080" reads as scheme "localhost") or a bare "http://".
+            return new HealthResult(null, "invalid URL", watch.ElapsedMilliseconds);
         }
     }
 }

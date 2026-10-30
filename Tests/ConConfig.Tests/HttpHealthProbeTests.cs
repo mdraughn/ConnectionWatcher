@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
-using ConWatchCli.Services;
+using ConConfig;
 
-namespace ConWatchCli.Tests;
+namespace ConConfig.Tests;
 
 public sealed class HttpHealthProbeTests
 {
@@ -105,5 +105,15 @@ public sealed class HttpHealthProbeTests
         var handler = new Handler(async _ => { await Task.Delay(5000); return new HttpResponseMessage(HttpStatusCode.OK); });
         var r = await new HttpHealthProbe(handler, TimeSpan.FromMilliseconds(100)).ProbeAsync("http://localhost:8080", CancellationToken.None);
         Assert.Equal("timed out", r.Failure);
+    }
+
+    [Theory]
+    [InlineData("localhost:8080")]
+    [InlineData("http://")]
+    public async Task A_url_that_is_not_absolute_reports_invalid_url(string url)
+    {
+        var result = await new HttpHealthProbe().ProbeAsync(url, CancellationToken.None);
+        Assert.Null(result.Status);
+        Assert.Equal("invalid URL", result.Failure);
     }
 }

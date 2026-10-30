@@ -239,7 +239,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowSettings()
     {
-        using var dialog = new SettingsForm(_settings, _http, _scoutPasswords, _scoutSession.ForgetConsent);
+        using var dialog = new SettingsForm(_settings, new ConConfig.HttpHealthProbe(), _scoutPasswords, _scoutSession.ForgetConsent);
         if (dialog.ShowDialog() == DialogResult.OK)
             _ = RefreshAsync(); // apply immediately
     }

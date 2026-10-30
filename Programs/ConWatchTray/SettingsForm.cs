@@ -9,17 +9,17 @@ namespace ConWatchTray;
 internal sealed class SettingsForm : Form
 {
     private readonly TraySettings _settings;
-    private readonly HttpClient _http;
+    private readonly IHealthProbe _probe;
     private readonly TextBox _urlBox;
     private readonly Label _sourceLabel;
     private readonly Label _testResult;
     private readonly CheckBox _notifications;
     private readonly Button _useDefault;
 
-    public SettingsForm(TraySettings settings, HttpClient http, ScoutPasswordStore scoutPasswords, Action onForget)
+    public SettingsForm(TraySettings settings, IHealthProbe probe, ScoutPasswordStore scoutPasswords, Action onForget)
     {
         _settings = settings;
-        _http = http;
+        _probe = probe;
 
         Text = "ConnectionWatcher Tray — Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -91,25 +91,19 @@ internal sealed class SettingsForm : Form
     {
         _testResult.ForeColor = SystemColors.GrayText;
         _testResult.Text = "testing…";
-        try
+        var url = ConfigResolver.NormalizeServerUrl(_urlBox.Text);
+        var result = await _probe.ProbeAsync(url, CancellationToken.None);
+        if (result.Failure is null)
         {
-            var url = ConfigResolver.NormalizeServerUrl(_urlBox.Text);
-            var response = await _http.GetAsync($"{url}/api/v1/health");
-            if (response.IsSuccessStatusCode)
-            {
-                _testResult.ForeColor = Color.FromArgb(46, 158, 82);
-                _testResult.Text = "Connected — ConnectionWatcher is answering.";
-            }
-            else
-            {
-                _testResult.ForeColor = Color.FromArgb(204, 51, 51);
-                _testResult.Text = $"Server answered HTTP {(int)response.StatusCode} — is that the right URL?";
-            }
+            _testResult.ForeColor = Color.FromArgb(46, 158, 82);
+            _testResult.Text = "Connected — ConnectionWatcher is answering.";
         }
-        catch (Exception ex)
+        else
         {
             _testResult.ForeColor = Color.FromArgb(204, 51, 51);
-            _testResult.Text = $"Could not connect: {ex.Message}";
+            _testResult.Text = result.Failure.StartsWith("HTTP ", StringComparison.Ordinal)
+                ? $"Server answered {result.Failure} — is that the right URL?"
+                : $"Could not connect: {result.Failure}.";
         }
     }
 

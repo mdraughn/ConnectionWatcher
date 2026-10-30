@@ -37,15 +37,6 @@ public interface IElevation
     Task<int> RelaunchElevatedAsync(string[] args, CancellationToken ct);
 }
 
-/// <param name="Status">The `status` word from /api/v1/health, or null on failure.</param>
-/// <param name="Failure">"refused", "timed out", "HTTP 503", ... or null on success.</param>
-public sealed record HealthResult(string? Status, string? Failure, long ElapsedMs);
-
-public interface IHealthProbe
-{
-    Task<HealthResult> ProbeAsync(string serverUrl, CancellationToken ct);
-}
-
 public interface IPortProbe
 {
     bool IsFree(int port);
