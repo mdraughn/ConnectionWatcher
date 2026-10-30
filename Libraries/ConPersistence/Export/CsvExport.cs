@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using ConPersistence.Entities;
+using ConPersistence.Queries;
 
 namespace ConPersistence.Export;
 
@@ -51,7 +52,7 @@ public static class CsvExport
         g.Id.ToString(CultureInfo.InvariantCulture),
         g.TargetId.ToString(),
         g.TargetName,
-        g.Class == 1 ? "Internet" : "Target",
+        GlitchDto.ClassName(g.Class),
         Iso(g.StartUtc),
         Iso(g.EndUtc),
         g.LostCount.ToString(CultureInfo.InvariantCulture),

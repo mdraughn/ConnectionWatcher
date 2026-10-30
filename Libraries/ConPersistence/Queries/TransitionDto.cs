@@ -94,7 +94,7 @@ public sealed record TransitionDto
         AvgRtt = r.AvgRtt,
     };
 
-    /// <summary>A history row tagged with its subject's current scope (see <see cref="HistoryQueries.ScopeOf"/>).</summary>
-    public static TransitionDto From(TransitionRow r, ISet<Guid> localIds, ISet<Guid> resolverIds, ISet<Guid> knownIds) =>
-        From(r) with { Scope = HistoryQueries.ScopeOf(r.SubjectId, r.SubjectKind, localIds, resolverIds, knownIds) };
+    /// <summary>A history row tagged with its subject's current scope (see <see cref="ScopeTags.Of"/>).</summary>
+    public static TransitionDto From(TransitionRow r, ScopeTags tags) =>
+        From(r) with { Scope = tags.Of(r.SubjectId, r.SubjectKind) };
 }

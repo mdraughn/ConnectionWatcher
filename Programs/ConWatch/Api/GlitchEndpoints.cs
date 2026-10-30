@@ -19,22 +19,9 @@ public static class GlitchEndpoints
                 return problem!;
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.GlitchesAsync(db, targetId, fromUtc, toUtc, limit, scopeFilter);
-            var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
-            var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
-            var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
+            var tags = await ScopeTags.LoadAsync(db);
 
-            return Results.Ok(new
-            {
-                Items = rows.Select(g => new
-                {
-                    g.Id, g.TargetId, g.TargetName,
-                    Class = g.Class == 1 ? "Internet" : "Target",
-                    StartUtc = new DateTimeOffset(g.StartUtc),
-                    EndUtc = new DateTimeOffset(g.EndUtc),
-                    g.LostCount, g.SampleCount, g.Detail,
-                    Scope = HistoryQueries.ScopeOf(g.TargetId, g.Class == 1 ? "Verdict" : "Target", localIds, resolverIds, knownIds),
-                }).ToList(),
-            });
+            return Results.Ok(new { Items = rows.Select(g => GlitchDto.From(g, tags)).ToList() });
         });
     }
 }

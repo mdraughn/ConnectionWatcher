@@ -111,14 +111,6 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
         Assert.DoesNotContain(local, g => g.TargetName == "Gone");
     }
 
-    [Fact]
-    public async Task LocalTargetIds_lists_only_current_Local_targets()
-    {
-        await using var db = _factory.CreateDbContext();
-        var ids = await HistoryQueries.LocalTargetIdsAsync(db);
-        Assert.Equal([_nasId], ids);
-    }
-
     [Theory]
     [InlineData(null, ScopeFilter.All)]
     [InlineData("", ScopeFilter.All)]
@@ -158,11 +150,9 @@ public class HistoryScopeTests : IAsyncLifetime, IDisposable
         await using var db = _factory.CreateDbContext();
         var internet = await HistoryQueries.TransitionsAsync(db, null, null, null, 100, null, null, ScopeFilter.Internet);
         var local = await HistoryQueries.TransitionsAsync(db, null, null, null, 100, null, null, ScopeFilter.Local);
-        var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
-        var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
-        var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
+        var tags = await ScopeTags.LoadAsync(db);
 
-        var tagged = internet.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds))
+        var tagged = internet.Select(r => TransitionDto.From(r, tags))
             .Single(d => d.SubjectName == "Resolver");
         Assert.Equal("Resolver", tagged.Scope);
         Assert.DoesNotContain(local, r => r.SubjectName == "Resolver");

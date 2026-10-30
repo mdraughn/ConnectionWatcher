@@ -375,7 +375,7 @@ public class McpEndpointTests : IDisposable
         // Newest first; every row has exactly these keys.
         Assert.Equal(["Gone", "Internet", "Google"], rows.Select(r => r.GetProperty("targetName").GetString()));
         foreach (var row in rows)
-            Assert.Equal(["startUtc", "endUtc", "targetName", "class", "lostCount", "sampleCount", "detail", "scope"],
+            Assert.Equal(["id", "targetId", "targetName", "class", "startUtc", "endUtc", "lostCount", "sampleCount", "detail", "scope"],
                 row.EnumerateObject().Select(p => p.Name));
         var google = rows[2];
         Assert.Equal("Target", google.GetProperty("class").GetString());
@@ -387,15 +387,47 @@ public class McpEndpointTests : IDisposable
         Assert.Equal("Verdict", rows[1].GetProperty("scope").GetString());
         Assert.Equal("Unknown", rows[0].GetProperty("scope").GetString());     // a target since deleted
         // Timestamps are UTC-marked ISO-8601 and round-trip to the seeded instant.
-        // AUDIT: this tool writes DateTime values, so the suffix is "Z"; get_transitions and the REST
-        // glitches endpoint write DateTimeOffset values, so theirs is "+00:00". Same instant, two
-        // spellings across the MCP surface: is that wanted? (Pinned as it is; Kind=Utc is what matters.)
+        // The same DateTimeOffset spelling as the REST glitches endpoint.
         foreach (var row in rows)
         {
-            Assert.EndsWith("Z", row.GetProperty("startUtc").GetString());
-            Assert.EndsWith("Z", row.GetProperty("endUtc").GetString());
+            Assert.EndsWith("+00:00", row.GetProperty("startUtc").GetString());
+            Assert.EndsWith("+00:00", row.GetProperty("endUtc").GetString());
         }
         Assert.Equal(t0, DateTime.Parse(google.GetProperty("startUtc").GetString()!, null,
             System.Globalization.DateTimeStyles.AdjustToUniversal));
+    }
+
+    [Fact]
+    public async Task get_glitches_rows_have_the_REST_shape()
+    {
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConPersistence.ConWatchDbContext>>();
+        var t0 = DateTime.Parse("2026-09-04T03:34:00Z").ToUniversalTime();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            db.Glitches.AddRange(
+                new ConPersistence.Entities.GlitchRow { TargetId = Guid.NewGuid(), TargetName = "Google", Class = 0,
+                    StartUtc = t0, EndUtc = t0.AddSeconds(9), LostCount = 2, SampleCount = 8 },
+                new ConPersistence.Entities.GlitchRow { TargetId = ConEngine.Topology.VerdictCoordinator.SubjectId,
+                    TargetName = "Internet", Class = 1, StartUtc = t0, EndUtc = t0.AddSeconds(70), Detail = "anchors" });
+            await db.SaveChangesAsync();
+        }
+        await InitializeAsync();
+
+        var mcp = JsonSerializer.Deserialize<JsonElement>(ToolText(await RpcAsync("tools/call", new
+        {
+            name = "get_glitches",
+            arguments = new { fromUtc = "2026-09-04T00:00:00Z", toUtc = "2026-09-05T00:00:00Z" },
+        }))).EnumerateArray().ToList();
+        var rest = JsonSerializer.Deserialize<JsonElement>(await _client.GetStringAsync("/api/v1/glitches"))
+            .GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Equal(rest.Count, mcp.Count);
+        for (var i = 0; i < rest.Count; i++)
+        {
+            Assert.Equal(rest[i].EnumerateObject().Select(p => p.Name).Order(),
+                mcp[i].EnumerateObject().Select(p => p.Name).Order());
+            Assert.Equal(rest[i].GetProperty("startUtc").GetString(), mcp[i].GetProperty("startUtc").GetString());
+            Assert.EndsWith("+00:00", mcp[i].GetProperty("startUtc").GetString());
+        }
     }
 }

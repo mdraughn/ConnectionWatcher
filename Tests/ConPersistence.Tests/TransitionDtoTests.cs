@@ -92,11 +92,11 @@ public class TransitionDtoTests
         var none = new HashSet<Guid>();
         var subject = new HashSet<Guid> { Subject };
 
-        Assert.Equal("Resolver", TransitionDto.From(row, none, subject, subject).Scope);
-        Assert.Equal("Local", TransitionDto.From(row, subject, none, subject).Scope);
-        Assert.Equal("Verdict", TransitionDto.From(row, none, none, subject).Scope);
-        Assert.Equal("Unknown", TransitionDto.From(row, none, none, none).Scope);
+        Assert.Equal("Resolver", TransitionDto.From(row, new ScopeTags(none, subject, subject)).Scope);
+        Assert.Equal("Local", TransitionDto.From(row, new ScopeTags(subject, none, subject)).Scope);
+        Assert.Equal("Verdict", TransitionDto.From(row, new ScopeTags(none, none, subject)).Scope);
+        Assert.Equal("Unknown", TransitionDto.From(row, new ScopeTags(none, none, none)).Scope);
         row.SubjectKind = "Pool";
-        Assert.Equal("Verdict", TransitionDto.From(row, none, none, none).Scope);
+        Assert.Equal("Verdict", TransitionDto.From(row, new ScopeTags(none, none, none)).Scope);
     }
 }

@@ -1,4 +1,5 @@
 using ConCore.Targets;
+using ConEngine.Events;
 using ConPersistence.Entities;
 using ConPersistence.Retention;
 using Microsoft.EntityFrameworkCore;
@@ -96,29 +97,6 @@ public static class HistoryQueries
             .OrderBy(r => r.PeriodStartUtc)
             .ToListAsync();
 
-    /// <summary>The ids of the current Local-scope targets, for tagging history rows with a scope.</summary>
-    public static async Task<HashSet<Guid>> LocalTargetIdsAsync(ConWatchDbContext db) =>
-        (await db.Targets.AsNoTracking().Where(t => t.Scope == TargetScope.Local)
-            .Select(t => t.Id).ToListAsync()).ToHashSet();
-
-    /// <summary>The ids of the current Resolver-scope targets, for tagging history rows with a scope.</summary>
-    public static async Task<HashSet<Guid>> ResolverTargetIdsAsync(ConWatchDbContext db) =>
-        (await db.Targets.AsNoTracking().Where(t => t.Scope == TargetScope.Resolver)
-            .Select(t => t.Id).ToListAsync()).ToHashSet();
-
-    /// <summary>Every configured target id, for telling a deleted subject ("Unknown") from a live one.</summary>
-    public static async Task<HashSet<Guid>> KnownTargetIdsAsync(ConWatchDbContext db) =>
-        (await db.Targets.AsNoTracking().Select(t => t.Id).ToListAsync()).ToHashSet();
-
-    /// <summary>The scope tag history rows carry: a verdict/pool subject or a live non-Local
-    /// target is "Verdict"; a live Local or Resolver target its own; a Target subject that is no
-    /// longer configured is "Unknown" — it stays under scope=all and is off both filters.</summary>
-    public static string ScopeOf(Guid id, string subjectKind, ISet<Guid> localIds, ISet<Guid> resolverIds, ISet<Guid> knownIds) =>
-        localIds.Contains(id) ? "Local"
-        : resolverIds.Contains(id) ? "Resolver"
-        : subjectKind != "Target" || knownIds.Contains(id) ? "Verdict"
-        : "Unknown";
-
     /// <summary>Glitches newest-first (by start, then id), optionally for one target and window.</summary>
     public static Task<List<GlitchRow>> GlitchesAsync(ConWatchDbContext db,
         Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit,
@@ -140,7 +118,7 @@ public static class HistoryQueries
             // on the internet side; a target-class glitch of a deleted target is on neither.
             query = scope == ScopeFilter.Local
                 ? query.Where(g => localIds.Contains(g.TargetId))
-                : query.Where(g => g.Class == 1 || (knownIds.Contains(g.TargetId) && !localIds.Contains(g.TargetId)));
+                : query.Where(g => g.Class == (int)GlitchClass.Internet || (knownIds.Contains(g.TargetId) && !localIds.Contains(g.TargetId)));
         }
         return query.OrderByDescending(g => g.StartUtc).ThenByDescending(g => g.Id)
             .Take(limit).ToListAsync();

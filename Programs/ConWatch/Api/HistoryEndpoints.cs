@@ -24,9 +24,7 @@ public static class HistoryEndpoints
             await using var db = await dbFactory.CreateDbContextAsync();
             var rows = await HistoryQueries.TransitionsAsync(db, subjectId,
                 fromUtc, toUtc, limit, before, subjectName, scopeFilter);
-            var localIds = await HistoryQueries.LocalTargetIdsAsync(db);
-            var resolverIds = await HistoryQueries.ResolverTargetIdsAsync(db);
-            var knownIds = await HistoryQueries.KnownTargetIdsAsync(db);
+            var tags = await ScopeTags.LoadAsync(db);
             var items = new List<TransitionDto>();
             // Opt-in, first page only, and only with a lower bound: each subject's latest row
             // before `from` leads the list, marked. They sit outside `limit` and the paging cursor.
@@ -35,9 +33,9 @@ public static class HistoryEndpoints
                 var openingRows = await HistoryQueries.OpeningTransitionsAsync(db, subjectId,
                     openFrom, subjectName, scopeFilter);
                 items.AddRange(openingRows.Select(r =>
-                    TransitionDto.From(r, localIds, resolverIds, knownIds) with { Opening = true }));
+                    TransitionDto.From(r, tags) with { Opening = true }));
             }
-            items.AddRange(rows.Select(r => TransitionDto.From(r, localIds, resolverIds, knownIds)));
+            items.AddRange(rows.Select(r => TransitionDto.From(r, tags)));
             long? nextBefore = rows.Count == Math.Clamp(limit, 1, 1000) ? rows.Last().Id : null;
             return Results.Ok(new { Items = items, NextBefore = nextBefore });
         });

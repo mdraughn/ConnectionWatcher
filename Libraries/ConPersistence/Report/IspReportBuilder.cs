@@ -1,4 +1,5 @@
 using ConCore.Targets;
+using ConEngine.Events;
 using ConEngine.Topology;
 using ConPersistence.Entities;
 using ConPersistence.Settings;
@@ -63,7 +64,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
         var verdictIds = await db.Targets.AsNoTracking()
             .Where(t => t.Scope == TargetScope.Verdict).Select(t => t.Id).ToListAsync();
         var glitches = await db.Glitches.AsNoTracking()
-            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc && (g.Class == 1 || verdictIds.Contains(g.TargetId)))
+            .Where(g => g.StartUtc >= fromUtc && g.StartUtc <= toUtc && (g.Class == (int)GlitchClass.Internet || verdictIds.Contains(g.TargetId)))
             .ToListAsync();
 
         var topHours = glitches
@@ -84,7 +85,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
             .OrderBy(name => name)
             .ToList();
 
-        return new GlitchSummary(glitches.Count, glitches.Count(g => g.Class == 1), topHours, chronic);
+        return new GlitchSummary(glitches.Count, glitches.Count(g => g.Class == (int)GlitchClass.Internet), topHours, chronic);
     }
 
     private static async Task<(List<ReportEpisode>, Dictionary<string, TimeSpan>)> BuildEpisodesAsync(
