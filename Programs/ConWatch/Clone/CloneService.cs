@@ -54,14 +54,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         var fetched = await FetchSnapshotAsync(source, sourcePassword, includeSecrets, ct);
         if (fetched.Outcome is { } fetchError)
             return fetchError;
-        var snapshot = fetched.Snapshot!;
-        snapshot = WithoutSystemManaged(snapshot);
-        var localSkipped = 0;
-        if (!includeLocalDevices)
-        {
-            localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
-            snapshot = WithoutLocalDevices(snapshot);
-        }
+        var (snapshot, localSkipped) = Prepare(fetched.Snapshot!, includeLocalDevices);
 
         // Arrive as a disabled archive: the source keeps monitoring; nothing
         // double-pings and MQTT entities don't fight. Take-over flips this.
@@ -176,17 +169,10 @@ public class CloneService(IHttpClientFactory httpFactory,
                 Error = fetchError.Error +
                     " The source has been disabled; re-enable it from its Settings page if you are not migrating.",
             };
-        var snapshot = fetched.Snapshot!;
-        snapshot = WithoutSystemManaged(snapshot);
-
         // The clone's choice sticks: a clone without Local devices must not
         // get them back (now pinging foreign private addresses) at take-over.
-        var localSkipped = 0;
-        if (!await settings.GetBoolAsync(SettingKeys.CloneIncludeLocalDevices))
-        {
-            localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
-            snapshot = WithoutLocalDevices(snapshot);
-        }
+        var (snapshot, localSkipped) = Prepare(fetched.Snapshot!,
+            await settings.GetBoolAsync(SettingKeys.CloneIncludeLocalDevices));
 
         // 3. Import-replace inside one transaction: a failure leaves the
         //    pre-take-over clone intact (and this node still disabled).
@@ -289,6 +275,17 @@ public class CloneService(IHttpClientFactory httpFactory,
         source = parsed.AbsolutePath.EndsWith('/') ? parsed
             : new UriBuilder(parsed) { Path = parsed.AbsolutePath + "/" }.Uri;
         return true;
+    }
+
+    /// <summary>Removes system-managed targets, counts the Local ones, and removes them too
+    /// unless <paramref name="includeLocalDevices"/>.</summary>
+    private static (Snapshot Snapshot, int LocalSkipped) Prepare(Snapshot fetched, bool includeLocalDevices)
+    {
+        var snapshot = SnapshotFilter.WithoutSystemManaged(fetched);
+        if (includeLocalDevices)
+            return (snapshot, 0);
+        var localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
+        return (SnapshotFilter.Without(snapshot, t => t.Scope == TargetScope.Local), localSkipped);
     }
 
     /// <summary>The snapshot minus every Local-scope target and the transitions, rollups and
