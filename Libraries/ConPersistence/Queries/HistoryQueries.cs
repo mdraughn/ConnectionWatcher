@@ -18,14 +18,23 @@ public static class HistoryQueries
         string? subjectName = null, ScopeFilter scope = ScopeFilter.All)
     {
         limit = Math.Clamp(limit, 1, 1000);
+        IQueryable<TransitionRow> query = TransitionsQuery(db, subjectId, fromUtc, toUtc, subjectName, scope);
+        if (before is { } cursor)
+            query = query.Where(t => t.Id < cursor);
+        return await query.OrderByDescending(t => t.Id).Take(limit).ToListAsync();
+    }
+
+    /// <summary>The transition filters, unordered and untracked: the base of the paged query and the export.</summary>
+    public static IQueryable<TransitionRow> TransitionsQuery(ConWatchDbContext db,
+        Guid? subjectId, DateTime? fromUtc, DateTime? toUtc,
+        string? subjectName = null, ScopeFilter scope = ScopeFilter.All)
+    {
         IQueryable<TransitionRow> query = Filtered(db, subjectId, subjectName, scope);
         if (fromUtc is { } from)
             query = query.Where(t => t.TimestampUtc >= from);
         if (toUtc is { } to)
             query = query.Where(t => t.TimestampUtc <= to);
-        if (before is { } cursor)
-            query = query.Where(t => t.Id < cursor);
-        return await query.OrderByDescending(t => t.Id).Take(limit).ToListAsync();
+        return query;
     }
 
     /// <summary>
@@ -97,12 +106,26 @@ public static class HistoryQueries
             .OrderBy(r => r.PeriodStartUtc)
             .ToListAsync();
 
-    /// <summary>Glitches newest-first (by start, then id), optionally for one target and window.</summary>
-    public static Task<List<GlitchRow>> GlitchesAsync(ConWatchDbContext db,
-        Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit,
-        ScopeFilter scope = ScopeFilter.All)
+    /// <summary>Rollups filtered by optional target, resolution (empty means any) and period-start window; unordered, untracked.</summary>
+    public static IQueryable<RollupRow> RollupsQuery(ConWatchDbContext db,
+        Guid? targetId, string? resolution, DateTime? fromUtc, DateTime? toUtc)
     {
-        limit = Math.Clamp(limit, 1, 1000);
+        IQueryable<RollupRow> query = db.Rollups.AsNoTracking();
+        if (targetId is { } tid)
+            query = query.Where(r => r.TargetId == tid);
+        if (resolution is { Length: > 0 })
+            query = query.Where(r => r.Resolution == resolution);
+        if (fromUtc is { } from)
+            query = query.Where(r => r.PeriodStartUtc >= from);
+        if (toUtc is { } to)
+            query = query.Where(r => r.PeriodStartUtc <= to);
+        return query;
+    }
+
+    /// <summary>Glitches filtered by optional target, start window and scope; unordered, untracked.</summary>
+    public static IQueryable<GlitchRow> GlitchesQuery(ConWatchDbContext db,
+        Guid? targetId, DateTime? fromUtc, DateTime? toUtc, ScopeFilter scope = ScopeFilter.All)
+    {
         IQueryable<GlitchRow> query = db.Glitches.AsNoTracking();
         if (targetId is { } tid)
             query = query.Where(g => g.TargetId == tid);
@@ -120,6 +143,16 @@ public static class HistoryQueries
                 ? query.Where(g => localIds.Contains(g.TargetId))
                 : query.Where(g => g.Class == (int)GlitchClass.Internet || (knownIds.Contains(g.TargetId) && !localIds.Contains(g.TargetId)));
         }
+        return query;
+    }
+
+    /// <summary>Glitches newest-first (by start, then id), optionally for one target and window.</summary>
+    public static Task<List<GlitchRow>> GlitchesAsync(ConWatchDbContext db,
+        Guid? targetId, DateTime? fromUtc, DateTime? toUtc, int limit,
+        ScopeFilter scope = ScopeFilter.All)
+    {
+        limit = Math.Clamp(limit, 1, 1000);
+        IQueryable<GlitchRow> query = GlitchesQuery(db, targetId, fromUtc, toUtc, scope);
         return query.OrderByDescending(g => g.StartUtc).ThenByDescending(g => g.Id)
             .Take(limit).ToListAsync();
     }

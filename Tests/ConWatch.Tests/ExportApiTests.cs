@@ -272,4 +272,56 @@ public class ExportApiTests : IDisposable
         var json = JsonSerializer.Deserialize<JsonElement>(await _client.GetStringAsync("/api/v1/export/glitches?format=json"));
         Assert.Equal(1, json.GetArrayLength());
     }
+
+    [Fact]
+    public async Task Exports_filter_by_subject_target_and_resolution()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var t0 = new DateTime(2026, 9, 18, 10, 0, 0, DateTimeKind.Utc);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            foreach (var id in new[] { a, b })
+            {
+                db.Transitions.Add(new TransitionRow
+                {
+                    TimestampUtc = t0, SubjectId = id, SubjectName = "S", SubjectKind = "Target",
+                    FromState = "Responding", ToState = "Down", Trigger = "ThresholdCrossed",
+                });
+                foreach (var res in new[] { "Minute", "Hour" })
+                    db.Rollups.Add(new RollupRow
+                    {
+                        TargetId = id, PeriodStartUtc = t0, Resolution = res,
+                        PingCount = 60, SuccessCount = 59, RttAvg = 1, RttMin = 1, RttMax = 2,
+                    });
+                foreach (var offset in new[] { 0, 10 })
+                    db.Glitches.Add(new GlitchRow
+                    {
+                        TargetId = id, TargetName = "G", Class = 0,
+                        StartUtc = t0.AddMinutes(offset), EndUtc = t0.AddMinutes(offset + 1),
+                        LostCount = 1, SampleCount = 5,
+                    });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var transitions = JsonSerializer.Deserialize<JsonElement>(
+            await _client.GetStringAsync($"/api/v1/export/transitions?format=json&subjectId={a}"));
+        Assert.Equal(1, transitions.GetArrayLength());
+        Assert.Equal(a, transitions[0].GetProperty("subjectId").GetGuid());
+
+        var rollups = JsonSerializer.Deserialize<JsonElement>(
+            await _client.GetStringAsync($"/api/v1/export/rollups?format=json&targetId={a}&resolution=Hour"));
+        Assert.Equal(1, rollups.GetArrayLength());
+        Assert.Equal(a, rollups[0].GetProperty("targetId").GetGuid());
+        Assert.Equal("Hour", rollups[0].GetProperty("resolution").GetString());
+
+        var to = Uri.EscapeDataString(t0.AddMinutes(5).ToString("o"));
+        var glitches = JsonSerializer.Deserialize<JsonElement>(
+            await _client.GetStringAsync($"/api/v1/export/glitches?format=json&targetId={a}&to={to}"));
+        Assert.Equal(1, glitches.GetArrayLength());
+        Assert.Equal(a, glitches[0].GetProperty("targetId").GetGuid());
+    }
 }

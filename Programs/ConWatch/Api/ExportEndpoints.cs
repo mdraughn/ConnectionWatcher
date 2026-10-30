@@ -3,6 +3,7 @@ using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Entities;
 using ConPersistence.Export;
+using ConPersistence.Queries;
 using ConPersistence.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,50 +15,20 @@ public static class ExportEndpoints
 {
     public static void MapExport(this RouteGroupBuilder api)
     {
-        api.MapGet("/export/transitions", async (HttpContext http,
+        api.MapGet("/export/transitions", (HttpContext http,
             IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider time, string format = "csv",
             Guid? subjectId = null, string? from = null, string? to = null) =>
-        {
-            if (!IsValidFormat(format))
-                return BadFormat();
-            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
-                return problem!;
-            var db = await OpenForResponseAsync(http, dbFactory);
-            IQueryable<TransitionRow> query = db.Transitions.AsNoTracking();
-            if (subjectId is { } sid) query = query.Where(t => t.SubjectId == sid);
-            if (fromUtc is { } f) query = query.Where(t => t.TimestampUtc >= f);
-            if (toUtc is { } u) query = query.Where(t => t.TimestampUtc <= u);
-            var rows = query.OrderBy(t => t.Id).AsAsyncEnumerable();
+            ExportAsync<TransitionRow>(http, dbFactory, time, format, from, to, "transitions",
+                CsvExport.TransitionHeader, CsvExport.TransitionLine,
+                (db, fromUtc, toUtc) => HistoryQueries.TransitionsQuery(db, subjectId, fromUtc, toUtc).OrderBy(t => t.Id)));
 
-            var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
-            return IsJson(format)
-                ? Results.Json(rows, contentType: "application/json")
-                : Csv(CsvExport.TransitionHeader, rows, CsvExport.TransitionLine,
-                    $"conwatch-transitions-{stamp}.csv", http.RequestAborted);
-        });
-
-        api.MapGet("/export/rollups", async (HttpContext http,
+        api.MapGet("/export/rollups", (HttpContext http,
             IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider time, string format = "csv",
             Guid? targetId = null, string? resolution = null, string? from = null, string? to = null) =>
-        {
-            if (!IsValidFormat(format))
-                return BadFormat();
-            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
-                return problem!;
-            var db = await OpenForResponseAsync(http, dbFactory);
-            IQueryable<RollupRow> query = db.Rollups.AsNoTracking();
-            if (targetId is { } tid) query = query.Where(r => r.TargetId == tid);
-            if (resolution is { Length: > 0 }) query = query.Where(r => r.Resolution == resolution);
-            if (fromUtc is { } f) query = query.Where(r => r.PeriodStartUtc >= f);
-            if (toUtc is { } u) query = query.Where(r => r.PeriodStartUtc <= u);
-            var rows = query.OrderBy(r => r.TargetId).ThenBy(r => r.PeriodStartUtc).AsAsyncEnumerable();
-
-            var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
-            return IsJson(format)
-                ? Results.Json(rows, contentType: "application/json")
-                : Csv(CsvExport.RollupHeader, rows, CsvExport.RollupLine,
-                    $"conwatch-rollups-{stamp}.csv", http.RequestAborted);
-        });
+            ExportAsync<RollupRow>(http, dbFactory, time, format, from, to, "rollups",
+                CsvExport.RollupHeader, CsvExport.RollupLine,
+                (db, fromUtc, toUtc) => HistoryQueries.RollupsQuery(db, targetId, resolution, fromUtc, toUtc)
+                    .OrderBy(r => r.TargetId).ThenBy(r => r.PeriodStartUtc)));
 
         // Route A of real-data testing: the complete sanitized state in one
         // document, retrievable without admin. Secrets (SettingKeys.SecretKeys)
@@ -81,30 +52,35 @@ public static class ExportEndpoints
             return Results.Ok(await SnapshotExporter.ExportAsync(dbFactory, configStore, time, includeSecrets: true));
         });
 
-        api.MapGet("/export/glitches", async (HttpContext http,
+        api.MapGet("/export/glitches", (HttpContext http,
             IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider time, string format = "csv",
             Guid? targetId = null, string? from = null, string? to = null) =>
-        {
-            if (!IsValidFormat(format))
-                return BadFormat();
-            if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
-                return problem!;
-            var db = await OpenForResponseAsync(http, dbFactory);
-            IQueryable<GlitchRow> query = db.Glitches.AsNoTracking();
-            if (targetId is { } tid) query = query.Where(g => g.TargetId == tid);
-            if (fromUtc is { } f) query = query.Where(g => g.StartUtc >= f);
-            if (toUtc is { } u) query = query.Where(g => g.StartUtc <= u);
-            var rows = query.OrderBy(g => g.Id).AsAsyncEnumerable();
-
-            var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
-            return IsJson(format)
-                ? Results.Json(rows, contentType: "application/json")
-                : Csv(CsvExport.GlitchHeader, rows, CsvExport.GlitchLine,
-                    $"conwatch-glitches-{stamp}.csv", http.RequestAborted);
-        });
+            ExportAsync<GlitchRow>(http, dbFactory, time, format, from, to, "glitches",
+                CsvExport.GlitchHeader, CsvExport.GlitchLine,
+                (db, fromUtc, toUtc) => HistoryQueries.GlitchesQuery(db, targetId, fromUtc, toUtc).OrderBy(g => g.Id)));
     }
 
     public record FullSnapshotRequest(string? Password);
+
+    /// <summary>The shared export skeleton: format check, range parse, response-owned context,
+    /// then the ordered query streamed as JSON or CSV named conwatch-{kind}-{stamp}.csv.</summary>
+    private static async Task<IResult> ExportAsync<T>(HttpContext http,
+        IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider time, string format,
+        string? from, string? to, string kind, string csvHeader, Func<T, string> csvLine,
+        Func<ConWatchDbContext, DateTime?, DateTime?, IQueryable<T>> query)
+    {
+        if (!IsValidFormat(format))
+            return BadFormat();
+        if (!TimeRange.TryParseRange(from, to, out var fromUtc, out var toUtc, out var problem))
+            return problem!;
+        var db = await OpenForResponseAsync(http, dbFactory);
+        var rows = query(db, fromUtc, toUtc).AsAsyncEnumerable();
+
+        var stamp = time.GetUtcNow().ToString("yyyyMMdd-HHmmss");
+        return IsJson(format)
+            ? Results.Json(rows, contentType: "application/json")
+            : Csv(csvHeader, rows, csvLine, $"conwatch-{kind}-{stamp}.csv", http.RequestAborted);
+    }
 
     private static bool IsValidFormat(string format) =>
         format.Equals("csv", StringComparison.OrdinalIgnoreCase) ||
