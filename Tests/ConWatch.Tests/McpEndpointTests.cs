@@ -21,6 +21,16 @@ public class McpEndpointTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
+    /// <summary>Seeds the home config and waits for its chain of rebuilds to finish on a
+    /// healthy engine. A warm rebuild can already read Healthy, and a tool call in the gap
+    /// before the next one finds no engine (a status of nulls).</summary>
+    private async Task SeedAndSettleAsync()
+    {
+        await ConfigApiTests.SeedHomeAsync(_client);
+        await HostTestWait.SettledRebuildCountAsync(_factory.Services.GetRequiredService<WatcherHostService>());
+        await HostTestWait.Eventually(() => HostTestWait.SteadyStateAsync(_client));
+    }
+
     private Task<JsonElement> RpcAsync(string method, object? @params = null) =>
         RpcWithAsync(_client, method, @params);
 
@@ -84,14 +94,7 @@ public class McpEndpointTests : IDisposable
     [Fact]
     public async Task Status_and_report_tools_answer_from_the_real_database()
     {
-        await ConfigApiTests.SeedHomeAsync(_client);
-        await ConfigApiTests.Eventually(async () =>
-        {
-            var status = await _client.GetAsync("/api/v1/status");
-            return status.IsSuccessStatusCode &&
-                   (await status.Content.ReadAsStringAsync()).Contains("Healthy");
-        });
-
+        await SeedAndSettleAsync();
         await InitializeAsync();
 
         var status = ToolText(await RpcAsync("tools/call", new
@@ -125,13 +128,7 @@ public class McpEndpointTests : IDisposable
     [Fact]
     public async Task Status_tool_reports_the_status_snapshot()
     {
-        await ConfigApiTests.SeedHomeAsync(_client);
-        await ConfigApiTests.Eventually(async () =>
-        {
-            var status = await _client.GetAsync("/api/v1/status");
-            return status.IsSuccessStatusCode &&
-                   (await status.Content.ReadAsStringAsync()).Contains("Healthy");
-        });
+        await SeedAndSettleAsync();
         await InitializeAsync();
 
         var json = JsonSerializer.Deserialize<JsonElement>(ToolText(await RpcAsync("tools/call", new
@@ -154,13 +151,7 @@ public class McpEndpointTests : IDisposable
     [Fact]
     public async Task Transitions_tool_speaks_the_rest_transition_shape()
     {
-        await ConfigApiTests.SeedHomeAsync(_client);
-        await ConfigApiTests.Eventually(async () =>
-        {
-            var status = await _client.GetAsync("/api/v1/status");
-            return status.IsSuccessStatusCode &&
-                   (await status.Content.ReadAsStringAsync()).Contains("Healthy");
-        });
+        await SeedAndSettleAsync();
         await _factory.Services.GetRequiredService<ConPersistence.Recording.TransitionRecorder>().FlushAsync();
         await InitializeAsync();
 
@@ -343,12 +334,7 @@ public class McpEndpointTests : IDisposable
     [Fact]
     public async Task get_glitches_rows_keep_their_shape_and_utc_timestamps()
     {
-        await ConfigApiTests.SeedHomeAsync(_client);
-        await ConfigApiTests.Eventually(async () =>
-        {
-            var status = await _client.GetAsync("/api/v1/status");
-            return status.IsSuccessStatusCode && (await status.Content.ReadAsStringAsync()).Contains("Healthy");
-        });
+        await SeedAndSettleAsync();
         var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConPersistence.ConWatchDbContext>>();
         var t0 = new DateTime(2026, 9, 4, 3, 34, 0, DateTimeKind.Utc);
         await using (var db = await dbFactory.CreateDbContextAsync())
