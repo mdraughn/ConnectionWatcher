@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Threading.Channels;
 using ConCore.Logging;
 using ConEngine;
@@ -45,7 +46,7 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
     }
 
     private List<TEvent>? _pending; // a batch whose write failed; retried first
-    private IDisposable? _subscription;
+    private readonly SerialDisposable _subscription = new();
 
     /// <summary>Plural noun for log lines ("transitions", "glitches").</summary>
     protected abstract string EventNoun { get; }
@@ -59,8 +60,7 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
     /// <summary>Subscribes to an event stream, replacing any prior subscription.</summary>
     public void Attach(IObservable<TEvent> source)
     {
-        _subscription?.Dispose();
-        _subscription = source.Subscribe(
+        _subscription.Disposable = source.Subscribe(
             e => _channel.Writer.TryWrite(e),
             ex => _log.LogError(ex, "{Noun} stream error", EventNoun));
     }
@@ -69,8 +69,7 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
 
     public void Detach()
     {
-        _subscription?.Dispose();
-        _subscription = null;
+        _subscription.Disposable = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -138,7 +137,7 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
 
     public override void Dispose()
     {
-        _subscription?.Dispose();
+        _subscription.Dispose();
         base.Dispose();
     }
 }

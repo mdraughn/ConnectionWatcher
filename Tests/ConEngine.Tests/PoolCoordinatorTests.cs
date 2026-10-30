@@ -58,6 +58,16 @@ public class PoolCoordinatorTests
     }
 
     [Fact]
+    public void Dispose_twice_completes_the_stream_once()
+    {
+        var completions = 0;
+        _pool.TransitionSource.Subscribe(_ => { }, () => completions++);
+        _pool.Dispose();
+        _pool.Dispose();
+        Assert.Equal(1, completions);
+    }
+
+    [Fact]
     public void Phase_offsets_stagger_members()
     {
         var interval = TimeSpan.FromSeconds(15);

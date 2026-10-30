@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using ConEngine.Events;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging;
@@ -16,7 +17,7 @@ public class TopologyCoordinator : IDisposable
 {
     private readonly IReadOnlyDictionary<Guid, TargetMonitor> _monitors;
     private readonly ILogger<TopologyCoordinator> _log;
-    private readonly List<IDisposable> _subscriptions = new();
+    private readonly CompositeDisposable _subscriptions = new();
     // Monitored ancestors per target, root first; monitored descendants per target.
     private readonly Dictionary<Guid, List<Guid>> _ancestors = new();
     private readonly Dictionary<Guid, List<Guid>> _descendants = new();
@@ -134,18 +135,9 @@ public class TopologyCoordinator : IDisposable
         }
     }
 
-    private readonly Lock _disposeLock = new();
-
     public void Dispose()
     {
-        List<IDisposable> toDispose;
-        lock (_disposeLock)
-        {
-            toDispose = new List<IDisposable>(_subscriptions);
-            _subscriptions.Clear();
-        }
-        foreach (var s in toDispose)
-            s.Dispose();
+        _subscriptions.Dispose();
         GC.SuppressFinalize(this);
     }
 }

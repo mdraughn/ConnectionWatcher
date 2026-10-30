@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Text;
 using System.Threading.Channels;
 using ConEngine;
@@ -20,13 +21,12 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
     private readonly Channel<(TargetTransition Transition, bool Critical)> _queue =
         Channel.CreateBounded<(TargetTransition, bool)>(
             new BoundedChannelOptions(500) { FullMode = BoundedChannelFullMode.DropOldest });
-    private IDisposable? _subscription;
+    private readonly SerialDisposable _subscription = new();
 
     /// <summary>Called by the host on every engine (re)start.</summary>
     public void Attach(WatcherEngine engine)
     {
-        _subscription?.Dispose();
-        _subscription = engine.TransitionSource.Subscribe(
+        _subscription.Disposable = engine.TransitionSource.Subscribe(
             t =>
             {
                 // Side (LAN-device, resolver) targets never notify, unless marked
@@ -41,8 +41,7 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
 
     public void Detach()
     {
-        _subscription?.Dispose();
-        _subscription = null;
+        _subscription.Disposable = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -103,7 +102,7 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
 
     public override void Dispose()
     {
-        _subscription?.Dispose();
+        _subscription.Dispose();
         base.Dispose();
     }
 }

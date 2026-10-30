@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 using ConEngine;
 using ConEngine.Topology;
@@ -37,7 +38,7 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
     // Guarded by _lock.
     private readonly Dictionary<string, ModelWarningInstance> _instances = new();
     private readonly HashSet<string> _unconfirmed = new();
-    private IDisposable? _subscription;
+    private readonly SerialDisposable _subscription = new();
     private ITimer? _resync;
     private ITimer? _probeOnlyResync;
     private int _generation;
@@ -95,7 +96,7 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
             DetachCore();
             _unconfirmed.UnionWith(_instances.Keys);
             var generation = _generation;
-            _subscription = source.Subscribe(OnChange);
+            _subscription.Disposable = source.Subscribe(OnChange);
             var now = _time.GetUtcNow();
             foreach (var condition in active())
                 Raise(condition, now);
@@ -115,8 +116,7 @@ public class ModelWarningLedger : IEngineObserver, IHostedService
     /// <summary>Under _lock.</summary>
     private void DetachCore()
     {
-        _subscription?.Dispose();
-        _subscription = null;
+        _subscription.Disposable = null;
         _resync?.Dispose();
         _resync = null;
         _probeOnlyResync?.Dispose();

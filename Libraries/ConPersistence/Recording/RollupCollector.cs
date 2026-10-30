@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using ConPersistence.Entities;
 using ConCore;
 using ConEngine;
@@ -22,7 +23,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
     private readonly SemaphoreSlim _flushLock = new(1, 1);
     private List<RollupBucket> _pending = new();
     private int _consecutiveFailures;
-    private IDisposable? _subscription;
+    private readonly SerialDisposable _subscription = new();
 
     /// <summary>
     /// Subscribes to a ping-sample stream, replacing any prior subscription.
@@ -38,8 +39,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
     public void Attach(IObservable<(Guid TargetId, PingResult Result)> source,
         IReadOnlyDictionary<Guid, TargetMonitor>? monitors = null)
     {
-        _subscription?.Dispose();
-        _subscription = source.Subscribe(
+        _subscription.Disposable = source.Subscribe(
             s =>
             {
                 if (monitors is not null && monitors.TryGetValue(s.TargetId, out var monitor) &&
@@ -54,8 +54,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
 
     public void Detach()
     {
-        _subscription?.Dispose();
-        _subscription = null;
+        _subscription.Disposable = null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -168,7 +167,7 @@ public class RollupCollector(IDbContextFactory<ConWatchDbContext> dbFactory,
 
     public override void Dispose()
     {
-        _subscription?.Dispose();
+        _subscription.Dispose();
         base.Dispose();
     }
 }

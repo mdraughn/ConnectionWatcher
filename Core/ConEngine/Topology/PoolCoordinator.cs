@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 using ConCore.Targets;
 using ConEngine.Events;
@@ -18,7 +19,7 @@ public class PoolCoordinator : IDisposable
     private readonly ILogger<PoolCoordinator> _log;
     private readonly Lock _lock = new();
     private readonly OrderedOutbox<TargetTransition> _outbox;
-    private readonly List<IDisposable> _subscriptions = new();
+    private readonly CompositeDisposable _subscriptions = new();
 
     private readonly Subject<TargetTransition> _transitionSubject = new();
     /// <summary>Transitions this coordinator raises as its own state changes. A
@@ -113,16 +114,12 @@ public class PoolCoordinator : IDisposable
 
     public void Dispose()
     {
-        List<IDisposable> toDispose;
         lock (_lock)
         {
-            toDispose = new List<IDisposable>(_subscriptions);
-            _subscriptions.Clear();
+            if (_subscriptions.IsDisposed)
+                return;
+            _subscriptions.Dispose();
         }
-        if (toDispose.Count == 0)
-            return; // already disposed
-        foreach (var s in toDispose)
-            s.Dispose();
         _transitionSubject.OnCompleted();
         GC.SuppressFinalize(this);
     }

@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Collections.Concurrent;
 using ConEngine;
 using ConEngine.Events;
@@ -15,7 +16,7 @@ namespace ConWatch.Metrics;
 public class MetricsCounters : IEngineObserver
 {
     private readonly Lock _lock = new();
-    private readonly List<IDisposable> _subscriptions = [];
+    private readonly SerialDisposable _subscription = new();
     private readonly ConcurrentDictionary<string, long> _transitions = new();
     private long _glitches;
 
@@ -31,12 +32,9 @@ public class MetricsCounters : IEngineObserver
     {
         lock (_lock)
         {
-            foreach (var subscription in _subscriptions)
-                subscription.Dispose();
-            _subscriptions.Clear();
-            _subscriptions.Add(engine.TransitionSource.Subscribe(Record));
-            _subscriptions.Add(engine.GlitchSource.Subscribe(_ =>
-                Interlocked.Increment(ref _glitches)));
+            _subscription.Disposable = new CompositeDisposable(
+                engine.TransitionSource.Subscribe(Record),
+                engine.GlitchSource.Subscribe(_ => Interlocked.Increment(ref _glitches)));
         }
     }
 
@@ -51,10 +49,6 @@ public class MetricsCounters : IEngineObserver
     public void Detach()
     {
         lock (_lock)
-        {
-            foreach (var subscription in _subscriptions)
-                subscription.Dispose();
-            _subscriptions.Clear();
-        }
+            _subscription.Disposable = null;
     }
 }

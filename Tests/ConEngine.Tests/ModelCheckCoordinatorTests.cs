@@ -107,6 +107,17 @@ public class ModelCheckCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public void Dispose_twice_completes_the_stream_once()
+    {
+        StartCheck();
+        var completions = 0;
+        _check.ChangeSource.Subscribe(_ => { }, () => completions++);
+        _check.Dispose();
+        _check.Dispose();
+        Assert.Equal(1, completions);
+    }
+
+    [Fact]
     public void The_2026_10_08_incident_raises_one_hop_bypassed_note_and_clears_it()
     {
         StartCheck();

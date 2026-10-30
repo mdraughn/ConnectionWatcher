@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Threading.Channels;
 using ConCore.Targets;
 using ConEngine;
@@ -64,7 +65,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
     // Set once the attached engine has started: until then its monitors are still being
     // created, and a refresh would read a partial dictionary and clear every target it missed.
     private bool _engineStarted;
-    private IDisposable? _subscription;
+    private readonly SerialDisposable _subscription = new();
     private MqttTopics? _topics;
     private Dictionary<Guid, string> _slugsById = new();
     private HashSet<string> _publishedSlugs = new();
@@ -74,10 +75,9 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
     {
         lock (_lock)
         {
-            _subscription?.Dispose();
             _engine = engine;
             _engineStarted = false;
-            _subscription = engine.TransitionSource.Subscribe(
+            _subscription.Disposable = engine.TransitionSource.Subscribe(
                 // Every target is published, LAN devices included: MQTT never notifies
                 // by itself; Home Assistant automations decide (Mark, 2026-10-10).
                 t => _inbox.Post(t),
@@ -101,8 +101,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
     {
         lock (_lock)
         {
-            _subscription?.Dispose();
-            _subscription = null;
+            _subscription.Disposable = null;
             _engine = null;
             _engineStarted = false;
         }
@@ -374,7 +373,7 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
     public override void Dispose()
     {
-        _subscription?.Dispose();
+        _subscription.Dispose();
         base.Dispose();
     }
 }

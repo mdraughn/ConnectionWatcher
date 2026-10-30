@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Globalization;
 using System.Reactive.Subjects;
 using ConCore;
@@ -109,7 +110,7 @@ public class ModelCheckCoordinator : IDisposable
     private readonly Lock _lock = new();
     private readonly OrderedOutbox<ModelConditionChange> _outbox;
     private readonly Subject<ModelConditionChange> _changes = new();
-    private readonly List<IDisposable> _subscriptions = new();
+    private readonly CompositeDisposable _subscriptions = new();
 
     // Guarded by _lock.
     private readonly Dictionary<string, ModelCondition> _active = new();
@@ -402,19 +403,15 @@ public class ModelCheckCoordinator : IDisposable
 
     public void Dispose()
     {
-        List<IDisposable> toDispose;
         lock (_lock)
         {
-            if (_disposed)
+            if (_subscriptions.IsDisposed)
                 return;
             _disposed = true;
             _timer?.Dispose();
             _timer = null;
-            toDispose = new List<IDisposable>(_subscriptions);
-            _subscriptions.Clear();
+            _subscriptions.Dispose();
         }
-        foreach (var s in toDispose)
-            s.Dispose();
         _changes.OnCompleted();
         GC.SuppressFinalize(this);
     }

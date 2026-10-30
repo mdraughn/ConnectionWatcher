@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using ConEngine;
 using ConEngine.Events;
 using ConPersistence.Queries;
@@ -21,7 +22,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private WatcherEngine? _engine;
-    private IDisposable? _subscription;
+    private readonly SerialDisposable _subscription = new();
     private DateTimeOffset _lastSnapshotSent = DateTimeOffset.MinValue;
 
     /// <summary>Subscribes to a (re)started engine, replacing any prior subscription.</summary>
@@ -29,9 +30,8 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     {
         lock (_lock)
         {
-            _subscription?.Dispose();
             _engine = engine;
-            _subscription = engine.TransitionSource.Subscribe(
+            _subscription.Disposable = engine.TransitionSource.Subscribe(
                 t => _ = OnTransitionAsync(engine, t),
                 ex => log.LogError(ex, "Transition stream error in broadcaster"));
         }
@@ -45,8 +45,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
     {
         lock (_lock)
         {
-            _subscription?.Dispose();
-            _subscription = null;
+            _subscription.Disposable = null;
             _engine = null;
         }
     }
@@ -174,7 +173,7 @@ public class StatusBroadcaster(IHubContext<StatusHub> hub, TimeProvider timeProv
 
     public override void Dispose()
     {
-        _subscription?.Dispose();
+        _subscription.Dispose();
         _sendGate.Dispose();
         base.Dispose();
     }

@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using ConCore.Targets;
@@ -71,7 +72,7 @@ public class VerdictCoordinator : IDisposable
     private readonly ILogger<VerdictCoordinator> _log;
     private readonly Lock _lock = new();
     private readonly OrderedOutbox<TargetTransition> _outbox;
-    private readonly List<IDisposable> _subscriptions = new();
+    private readonly CompositeDisposable _subscriptions = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
 
     /// <summary>State, detail and blamed operator as one immutable value:
@@ -562,18 +563,14 @@ public class VerdictCoordinator : IDisposable
 
     public void Dispose()
     {
-        List<IDisposable> toDispose;
         lock (_lock)
         {
+            if (_subscriptions.IsDisposed)
+                return;
             _disposed = true;
             EndWait();
-            toDispose = new List<IDisposable>(_subscriptions);
-            _subscriptions.Clear();
+            _subscriptions.Dispose();
         }
-        if (toDispose.Count == 0)
-            return; // already disposed
-        foreach (var s in toDispose)
-            s.Dispose();
         _transitionSubject.OnCompleted();
         GC.SuppressFinalize(this);
     }

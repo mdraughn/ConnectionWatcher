@@ -80,6 +80,16 @@ public class VerdictCoordinatorTests
     private VerdictState Verdict => _verdict.CurrentVerdict;
 
     [Fact]
+    public void Dispose_twice_completes_the_stream_once()
+    {
+        var completions = 0;
+        _verdict.TransitionSource.Subscribe(_ => { }, () => completions++);
+        _verdict.Dispose();
+        _verdict.Dispose();
+        Assert.Equal(1, completions);
+    }
+
+    [Fact]
     public void Verdict_transitions_are_named_by_the_subject_constants()
     {
         AllHealthy();
