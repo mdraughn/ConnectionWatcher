@@ -105,8 +105,8 @@ public class RetentionPass(ILogger log)
     }
 
     private static DateTime TruncateToHour(DateTime t) =>
-        new(t.Ticks - t.Ticks % TimeSpan.TicksPerHour, DateTimeKind.Utc);
+        RollupResolution.FloorUtc(t, TimeSpan.TicksPerHour);
 
     private static DateTime TruncateToDay(DateTime t) =>
-        new(t.Ticks - t.Ticks % TimeSpan.TicksPerDay, DateTimeKind.Utc);
+        RollupResolution.FloorUtc(t, TimeSpan.TicksPerDay);
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using ConCore;
+using ConPersistence.Entities;
 using ConPersistence.Recording;
 
 namespace ConPersistence.Tests;
@@ -12,6 +13,16 @@ public class RollupAccumulatorTests
 
     private static PingResult Ping(DateTime at, bool ok, long rtt) =>
         new(Ip, ok, rtt, timestamp: new DateTimeOffset(at, TimeSpan.Zero));
+
+    [Fact]
+    public void FloorUtc_floors_to_the_unit_and_tags_utc()
+    {
+        var floored = RollupResolution.FloorUtc(
+            new DateTime(2026, 10, 29, 13, 47, 59, 999, DateTimeKind.Unspecified), TimeSpan.TicksPerHour);
+
+        Assert.Equal(new DateTime(2026, 10, 29, 13, 0, 0, DateTimeKind.Utc), floored);
+        Assert.Equal(DateTimeKind.Utc, floored.Kind);
+    }
 
     [Fact]
     public void Samples_within_a_minute_aggregate()

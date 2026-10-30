@@ -1,4 +1,5 @@
 using ConCore;
+using ConPersistence.Entities;
 
 namespace ConPersistence.Recording;
 
@@ -16,6 +17,17 @@ public class RollupBucket(Guid targetId, DateTime periodStartUtc)
     public double RttAvg => SuccessCount > 0 ? (double)RttSum / SuccessCount : 0;
     /// <summary>RttMin, or 0 when the bucket has no successful pings.</summary>
     public long EffectiveMin => SuccessCount > 0 ? RttMin : 0;
+
+    /// <summary>Counts one ping; RTT statistics take successful pings only. Callers synchronize.</summary>
+    internal void Add(bool success, long rttMs)
+    {
+        PingCount++;
+        if (!success) return;
+        SuccessCount++;
+        RttSum += rttMs;
+        RttMin = Math.Min(RttMin, rttMs);
+        RttMax = Math.Max(RttMax, rttMs);
+    }
 
     /// <summary>Folds another bucket for the same target and minute into this one.</summary>
     public void Absorb(RollupBucket other)
@@ -44,27 +56,20 @@ public class RollupAccumulator
     public void AddSample(Guid targetId, PingResult result)
     {
         var utc = result.Timestamp.UtcDateTime;
-        var minute = new DateTime(utc.Ticks - utc.Ticks % TimeSpan.TicksPerMinute, DateTimeKind.Utc);
+        var minute = RollupResolution.FloorUtc(utc, TimeSpan.TicksPerMinute);
         lock (_lock)
         {
             if (!_open.TryGetValue((targetId, minute), out var bucket))
                 _open[(targetId, minute)] = bucket = new RollupBucket(targetId, minute);
 
-            bucket.PingCount++;
-            if (result.Success)
-            {
-                bucket.SuccessCount++;
-                bucket.RttSum += result.RoundtripTime;
-                bucket.RttMin = Math.Min(bucket.RttMin, result.RoundtripTime);
-                bucket.RttMax = Math.Max(bucket.RttMax, result.RoundtripTime);
-            }
+            bucket.Add(result.Success, result.RoundtripTime);
         }
     }
 
     /// <summary>Removes and returns buckets whose minute has fully elapsed.</summary>
     public List<RollupBucket> TakeClosed(DateTime nowUtc)
     {
-        var currentMinute = new DateTime(nowUtc.Ticks - nowUtc.Ticks % TimeSpan.TicksPerMinute, DateTimeKind.Utc);
+        var currentMinute = RollupResolution.FloorUtc(nowUtc, TimeSpan.TicksPerMinute);
         lock (_lock)
         {
             var closed = _open.Values.Where(b => b.PeriodStartUtc < currentMinute).ToList();
