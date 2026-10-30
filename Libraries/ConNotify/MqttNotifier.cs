@@ -144,9 +144,9 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
 
     private async Task RunConnectedSessionAsync(string host, CancellationToken stoppingToken)
     {
-        var port = await settings.GetIntAsync(SettingKeys.MqttPort, 1883);
-        var baseTopic = await settings.GetAsync(SettingKeys.MqttBaseTopic) is { Length: > 0 } b ? b : "conwatch";
-        var prefix = await settings.GetAsync(SettingKeys.MqttDiscoveryPrefix) is { Length: > 0 } p ? p : "homeassistant";
+        var port = await settings.GetIntAsync(SettingKeys.MqttPort, SettingRules.Int(SettingKeys.MqttPort).Default);
+        var baseTopic = await settings.GetAsync(SettingKeys.MqttBaseTopic) is { Length: > 0 } b ? b : SettingRules.MqttBaseTopicDefault;
+        var prefix = await settings.GetAsync(SettingKeys.MqttDiscoveryPrefix) is { Length: > 0 } p ? p : SettingRules.MqttDiscoveryPrefixDefault;
         _topics = new MqttTopics(baseTopic, prefix);
 
         var username = await settings.GetAsync(SettingKeys.MqttUsername);

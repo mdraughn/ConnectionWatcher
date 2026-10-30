@@ -1,5 +1,6 @@
 @page
 @using ConPersistence
+@using System.Globalization
 @using ConPersistence.Settings
 @model ConWatch.Pages.DataModel
 @{
@@ -42,20 +43,20 @@ from it). The pass runs nightly.</small></p>
 <form id="retention-form">
     <div class="grid">
         <label>Minute rollups kept (days)
-            <input name="@SettingKeys.MinuteRetentionDays" type="number" min="1" max="3650"
-                   value="@Model.Setting(SettingKeys.MinuteRetentionDays, "90")" />
+            <input name="@SettingKeys.MinuteRetentionDays" type="number" min="@SettingRules.Int(SettingKeys.MinuteRetentionDays).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.MinuteRetentionDays).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.MinuteRetentionDays, SettingRules.Int(SettingKeys.MinuteRetentionDays).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
         <label>Hourly rollups kept (months)
-            <input name="@SettingKeys.HourlyRetentionMonths" type="number" min="1" max="120"
-                   value="@Model.Setting(SettingKeys.HourlyRetentionMonths, "13")" />
+            <input name="@SettingKeys.HourlyRetentionMonths" type="number" min="@SettingRules.Int(SettingKeys.HourlyRetentionMonths).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.HourlyRetentionMonths).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.HourlyRetentionMonths, SettingRules.Int(SettingKeys.HourlyRetentionMonths).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
         <label>Transitions kept (months)
-            <input name="@SettingKeys.TransitionRetentionMonths" type="number" min="1" max="120"
-                   value="@Model.Setting(SettingKeys.TransitionRetentionMonths, "24")" />
+            <input name="@SettingKeys.TransitionRetentionMonths" type="number" min="@SettingRules.Int(SettingKeys.TransitionRetentionMonths).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.TransitionRetentionMonths).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.TransitionRetentionMonths, SettingRules.Int(SettingKeys.TransitionRetentionMonths).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
         <label>Retention run hour (UTC)
-            <input name="@SettingKeys.RetentionRunHourUtc" type="number" min="0" max="23"
-                   value="@Model.Setting(SettingKeys.RetentionRunHourUtc, "3")" />
+            <input name="@SettingKeys.RetentionRunHourUtc" type="number" min="@SettingRules.Int(SettingKeys.RetentionRunHourUtc).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.RetentionRunHourUtc).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.RetentionRunHourUtc, SettingRules.Int(SettingKeys.RetentionRunHourUtc).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
     </div>
     <button type="submit">Save retention settings</button>

@@ -1,5 +1,6 @@
 @page
 @using ConPersistence
+@using System.Globalization
 @using ConPersistence.Settings
 @model ConWatch.Pages.SettingsModel
 @{
@@ -88,8 +89,8 @@ else
                    value="@Model.Setting(SettingKeys.MqttHost)" />
         </label>
         <label>Port
-            <input name="@SettingKeys.MqttPort" type="number" min="1" max="65535"
-                   value="@Model.Setting(SettingKeys.MqttPort, "1883")" />
+            <input name="@SettingKeys.MqttPort" type="number" min="@SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.MqttPort, SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
     </div>
     <div class="grid">
@@ -102,11 +103,11 @@ else
                    value="@Model.Setting(SettingKeys.MqttPassword)" />
         </label>
         <label>Base topic
-            <input name="@SettingKeys.MqttBaseTopic" placeholder="conwatch"
+            <input name="@SettingKeys.MqttBaseTopic" placeholder="@SettingRules.MqttBaseTopicDefault"
                    value="@Model.Setting(SettingKeys.MqttBaseTopic)" />
         </label>
         <label>Discovery prefix
-            <input name="@SettingKeys.MqttDiscoveryPrefix" placeholder="homeassistant"
+            <input name="@SettingKeys.MqttDiscoveryPrefix" placeholder="@SettingRules.MqttDiscoveryPrefixDefault"
                    value="@Model.Setting(SettingKeys.MqttDiscoveryPrefix)" />
         </label>
     </div>
@@ -150,8 +151,8 @@ else
                    value="@Model.Setting(SettingKeys.HeartbeatUrl)" />
         </label>
         <label>Interval (minutes)
-            <input name="@SettingKeys.HeartbeatIntervalMinutes" type="number" min="1" max="1440"
-                   value="@Model.Setting(SettingKeys.HeartbeatIntervalMinutes, "5")" />
+            <input name="@SettingKeys.HeartbeatIntervalMinutes" type="number" min="@SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.HeartbeatIntervalMinutes, SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
     </div>
     <button type="submit">Save notifications</button>

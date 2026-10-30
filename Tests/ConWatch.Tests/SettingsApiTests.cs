@@ -94,6 +94,26 @@ public class SettingsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Every_bad_value_in_one_put_is_reported()
+    {
+        var response = await _client.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, string?>
+        {
+            ["Retention.MinuteRetentionDays"] = "0",
+            ["Mqtt.Port"] = "70000",
+            ["Heartbeat.Url"] = "ftp://x",
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var errors = body.GetProperty("errors").EnumerateArray().Select(e => e.GetString()!).ToArray();
+        Assert.Equal(
+        [
+            "Retention.MinuteRetentionDays must be 1–3650.",
+            "Mqtt.Port must be 1–65535.",
+            "Heartbeat.Url must be an absolute http(s) URL.",
+        ], errors);
+    }
+
+    [Fact]
     public async Task Mqtt_test_requires_a_host()
     {
         var response = await _client.PostAsJsonAsync("/api/v1/admin/mqtt-test",

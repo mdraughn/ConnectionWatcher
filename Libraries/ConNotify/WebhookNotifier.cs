@@ -72,9 +72,8 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
         if (!WebhookFilter.ShouldDeliver(transition, verdictOnly, skipExplained, critical))
             return;
 
-        var urls = (await settings.GetAsync(SettingKeys.WebhookUrls) ?? "")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (urls.Length == 0)
+        var urls = SettingRules.SplitUrlList(await settings.GetAsync(SettingKeys.WebhookUrls));
+        if (urls.Count == 0)
             return;
 
         var json = WebhookPayload.ToJson(transition);

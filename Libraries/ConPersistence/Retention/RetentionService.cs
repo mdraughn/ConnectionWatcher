@@ -20,8 +20,7 @@ public class RetentionService(IDbContextFactory<ConWatchDbContext> dbFactory,
         if (settingsStore is null)
             return (RetentionWindows.From(o), o.RetentionRunHourUtc);
         var all = await settingsStore.GetAllAsync().ConfigureAwait(false);
-        var hour = all.TryGetValue(SettingKeys.RetentionRunHourUtc, out var text) && int.TryParse(text, out var value)
-            ? value : o.RetentionRunHourUtc;
+        var hour = SettingRules.IntOr(all, SettingKeys.RetentionRunHourUtc, o.RetentionRunHourUtc);
         return (RetentionWindows.FromSettings(all, o), hour);
     }
 

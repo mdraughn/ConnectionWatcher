@@ -40,8 +40,9 @@ public class HeartbeatNotifier(SettingsStore settings, IHttpClientFactory httpFa
 
                 await PingAsync(url, stoppingToken).ConfigureAwait(false);
 
+                var hbRule = SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes);
                 var minutes = Math.Clamp(
-                    await settings.GetIntAsync(SettingKeys.HeartbeatIntervalMinutes, 5), 1, 1440);
+                    await settings.GetIntAsync(SettingKeys.HeartbeatIntervalMinutes, hbRule.Default), hbRule.Min, hbRule.Max);
                 var winner = await Task.WhenAny(
                     Task.Delay(TimeSpan.FromMinutes(minutes), stoppingToken), wakeTask)
                     .ConfigureAwait(false);

@@ -84,9 +84,10 @@ public static class AdminEndpoints
         {
             if (request.Host is not { Length: > 0 })
                 return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Host is required.");
-            var port = request.Port ?? 1883;
-            if (port is < 1 or > 65535)
-                return ApiResults.Error(StatusCodes.Status400BadRequest, null, "Port must be 1–65535.");
+            var portRule = SettingRules.Int(SettingKeys.MqttPort);
+            var port = request.Port ?? portRule.Default;
+            if (port < portRule.Min || port > portRule.Max)
+                return ApiResults.Error(StatusCodes.Status400BadRequest, null, $"Port must be {portRule.Min}–{portRule.Max}.");
 
             var (ok, message) = await ConNotify.MqttTester.TestAsync(
                 request.Host, port, request.Username, request.Password, ct);

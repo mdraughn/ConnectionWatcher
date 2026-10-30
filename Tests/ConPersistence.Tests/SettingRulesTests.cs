@@ -26,4 +26,22 @@ public class SettingRulesTests
     [Fact]
     public void A_key_that_is_not_a_flag_is_refused() =>
         Assert.Throws<ArgumentException>(() => SettingRules.ReadFlag(SettingKeys.MqttPort, "true"));
+
+    [Fact]
+    public void Int_errors_name_the_full_key_and_range()
+    {
+        Assert.Null(SettingRules.IntError(SettingKeys.MinuteRetentionDays, "90"));
+        Assert.Equal("Retention.MinuteRetentionDays must be 1–3650.", SettingRules.IntError(SettingKeys.MinuteRetentionDays, "0"));
+        Assert.Equal("Retention.RetentionRunHourUtc must be 0–23.", SettingRules.IntError(SettingKeys.RetentionRunHourUtc, "x"));
+        Assert.Equal("Verdict.WeatherThreshold must be an integer ≥ 1.", SettingRules.IntError(SettingKeys.WeatherThreshold, null));
+    }
+
+    [Fact]
+    public void Defaults_match_the_compiled_options()
+    {
+        var p = new PersistenceOptions();
+        Assert.Equal(p.MinuteRetentionDays, SettingRules.Int(SettingKeys.MinuteRetentionDays).Default);
+        Assert.Equal(1883, SettingRules.Int(SettingKeys.MqttPort).Default);
+        Assert.Equal(5, SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Default);
+    }
 }

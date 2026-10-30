@@ -19,11 +19,9 @@ public sealed record RetentionWindows(int MinuteDays, int HourlyMonths, int Tran
 
     internal static RetentionWindows FromSettings(IReadOnlyDictionary<string, string> all, PersistenceOptions o)
     {
-        int Get(string key, int fallback) =>
-            all.TryGetValue(key, out var text) && int.TryParse(text, out var value) ? value : fallback;
         return new RetentionWindows(
-            Get(SettingKeys.MinuteRetentionDays, o.MinuteRetentionDays),
-            Get(SettingKeys.HourlyRetentionMonths, o.HourlyRetentionMonths),
-            Get(SettingKeys.TransitionRetentionMonths, o.TransitionRetentionMonths));
+            SettingRules.IntOr(all, SettingKeys.MinuteRetentionDays, o.MinuteRetentionDays),
+            SettingRules.IntOr(all, SettingKeys.HourlyRetentionMonths, o.HourlyRetentionMonths),
+            SettingRules.IntOr(all, SettingKeys.TransitionRetentionMonths, o.TransitionRetentionMonths));
     }
 }
