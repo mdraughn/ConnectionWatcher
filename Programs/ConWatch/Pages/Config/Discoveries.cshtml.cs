@@ -1,4 +1,5 @@
 using ConCore.Discovery;
+using ConCore.Targets;
 using ConPersistence.Config;
 using ConPersistence.Discoveries;
 using Microsoft.AspNetCore.Http;
@@ -66,17 +67,7 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
         _ => "ping sweep",
     };
 
-    private string UniqueName(string wanted)
-    {
-        wanted = wanted.Trim();
-        if (wanted.Length > 64)
-            wanted = wanted[..64];
-        if (!_targetNames.Contains(wanted))
-            return wanted;
-        for (var n = 2; ; n++)
-            if (!_targetNames.Contains($"{wanted} {n}"))
-                return $"{wanted} {n}";
-    }
+    private string UniqueName(string wanted) => TargetNames.Unique(wanted, _targetNames);
 
     /// <summary>The Targets dialog, pre-filled for this discovery; saving it adopts the discovery.</summary>
     public string AdoptUrl(DiscoveryDto d)

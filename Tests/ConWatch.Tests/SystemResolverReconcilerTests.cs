@@ -42,7 +42,15 @@ public class SystemResolverReconcilerTests
     {
         var taken = new TargetDto { Id = Guid.NewGuid(), Name = "Docker's resolver", Address = "203.0.113.5", Profile = "Public" };
         var plan = SystemResolverReconciler.Reconcile([taken], [Found("127.0.0.11", docker: true)], true, NoneRetired);
-        Assert.Equal("Docker's resolver (2)", Assert.Single(plan.Targets, t => t.SystemManaged).Name);
+        Assert.Equal("Docker's resolver 2", Assert.Single(plan.Targets, t => t.SystemManaged).Name);
+    }
+
+    [Fact]
+    public void A_resolver_whose_name_is_taken_gets_a_numeric_suffix()
+    {
+        var taken = new TargetDto { Id = Guid.NewGuid(), Name = "Your resolver 10.0.0.53", Address = "203.0.113.5", Profile = "Public" };
+        var plan = SystemResolverReconciler.Reconcile([taken], [Found("10.0.0.53")], true, NoneRetired);
+        Assert.Equal("Your resolver 10.0.0.53 2", Assert.Single(plan.Targets, t => t.SystemManaged).Name);
     }
 
     [Fact]

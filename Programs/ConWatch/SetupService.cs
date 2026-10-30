@@ -42,8 +42,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
             string? ByAddress(string address) => doc.Targets
                 .FirstOrDefault(t => t.Scope == TargetScope.Verdict
                     && t.Address.Equals(address, StringComparison.OrdinalIgnoreCase))?.Name;
-            bool NameTaken(string name) => doc.Targets
-                .Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            string Unique(string wanted) => TargetNames.Unique(wanted, doc.Targets.Select(t => t.Name));
             string Add(TargetDto target)
             {
                 doc.Targets.Add(target);
@@ -55,7 +54,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
             // A router the wizard creates is critical (spec §4.7); a reused target is left as it is (D6).
             routerName = ByAddress(request.Router.Address) ?? Add(new TargetDto
             {
-                Name = Unique(request.Router.Name, NameTaken),
+                Name = Unique(request.Router.Name),
                 Address = request.Router.Address,
                 Profile = "Internal",
                 Critical = true,
@@ -67,7 +66,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
             {
                 pathLeaf = ByAddress(outer.Address) ?? Add(new TargetDto
                 {
-                    Name = Unique(outer.Name, NameTaken),
+                    Name = Unique(outer.Name),
                     Address = outer.Address,
                     Parent = routerName,
                     Profile = "Path",
@@ -82,7 +81,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 var catalogEntry = AnchorCatalog.FirstOrDefault(a => a.Address == address);
                 anchorNames.Add(ByAddress(address) ?? Add(new TargetDto
                 {
-                    Name = Unique(catalogEntry?.Name ?? address, NameTaken),
+                    Name = Unique(catalogEntry?.Name ?? address),
                     Address = address, Parent = pathLeaf, Profile = "Public",
                     Operator = catalogEntry?.Operator,
                 }));
@@ -98,7 +97,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
             {
                 Add(new TargetDto
                 {
-                    Name = Unique($"{upstream} directly", NameTaken), Address = upstream,
+                    Name = Unique($"{upstream} directly"), Address = upstream,
                     Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver,
                 });
             }
@@ -142,17 +141,5 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
         log.LogInformation("Setup applied: router {Router}, {AnchorCount} anchors",
             routerName, anchorNames.Count);
         return ConfigResult.Ok();
-    }
-
-    private static string Unique(string name, Func<string, bool> taken)
-    {
-        if (!taken(name))
-            return name;
-        for (int i = 2; ; i++)
-        {
-            var candidate = $"{name} {i}";
-            if (!taken(candidate))
-                return candidate;
-        }
     }
 }

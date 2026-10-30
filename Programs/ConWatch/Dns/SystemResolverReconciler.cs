@@ -54,7 +54,7 @@ public static class SystemResolverReconciler
                     log.Add($"skipped {address}: a target with a dns probe already exists at that address");
                     continue;
                 }
-                var name = UniqueName(NameFor(resolver), result);
+                var name = TargetNames.Unique(NameFor(resolver), result.Select(t => t.Name));
                 result.Add(new TargetDto
                 {
                     Name = name, Address = address, Profile = ProfileName, Probe = "dns",
@@ -106,17 +106,5 @@ public static class SystemResolverReconciler
             changed = true;
 
         return new Plan(result, retiredNow, changed, log);
-    }
-
-    private static string UniqueName(string wanted, List<TargetDto> targets)
-    {
-        if (!targets.Any(t => t.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase)))
-            return wanted;
-        for (var n = 2; ; n++)
-        {
-            var candidate = $"{wanted} ({n})";
-            if (!targets.Any(t => t.Name.Equals(candidate, StringComparison.OrdinalIgnoreCase)))
-                return candidate;
-        }
     }
 }
