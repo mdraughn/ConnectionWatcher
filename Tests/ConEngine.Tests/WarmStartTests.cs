@@ -280,6 +280,64 @@ public class WarmStartTests
         Assert.Contains(transitions, t => t.From == HostState.Responding);
     }
 
+    private static (PoolCoordinator pool, List<TargetTransition> transitions) MakePool(HostState? memberSeed)
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-11T00:00:00Z"));
+        var a = new Target { Id = Guid.NewGuid(), Name = "A", Address = "10.0.0.1", ProfileName = "Test" };
+        var b = new Target { Id = Guid.NewGuid(), Name = "B", Address = "10.0.0.2", ProfileName = "Test" };
+        var monitors = new[] { a, b }.Select(t =>
+        {
+            var m = new TargetMonitor(t, Profile, new PingDiscipline(Profile, time),
+                time, NullLoggerFactory.Instance);
+            if (memberSeed is { } s)
+                m.Seed(s);
+            m.StartTracking(IPAddress.Parse(t.Address));
+            return m;
+        }).ToList();
+        var pool = new PoolCoordinator(new PoolDefinition
+        {
+            Id = Guid.NewGuid(), Name = "P", MemberTargetIds = [a.Id, b.Id],
+        }, monitors, time, NullLogger<PoolCoordinator>.Instance);
+        var transitions = new List<TargetTransition>();
+        pool.TransitionSource.Subscribe(transitions.Add);
+        return (pool, transitions);
+    }
+
+    [Fact]
+    public void A_new_pool_over_presumed_members_takes_their_state_at_start()
+    {
+        // The pool did not exist before this rebuild (no pool seed) and its members
+        // were carried over: confirming them emits nothing, so start must decide.
+        var (pool, transitions) = MakePool(HostState.Responding);
+        pool.Start();
+
+        Assert.Equal(HostState.Responding, pool.CurrentState);
+        var t = Assert.Single(transitions);
+        Assert.Equal(HostState.Initializing, t.From);
+        Assert.Equal(HostState.Responding, t.To);
+    }
+
+    [Fact]
+    public void A_cold_pool_start_stays_silent()
+    {
+        var (pool, transitions) = MakePool(memberSeed: null);
+        pool.Start();
+
+        Assert.Equal(HostState.Initializing, pool.CurrentState);
+        Assert.Empty(transitions);
+    }
+
+    [Fact]
+    public void A_seeded_pool_contradicted_by_its_presumed_members_corrects_at_start()
+    {
+        var (pool, transitions) = MakePool(HostState.Down);
+        pool.Seed(HostState.Responding);
+        pool.Start();
+
+        Assert.Equal(HostState.Down, pool.CurrentState);
+        Assert.Equal(HostState.Responding, Assert.Single(transitions).From);
+    }
+
     private static (VerdictCoordinator verdict, Dictionary<Guid, TargetMonitor> monitors,
         TargetGraph graph, List<TargetTransition> transitions, FakeTimeProvider time)
         MakeVerdictWorld(HostState? monitorSeed)
@@ -333,6 +391,75 @@ public class WarmStartTests
         Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
         var t = Assert.Single(transitions);
         Assert.Equal("Healthy", t.Reason.Verdict);
+    }
+
+    [Fact]
+    public void An_unseeded_verdict_over_presumed_monitors_classifies_at_start()
+    {
+        // A new anchor pool over carried-over targets: no verdict seed, and no
+        // monitor transition will ever come to classify it.
+        var (verdict, _, _, transitions, _) = MakeVerdictWorld(HostState.Responding);
+        verdict.Start();
+
+        Assert.Equal(VerdictState.Healthy, verdict.CurrentVerdict);
+        Assert.Equal("Healthy", Assert.Single(transitions).Reason.Verdict);
+    }
+
+    [Fact]
+    public void A_cold_verdict_start_stays_silent()
+    {
+        var (verdict, _, _, transitions, _) = MakeVerdictWorld(monitorSeed: null);
+        verdict.Start();
+
+        Assert.Equal(VerdictState.Unknown, verdict.CurrentVerdict);
+        Assert.Empty(transitions);
+    }
+
+    [Fact]
+    public async Task A_pool_added_by_a_warm_rebuild_gets_its_state_and_a_verdict_at_once()
+    {
+        // The rebuild that adds the anchor pool carries every target over as
+        // Responding but has no pool or verdict to carry. Fresh pings agree
+        // with the presumption, so they never move either one.
+        var router = Guid.NewGuid();
+        var google = Guid.NewGuid();
+        var cloudflare = Guid.NewGuid();
+        var options = new WatcherOptions
+        {
+            Profiles = { ["Test"] = new PingProfileConfig { NormalIntervalSeconds = 60, HistorySize = 20, MinUsableSample = 5 } },
+            Targets =
+            [
+                new TargetConfig { Id = router, Name = "Router", Address = "192.168.1.1", Profile = "Test" },
+                new TargetConfig { Id = google, Name = "Google", Address = "8.8.8.8", Parent = "Router", Profile = "Test" },
+                new TargetConfig { Id = cloudflare, Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router", Profile = "Test" },
+            ],
+            Pools = [new PoolConfig { Name = "Internet", Members = ["Google", "Cloudflare"] }],
+        };
+        var seed = new EngineSeed
+        {
+            Targets = new Dictionary<Guid, TargetSeed>
+            {
+                [router] = new TargetSeed(HostState.Responding, "192.168.1.1"),
+                [google] = new TargetSeed(HostState.Responding, "8.8.8.8"),
+                [cloudflare] = new TargetSeed(HostState.Responding, "1.1.1.1"),
+            },
+        };
+        var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
+            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            Options.Create(options), Options.Create(new VerdictOptions { AnchorPool = "Internet" }));
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            await engine.StartAsync(cts.Token, seed);
+
+            Assert.Equal(HostState.Responding, Assert.Single(engine.PoolCoordinators).CurrentState);
+            Assert.Equal(VerdictState.Healthy, engine.Verdict!.CurrentVerdict);
+        }
+        finally
+        {
+            cts.Cancel();
+            await engine.StopAsync();
+        }
     }
 
     [Fact]

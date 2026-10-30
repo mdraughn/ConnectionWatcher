@@ -53,7 +53,8 @@ public class PoolCoordinator : IDisposable
         interval * memberIndex / memberCount;
 
     /// <summary>Warm restart: adopt a presumed aggregate state silently — no
-    /// transition. Member transitions recalculate (and correct) it as usual.</summary>
+    /// transition. Start() checks it once against the members' (presumed)
+    /// states; member transitions recalculate (and correct) it as usual.</summary>
     public void Seed(HostState state)
     {
         lock (_lock)
@@ -67,6 +68,13 @@ public class PoolCoordinator : IDisposable
     {
         foreach (var member in _members)
             _subscriptions.Add(member.TransitionSource.Subscribe(_ => Recalculate()));
+
+        // A fully confirmed warm start emits no member transitions at all, so a
+        // pool new to this engine (nothing to seed it from) would sit at
+        // Initializing for good: decide once now. A cold start, every member
+        // still undetermined, stays silent.
+        if (_members.Any(m => !m.CurrentState.IsUndetermined()))
+            Recalculate();
     }
 
     private void Recalculate()

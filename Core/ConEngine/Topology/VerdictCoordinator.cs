@@ -207,11 +207,12 @@ public class VerdictCoordinator : IDisposable
             _subscriptions.Add(m.TransitionSource.Subscribe(_ => Recalculate()));
 
         // A fully confirmed warm start emits no monitor transitions at all, so
-        // a seeded verdict must classify once now rather than wait for one.
+        // the verdict must classify once now rather than wait for one — seeded
+        // or not (a new anchor pool over carried-over targets has no verdict to
+        // carry). A cold start classifies Unknown: no change, no transition.
         bool seeded;
         lock (_lock) { seeded = _seeded; _seeded = false; }
-        if (seeded)
-            Recalculate(ignoreUnknown: true);
+        Recalculate(ignoreUnknown: seeded);
     }
 
     private void Recalculate(bool ignoreUnknown = false)
