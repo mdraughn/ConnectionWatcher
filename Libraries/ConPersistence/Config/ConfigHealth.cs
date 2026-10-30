@@ -20,6 +20,9 @@ public record HealthWarning(string Code, string Message)
         _ => "/Config/Targets", // anchors-all-isp (operator tags), tcp-refused (probe), anything new
     };
 
+    /// <summary>True when the fix lives on a Config tab (as opposed to the Settings page).</summary>
+    public bool IsConfigTab => Page.StartsWith("/Config/", StringComparison.Ordinal);
+
     /// <summary>The page's name as the UI labels it ("DNS", "Pools", "Targets", "Settings").</summary>
     public string PageName => Page[(Page.LastIndexOf('/') + 1)..] switch
     {

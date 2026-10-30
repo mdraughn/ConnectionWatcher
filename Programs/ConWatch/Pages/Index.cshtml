@@ -31,7 +31,7 @@
 {
     <p class="cw-health-hint">
         ⚠ @Model.WarningCount configuration warning@(Model.WarningCount == 1 ? "" : "s") —
-        @if (Model.WarningPage is { } fixOn && fixOn.Page.StartsWith("/Config/"))
+        @if (Model.WarningPage is { } fixOn && fixOn.IsConfigTab)
         {
             <a href="@fixOn.Page">review on the Config → @fixOn.PageName tab</a>
         }

@@ -10,7 +10,7 @@
                 <li data-code="@warning.Code">@warning.Message
                     @if (!string.Equals(warning.Page, here, StringComparison.OrdinalIgnoreCase))
                     {
-                        <a href="@warning.Page">→ @warning.PageName @(warning.Page.StartsWith("/Config/") ? "tab" : "page")</a>
+                        <a href="@warning.Page">→ @warning.PageName @(warning.IsConfigTab ? "tab" : "page")</a>
                     }
                 </li>
             }

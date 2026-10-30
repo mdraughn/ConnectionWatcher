@@ -23,4 +23,11 @@ public class HealthWarningPageTests
         Assert.Equal(page, warning.Page);
         Assert.Equal(pageName, warning.PageName);
     }
+
+    [Fact]
+    public void IsConfigTab_is_true_only_for_config_pages()
+    {
+        Assert.True(new HealthWarning("dns-not-watched", "m").IsConfigTab);
+        Assert.False(new HealthWarning("clone-source-active", "m").IsConfigTab);
+    }
 }

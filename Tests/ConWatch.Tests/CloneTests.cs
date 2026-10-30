@@ -355,6 +355,31 @@ public class CloneTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task Settings_page_shows_the_clone_source_warning()
+    {
+        await SeedSourceAsync();
+        var target = MakeTarget();
+        var client = target.CreateClient();
+        (await client.PostAsJsonAsync("/api/v1/setup/clone", new
+        {
+            sourceUrl = "http://source.test/", includeSecrets = true, allowInsecure = true,
+        })).EnsureSuccessStatusCode();
+        (await client.PutAsJsonAsync("/api/v1/settings",
+            new Dictionary<string, string?> { ["Engine.Enabled"] = "true" }))
+            .EnsureSuccessStatusCode();
+        await ConfigApiTests.Eventually(async () =>
+        {
+            var health = await GetJson(client, "/api/v1/config/health");
+            foreach (var w in health.GetProperty("warnings").EnumerateArray())
+                if (w.GetProperty("code").GetString() == "clone-source-active")
+                    return true;
+            return false;
+        });
+
+        Assert.Contains("data-code=\"clone-source-active\"", await client.GetStringAsync("/Settings"));
+    }
+
     /// <summary>
     /// The import has landed but the archive rebuild fails: the clone must say
     /// so (500, code rebuild-failed), not report success on a node that is

@@ -86,4 +86,33 @@ public class RuntimeHealthTests : IDisposable
         Assert.Contains(doc.RootElement.GetProperty("warnings").EnumerateArray(),
             w => w.GetProperty("code").GetString() == "tcp-refused");
     }
+
+    [Fact]
+    public async Task Dashboard_and_every_config_tab_count_a_refused_tcp_target()
+    {
+        await _client.PostAsJsonAsync("/api/v1/targets", new
+        {
+            name = "Modem", address = "192.168.1.254", profile = "Public", probe = "tcp:80",
+        });
+
+        var host = _factory.Services.GetRequiredService<WatcherHostService>();
+        await ConfigApiTests.Eventually(async () =>
+        {
+            await Task.CompletedTask;
+            return host.Engine is not null && host.Engine.Monitors.Values.Any(m => m.Target.Name == "Modem");
+        });
+
+        var monitor = host.Engine!.Monitors.Values.Single(m => m.Target.Name == "Modem");
+        _factory.Pings.SetUp(IPAddress.Parse("192.168.1.254"), false);
+        for (int i = 0; i < 200; i++)
+            monitor.RecordPingResult(new ConCore.PingResult(IPAddress.Parse("192.168.1.254"), true, 2, "Refused"));
+
+        using var doc = JsonDocument.Parse(await _client.GetStringAsync("/api/v1/config/health"));
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.Contains(warnings.EnumerateArray(), w => w.GetProperty("code").GetString() == "tcp-refused");
+        var n = warnings.GetArrayLength();
+
+        Assert.Contains($"⚠ {n} configuration warning", await _client.GetStringAsync("/"));
+        Assert.Contains("data-code=\"tcp-refused\"", await _client.GetStringAsync("/Config/Dns"));
+    }
 }

@@ -7,8 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace ConWatch.Pages.Config;
 
 /// <summary>Admin-locked by convention (AdminLockPageFilter on /Config).</summary>
-public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore settings,
-    WatcherHostService host) : PageModel
+public class TargetsModel(ConfigStore store, ConWatch.Health.HealthReport health, SettingsStore settings) : PageModel
 {
     public ConfigDocument Config { get; private set; } = new();
     public IReadOnlyList<HealthWarning> Warnings { get; private set; } = [];
@@ -50,7 +49,7 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     {
         var names = await TopologyNames.FromConfigAsync(store, settings);
         Config = names.Config;
-        Warnings = [.. await health.EvaluateAsync(), .. RuntimeHealth.RefusalWarnings(host.Engine)];
+        Warnings = await health.ForPagesAsync();
 
         var byName = Config.Targets.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
         Anchors = names.AnchorNames.Select(n => byName[n]).ToList();

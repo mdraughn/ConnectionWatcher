@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHealth health,
+public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport health,
     Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
     ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
     ConPersistence.Config.ConfigStore configStore, StatusSource status) : PageModel
@@ -51,7 +51,7 @@ public class IndexModel(WatcherHostService host, ConPersistence.Config.ConfigHea
                 return Redirect("/Setup");
         }
 
-        var healthWarnings = await health.EvaluateAsync();
+        var healthWarnings = await health.ForPagesAsync();
         WarningCount = healthWarnings.Count;
         WarningPage = healthWarnings.Select(w => w.Page).Distinct().Count() == 1 ? healthWarnings[0] : null;
         var engine = host.Engine;

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace ConWatch.Pages.Config;
 
 /// <summary>Admin-locked by convention (AdminLockPageFilter on /Config).</summary>
-public class ProfilesModel(ConfigStore store, ConfigHealth health) : PageModel
+public class ProfilesModel(ConfigStore store, ConWatch.Health.HealthReport health) : PageModel
 {
     /// <summary>The new-profile dialog's starting values, keyed by form field name:
     /// a default <see cref="PingProfileConfig"/>, formatted invariantly for number inputs.</summary>
@@ -38,6 +38,6 @@ public class ProfilesModel(ConfigStore store, ConfigHealth health) : PageModel
     public async Task OnGetAsync()
     {
         Config = await store.ExportAsync();
-        Warnings = await health.EvaluateAsync();
+        Warnings = await health.ForPagesAsync();
     }
 }
