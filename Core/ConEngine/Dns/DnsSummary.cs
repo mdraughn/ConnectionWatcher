@@ -21,14 +21,14 @@ public sealed record DnsSummary(bool Watched, DnsSummaryState State)
         if (!watch.Enabled || watch.System.Count == 0)
             return new DnsSummary(false, DnsSummaryState.Unknown);
         var states = watch.System.Select(m => m.CurrentState).ToList();
-        var determined = states.Where(s => s is not (HostState.Initializing or HostState.Starting)).ToList();
+        var determined = states.Where(s => !s.IsUndetermined()).ToList();
         if (determined.Count == 0)
             return new DnsSummary(true, DnsSummaryState.Unknown);
-        if (determined.All(s => s is HostState.Down or HostState.Unreachable))
+        if (determined.All(s => s.IsFailed()))
             return new DnsSummary(true, DnsSummaryState.Down);
         if (determined.Any(s => s is HostState.Down or HostState.Unreachable or HostState.Faltering or HostState.Recovering))
             return new DnsSummary(true, DnsSummaryState.Degraded);
-        var answering = watch.System.Where(m => TopologyCoordinator.Answering(m.CurrentState)).ToList();
+        var answering = watch.System.Where(m => m.CurrentState.IsAnswering()).ToList();
         if (answering.Count > 0 && answering.All(m => IsFiltered(log.Recent(m.Target.Id))))
             return new DnsSummary(true, DnsSummaryState.Filtered);
         return new DnsSummary(true, DnsSummaryState.Ok);

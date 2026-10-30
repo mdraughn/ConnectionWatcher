@@ -104,7 +104,7 @@ public class SuspicionCoordinator : IDisposable
 
         var priorState = _priorStates.TryGetValue(targetId, out var known)
             ? known : monitor.CurrentState;
-        bool priorHealthy = priorState is HostState.Responding or HostState.Starting;
+        bool priorHealthy = priorState.IsHealthy();
         var timestamp = result.Timestamp;
 
         if (!result.Success && priorHealthy &&
@@ -144,7 +144,7 @@ public class SuspicionCoordinator : IDisposable
         // parent's problem either way.
         var stateNow = monitor.CurrentState;
         if (_episodes.ContainsKey(targetId) &&
-            stateNow is not (HostState.Responding or HostState.Starting))
+            !stateNow.IsHealthy())
         {
             _episodes.Remove(targetId);
         }

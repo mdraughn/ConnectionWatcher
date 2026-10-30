@@ -204,11 +204,11 @@ public class ModelCheckCoordinator : IDisposable
                     _falteringSince.Remove(id);
                 // A hop that keeps dropping its own probes while forwarding fine
                 // (spec §4.5 corollary 3, §9.3). A Down hop is HopBypassed's business.
-                if (_loss is not null && state is not (HostState.Down or HostState.Unreachable))
+                if (_loss is not null && !state.IsFailed())
                     CheckProbeOnlyLoss(found, _monitors[id], beyond);
                 if (state is not (HostState.Down or HostState.Faltering))
                     continue;
-                var witnessId = beyond.FirstOrDefault(d => TopologyCoordinator.Answering(states[d]));
+                var witnessId = beyond.FirstOrDefault(d => states[d].IsAnswering());
                 if (witnessId == Guid.Empty)
                     continue; // nothing beyond answers: a real failure, not a map error
 
@@ -309,8 +309,8 @@ public class ModelCheckCoordinator : IDisposable
         var system = _dns.System.Where(m => states.ContainsKey(m.Target.Id))
             .Select(m => (Monitor: m, State: states[m.Target.Id])).ToList();
         var upstream = _dns.Upstream.Where(m => states.ContainsKey(m.Target.Id)).ToList();
-        var answering = system.Where(s => TopologyCoordinator.Answering(s.State)).ToList();
-        var down = system.Where(s => s.State is HostState.Down or HostState.Unreachable).ToList();
+        var answering = system.Where(s => s.State.IsAnswering()).ToList();
+        var down = system.Where(s => s.State.IsFailed()).ToList();
         // The Down-based notes need a reachable internet: during an outage the resolvers
         // fall in whatever order their windows fill, which proves nothing about them.
         var reachable = _internetReachable?.Invoke() ?? true;
@@ -323,7 +323,7 @@ public class ModelCheckCoordinator : IDisposable
 
         // UpstreamResolverDown: a system resolver answers but an upstream one is Down.
         if (reachable && answering.Count > 0)
-            foreach (var up in upstream.Where(m => states[m.Target.Id] is HostState.Down or HostState.Unreachable))
+            foreach (var up in upstream.Where(m => states[m.Target.Id].IsFailed()))
                 Add(found, ModelWarningKind.UpstreamResolverDown, up.Target,
                     $"{up.Target.Address} isn't answering direct queries; your resolver is fine.");
 
@@ -351,7 +351,7 @@ public class ModelCheckCoordinator : IDisposable
         // NameUnresolvable: one name missed its last NameMisses asks on every answering
         // resolver that asked it, while some other name hit on each of them.
         var answeringResolvers = system.Select(s => s.Monitor).Concat(upstream)
-            .Where(m => TopologyCoordinator.Answering(states[m.Target.Id])).ToList();
+            .Where(m => states[m.Target.Id].IsAnswering()).ToList();
         if (answeringResolvers.Count == 0)
             return;
         var byName = new Dictionary<string, (int Resolvers, int Failing)>(StringComparer.OrdinalIgnoreCase);

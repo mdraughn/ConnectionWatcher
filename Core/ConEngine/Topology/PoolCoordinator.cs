@@ -73,11 +73,11 @@ public class PoolCoordinator : IDisposable
             var states = members.Select(m => m.State).ToList();
 
             HostState next;
-            if (states.All(s => s is HostState.Initializing or HostState.Starting))
+            if (states.All(s => s.IsUndetermined()))
                 next = HostState.Starting;
             else if (states.Any(s => s == HostState.Responding))
                 next = HostState.Responding;
-            else if (states.All(s => s is HostState.Down or HostState.Unreachable))
+            else if (states.All(s => s.IsFailed()))
                 next = HostState.Down;
             else
                 next = HostState.Faltering;

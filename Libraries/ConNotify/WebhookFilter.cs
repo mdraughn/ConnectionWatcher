@@ -48,14 +48,11 @@ public static class WebhookFilter
     {
         if (t.Kind != TransitionSubjectKind.Target)
             return false;
-        static bool Failed(HostState s) => s is HostState.Down or HostState.Unreachable;
-        static bool Answering(HostState s) =>
-            s is HostState.Responding or HostState.Recovering or HostState.Faltering;
-        if (Failed(t.To))
-            return !Failed(t.From) &&
+        if (t.To.IsFailed())
+            return !t.From.IsFailed() &&
                 !(t.From == HostState.Starting && t.Reason.AncestorId is not null);
-        if (Failed(t.From))
-            return Answering(t.To);
-        return t.From == HostState.Starting && t.Reason.AncestorId is not null && Answering(t.To);
+        if (t.From.IsFailed())
+            return t.To.IsAnswering();
+        return t.From == HostState.Starting && t.Reason.AncestorId is not null && t.To.IsAnswering();
     }
 }

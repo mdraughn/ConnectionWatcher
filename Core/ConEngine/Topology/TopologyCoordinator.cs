@@ -45,15 +45,11 @@ public class TopologyCoordinator : IDisposable
         }
     }
 
-    /// <summary>The state machine saw replies in its window.</summary>
-    public static bool Answering(HostState state) =>
-        state is HostState.Responding or HostState.Faltering or HostState.Recovering;
-
     /// <summary>Something beyond this target answers: packets get through it,
     /// whatever its own probe says.</summary>
     public bool ProvenForwarding(Guid targetId) =>
         _descendants.TryGetValue(targetId, out var beyond) &&
-        beyond.Any(id => Answering(_monitors[id].CurrentState));
+        beyond.Any(id => _monitors[id].CurrentState.IsAnswering());
 
     /// <summary>The shallowest ancestor that is Down with no proven forwarding, or null.</summary>
     public Guid? RootCause(Guid targetId)

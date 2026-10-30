@@ -65,11 +65,11 @@ public sealed class WarmStartSeeder(IDbContextFactory<ConWatchDbContext> dbFacto
             {
                 case "Target" when targetsById.TryGetValue(row.SubjectId, out var target)
                     && Enum.TryParse<HostState>(row.ToState, out var state)
-                    && state is not (HostState.Initializing or HostState.Starting):
+                    && !state.IsUndetermined():
                     seed.Targets[row.SubjectId] = new TargetSeed(state, target.Address, target.Probe);
                     break;
                 case "Pool" when Enum.TryParse<HostState>(row.ToState, out var poolState)
-                    && poolState is not (HostState.Initializing or HostState.Starting):
+                    && !poolState.IsUndetermined():
                     seed.Pools[row.SubjectId] = poolState;
                     break;
             }
@@ -138,13 +138,13 @@ public sealed class WarmStartSeeder(IDbContextFactory<ConWatchDbContext> dbFacto
         };
         foreach (var (id, monitor) in engine.Monitors)
         {
-            if (monitor.CurrentState is HostState.Initializing or HostState.Starting)
+            if (monitor.CurrentState.IsUndetermined())
                 continue;
             seed.Targets[id] = new TargetSeed(monitor.CurrentState, monitor.Target.Address, monitor.Target.Probe);
         }
         foreach (var pool in engine.PoolCoordinators)
         {
-            if (pool.CurrentState is not (HostState.Initializing or HostState.Starting))
+            if (!pool.CurrentState.IsUndetermined())
                 seed.Pools[pool.Pool.Id] = pool.CurrentState;
         }
         return seed;

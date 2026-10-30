@@ -228,7 +228,7 @@ public class VerdictCoordinator : IDisposable
             // A presumed-reachable verdict means the internet was already up: the first
             // pass is not a return, so no resolver is judged stale for lack of results
             // (the result log is fresh per engine).
-            _wasReachable = verdict is not (VerdictState.LinkDown or VerdictState.Unknown);
+            _wasReachable = verdict.IsReachable();
         }
     }
 
@@ -383,9 +383,7 @@ public class VerdictCoordinator : IDisposable
         _waitTimer = null;
     }
 
-    private static bool Answering(HostState s) => TopologyCoordinator.Answering(s);
 
-    private static bool Undetermined(HostState s) => s is HostState.Initializing or HostState.Starting;
 
     private static string? Normalize(string? op) =>
         op?.Trim() is { Length: > 0 } t ? t.ToLowerInvariant() : null;
@@ -394,12 +392,12 @@ public class VerdictCoordinator : IDisposable
     {
         var anchors = _anchors.Select(a => (Monitor: a, State: states[a.Target.Id])).ToList();
         var counted = anchors.Where(a => _counted.Contains(a.Monitor)).ToList();
-        var reachable = counted.Any(a => Answering(a.State));
+        var reachable = counted.Any(a => a.State.IsAnswering());
         if (reachable && !_wasReachable)
             _reachableSince = _time.GetUtcNow();
         _wasReachable = reachable;
 
-        var determined = anchors.Where(a => !Undetermined(a.State)).ToList();
+        var determined = anchors.Where(a => !a.State.IsUndetermined()).ToList();
         if (determined.Count == 0)
             return (VerdictState.Unknown, "No anchors determined yet", null, null);
 
@@ -422,7 +420,7 @@ public class VerdictCoordinator : IDisposable
         // the anchors while one is permanently dead) — but only for
         // AnchorWaitCap: an anchor stuck in Starting (an address that never
         // resolves) must not hide the outage longer (spec §4.2, I2).
-        if (counted.Any(a => Undetermined(a.State)) && StillWaiting(WaitKind.Anchors))
+        if (counted.Any(a => a.State.IsUndetermined()) && StillWaiting(WaitKind.Anchors))
             return (VerdictState.Unknown, "Waiting for anchors to report", null, null);
 
         // 2. Down: the path says where (spec §4.3).
@@ -432,7 +430,7 @@ public class VerdictCoordinator : IDisposable
 
     private bool AllSystemResolversDown(IReadOnlyDictionary<Guid, HostState> states) =>
         _dns.Enabled && _dns.System.Count > 0 &&
-        _dns.System.All(m => states[m.Target.Id] is HostState.Down or HostState.Unreachable);
+        _dns.System.All(m => states[m.Target.Id].IsFailed());
 
     /// <summary>DnsDown when every determined system resolver is Down (and none is still
     /// undetermined past the wait cap); null otherwise, including while an undetermined
@@ -445,19 +443,19 @@ public class VerdictCoordinator : IDisposable
         if (!_dns.Enabled || _dns.System.Count == 0)
             return null;
         var system = _dns.System.Select(m => (Monitor: m, State: states[m.Target.Id])).ToList();
-        var down = system.Where(s => s.State is HostState.Down or HostState.Unreachable).ToList();
+        var down = system.Where(s => s.State.IsFailed()).ToList();
         var stale = down.Where(s => WithoutFreshFailure(s.Monitor)).ToList();
-        var determined = system.Where(s => !Undetermined(s.State) && !stale.Contains(s)).ToList();
+        var determined = system.Where(s => !s.State.IsUndetermined() && !stale.Contains(s)).ToList();
         if (determined.Count == 0 && stale.Count == 0)
             return null;
-        if (!determined.All(s => s.State is HostState.Down or HostState.Unreachable))
+        if (!determined.All(s => s.State.IsFailed()))
             return null;
-        if ((stale.Count > 0 || system.Any(s => Undetermined(s.State))) && StillWaiting(WaitKind.Resolvers))
+        if ((stale.Count > 0 || system.Any(s => s.State.IsUndetermined())) && StillWaiting(WaitKind.Resolvers))
             return null; // keep waiting (timer armed) but never hide a reachable internet's quality verdict
 
         var resolvers = system.Select(s => s.Monitor.Target.Address).ToList();
         var firstDown = down[0].Monitor.Target.Address;
-        var upstream = _dns.Upstream.FirstOrDefault(m => Answering(states[m.Target.Id]));
+        var upstream = _dns.Upstream.FirstOrDefault(m => states[m.Target.Id].IsAnswering());
         DnsBlame blame = upstream is not null
             ? new DnsBlame(DnsBlameKind.YourResolver,
                 $"Your resolver {firstDown} isn't answering, but {upstream.Target.Address} answers directly.", resolvers)
@@ -520,7 +518,7 @@ public class VerdictCoordinator : IDisposable
 
         if (degraded.Count == 0)
         {
-            var responding = counted.Count(a => Answering(a.State));
+            var responding = counted.Count(a => a.State.IsAnswering());
             var unreachableNote = unreachable.Count == 0 ? "" :
                 $" ({string.Join(", ", unreachable.Select(a => UnreachableName(a.Monitor)))})";
             return (VerdictState.Healthy, $"Healthy: {responding} anchors responding{unreachableNote}{qualifier}", null);
@@ -543,7 +541,7 @@ public class VerdictCoordinator : IDisposable
             .Where(a => states[a.Monitor.Target.Id] switch
             {
                 HostState.Faltering => _probeOnlyVeto?.Holds(ModelWarningKind.ProbeOnlyLoss, a.Monitor.Target.Id) != true,
-                HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => Answering(states[id])),
+                HostState.Down => !_descendants[a.Monitor.Target.Id].Any(id => states[id].IsAnswering()),
                 _ => false,
             })
             .OrderBy(a => a.Depth).FirstOrDefault();
@@ -574,14 +572,14 @@ public class VerdictCoordinator : IDisposable
         VerdictState verdict, IReadOnlyDictionary<Guid, HostState> states)
     {
         bool Proven(TargetMonitor hop) =>
-            Answering(states[hop.Target.Id]) ||
-            _descendants[hop.Target.Id].Any(id => Answering(states[id]));
+            states[hop.Target.Id].IsAnswering() ||
+            _descendants[hop.Target.Id].Any(id => states[id].IsAnswering());
 
         TargetMonitor? blamed = null, beyond = null;
         int bestIndex = int.MaxValue;
         foreach (var (anchor, path) in _paths)
         {
-            if (Answering(states[anchor.Target.Id]) || path.Count == 0)
+            if (states[anchor.Target.Id].IsAnswering() || path.Count == 0)
                 continue;
             int frontier = -1;
             for (int i = 0; i < path.Count; i++)

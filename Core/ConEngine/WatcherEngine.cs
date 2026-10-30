@@ -280,7 +280,7 @@ public class WatcherEngine
         // probes. Only a holding ProbeOnlyLoss note feeds the verdict, as a veto.
         ModelCheck = new ModelCheckCoordinator(_graph, _monitors, Verdict?.UsingIspFallback == true,
             _timeProvider, _loggerFactory.CreateLogger<ModelCheckCoordinator>(), Loss, DnsWatch, DnsResults,
-            () => Verdict is null || Verdict.CurrentVerdict is not (VerdictState.LinkDown or VerdictState.Unknown));
+            () => Verdict is null || Verdict.CurrentVerdict.IsReachable());
         _subscriptions.Add(ModelCheck.ChangeSource.Subscribe(_modelSubject.OnNext));
         Verdict?.UseProbeOnlyVeto(ModelCheck);
         ModelCheck.Start();

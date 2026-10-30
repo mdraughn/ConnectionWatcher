@@ -235,7 +235,7 @@ public class TopologyCoordinatorTests
 
         Feed("Switch", 5, true);
         Assert.Equal(HostState.Down, State("Router"));
-        Assert.True(TopologyCoordinator.Answering(State("Switch")));
+        Assert.True(State("Switch").IsAnswering());
         foreach (var name in new[] { "Inside", "Edge", "Google", "Cloudflare" })
         {
             Assert.Equal(HostState.Starting, State(name));

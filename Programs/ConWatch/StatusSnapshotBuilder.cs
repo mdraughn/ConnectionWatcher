@@ -116,7 +116,7 @@ public static class StatusSnapshotBuilder
     /// answering or without samples (spec 2026-10-10 §5.2).</summary>
     public static string? ResolverDetail(HostState state, IReadOnlyList<ConEngine.Dns.DnsResult> recent)
     {
-        if (recent.Count == 0 || TopologyCoordinator.Answering(state))
+        if (recent.Count == 0 || state.IsAnswering())
             return null;
         for (var i = recent.Count - 1; i >= 0; i--)
             if (!recent[i].Success)

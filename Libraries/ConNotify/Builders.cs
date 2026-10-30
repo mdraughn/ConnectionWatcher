@@ -55,7 +55,7 @@ public static class StateMapping
 {
     /// <summary>ON = reachable-ish (incl. degraded); OFF = Down/Unreachable.</summary>
     public static string TargetPayload(HostState state) =>
-        state is HostState.Down or HostState.Unreachable ? "OFF" : "ON";
+        state.IsFailed() ? "OFF" : "ON";
 
     /// <summary>The headline binary: ON unless the verdict says the LINK is down or name lookups are failing (spec 2026-10-10 D9).</summary>
     public static string InternetPayload(string verdict) =>

@@ -94,7 +94,7 @@ public class PingDiscipline : IPingCadence
             return;
         lock (_lock)
         {
-            if (_state is not (HostState.Responding or HostState.Starting))
+            if (!_state.IsHealthy())
                 return;
             StartBurstLocked(guarded: true);
         }
