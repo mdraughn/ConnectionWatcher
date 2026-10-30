@@ -50,6 +50,7 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
     private const int MaxHostname = 255;
     private const int MaxOrigin = 100;
     private const int MaxEvidence = 1000;
+    private const string AdoptedConflict = "This discovery was adopted into a target; delete the target first.";
 
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
@@ -192,43 +193,25 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
             r.AdoptedTargetId is { } id && names.TryGetValue(id, out var name) ? name : null)).ToList();
     }
 
-    public async Task<ConfigResult> DismissAsync(Guid id)
+    public Task<ConfigResult> DismissAsync(Guid id) => ChangeAsync(id, (_, row) =>
     {
-        await using var db = await dbFactory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync();
-        var row = await db.Discoveries.FindAsync(id);
-        if (row is null)
-            return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {id}.");
-        if (await IsLiveAdoptionAsync(db, row))
-            return ConfigResult.Fail(ConfigErrorKind.Conflict,
-                "This discovery was adopted into a target; delete the target first.");
         row.Status = DiscoveryStatus.Dismissed;
         row.AdoptedTargetId = null;
-        await db.SaveChangesAsync();
-        await tx.CommitAsync();
-        return ConfigResult.Ok(id);
-    }
+    });
 
-    public async Task<ConfigResult> RestoreAsync(Guid id)
+    public Task<ConfigResult> RestoreAsync(Guid id) => ChangeAsync(id, (_, row) =>
     {
-        await using var db = await dbFactory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync();
-        var row = await db.Discoveries.FindAsync(id);
-        if (row is null)
-            return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {id}.");
-        if (await IsLiveAdoptionAsync(db, row))
-            return ConfigResult.Fail(ConfigErrorKind.Conflict,
-                "This discovery was adopted into a target; delete the target first.");
         row.Status = DiscoveryStatus.New;
         row.AdoptedTargetId = null;
-        await db.SaveChangesAsync();
-        await tx.CommitAsync();
-        return ConfigResult.Ok(id);
-    }
+    });
 
     /// <summary>Deletes one New or hidden discovery outright. Unlike hiding, nothing remembers it:
     /// finding the address again creates a fresh New row. A live adoption is refused.</summary>
-    public async Task<ConfigResult> RemoveAsync(Guid id)
+    public Task<ConfigResult> RemoveAsync(Guid id) => ChangeAsync(id, (db, row) => db.Discoveries.Remove(row));
+
+    /// <summary>Loads one discovery in a transaction, refuses a missing one (NotFound) or a live
+    /// adoption (Conflict), applies <paramref name="change"/>, saves and commits.</summary>
+    private async Task<ConfigResult> ChangeAsync(Guid id, Action<ConWatchDbContext, DiscoveryRow> change)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
@@ -236,9 +219,8 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
         if (row is null)
             return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {id}.");
         if (await IsLiveAdoptionAsync(db, row))
-            return ConfigResult.Fail(ConfigErrorKind.Conflict,
-                "This discovery was adopted into a target; remove the target to undo it.");
-        db.Discoveries.Remove(row);
+            return ConfigResult.Fail(ConfigErrorKind.Conflict, AdoptedConflict);
+        change(db, row);
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return ConfigResult.Ok(id);
@@ -261,7 +243,8 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.Status, DiscoveryStatus.New));
     }
 
-    private static async Task<bool> IsLiveAdoptionAsync(ConWatchDbContext db, DiscoveryRow row) =>
+    /// <summary>True when the discovery is Adopted and the target it names still exists.</summary>
+    internal static async Task<bool> IsLiveAdoptionAsync(ConWatchDbContext db, DiscoveryRow row) =>
         row.Status == DiscoveryStatus.Adopted && row.AdoptedTargetId is { } target &&
         await db.Targets.AnyAsync(t => t.Id == target);
 }

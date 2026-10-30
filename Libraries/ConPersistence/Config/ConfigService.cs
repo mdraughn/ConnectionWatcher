@@ -1,5 +1,6 @@
 using ConCore.Discovery;
 using ConEngine.Configuration;
+using ConPersistence.Discoveries;
 using ConPersistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -96,8 +97,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             discovery = await db.Discoveries.FindAsync(discoveryId);
             if (discovery is null)
                 return ConfigResult.Fail(ConfigErrorKind.NotFound, $"No discovery with id {discoveryId}.");
-            if (discovery.Status == DiscoveryStatus.Adopted && discovery.AdoptedTargetId is { } adopted &&
-                await db.Targets.AnyAsync(t => t.Id == adopted))
+            if (await DiscoveryStore.IsLiveAdoptionAsync(db, discovery))
                 return ConfigResult.Fail(ConfigErrorKind.Conflict,
                     "This discovery was already adopted into a target.");
         }

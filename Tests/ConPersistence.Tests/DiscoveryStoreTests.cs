@@ -261,6 +261,18 @@ public class DiscoveryStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Removing_a_live_adoption_names_the_same_fix_as_hiding_it()
+    {
+        var (id, _) = await AdoptedAsync(targetStillExists: true);
+
+        var result = await _store.RemoveAsync(id);
+
+        Assert.Equal(ConfigErrorKind.Conflict, result.Kind);
+        Assert.Equal("This discovery was adopted into a target; delete the target first.",
+            Assert.Single(result.Errors!));
+    }
+
+    [Fact]
     public async Task RemoveAsync_refuses_a_live_adoption()
     {
         var (id, _) = await AdoptedAsync(targetStillExists: true);
