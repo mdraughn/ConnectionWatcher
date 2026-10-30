@@ -88,9 +88,12 @@ public sealed class HttpHealthProbeTests
         });
         try
         {
-            var r = await new HttpHealthProbe().ProbeAsync($"http://localhost:{port}", CancellationToken.None);
+            var detour = await Ipv6Detour.MeasureMsAsync(port);
+            using var probe = new HttpHealthProbe();
+            var r = await probe.ProbeAsync($"http://localhost:{port}", CancellationToken.None);
             Assert.Equal("Healthy", r.Status);
-            Assert.True(r.ElapsedMs < 1000, $"took {r.ElapsedMs} ms");
+            if (detour >= Ipv6Detour.DetectableMs)
+                Assert.True(r.ElapsedMs < detour, $"took {r.ElapsedMs} ms; waiting on ::1 costs {detour} ms");
         }
         finally
         {

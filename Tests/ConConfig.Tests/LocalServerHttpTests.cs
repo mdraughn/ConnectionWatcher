@@ -42,11 +42,13 @@ public sealed class LocalServerHttpTests
         });
         try
         {
+            var detour = await Ipv6Detour.MeasureMsAsync(port);
             using var http = Client();
             var watch = Stopwatch.StartNew();
             using var response = await http.GetAsync($"http://localhost:{port}/");
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-            Assert.True(watch.ElapsedMilliseconds < 1000, $"took {watch.ElapsedMilliseconds} ms");
+            if (detour >= Ipv6Detour.DetectableMs)
+                Assert.True(watch.ElapsedMilliseconds < detour, $"took {watch.ElapsedMilliseconds} ms; waiting on ::1 costs {detour} ms");
         }
         finally
         {
