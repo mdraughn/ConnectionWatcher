@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Reactive.Subjects;
 using ConCore;
@@ -16,7 +15,7 @@ namespace ConEngine.Tracking;
 /// Threading contract: state changes happen under <c>_lock</c>; every
 /// publication is queued while the lock is held (so delivery order equals
 /// state order) and delivered only after it is released, serialized through
-/// <c>_publishLock</c>. Subscribers may therefore take other monitors' locks
+/// the outbox (Wait mode). Subscribers may therefore take other monitors' locks
 /// freely — nothing they can reach is held while they run.
 /// The HostTracker it owns is pure; this monitor's _lock is the only lock around it.
 /// </summary>
@@ -28,8 +27,7 @@ public class TargetMonitor : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<TargetMonitor> _log;
     private readonly Lock _lock = new();
-    private readonly Lock _publishLock = new();
-    private readonly ConcurrentQueue<Action> _outbox = new();
+    private readonly OrderedOutbox<Action> _outbox = new(a => a(), OutboxMode.Wait);
 
     private long _acceptedReplies;
     private long _refusedReplies;
@@ -130,7 +128,7 @@ public class TargetMonitor : IDisposable
             if (_explanationGiven)
                 QueueOutcomeLocked(_tracker.SetExplanation(_explanation));
         }
-        DrainOutbox();
+        _outbox.Drain();
     }
 
     /// <summary>DNS moved the target: keep state and history, change the address.</summary>
@@ -156,7 +154,7 @@ public class TargetMonitor : IDisposable
             if (_tracker is not null)
                 QueueOutcomeLocked(_tracker.RecordPingResult(result));
         }
-        DrainOutbox();
+        _outbox.Drain();
     }
 
     /// <summary>Topology names (or withdraws) the upstream root cause. Only an
@@ -193,7 +191,7 @@ public class TargetMonitor : IDisposable
                 released = false;
             }
         }
-        DrainOutbox();
+        _outbox.Drain();
         return released;
     }
 
@@ -228,7 +226,7 @@ public class TargetMonitor : IDisposable
                 ReleasePreTrackerLocked();
             }
         }
-        DrainOutbox();
+        _outbox.Drain();
     }
 
     /// <summary>A seeded Unreachable released before DNS resolved: re-prove
@@ -258,7 +256,7 @@ public class TargetMonitor : IDisposable
                 Trigger = TransitionTrigger.ResolutionFailed, Detail = detail,
             });
         }
-        DrainOutbox();
+        _outbox.Drain();
     }
 
     private void QueuePreTrackerTransitionLocked(HostState to, TransitionReason reason)
@@ -323,18 +321,6 @@ public class TargetMonitor : IDisposable
             _log.LogInformation("Transition: {Transition}", transition);
             _transitionSubject.OnNext(transition);
         });
-    }
-
-    /// <summary>Delivers queued publications in order, never under _lock.</summary>
-    private void DrainOutbox()
-    {
-        if (_outbox.IsEmpty)
-            return;
-        lock (_publishLock)
-        {
-            while (_outbox.TryDequeue(out var publish))
-                publish();
-        }
     }
 
     public void Dispose()

@@ -1,8 +1,8 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reactive.Subjects;
 using ConCore;
 using ConCore.Targets;
+using ConEngine.Events;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging;
 
@@ -107,8 +107,7 @@ public class ModelCheckCoordinator : IDisposable
     // says nothing about the resolver (ResolverPartial and UpstreamResolverDown wait).
     private readonly Func<bool>? _internetReachable;
     private readonly Lock _lock = new();
-    private readonly Lock _publishLock = new();
-    private readonly ConcurrentQueue<ModelConditionChange> _outbox = new();
+    private readonly OrderedOutbox<ModelConditionChange> _outbox;
     private readonly Subject<ModelConditionChange> _changes = new();
     private readonly List<IDisposable> _subscriptions = new();
 
@@ -129,6 +128,12 @@ public class ModelCheckCoordinator : IDisposable
         _unprovableUp = unprovableUp;
         _time = timeProvider;
         _log = log;
+        _outbox = new OrderedOutbox<ModelConditionChange>(change =>
+        {
+            _log.LogDebug("Model condition {Key} {State}", change.Condition.Key,
+                change.Active ? "raised" : "cleared");
+            _changes.OnNext(change);
+        }, OutboxMode.Skip);
         _loss = loss;
         _dns = dnsWatch ?? ConEngine.Dns.DnsWatch.Off;
         _dnsResults = dnsResults;
@@ -253,7 +258,7 @@ public class ModelCheckCoordinator : IDisposable
                 _active[key] = condition; // a standing condition refreshes its message silently
             }
         }
-        DrainOutbox();
+        _outbox.Drain();
     }
 
     private void CheckProbeOnlyLoss(Dictionary<string, ModelCondition> found, TargetMonitor hop, List<Guid> beyond)
@@ -393,30 +398,6 @@ public class ModelCheckCoordinator : IDisposable
             ProbeKind.Dns => "dns",
             _ => "ping",
         };
-    }
-
-    /// <summary>Same discipline as VerdictCoordinator: TryEnter, so a thread
-    /// that finds another draining leaves its items to that thread.</summary>
-    private void DrainOutbox()
-    {
-        while (!_outbox.IsEmpty)
-        {
-            if (!_publishLock.TryEnter())
-                return;
-            try
-            {
-                while (_outbox.TryDequeue(out var change))
-                {
-                    _log.LogDebug("Model condition {Key} {State}", change.Condition.Key,
-                        change.Active ? "raised" : "cleared");
-                    _changes.OnNext(change);
-                }
-            }
-            finally
-            {
-                _publishLock.Exit();
-            }
-        }
     }
 
     public void Dispose()

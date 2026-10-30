@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using ConCore.Targets;
@@ -71,8 +70,7 @@ public class VerdictCoordinator : IDisposable
     private readonly TimeProvider _time;
     private readonly ILogger<VerdictCoordinator> _log;
     private readonly Lock _lock = new();
-    private readonly Lock _publishLock = new();
-    private readonly ConcurrentQueue<TargetTransition> _outbox = new();
+    private readonly OrderedOutbox<TargetTransition> _outbox;
     private readonly List<IDisposable> _subscriptions = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
 
@@ -126,6 +124,11 @@ public class VerdictCoordinator : IDisposable
         _weatherThreshold = weatherThreshold;
         _time = timeProvider;
         _log = log;
+        _outbox = new OrderedOutbox<TargetTransition>(t =>
+        {
+            _log.LogInformation("Verdict: {Transition}", t);
+            _transitionSubject.OnNext(t);
+        }, OutboxMode.Skip);
         _anchors = anchorPool.MemberTargetIds
             .Where(monitors.ContainsKey).Select(id => monitors[id]).ToList();
 
@@ -252,35 +255,7 @@ public class VerdictCoordinator : IDisposable
             // Queued under the lock (queue order is state order), published after it.
             _outbox.Enqueue(transition);
         }
-        DrainOutbox();
-    }
-
-    /// <summary>
-    /// Publishes queued transitions in state order, never under _lock.
-    /// TryEnter, not Enter: a thread that finds another one draining leaves
-    /// its item to that thread, which re-checks the queue after releasing the
-    /// lock — nothing is stranded, and no thread waits on this coordinator
-    /// while it may itself be inside a monitor's publish.
-    /// </summary>
-    private void DrainOutbox()
-    {
-        while (!_outbox.IsEmpty)
-        {
-            if (!_publishLock.TryEnter())
-                return;
-            try
-            {
-                while (_outbox.TryDequeue(out var transition))
-                {
-                    _log.LogInformation("Verdict: {Transition}", transition);
-                    _transitionSubject.OnNext(transition);
-                }
-            }
-            finally
-            {
-                _publishLock.Exit();
-            }
-        }
+        _outbox.Drain();
     }
 
     private enum WaitKind { Anchors, Resolvers }
