@@ -67,6 +67,8 @@ public static class AdminEndpoints
                     Transitions = await db.Transitions.CountAsync(),
                     Rollups = await db.Rollups.CountAsync(),
                     ModelWarnings = await db.ModelWarnings.CountAsync(),
+                    Glitches = await db.Glitches.CountAsync(),
+                    Discoveries = await db.Discoveries.CountAsync(),
                     Settings = await db.Settings.CountAsync(),
                 },
                 OldestTransitionUtc = AsUtc(oldestTransition),
@@ -105,8 +107,8 @@ public static class AdminEndpoints
                 db, options.Value.DbPath, TimeRange.AsUtc(before));
             loggerFactory.CreateLogger("Admin").LogWarning(
                 "History PRUNED before {Before:u}: {Transitions} transitions, {Rollups} rollups, " +
-                "{Glitches} glitches; file {Before2} -> {After} bytes",
-                before, result.Transitions, result.Rollups, result.Glitches,
+                "{Glitches} glitches, {ModelWarnings} model warnings; file {Before2} -> {After} bytes",
+                before, result.Transitions, result.Rollups, result.Glitches, result.ModelWarnings,
                 result.FileSizeBefore, result.FileSizeAfter);
             return Results.Ok(result);
         });
@@ -120,10 +122,7 @@ public static class AdminEndpoints
             await using var db = await dbFactory.CreateDbContextAsync();
             await using (var tx = await db.Database.BeginTransactionAsync())
             {
-                await db.Transitions.ExecuteDeleteAsync();
-                await db.Rollups.ExecuteDeleteAsync();
-                await db.ModelWarnings.ExecuteDeleteAsync();
-                await db.Glitches.ExecuteDeleteAsync();
+                await ConPersistence.Retention.MeasurementTables.ClearAllAsync(db);
                 await tx.CommitAsync();
             }
             loggerFactory.CreateLogger("Admin").LogWarning("Measurement history CLEARED by administrator");
@@ -141,10 +140,7 @@ public static class AdminEndpoints
             await using (var db = await dbFactory.CreateDbContextAsync())
             await using (var tx = await db.Database.BeginTransactionAsync())
             {
-                await db.Transitions.ExecuteDeleteAsync();
-                await db.Rollups.ExecuteDeleteAsync();
-                await db.ModelWarnings.ExecuteDeleteAsync();
-                await db.Glitches.ExecuteDeleteAsync();
+                await ConPersistence.Retention.MeasurementTables.ClearAllAsync(db);
                 await db.PoolMembers.ExecuteDeleteAsync();
                 await db.Pools.ExecuteDeleteAsync();
                 await db.Targets.ExecuteDeleteAsync();

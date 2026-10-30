@@ -50,6 +50,34 @@ public class DataPrunerTests : IDisposable
         Assert.Equal(1, await check.Glitches.CountAsync());
     }
 
+    [Fact]
+    public async Task Prunes_ended_model_warnings_before_the_date_and_keeps_open_and_later_ones()
+    {
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.ModelWarnings.AddRange(
+                Warning("ended-before", Cutoff.AddDays(-10), Cutoff.AddDays(-5)),
+                Warning("ended-after", Cutoff.AddDays(-10), Cutoff.AddDays(5)),
+                Warning("open", Cutoff.AddDays(-10), null));
+            await db.SaveChangesAsync();
+        }
+
+        PruneResult result;
+        await using (var db = _factory.CreateDbContext())
+            result = await DataPruner.PruneBeforeAsync(db, "no-such-file.db", Cutoff);
+
+        Assert.Equal(1, result.ModelWarnings);
+
+        await using var check = _factory.CreateDbContext();
+        var keys = (await check.ModelWarnings.ToListAsync()).Select(w => w.Key).Order().ToList();
+        Assert.Equal(new[] { "ended-after", "open" }, keys);
+    }
+
+    private static ModelWarningRow Warning(string key, DateTime start, DateTime? end) => new()
+    {
+        Key = key, Kind = "UnprovableUp", Message = "m", StartUtc = start, EndUtc = end,
+    };
+
     private TransitionRow Row(Guid subject, DateTime at) => new()
     {
         TimestampUtc = at, SubjectId = subject, SubjectName = "T", SubjectKind = "Target",

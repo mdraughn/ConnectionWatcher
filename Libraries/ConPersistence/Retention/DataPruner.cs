@@ -1,11 +1,10 @@
-using ConPersistence.Queries;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConPersistence.Retention;
 
 /// <summary>Result of a user-initiated prune: what was deleted and the file
 /// size before/after the VACUUM.</summary>
-public sealed record PruneResult(int Transitions, int Rollups, int Glitches,
+public sealed record PruneResult(int Transitions, int Rollups, int Glitches, int ModelWarnings,
     long FileSizeBefore, long FileSizeAfter);
 
 /// <summary>
@@ -22,22 +21,20 @@ public static class DataPruner
     {
         var sizeBefore = FileSize(dbPath);
 
-        var latestIds = HistoryQueries.LatestTransitionIdsPerSubject(db);
-        var transitions = await db.Transitions
-            .Where(t => t.TimestampUtc < beforeUtc && !latestIds.Contains(t.Id))
-            .ExecuteDeleteAsync(ct);
+        var transitions = await MeasurementTables.DeleteTransitionsBeforeAsync(db, beforeUtc, ct);
         var rollups = await db.Rollups
             .Where(r => r.PeriodStartUtc < beforeUtc)
             .ExecuteDeleteAsync(ct);
         var glitches = await db.Glitches
             .Where(g => g.StartUtc < beforeUtc)
             .ExecuteDeleteAsync(ct);
+        var modelWarnings = await MeasurementTables.DeleteEndedModelWarningsBeforeAsync(db, beforeUtc, ct);
 
         // A big delete leaves the file at its high-water mark; a full VACUUM
         // rebuilds it and returns the space. Must run outside a transaction.
         await db.Database.ExecuteSqlRawAsync("VACUUM;", ct);
 
-        return new PruneResult(transitions, rollups, glitches, sizeBefore, FileSize(dbPath));
+        return new PruneResult(transitions, rollups, glitches, modelWarnings, sizeBefore, FileSize(dbPath));
     }
 
     private static long FileSize(string dbPath)

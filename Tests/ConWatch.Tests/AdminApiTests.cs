@@ -64,6 +64,31 @@ public class AdminApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Stats_count_glitches_and_discoveries()
+    {
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<ConWatchDbContext>>();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            db.Glitches.Add(new ConPersistence.Entities.GlitchRow
+            {
+                TargetId = Guid.NewGuid(), TargetName = "T", Class = 0,
+                StartUtc = DateTime.UtcNow, EndUtc = DateTime.UtcNow.AddSeconds(10),
+                LostCount = 2, SampleCount = 8,
+            });
+            db.Discoveries.Add(new ConPersistence.Entities.DiscoveryRow
+            {
+                Id = Guid.NewGuid(), Address = "192.0.2.77",
+                FirstSeenUtc = DateTime.UtcNow, LastSeenUtc = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var tables = (await Stats()).GetProperty("tables");
+        Assert.Equal(1, tables.GetProperty("glitches").GetInt32());
+        Assert.Equal(1, tables.GetProperty("discoveries").GetInt32());
+    }
+
+    [Fact]
     public async Task Stats_reflect_seeded_data()
     {
         await ConfigApiTests.SeedHomeAsync(_client);

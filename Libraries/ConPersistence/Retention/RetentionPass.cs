@@ -1,5 +1,4 @@
 using ConPersistence.Entities;
-using ConPersistence.Queries;
 using ConPersistence.Recording;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -42,10 +41,8 @@ public class RetentionPass(ILogger log)
         // subject's MOST RECENT transition always survives: warm restart
         // seeds the presumed state from it, however old it is.
         var transitionThreshold = nowUtc.AddMonths(-windows.TransitionMonths);
-        var latestIds = HistoryQueries.LatestTransitionIdsPerSubject(db);
-        var prunedTransitions = await db.Transitions
-            .Where(t => t.TimestampUtc < transitionThreshold && !latestIds.Contains(t.Id))
-            .ExecuteDeleteAsync(ct);
+        var prunedTransitions = await MeasurementTables.DeleteTransitionsBeforeAsync(
+            db, transitionThreshold, ct);
         if (prunedTransitions > 0)
         {
             log.LogInformation("Pruned {Count} transitions older than {Months} months",
@@ -55,9 +52,8 @@ public class RetentionPass(ILogger log)
 
         // Ended model warnings (admin notes) age out with transitions; an
         // open one stays however old it is.
-        var prunedWarnings = await db.ModelWarnings
-            .Where(w => w.EndUtc != null && w.EndUtc < transitionThreshold)
-            .ExecuteDeleteAsync(ct);
+        var prunedWarnings = await MeasurementTables.DeleteEndedModelWarningsBeforeAsync(
+            db, transitionThreshold, ct);
         if (prunedWarnings > 0)
         {
             log.LogInformation("Pruned {Count} model warnings older than {Months} months",
