@@ -12,7 +12,7 @@ public interface IHealthProbe
     Task<HealthResult> ProbeAsync(string serverUrl, CancellationToken ct);
 }
 
-/// <summary>GET {serverUrl}/api/v1/health, 3 s budget. Read-only; the CLI's only HTTP call.</summary>
+/// <summary>GET {serverUrl}/api/v1/health, 3 s budget. Read-only. Shared by the CLI and the tray's Settings Test button.</summary>
 public sealed class HttpHealthProbe(HttpMessageHandler? handler = null, TimeSpan? timeout = null) : IHealthProbe
 {
     // The shared handler races ::1 and 127.0.0.1, so a dead localhost port says "refused".
