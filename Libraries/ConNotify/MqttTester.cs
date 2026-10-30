@@ -8,11 +8,7 @@ public static class MqttTester
     public static async Task<(bool Ok, string Message)> TestAsync(
         string host, int port, string? username, string? password, CancellationToken ct = default)
     {
-        var optionsBuilder = new MqttClientOptionsBuilder()
-            .WithTcpServer(host, port)
-            .WithTimeout(TimeSpan.FromSeconds(5));
-        if (username is { Length: > 0 })
-            optionsBuilder = optionsBuilder.WithCredentials(username, password ?? "");
+        var optionsBuilder = MqttConnection.Options(host, port, username, password);
 
         try
         {

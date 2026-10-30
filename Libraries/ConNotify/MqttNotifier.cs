@@ -150,15 +150,12 @@ public class MqttNotifier(SettingsStore settings, ILogger<MqttNotifier> log) : B
         var prefix = await settings.GetAsync(SettingKeys.MqttDiscoveryPrefix) is { Length: > 0 } p ? p : "homeassistant";
         _topics = new MqttTopics(baseTopic, prefix);
 
-        var optionsBuilder = new MqttClientOptionsBuilder()
-            .WithTcpServer(host, port)
+        var username = await settings.GetAsync(SettingKeys.MqttUsername);
+        var password = await settings.GetAsync(SettingKeys.MqttPassword);
+        var optionsBuilder = MqttConnection.Options(host, port, username, password)
             .WithWillTopic(_topics.Availability)
             .WithWillPayload("offline")
             .WithWillRetain(true);
-        var username = await settings.GetAsync(SettingKeys.MqttUsername);
-        if (username is { Length: > 0 })
-            optionsBuilder = optionsBuilder.WithCredentials(username,
-                await settings.GetAsync(SettingKeys.MqttPassword) ?? "");
 
         var factory = new MqttClientFactory();
         using var client = factory.CreateMqttClient();
