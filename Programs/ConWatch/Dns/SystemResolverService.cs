@@ -129,7 +129,7 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
                 return false; // first boot, before WatcherHostService seeds
 
             var found = source.Read();
-            var enabled = await settings.GetAsync(SettingKeys.DnsEnabled) != "false";
+            var enabled = await settings.GetBoolAsync(SettingKeys.DnsEnabled);
             var names = DnsLookupName.FromJson(await settings.GetAsync(SettingKeys.DnsLookupNames));
             var retired = Parse(await settings.GetAsync(SettingKeys.DnsRetiredResolvers));
 

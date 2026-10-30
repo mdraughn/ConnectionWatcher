@@ -19,7 +19,7 @@ public class DnsModel(ConfigStore store, ConfigHealth health, SettingsStore sett
 
     public async Task OnGetAsync()
     {
-        Enabled = await settings.GetAsync(SettingKeys.DnsEnabled) != "false";
+        Enabled = await settings.GetBoolAsync(SettingKeys.DnsEnabled);
         LookupNames = DnsLookupName.FromJson(await settings.GetAsync(SettingKeys.DnsLookupNames));
         var config = await store.ExportAsync();
         var resolvers = config.Targets.Where(t => t.Scope == TargetScope.Resolver).OrderBy(t => t.Name).ToList();

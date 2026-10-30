@@ -26,7 +26,7 @@ public class CloneHealth(IHttpClientFactory httpFactory, SettingsStore settings,
     {
         // Cheap local checks stay OUTSIDE the cache: toggling this node must
         // reflect immediately; only the network probe result is cached.
-        if (await settings.GetAsync(SettingKeys.EngineEnabled) == "false")
+        if (!await settings.GetBoolAsync(SettingKeys.EngineEnabled))
             return null; // we are the archive; no conflict possible
         var stored = await settings.GetAsync(SettingKeys.CloneSourceUrl);
         if (!Uri.TryCreate(stored, UriKind.Absolute, out var source))

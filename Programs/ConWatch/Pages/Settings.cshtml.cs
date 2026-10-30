@@ -10,13 +10,15 @@ public class SettingsModel(SettingsStore settingsStore, AdminGate gate) : PageMo
     public Dictionary<string, string> Settings { get; private set; } = new();
 
     public bool PasswordSet => gate.IsEnabled;
-    public bool EngineEnabled => Setting(SettingKeys.EngineEnabled, "true") != "false";
+    public bool EngineEnabled => Flag(SettingKeys.EngineEnabled);
     public string CloneSource => Setting(SettingKeys.CloneSourceUrl);
 
     public async Task OnGetAsync()
     {
         Settings = await settingsStore.GetAllAsync();
     }
+
+    public bool Flag(string key) => SettingRules.ReadFlag(key, Settings.GetValueOrDefault(key));
 
     public string Setting(string key, string fallback = "") =>
         Settings.TryGetValue(key, out var value) ? value : fallback;

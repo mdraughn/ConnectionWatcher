@@ -182,7 +182,7 @@ public class CloneService(IHttpClientFactory httpFactory,
         // The clone's choice sticks: a clone without Local devices must not
         // get them back (now pinging foreign private addresses) at take-over.
         var localSkipped = 0;
-        if (await settings.GetAsync(SettingKeys.CloneIncludeLocalDevices) == "false")
+        if (!await settings.GetBoolAsync(SettingKeys.CloneIncludeLocalDevices))
         {
             localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
             snapshot = WithoutLocalDevices(snapshot);

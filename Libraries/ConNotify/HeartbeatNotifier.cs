@@ -30,7 +30,7 @@ public class HeartbeatNotifier(SettingsStore settings, IHttpClientFactory httpFa
                 var url = await settings.GetAsync(SettingKeys.HeartbeatUrl);
                 // Master enable: a disabled node is deliberately off duty —
                 // the check service alerting on silence is correct behavior.
-                var engineEnabled = await settings.GetAsync(SettingKeys.EngineEnabled) != "false";
+                var engineEnabled = await settings.GetBoolAsync(SettingKeys.EngineEnabled);
                 if (url is not { Length: > 0 } || !engineEnabled)
                 {
                     await wakeTask.ConfigureAwait(false);

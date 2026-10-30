@@ -14,7 +14,7 @@ public static class TracerouteEndpoints
         {
             if (string.IsNullOrWhiteSpace(request.Host))
                 return ApiResults.Error(StatusCodes.Status400BadRequest, null, "'host' is required.");
-            var lookup = await settings.GetAsync(SettingKeys.TracerouteAsnLookup) == "true";
+            var lookup = await settings.GetBoolAsync(SettingKeys.TracerouteAsnLookup);
             try
             {
                 var hops = await runner.RunAsync(request.Host.Trim(), lookup, ct);

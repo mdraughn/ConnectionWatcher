@@ -65,10 +65,10 @@ public class WebhookNotifier(SettingsStore settings, IHttpClientFactory httpFact
 
     private async Task DeliverAsync(TargetTransition transition, bool critical, CancellationToken ct)
     {
-        if (await settings.GetAsync(SettingKeys.WebhookEnabled) != "true")
+        if (!await settings.GetBoolAsync(SettingKeys.WebhookEnabled))
             return;
-        var verdictOnly = await settings.GetAsync(SettingKeys.WebhookVerdictOnly) == "true";
-        var skipExplained = await settings.GetAsync(SettingKeys.WebhookSkipExplained) != "false";
+        var verdictOnly = await settings.GetBoolAsync(SettingKeys.WebhookVerdictOnly);
+        var skipExplained = await settings.GetBoolAsync(SettingKeys.WebhookSkipExplained);
         if (!WebhookFilter.ShouldDeliver(transition, verdictOnly, skipExplained, critical))
             return;
 

@@ -63,7 +63,7 @@ else
 <ul class="form-errors" id="traceroute-errors"></ul>
 <form id="traceroute-form">
     <label>
-        <input type="checkbox" role="switch" name="@SettingKeys.TracerouteAsnLookup" @(Model.Setting(SettingKeys.TracerouteAsnLookup) == "true" ? "checked" : "") />
+        <input type="checkbox" role="switch" name="@SettingKeys.TracerouteAsnLookup" @(Model.Flag(SettingKeys.TracerouteAsnLookup) ? "checked" : "") />
         Look up the operator of each hop
     </label>
     <p><small>When on, the Traceroute page sends the address of every public hop to
@@ -79,8 +79,8 @@ else
     <div class="grid">
         <label>Enabled
             <select name="@SettingKeys.MqttEnabled">
-                <option value="false" selected="@(Model.Setting(SettingKeys.MqttEnabled, "false") != "true")">off</option>
-                <option value="true" selected="@(Model.Setting(SettingKeys.MqttEnabled) == "true")">on</option>
+                <option value="false" selected="@(!Model.Flag(SettingKeys.MqttEnabled))">off</option>
+                <option value="true" selected="@(Model.Flag(SettingKeys.MqttEnabled))">on</option>
             </select>
         </label>
         <label>Broker host
@@ -117,20 +117,20 @@ else
     <div class="grid">
         <label>Enabled
             <select name="@SettingKeys.WebhookEnabled">
-                <option value="false" selected="@(Model.Setting(SettingKeys.WebhookEnabled, "false") != "true")">off</option>
-                <option value="true" selected="@(Model.Setting(SettingKeys.WebhookEnabled) == "true")">on</option>
+                <option value="false" selected="@(!Model.Flag(SettingKeys.WebhookEnabled))">off</option>
+                <option value="true" selected="@(Model.Flag(SettingKeys.WebhookEnabled))">on</option>
             </select>
         </label>
         <label>Verdict changes only
             <select name="@SettingKeys.WebhookVerdictOnly">
-                <option value="false" selected="@(Model.Setting(SettingKeys.WebhookVerdictOnly, "false") != "true")">no — every transition</option>
-                <option value="true" selected="@(Model.Setting(SettingKeys.WebhookVerdictOnly) == "true")">yes — verdict only</option>
+                <option value="false" selected="@(!Model.Flag(SettingKeys.WebhookVerdictOnly))">no — every transition</option>
+                <option value="true" selected="@(Model.Flag(SettingKeys.WebhookVerdictOnly))">yes — verdict only</option>
             </select>
         </label>
         <label>Skip explained transitions
             <select name="@SettingKeys.WebhookSkipExplained">
-                <option value="true" selected="@(Model.Setting(SettingKeys.WebhookSkipExplained, "true") != "false")">yes — one message per root cause</option>
-                <option value="false" selected="@(Model.Setting(SettingKeys.WebhookSkipExplained) == "false")">no — every target behind it too</option>
+                <option value="true" selected="@(Model.Flag(SettingKeys.WebhookSkipExplained))">yes — one message per root cause</option>
+                <option value="false" selected="@(!Model.Flag(SettingKeys.WebhookSkipExplained))">no — every target behind it too</option>
             </select>
         </label>
     </div>

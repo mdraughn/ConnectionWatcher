@@ -158,7 +158,7 @@ public class WatcherHostService(
 
     /// <summary>True when the master enable switch says monitor (the default).</summary>
     private async Task<bool> EngineEnabledAsync() =>
-        await settingsStore.GetAsync(SettingKeys.EngineEnabled) != "false";
+        await settingsStore.GetBoolAsync(SettingKeys.EngineEnabled);
 
     /// <summary>
     /// Brings the node to the state the settings ask for. Returns true when
@@ -192,7 +192,7 @@ public class WatcherHostService(
         // target's name (the resolver has to resolve those anyway). Refreshed
         // here, before the engine that will use them exists; empty when the
         // watch is off, so a stray resolver target reports "NoLookupNames".
-        var dnsEnabled = await settingsStore.GetAsync(SettingKeys.DnsEnabled) != "false";
+        var dnsEnabled = await settingsStore.GetBoolAsync(SettingKeys.DnsEnabled);
         lookupNames.Replace(dnsEnabled
             ? ConCore.Dns.DnsLookupName.FromJson(await settingsStore.GetAsync(SettingKeys.DnsLookupNames))
                 .Concat(options.Targets
@@ -361,7 +361,7 @@ public class WatcherHostService(
         // too; under load that starved the thread pool.) Null removes the row,
         // which reads as enabled — the same rule as EngineEnabledAsync.
         if (written.TryGetValue(SettingKeys.EngineEnabled, out var enabled))
-            EngineEnabled = enabled != "false";
+            EngineEnabled = SettingRules.ReadFlag(SettingKeys.EngineEnabled, enabled);
         OnConfigChanged();
     }
 

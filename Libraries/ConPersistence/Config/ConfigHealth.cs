@@ -92,7 +92,7 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
     private async Task AddDnsWarningsAsync(List<HealthWarning> warnings)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        var dnsEnabled = await settings.GetAsync(SettingKeys.DnsEnabled) != "false";
+        var dnsEnabled = await settings.GetBoolAsync(SettingKeys.DnsEnabled);
         var names = ConCore.Dns.DnsLookupName.FromJson(await settings.GetAsync(SettingKeys.DnsLookupNames));
         var addresses = await db.Targets.Where(t => t.Enabled && t.Scope != ConCore.Targets.TargetScope.Resolver)
             .Select(t => t.Address).ToListAsync();
