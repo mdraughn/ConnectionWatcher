@@ -102,18 +102,13 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                     "This discovery was already adopted into a target.");
         }
 
-        var profile = await db.Profiles.SingleOrDefaultAsync(p => p.Name == dto.Profile);
-        if (profile is null)
-            return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{dto.Profile}'.");
+        var (profile, profileError) = await ProfileNamedAsync(db, dto.Profile);
+        if (profileError is not null)
+            return profileError;
 
-        Guid? parentId = null;
-        if (dto.Parent is { Length: > 0 } parentName)
-        {
-            var parent = await db.Targets.SingleOrDefaultAsync(t => t.Name == parentName);
-            if (parent is null)
-                return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown parent target '{parentName}'.");
-            parentId = parent.Id;
-        }
+        var (parentId, parentError) = await ParentIdNamedAsync(db, dto.Parent);
+        if (parentError is not null)
+            return parentError;
 
         TargetRow row;
         var wasManaged = false;
@@ -133,7 +128,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                 if (!string.Equals(existing.Address, ConfigMapping.NormalizeAddress(dto.Address), StringComparison.OrdinalIgnoreCase))
                     frozen.Add("address");
                 if (parentId is not null) frozen.Add("parent");
-                if (existing.ProfileId != profile.Id) frozen.Add("profile");
+                if (existing.ProfileId != profile!.Id) frozen.Add("profile");
                 if (!string.Equals(existing.Probe, ConfigMapping.NormalizeProbe(dto.Probe), StringComparison.OrdinalIgnoreCase))
                     frozen.Add("probe");
                 if (existing.Scope != dto.Scope) frozen.Add("scope");
@@ -173,7 +168,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             row = new TargetRow { Id = Guid.NewGuid() };
             db.Targets.Add(row);
         }
-        row.CopyFrom(dto, profile.Id, parentId);
+        row.CopyFrom(dto, profile!.Id, parentId);
         // The flag is the reconciler's (EditDocumentAsync), never the API's: a
         // new row is never managed, an existing row keeps what it had.
         row.SystemManaged = wasManaged;
@@ -204,11 +199,11 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
             return ConfigResult.Fail(ConfigErrorKind.Validation,
                 "All children must currently share the same parent.");
 
-        var profile = await db.Profiles.SingleOrDefaultAsync(p => p.Name == newTarget.Profile);
-        if (profile is null)
-            return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{newTarget.Profile}'.");
+        var (profile, profileError) = await ProfileNamedAsync(db, newTarget.Profile);
+        if (profileError is not null)
+            return profileError;
 
-        var row = new TargetRow { Id = Guid.NewGuid() }.CopyFrom(newTarget, profile.Id, parents[0]);
+        var row = new TargetRow { Id = Guid.NewGuid() }.CopyFrom(newTarget, profile!.Id, parents[0]);
         row.SystemManaged = false; // a new row is never managed
         db.Targets.Add(row);
         foreach (var child in children)
@@ -251,14 +246,9 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                 return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown pool member '{name}'.");
             memberIds.Add(member.Id);
         }
-        Guid? parentId = null;
-        if (dto.Parent is { Length: > 0 } parentName)
-        {
-            var parent = await db.Targets.SingleOrDefaultAsync(t => t.Name == parentName);
-            if (parent is null)
-                return ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown parent target '{parentName}'.");
-            parentId = parent.Id;
-        }
+        var (parentId, parentError) = await ParentIdNamedAsync(db, dto.Parent);
+        if (parentError is not null)
+            return parentError;
 
         PoolRow row;
         if (dto.Id is { } id)
@@ -304,20 +294,13 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         var descriptionErrors = doc.Profiles.Select(DescriptionError).Where(e => e is not null).ToArray();
         if (descriptionErrors.Length > 0)
             return ConfigResult.Fail(ConfigErrorKind.Validation, descriptionErrors!);
-        var validation = new WatcherOptionsValidator().Validate(null, doc.ToOptions());
-        if (validation.Failed)
-            return ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray());
+        if (Invalid(doc.ToOptions()) is { } invalid)
+            return invalid;
 
         await using var db = await dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
-        try
-        {
-            await ConfigStore.WriteDocumentAsync(db, doc);
-        }
-        catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
-        {
-            return UniquenessFailure(ex, "Config import");
-        }
+        if (await WriteDocumentCheckedAsync(db, doc, "Config import") is { } writeFailure)
+            return writeFailure;
 
         await tx.CommitAsync();
         _log.LogInformation("Imported configuration: {Targets} targets, {Pools} pools",
@@ -358,18 +341,11 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
                     "Address edits go through UpsertTargetAsync with addressChange; EditDocumentAsync cannot change an existing target's address.");
         }
 
-        var validation = new WatcherOptionsValidator().Validate(null, doc.ToOptions());
-        if (validation.Failed)
-            return ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray());
+        if (Invalid(doc.ToOptions()) is { } invalid)
+            return invalid;
 
-        try
-        {
-            await ConfigStore.WriteDocumentAsync(db, doc);
-        }
-        catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
-        {
-            return UniquenessFailure(ex, "Config edit");
-        }
+        if (await WriteDocumentCheckedAsync(db, doc, "Config edit") is { } writeFailure)
+            return writeFailure;
 
         await tx.CommitAsync();
         ConfigChanged?.Invoke();
@@ -403,12 +379,55 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         }
 
         var options = await store.LoadWatcherOptionsAsync(db);
-        var validation = new WatcherOptionsValidator().Validate(null, options);
-        if (validation.Failed)
-            return ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray());
+        if (Invalid(options) is { } invalid)
+            return invalid;
 
         await tx.CommitAsync();
         ConfigChanged?.Invoke();
         return result;
+    }
+
+    /// <summary>Null when the options pass the validator, else the Validation failure.</summary>
+    private static ConfigResult? Invalid(WatcherOptions options)
+    {
+        var validation = new WatcherOptionsValidator().Validate(null, options);
+        return validation.Failed
+            ? ConfigResult.Fail(ConfigErrorKind.Validation, validation.Failures!.ToArray())
+            : null;
+    }
+
+    /// <summary>
+    /// Writes the document; a unique-constraint violation comes back as the
+    /// uniqueness failure (null on success). The caller commits.
+    /// </summary>
+    private async Task<ConfigResult?> WriteDocumentCheckedAsync(ConWatchDbContext db, ConfigDocument doc, string what)
+    {
+        try
+        {
+            await ConfigStore.WriteDocumentAsync(db, doc);
+            return null;
+        }
+        catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
+        {
+            return UniquenessFailure(ex, what);
+        }
+    }
+
+    private static async Task<(ProfileRow? Row, ConfigResult? Error)> ProfileNamedAsync(ConWatchDbContext db, string name)
+    {
+        var profile = await db.Profiles.SingleOrDefaultAsync(p => p.Name == name);
+        return profile is null
+            ? (null, ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown profile '{name}'."))
+            : (profile, null);
+    }
+
+    private static async Task<(Guid? Id, ConfigResult? Error)> ParentIdNamedAsync(ConWatchDbContext db, string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return (null, null);
+        var parent = await db.Targets.SingleOrDefaultAsync(t => t.Name == name);
+        return parent is null
+            ? (null, ConfigResult.Fail(ConfigErrorKind.Validation, $"Unknown parent target '{name}'."))
+            : (parent.Id, null);
     }
 }
