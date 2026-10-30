@@ -89,8 +89,8 @@ else
                    value="@Model.Setting(SettingKeys.MqttHost)" />
         </label>
         <label>Port
-            <input name="@SettingKeys.MqttPort" type="number" min="@SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Max.ToString(CultureInfo.InvariantCulture)"
-                   value="@Model.Setting(SettingKeys.MqttPort, SettingRules.Int(SettingKeys.HeartbeatIntervalMinutes).Default.ToString(CultureInfo.InvariantCulture))" />
+            <input name="@SettingKeys.MqttPort" type="number" min="@SettingRules.Int(SettingKeys.MqttPort).Min.ToString(CultureInfo.InvariantCulture)" max="@SettingRules.Int(SettingKeys.MqttPort).Max.ToString(CultureInfo.InvariantCulture)"
+                   value="@Model.Setting(SettingKeys.MqttPort, SettingRules.Int(SettingKeys.MqttPort).Default.ToString(CultureInfo.InvariantCulture))" />
         </label>
     </div>
     <div class="grid">
