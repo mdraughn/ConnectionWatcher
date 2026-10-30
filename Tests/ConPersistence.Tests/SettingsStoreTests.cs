@@ -34,6 +34,20 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task GetBool_uses_the_keys_own_default()
+    {
+        Assert.True(await _store.GetBoolAsync(SettingKeys.EngineEnabled));
+        Assert.False(await _store.GetBoolAsync(SettingKeys.MqttEnabled));
+        await _store.SetManyAsync(new Dictionary<string, string?>
+        {
+            [SettingKeys.EngineEnabled] = "false",
+            [SettingKeys.MqttEnabled] = "true",
+        });
+        Assert.False(await _store.GetBoolAsync(SettingKeys.EngineEnabled));
+        Assert.True(await _store.GetBoolAsync(SettingKeys.MqttEnabled));
+    }
+
+    [Fact]
     public async Task SeedMissing_fills_only_absent_keys()
     {
         await _store.SetManyAsync(new Dictionary<string, string?> { [SettingKeys.AnchorPool] = "Internet" });

@@ -111,6 +111,11 @@ public class SettingsStore(IDbContextFactory<ConWatchDbContext> dbFactory)
     public async Task<int> GetIntAsync(string key, int fallback) =>
         int.TryParse(await GetAsync(key), out var value) ? value : fallback;
 
+    /// <summary>A boolean flag, read with the default <see cref="SettingRules"/> holds for the key.
+    /// Throws <see cref="ArgumentException"/> for a key that is not a flag.</summary>
+    public async Task<bool> GetBoolAsync(string key) =>
+        SettingRules.ReadFlag(key, await GetAsync(key));
+
     public async Task<Dictionary<string, string>> GetAllAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
