@@ -100,9 +100,7 @@ public static class HistoryQueries
     /// <summary>Rollup points for one target in ascending period order.</summary>
     public static Task<List<RollupRow>> RollupsAsync(ConWatchDbContext db,
         Guid targetId, DateTime fromUtc, DateTime toUtc, string resolution) =>
-        db.Rollups.AsNoTracking()
-            .Where(r => r.TargetId == targetId && r.Resolution == resolution &&
-                        r.PeriodStartUtc >= fromUtc && r.PeriodStartUtc <= toUtc)
+        RollupsQuery(db, targetId, resolution, fromUtc, toUtc)
             .OrderBy(r => r.PeriodStartUtc)
             .ToListAsync();
 
