@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import type { GlitchItem } from "./glitchData";
 import type {
   DnsBlame, DnsLookupNameStatus, DnsResolverStatus, DnsStatus, ModelWarning, PoolStatus,
-  RollupPoint, Snapshot, TargetStatus, TransitionEvent, VerdictStatus,
+  RollupPoint, Snapshot, TargetScope, TargetStatus, TransitionEvent, VerdictStatus,
 } from "./types";
 import { VERDICT_SUBJECT_ID } from "./verdictSubject";
 import { answerClassOf, type AnswerClass } from "./verdictClock";
@@ -163,11 +163,11 @@ describe("server vocabulary", () => {
     expect([...vocabulary.ModelWarningKind].sort()).toEqual([...kinds].sort());
   });
 
-  it("every TargetScope is in TargetStatus.scope", () => {
-    const scopes = ["Verdict", "Local", "Resolver"] as const satisfies readonly NonNullable<TargetStatus["scope"]>[];
-    const all: true = true satisfies Covers<Record<NonNullable<TargetStatus["scope"]>, 0>, typeof scopes>;
+  it("TargetScope is the server's vocabulary", () => {
+    const targetScopes = ["Local", "Resolver", "Verdict"] as const satisfies readonly TargetScope[];
+    const all: true = true satisfies Covers<Record<TargetScope, 0>, typeof targetScopes>;
     expect(all).toBe(true);
-    expect([...vocabulary.TargetScope].sort()).toEqual([...scopes].sort());
+    expect([...targetScopes].sort()).toEqual([...vocabulary.TargetScope].sort());
   });
 
   it("every GlitchClass is in GlitchItem.class", () => {

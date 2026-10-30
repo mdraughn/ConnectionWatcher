@@ -76,6 +76,16 @@ describe("statusStore", () => {
     expect(store.getState().recentTransitions).toHaveLength(0);
   });
 
+  it("a resolver's live transition is internet news: it reaches the status line", () => {
+    const store = createStatusStore();
+    store.applySnapshot({ ...lanSnapshot, targets: [
+      { id: "dns", name: "Resolver", address: "203.0.113.53", state: "Responding", successRate: 1, avgRtt: 1, sampleSize: 10, scope: "Resolver" },
+    ] });
+    store.applyTransition(transition({ subjectId: "dns", subjectName: "Resolver" }));
+    expect(store.getState().latestTransition?.subjectId).toBe("dns");
+    expect(store.getState().recentTransitions).toHaveLength(1);
+  });
+
   it("still records verdict-scope transitions as before", () => {
     const store = createStatusStore();
     store.applySnapshot(lanSnapshot);

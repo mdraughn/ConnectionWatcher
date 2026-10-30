@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInternetTarget, isLocal, isResolver, summarizeLan } from "./lan";
+import { isLocal, isResolver, isTreeTarget, summarizeLan } from "./scope";
 import type { TargetStatus } from "./types";
 
 const t = (over: Partial<TargetStatus>): TargetStatus => ({
@@ -44,11 +44,11 @@ describe("isResolver", () => {
   });
 });
 
-describe("isInternetTarget", () => {
-  it("excludes Local and Resolver targets; a missing scope is Verdict", () => {
-    expect(isInternetTarget(t({ scope: "Verdict" }))).toBe(true);
-    expect(isInternetTarget(t({}))).toBe(true);
-    expect(isInternetTarget(t({ scope: "Local" }))).toBe(false);
-    expect(isInternetTarget(t({ scope: "Resolver" }))).toBe(false);
+describe("isTreeTarget", () => {
+  it("is the server's IsTree(): Verdict and a missing scope only", () => {
+    expect(isTreeTarget(t({ scope: "Verdict" }))).toBe(true);
+    expect(isTreeTarget(t({}))).toBe(true);
+    expect(isTreeTarget(t({ scope: "Local" }))).toBe(false);
+    expect(isTreeTarget(t({ scope: "Resolver" }))).toBe(false);
   });
 });

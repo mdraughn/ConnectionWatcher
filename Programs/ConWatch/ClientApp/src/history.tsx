@@ -7,10 +7,10 @@ import { StatsRow } from "./components/StatsRow";
 import { TimeChart } from "./components/TimeChart";
 import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
-import { isInternetTarget } from "./lib/lan";
+import { isTreeTarget } from "./lib/scope";
 import { fetchStory, type Story, type StoryTopology } from "./lib/story";
 import { clipAtReset, incidents, lossPercent, ribbonSegments, subjectsForScope, uptimePercent, weightedRtt, type HistoryScope } from "./lib/historyData";
-import type { RollupPoint, TransitionEvent } from "./lib/types";
+import type { RollupPoint, TargetScope, TransitionEvent } from "./lib/types";
 
 interface Subject {
   id: string;
@@ -18,7 +18,7 @@ interface Subject {
   kind: "target" | "pool" | "verdict";
   parent: string | null;
   role: "trunk" | "anchor" | "other";
-  scope?: "Verdict" | "Local" | "Resolver";
+  scope?: TargetScope;
 }
 
 const RANGES: Record<string, number> = {
@@ -220,7 +220,7 @@ function App({ subjects }: { subjects: Subject[] }) {
 
           <h4>Internet targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
           <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * 24 * 3_600_000)} rangeEnd={to}
-            subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target" && isInternetTarget(s))
+            subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target" && isTreeTarget(s))
               .map((s): BoardSubject => ({
                 id: s.id, name: s.name, kind: s.kind,
                 parent: s.parent ?? null, role: s.role ?? "other",

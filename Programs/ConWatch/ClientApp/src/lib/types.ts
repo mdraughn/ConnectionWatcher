@@ -1,3 +1,6 @@
+/** The server's TargetScope: where a target belongs. Verdict targets feed the tree; Local are LAN devices; Resolver are DNS resolvers. */
+export type TargetScope = "Verdict" | "Local" | "Resolver";
+
 export interface TargetStatus {
   id: string;
   name: string;
@@ -12,8 +15,8 @@ export interface TargetStatus {
   sampleSize: number;
   /** Monotonic count of results ever recorded; the activity LED flickers when it grows. */
   pingCount?: number;
-  /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
-  scope?: "Verdict" | "Local" | "Resolver";
+  /** "Verdict" (default when absent), "Local" (a LAN device tracked beside the verdict) or "Resolver". */
+  scope?: TargetScope;
   /** Notify when this is down, even if the internet is fine (spec §4.7). */
   critical?: boolean;
   /** Created from the host's OS resolver list; the admin can only disable it. */
@@ -79,8 +82,8 @@ export interface TransitionEvent {
   successRate: number | null;
   sampleSize: number | null;
   burstLossRate: number | null;
-  /** "Verdict" (default when absent) or "Local": a LAN device tracked beside the verdict. */
-  scope?: "Verdict" | "Local" | "Resolver" | "Unknown";
+  /** As TargetStatus.scope, or "Unknown" when the subject is gone. */
+  scope?: TargetScope | "Unknown";
   /** True only on the rows `?opening=true` prepends: the subject's latest transition before `from`. An opening state, not an event. */
   opening?: boolean;
 }

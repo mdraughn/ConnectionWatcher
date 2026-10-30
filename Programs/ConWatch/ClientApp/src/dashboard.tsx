@@ -11,7 +11,7 @@ import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
 import { startHub } from "./lib/hub";
-import { isInternetTarget } from "./lib/lan";
+import { isTreeTarget } from "./lib/scope";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
 import { VERDICT_SUBJECT_ID } from "./lib/verdictSubject";
@@ -123,7 +123,7 @@ function App({ store, topology, initial }: {
     <div>
       <VerdictBanner verdict={state.verdict} dns={state.dns} connected={state.connected} clock={clock} />
       <EventStrip topology={initial} />
-      <Tree topology={topology} targets={state.targets.filter(isInternetTarget)} pools={state.pools}
+      <Tree topology={topology} targets={state.targets.filter(isTreeTarget)} pools={state.pools}
         trunkNames={initial.trunkNames} anchorNames={initial.anchorNames} />
       <LanSection targets={state.targets} />
       <NameResolutionSection dns={state.dns} verdictState={state.verdict?.state ?? null} />

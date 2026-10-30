@@ -1,6 +1,6 @@
 // "How's my LAN": the LAN devices tracked beside the verdict. Never colours
 // the verdict, the tree or the tray; its own summary and rows only.
-import { isLocal, summarizeLan } from "../lib/lan";
+import { isLocal, summarizeLan } from "../lib/scope";
 import type { TargetStatus } from "../lib/types";
 import { TargetRow } from "./TargetRow";
 

@@ -1,5 +1,6 @@
 // Tiny external store for the dashboard island (React useSyncExternalStore).
 import type { DnsStatus, ModelWarning, Snapshot, TransitionEvent } from "./types";
+import { isLocal } from "./scope";
 
 const MAX_RECENT = 50;
 
@@ -48,7 +49,7 @@ export function createStatusStore() {
     applyTransition(t: TransitionEvent): void {
       // A LAN device's blip is not internet news: it never becomes the status
       // line's latest event or lands in the recent-events panel.
-      if (state.targets.some((x) => x.id === t.subjectId && x.scope === "Local")) {
+      if (state.targets.some((x) => x.id === t.subjectId && isLocal(x))) {
         return;
       }
       state.latestTransition = t;
