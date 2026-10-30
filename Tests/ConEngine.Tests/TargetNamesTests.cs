@@ -17,4 +17,10 @@ public class TargetNamesTests
         var suffixed = TargetNames.Unique(longName, [new string('a', 64)]);
         Assert.Equal(new string('a', 62) + " 2", suffixed);
     }
+    [Fact] public void A_cut_that_lands_on_a_space_is_trimmed()
+    {
+        var wanted = new string('a', 61) + " " + "bbbbbbbb";
+        var result = TargetNames.Unique(wanted, [wanted[..64]]);
+        Assert.Equal(new string('a', 61) + " 2", result);
+    }
 }

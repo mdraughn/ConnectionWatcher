@@ -85,7 +85,7 @@ wireDanger("reset-confirm", "reset-btn", "RESET", "/api/v1/admin/factory-reset")
         const r = result.body;
         const freed = Math.max(0, r.fileSizeBefore - r.fileSizeAfter) / 1048576;
         out.textContent = `Removed ${r.transitions.toLocaleString()} transitions, ` +
-            `${r.rollups.toLocaleString()} rollup rows, ${r.glitches.toLocaleString()} glitches; ` +
+            `${r.rollups.toLocaleString()} rollup rows, ${r.glitches.toLocaleString()} glitches, ${r.modelWarnings.toLocaleString()} model warnings; ` +
             `freed ${freed.toFixed(1)} MB.`;
         input.value = "";
         button.disabled = true;

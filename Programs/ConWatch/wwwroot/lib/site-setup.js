@@ -35,7 +35,9 @@ async function loadAnchors() {
     const result = await apiFetch("GET", "/api/v1/setup/anchors");
     list.removeAttribute("aria-busy");
     list.innerHTML = "";
-    for (const anchor of result.body ?? []) {
+    const anchors = result.ok ? result.body : [];
+    if (!result.ok) list.textContent = "Could not load the suggested targets — you can add them later from the Targets page.";
+    for (const anchor of anchors) {
         const label = document.createElement("label");
         const box = document.createElement("input");
         box.type = "checkbox";
@@ -60,7 +62,7 @@ async function loadAnchors() {
         label.append(` ${text}`);
         resolvers.appendChild(label);
     };
-    for (const anchor of result.body ?? [])
+    for (const anchor of anchors)
         addRadio(anchor.address, `${anchor.name} (${anchor.address})`, false);
     addRadio("", "I don't know", true);
 }

@@ -45,7 +45,7 @@ public class WatcherOptionsValidator : IValidateOptions<WatcherOptions>
             if (!Enum.IsDefined(t.Scope))
                 failures.Add($"Target '{t.Name}' has unknown scope '{t.Scope}'.");
 
-            if (t.Scope is TargetScope.Local or TargetScope.Resolver)
+            if (!t.Scope.IsTree())
             {
                 if (!string.IsNullOrWhiteSpace(t.Name))
                     sideScopes[t.Name] = t.Scope;

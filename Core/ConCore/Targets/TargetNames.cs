@@ -16,13 +16,13 @@ public static class TargetNames
         var names = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
         var name = wanted.Trim();
         if (name.Length > MaxLength)
-            name = name[..MaxLength];
+            name = name[..MaxLength].TrimEnd();
         if (!names.Contains(name))
             return name;
         for (var n = 2; ; n++)
         {
             var suffix = $" {n}";
-            var candidate = (name.Length + suffix.Length > MaxLength ? name[..(MaxLength - suffix.Length)] : name) + suffix;
+            var candidate = (name.Length + suffix.Length > MaxLength ? name[..(MaxLength - suffix.Length)].TrimEnd() : name) + suffix;
             if (!names.Contains(candidate))
                 return candidate;
         }

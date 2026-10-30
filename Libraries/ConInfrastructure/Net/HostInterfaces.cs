@@ -19,7 +19,10 @@ public static class HostInterfaces
     {
         try
         {
-            return Usable(NetworkInterface.GetAllNetworkInterfaces().Select(Map).ToList());
+            return Usable(NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up &&
+                            n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel))
+                .Select(Map).ToList());
         }
         catch (NetworkInformationException)
         {

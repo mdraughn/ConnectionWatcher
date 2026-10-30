@@ -147,6 +147,7 @@ public sealed class ConfigFileTests : IDisposable
     [Fact]
     public void Update_on_an_unreadable_file_throws_and_writes_nothing()
     {
+        if (!OperatingSystem.IsWindows()) return;
         var path = File("locked.json");
         System.IO.File.WriteAllText(path, "{}");
         using var hold = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);

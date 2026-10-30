@@ -61,6 +61,8 @@
 - `POST /api/v1/config/import` (and clone/take-over import): config with names that differ only in case is a 400 validation error, not a 500. (Task 8)
 - `POST /api/v1/setup/takeover`: a history-phase import failure is 500 `import-incomplete`, and a config-phase failure that is not a validation error is 500 `import-error`. Both say the source has been disabled. (Task 9)
 - New system-resolver targets that collide on name are suffixed `"X 2"`, not `"X (2)"`. (Task 2)
+- `conwatch service install` and `conwatch tray install --url`: a config file that cannot be opened now fails with ConfigInvalid instead of being overwritten, and a malformed one is kept as `.corrupt` with a warning (Task 10).
+- The Settings page's prune result also reports the model warnings removed (final review).
 
 ## Names later plans use
 
