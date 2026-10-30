@@ -85,4 +85,28 @@ public static class ConfigFile
             if (File.Exists(temp)) File.Delete(temp);
         }
     }
+
+    /// <summary>
+    /// Read-modify-write. <paramref name="change"/> gets the current config, or
+    /// null when the file is missing or malformed. A malformed file is moved to
+    /// <c>path + ".corrupt"</c> (after <paramref name="change"/> succeeds, so a
+    /// rejected change touches nothing) and <paramref name="warning"/> says so.
+    /// A file that cannot be opened at all throws <see cref="IOException"/>
+    /// rather than being reset to defaults.
+    /// </summary>
+    public static ConWatchConfig Update(string path, Func<ConWatchConfig?, ConWatchConfig> change, out string? warning)
+    {
+        warning = null;
+        var current = TryRead(path, out var error, out var unreadable);
+        if (error is not null && unreadable)
+            throw new IOException($"{path} could not be read: {error}");
+        var next = change(current);
+        if (error is not null)
+        {
+            File.Move(path, path + ".corrupt", overwrite: true);
+            warning = $"{path} was not valid JSON; moved to {path}.corrupt and replaced";
+        }
+        WriteAtomic(path, next);
+        return next;
+    }
 }

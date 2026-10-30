@@ -250,4 +250,16 @@ public sealed class ServiceCommandTests
         Assert.DoesNotContain(h.Lockdown.Locked, l => l.Directory == data);
         Assert.Contains($"left the permissions of {data} unchanged", error);
     }
+
+    [Fact]
+    public async Task Install_over_a_malformed_machine_file_keeps_it_as_corrupt()
+    {
+        using var h = new CliHarness();
+        Directory.CreateDirectory(Path.GetDirectoryName(h.Paths.MachineFile)!);
+        File.WriteAllText(h.Paths.MachineFile, "{ not json");
+        var (code, _, error) = await h.RunAsync("service", "install");
+        Assert.Equal(0, code);
+        Assert.Equal("{ not json", File.ReadAllText(h.Paths.MachineFile + ".corrupt"));
+        Assert.Contains("moved to", error);
+    }
 }

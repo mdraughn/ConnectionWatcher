@@ -76,4 +76,18 @@ public sealed class TrayCommandTests
         Assert.Equal(0, (await h.RunAsync("tray", "uninstall")).Code);
         Assert.False(h.TrayAutostart.IsInstalled);
     }
+
+    [Fact]
+    public async Task Tray_install_url_over_a_malformed_user_file_keeps_it_as_corrupt()
+    {
+        using var h = new CliHarness(elevated: false);
+        File.WriteAllText(h.TrayExePath(), "");
+        Directory.CreateDirectory(Path.GetDirectoryName(h.Paths.UserFile)!);
+        File.WriteAllText(h.Paths.UserFile, "{ not json");
+        var (code, _, error) = await h.RunAsync("tray", "install", "--url", "http://nas:8080");
+        Assert.Equal(0, code);
+        Assert.Equal("{ not json", File.ReadAllText(h.Paths.UserFile + ".corrupt"));
+        Assert.Contains("moved to", error);
+        Assert.Equal("http://nas:8080", h.User!.ServerUrl);
+    }
 }

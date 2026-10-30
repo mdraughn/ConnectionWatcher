@@ -39,8 +39,7 @@ public static class TrayCommands
             if (pr.GetValue(url) is { } u)
             {
                 if (!ConfigResolver.ValidateUrl(u, out var error)) throw new ConfigException(error!);
-                var current = ConfigFile.TryRead(s.Paths.UserFile, out _) ?? new ConWatchConfig();
-                ConfigFile.WriteAtomic(s.Paths.UserFile, current with { ServerUrl = u.TrimEnd('/') });
+                CliConfig.Update(s, s.Paths.UserFile, current => (current ?? new ConWatchConfig()) with { ServerUrl = u.TrimEnd('/') });
                 s.Out.WriteLine($"server-url = {u.TrimEnd('/')}  written to {s.Paths.UserFile}");
             }
             s.TrayAutostart.Install(s.TrayExePath);

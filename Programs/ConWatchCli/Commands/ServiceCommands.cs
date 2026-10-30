@@ -33,19 +33,18 @@ public static class ServiceCommands
         cmd.SetAction((pr, ct) => CliApp.Elevated(s, rawArgs, async () =>
         {
             var status = await s.Services.StatusAsync(ct);
-            var machine = ConfigFile.TryRead(s.Paths.MachineFile, out var warning);
-            if (warning is not null) s.Err.WriteLine($"warning: ignoring malformed config {warning}");
-            var legacy = machine is null ? LegacyInstall.Detect(s.AppDir, status.BinaryPath) : new LegacyValues(null, null);
-
-            var listen = ResolveListen(s, machine, legacy, pr.GetValue(port), pr.GetValue(url));
-            var dataDir = ConfigResolver.DataDir(s.Paths, machine, pr.GetValue(data), s.Env(ConfigResolver.EnvDataDir)).Value;
-            if (!ConfigResolver.ValidateUrl(listen, out var urlError)) throw new ConfigException(urlError!);
-            if (!ConfigResolver.ValidateDataDir(dataDir, out var dirError)) throw new ConfigException(dirError!);
-            var serverUrl = machine?.ServerUrl ?? legacy.ServerUrl ?? ConfigResolver.ListenToServerUrl(listen);
-            serverUrl = ConfigResolver.WithPortOf(serverUrl, listen);
-
-            var next = (machine ?? new ConWatchConfig()) with { ListenUrl = listen, DataDir = dataDir, ServerUrl = serverUrl };
-            ConfigFile.WriteAtomic(s.Paths.MachineFile, next);
+            string listen = "", dataDir = "", serverUrl = "";
+            var written = CliConfig.Update(s, s.Paths.MachineFile, machine =>
+            {
+                var legacy = machine is null ? LegacyInstall.Detect(s.AppDir, status.BinaryPath) : new LegacyValues(null, null);
+                listen = ResolveListen(s, machine, legacy, pr.GetValue(port), pr.GetValue(url));
+                dataDir = ConfigResolver.DataDir(s.Paths, machine, pr.GetValue(data), s.Env(ConfigResolver.EnvDataDir)).Value;
+                if (!ConfigResolver.ValidateUrl(listen, out var urlError)) throw new ConfigException(urlError!);
+                if (!ConfigResolver.ValidateDataDir(dataDir, out var dirError)) throw new ConfigException(dirError!);
+                var server = machine?.ServerUrl ?? legacy.ServerUrl ?? ConfigResolver.ListenToServerUrl(listen);
+                return (machine ?? new ConWatchConfig()) with { ListenUrl = listen, DataDir = dataDir, ServerUrl = ConfigResolver.WithPortOf(server, listen) };
+            });
+            (listen, dataDir, serverUrl) = (written.ListenUrl!, written.DataDir!, written.ServerUrl!);
             // Before the service first starts, so the db and keys are born private.
             s.Lockdown.Lock(Path.GetDirectoryName(s.Paths.MachineFile)!, usersMayRead: true);
             LockDataDir(s, dataDir);

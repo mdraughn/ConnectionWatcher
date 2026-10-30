@@ -69,46 +69,41 @@ public static class ConfigCommands
     private static int Apply(CliServices s, string key, string value, bool perUser)
     {
         var path = perUser ? s.Paths.UserFile : s.Paths.MachineFile;
-        var current = ConfigFile.TryRead(path, out var warn, out var unreadable) ?? new ConWatchConfig();
-        if (warn is not null && unreadable)
-            throw new ConfigException($"{path} could not be read: {warn}");
-        if (warn is not null)
-        {
-            File.Move(path, path + ".corrupt", overwrite: true);
-            s.Err.WriteLine($"warning: {path} was not valid JSON; moved to {path}.corrupt and replaced");
-        }
-
-        ConWatchConfig next;
-        string stored;
+        string stored = "";
         string? newServerUrl = null;
-        switch (key)
+        CliConfig.Update(s, path, read =>
         {
-            case "listen-url":
-            case "server-url":
-                if (!ConfigResolver.ValidateUrl(value, out var urlError)) throw new ConfigException(urlError!);
-                stored = value.TrimEnd('/');
-                if (key == "listen-url")
-                {
-                    next = current with { ListenUrl = stored };
-                    if (current.ServerUrl is { Length: > 0 } existingServerUrl &&
-                        ConfigResolver.PortOf(existingServerUrl) != ConfigResolver.PortOf(stored))
+            var current = read ?? new ConWatchConfig();
+            ConWatchConfig next;
+            switch (key)
+            {
+                case "listen-url":
+                case "server-url":
+                    if (!ConfigResolver.ValidateUrl(value, out var urlError)) throw new ConfigException(urlError!);
+                    stored = value.TrimEnd('/');
+                    if (key == "listen-url")
                     {
-                        newServerUrl = ConfigResolver.WithPortOf(existingServerUrl, stored);
-                        next = next with { ServerUrl = newServerUrl };
+                        next = current with { ListenUrl = stored };
+                        if (current.ServerUrl is { Length: > 0 } existingServerUrl &&
+                            ConfigResolver.PortOf(existingServerUrl) != ConfigResolver.PortOf(stored))
+                        {
+                            newServerUrl = ConfigResolver.WithPortOf(existingServerUrl, stored);
+                            next = next with { ServerUrl = newServerUrl };
+                        }
                     }
-                }
-                else
-                {
-                    next = current with { ServerUrl = stored };
-                }
-                break;
-            default: // data-dir
-                if (!ConfigResolver.ValidateDataDir(value, out var dirError)) throw new ConfigException(dirError!);
-                stored = value;
-                next = current with { DataDir = stored };
-                break;
-        }
-        ConfigFile.WriteAtomic(path, next);
+                    else
+                    {
+                        next = current with { ServerUrl = stored };
+                    }
+                    break;
+                default: // data-dir
+                    if (!ConfigResolver.ValidateDataDir(value, out var dirError)) throw new ConfigException(dirError!);
+                    stored = value;
+                    next = current with { DataDir = stored };
+                    break;
+            }
+            return next;
+        });
         s.Out.WriteLine($"{key} = {stored}  written to {path}");
         if (newServerUrl is not null)
             s.Out.WriteLine($"server-url = {newServerUrl}  (port follows listen-url)");

@@ -107,4 +107,52 @@ public sealed class ConfigFileTests : IDisposable
         Assert.Equal(Path.Combine(appData, "DSoftCo", "ConnectionWatcher", "contray-settings.json"), paths.LegacyUserFile);
         Assert.EndsWith(Path.Combine("DSoftCo", "ConnectionWatcher", "data"), paths.DefaultDataDir);
     }
+
+    [Fact]
+    public void Update_on_a_missing_file_passes_null_and_writes()
+    {
+        var path = File("new.json");
+        ConWatchConfig? seen = new ConWatchConfig();
+        var written = ConfigFile.Update(path, c => { seen = c; return new ConWatchConfig(ListenUrl: "http://x:1"); }, out var warning);
+        Assert.Null(seen);
+        Assert.Null(warning);
+        Assert.Equal("http://x:1", written.ListenUrl);
+        Assert.Equal("http://x:1", ConfigFile.TryRead(path, out _)!.ListenUrl);
+    }
+
+    [Fact]
+    public void Update_moves_a_malformed_file_aside_and_writes_the_change()
+    {
+        var path = File("bad.json");
+        System.IO.File.WriteAllText(path, "{ not json");
+        ConWatchConfig? seen = new ConWatchConfig();
+        ConfigFile.Update(path, c => { seen = c; return new ConWatchConfig(DataDir: "d"); }, out var warning);
+        Assert.Null(seen);
+        Assert.Contains(".corrupt", warning);
+        Assert.Equal("{ not json", System.IO.File.ReadAllText(path + ".corrupt"));
+        Assert.Equal("d", ConfigFile.TryRead(path, out _)!.DataDir);
+    }
+
+    [Fact]
+    public void Update_whose_change_throws_touches_nothing()
+    {
+        var path = File("bad.json");
+        System.IO.File.WriteAllText(path, "{ not json");
+        Assert.Throws<InvalidOperationException>(() =>
+            ConfigFile.Update(path, _ => throw new InvalidOperationException("no"), out _));
+        Assert.Equal("{ not json", System.IO.File.ReadAllText(path));
+        Assert.False(System.IO.File.Exists(path + ".corrupt"));
+    }
+
+    [Fact]
+    public void Update_on_an_unreadable_file_throws_and_writes_nothing()
+    {
+        var path = File("locked.json");
+        System.IO.File.WriteAllText(path, "{}");
+        using var hold = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var called = false;
+        Assert.Throws<IOException>(() =>
+            ConfigFile.Update(path, c => { called = true; return c ?? new ConWatchConfig(); }, out _));
+        Assert.False(called);
+    }
 }
