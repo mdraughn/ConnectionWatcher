@@ -72,18 +72,18 @@ public class DiscoveriesModel(DiscoveryStore store, ConfigStore configStore) : P
     /// <summary>The Targets dialog, pre-filled for this discovery; saving it adopts the discovery.</summary>
     public string AdoptUrl(DiscoveryDto d)
     {
-        var (name, profile, scope) = d.Kind switch
+        var (name, role) = d.Kind switch
         {
-            DiscoveryKind.Gateway => (UniqueName("Router"), "Internal", "Verdict"),
-            DiscoveryKind.NetworkEdge => (UniqueName("ISP edge"), "Path", "Verdict"),
-            _ => (UniqueName(string.IsNullOrWhiteSpace(d.Hostname) ? d.Address : d.Hostname), "Local", "Local"),
+            DiscoveryKind.Gateway => (UniqueName("Router"), TargetRole.Router),
+            DiscoveryKind.NetworkEdge => (UniqueName("ISP edge"), TargetRole.PathHop),
+            _ => (UniqueName(string.IsNullOrWhiteSpace(d.Hostname) ? d.Address : d.Hostname), TargetRole.LocalDevice),
         };
         var query = new QueryString()
-            .Add("address", d.Address).Add("name", name).Add("profile", profile)
-            .Add("scope", scope);
+            .Add("address", d.Address).Add("name", name).Add("profile", role.Profile)
+            .Add("scope", role.Scope.ToString());
         // A router is the device you most want to hear about: adopting the
         // gateway pre-checks Critical (spec §4.7). The admin can uncheck it.
-        if (d.Kind == DiscoveryKind.Gateway)
+        if (role.Critical)
             query = query.Add("critical", "true");
         if (d.Kind == DiscoveryKind.NetworkEdge && _routerName is { Length: > 0 })
             query = query.Add("parent", _routerName);

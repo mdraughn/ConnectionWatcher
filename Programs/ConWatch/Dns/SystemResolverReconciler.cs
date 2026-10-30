@@ -16,7 +16,6 @@ namespace ConWatch.NameResolution;
 /// </summary>
 public static class SystemResolverReconciler
 {
-    public const string ProfileName = "Resolver";
 
     public sealed record Plan(IReadOnlyList<TargetDto> Targets, IReadOnlySet<string> Retired, bool Changed, IReadOnlyList<string> Log);
 
@@ -47,7 +46,7 @@ public static class SystemResolverReconciler
                 if (!watchActive)
                     continue;
                 if (result.Any(t => !t.SystemManaged
-                        && string.Equals(t.Probe, "dns", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(t.Probe, TargetRole.Resolver.Probe, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(t.Address, address, StringComparison.OrdinalIgnoreCase)))
                 {
                     // The validator rejects two targets with the same address and probe; a hand-made one wins.
@@ -57,8 +56,8 @@ public static class SystemResolverReconciler
                 var name = TargetNames.Unique(NameFor(resolver), result.Select(t => t.Name));
                 result.Add(new TargetDto
                 {
-                    Name = name, Address = address, Profile = ProfileName, Probe = "dns",
-                    Scope = TargetScope.Resolver, SystemManaged = true, Enabled = true,
+                    Name = name, Address = address, Profile = TargetRole.Resolver.Profile, Probe = TargetRole.Resolver.Probe,
+                    Scope = TargetRole.Resolver.Scope, SystemManaged = true, Enabled = true,
                 });
                 log.Add($"added {name}");
                 changed = true;

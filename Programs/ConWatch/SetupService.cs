@@ -56,8 +56,8 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
             {
                 Name = Unique(request.Router.Name),
                 Address = request.Router.Address,
-                Profile = "Internal",
-                Critical = true,
+                Profile = TargetRole.Router.Profile,
+                Critical = TargetRole.Router.Critical,
             });
 
             // Optional WAN address, chained under the router.
@@ -69,7 +69,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                     Name = Unique(outer.Name),
                     Address = outer.Address,
                     Parent = routerName,
-                    Profile = "Path",
+                    Profile = TargetRole.PathHop.Profile,
                     // The WAN hop is where the ISP's service begins.
                     Operator = request.IspName,
                 });
@@ -82,7 +82,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 anchorNames.Add(ByAddress(address) ?? Add(new TargetDto
                 {
                     Name = Unique(catalogEntry?.Name ?? address),
-                    Address = address, Parent = pathLeaf, Profile = "Public",
+                    Address = address, Parent = pathLeaf, Profile = TargetRole.Anchor.Profile,
                     Operator = catalogEntry?.Operator,
                 }));
             }
@@ -98,7 +98,8 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 Add(new TargetDto
                 {
                     Name = Unique($"{upstream} directly"), Address = upstream,
-                    Profile = "Resolver", Probe = "dns", Scope = TargetScope.Resolver,
+                    Profile = TargetRole.Resolver.Profile, Probe = TargetRole.Resolver.Probe,
+                    Scope = TargetRole.Resolver.Scope,
                 });
             }
 
