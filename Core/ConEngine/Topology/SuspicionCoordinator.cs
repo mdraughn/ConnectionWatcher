@@ -65,17 +65,7 @@ public class SuspicionCoordinator : IDisposable
             ? new HashSet<Guid>()
             : anchorPool.MemberTargetIds.Where(monitors.ContainsKey).ToHashSet();
 
-        _trunkIds = new HashSet<Guid>();
-        foreach (var anchorId in _anchorIds)
-        {
-            var parent = graph.Targets[anchorId].ParentId;
-            while (parent is { } pid)
-            {
-                if (monitors.ContainsKey(pid))
-                    _trunkIds.Add(pid);
-                parent = graph.Targets[pid].ParentId;
-            }
-        }
+        _trunkIds = graph.TrunkIds(_anchorIds, monitors.ContainsKey).ToHashSet();
 
         _sweepSet = _anchorIds.Concat(_trunkIds).Select(id => monitors[id]).ToList();
     }

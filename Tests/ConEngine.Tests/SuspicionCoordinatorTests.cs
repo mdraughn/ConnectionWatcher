@@ -401,13 +401,10 @@ public class SuspicionCoordinatorTests
     }
 
     [Fact]
-    public void A_nested_anchor_counts_as_trunk_for_sweeps()
+    public void A_nested_anchor_sweeps_but_is_never_trunk()
     {
-        // EV15, observed then pinned (Mark ruled D7 "keep both rules"; no AUDIT).
-        // Here an anchor parented under another anchor IS a trunk target: the suspicion
-        // sweep treats the outer anchor as trunk. The verdict's opposite rule
-        // (A_tagged_anchor_nested_under_another_anchor_does_not_make_its_operator_the_isp,
-        // VerdictCoordinatorTests) -- an anchor is not a path hop -- is deliberate too.
+        // Ruling 2026-10-28: the trunk is the anchors' ancestors minus the anchors. The outer anchor still
+        // triggers and joins sweeps, but its glitch is internet-side.
         var rig = new Rig(_time, new WatcherOptions
         {
             Targets =
@@ -426,7 +423,7 @@ public class SuspicionCoordinatorTests
         foreach (var name in new[] { "Google", "Google DNS", "Cloudflare", "Router" })
             Assert.True(rig.Monitor(name).Discipline.IsBurstActive, $"{name} should be bursting");
 
-        // (b) the outer anchor's glitch counts as "trunk involved" in the Internet-glitch wording.
+        // (b) the outer anchor's glitch is not trunk involvement in the Internet-glitch wording.
         rig.Feed("Google DNS", false);
         rig.Feed("Google", false);
         rig.Feed("Google", false);
@@ -436,7 +433,25 @@ public class SuspicionCoordinatorTests
             rig.Feed("Google", true);
         }
         var internet = Assert.Single(rig.Glitches, g => g.Class == GlitchClass.Internet);
-        Assert.Contains("link/ISP", internet.Detail);
+        Assert.Contains("trunk clean (upstream)", internet.Detail);
+
+        // (c) a loss on the real trunk target (Router) overlapping the anchors' losses still reads link/ISP.
+        rig.Prime("Router", "Google", "Google DNS");
+        rig.Glitches.Clear();
+        rig.Feed("Router", false);
+        rig.Feed("Google DNS", false);
+        rig.Feed("Google", false);
+        rig.Feed("Router", false);
+        rig.Feed("Google DNS", false);
+        rig.Feed("Google", false);
+        for (int i = 0; i < 5; i++)
+        {
+            rig.Feed("Router", true);
+            rig.Feed("Google DNS", true);
+            rig.Feed("Google", true);
+        }
+        var withTrunk = Assert.Single(rig.Glitches, g => g.Class == GlitchClass.Internet);
+        Assert.Contains("link/ISP", withTrunk.Detail);
     }
 
     [Fact]

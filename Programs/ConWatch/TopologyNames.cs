@@ -7,15 +7,15 @@ namespace ConWatch;
 /// <summary>
 /// Trunk and anchor roles from the STORED configuration — the graph the
 /// engine is built from — for the dashboard, History and the Targets
-/// pipeline, whether or not an engine is running. The one rule (owner
-/// decision 2026-09-18): the trunk is the UNION of every anchor's ancestor
-/// chain.
+/// pipeline, whether or not an engine is running. The one rule: the trunk is
+/// the union of every anchor's ancestor chain, minus the anchors (rulings
+/// 2026-09-18 and 2026-10-28).
 /// </summary>
 public static class TopologyNames
 {
-    /// <param name="TrunkNames">Every ancestor of every anchor, first-seen order walking each anchor upward.</param>
+    /// <param name="TrunkNames">Every ancestor of every anchor, minus the anchors, first-seen order walking each anchor upward.</param>
     /// <param name="AnchorNames">The anchor pool's members that exist, in pool order.</param>
-    /// <param name="TrunkChains">One root-first chain per distinct anchor parent, in first-seen order; their union is <paramref name="TrunkNames"/>.</param>
+    /// <param name="TrunkChains">One root-first chain per distinct anchor parent, in first-seen order; their union, minus the anchors, is <paramref name="TrunkNames"/>.</param>
     /// <param name="DirectAnchorNames">Anchors with no parent (or one naming no target): reached directly, so on no chain.</param>
     /// <param name="HasAnchorPool">The AnchorPool setting names an existing pool (the engine then runs a verdict).</param>
     /// <param name="WeatherThreshold">The Verdict.WeatherThreshold setting.</param>
@@ -43,7 +43,7 @@ public static class TopologyNames
             t.Parent is { Length: > 0 } parent && byName.TryGetValue(parent, out var p) ? p : null;
 
         var members = pool.Members.Where(byName.ContainsKey).Select(m => byName[m]).ToList();
-        var trunk = TreeWalk.AncestorsOf(members, ParentOf).Select(t => t.Name).ToList();
+        var trunk = TreeWalk.TrunkOf(members, ParentOf).Select(t => t.Name).ToList();
         var chains = members
             .Select(ParentOf).OfType<TargetDto>()
             .DistinctBy(leaf => leaf.Name, StringComparer.OrdinalIgnoreCase)

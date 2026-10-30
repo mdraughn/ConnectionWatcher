@@ -84,4 +84,23 @@ public class TopologyNamesTests
         Assert.Empty(names.TrunkChains);
         Assert.Empty(names.DirectAnchorNames);
     }
+
+    [Fact]
+    public void A_nested_anchor_is_an_anchor_only()
+    {
+        var doc = new ConfigDocument
+        {
+            Targets =
+            [
+                new() { Name = "Router", Address = "192.168.1.1" },
+                new() { Name = "Google", Address = "8.8.8.8", Parent = "Router" },
+                new() { Name = "Google DNS", Address = "8.8.4.4", Parent = "Google" },
+                new() { Name = "Cloudflare", Address = "1.1.1.1", Parent = "Router" },
+            ],
+            Pools = [new() { Name = "Internet", Members = ["Google", "Google DNS", "Cloudflare"] }],
+        };
+        var names = TopologyNames.Compute(doc, "Internet", weatherThreshold: 2);
+        Assert.Equal(["Router"], names.TrunkNames);
+        Assert.Contains(names.TrunkChains, c => c.SequenceEqual(["Router", "Google"])); // still on the path
+    }
 }
