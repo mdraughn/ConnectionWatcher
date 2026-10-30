@@ -239,9 +239,13 @@ describe("subjectsForScope", () => {
     { id: "v", name: "Internet", kind: "verdict" }, // no scope: an older page payload means Verdict
     { id: "p", name: "Anchors", kind: "pool", scope: "Verdict" },
     { id: "lp", name: "LanPool", kind: "pool", scope: "Local" },
+    { id: "dns", name: "Router DNS", kind: "target", scope: "Resolver" },
   ];
-  it("path keeps the verdict and path targets, not pools or LAN", () => {
+  it("path keeps the verdict and tree targets, never resolvers", () => {
     expect(subjectsForScope(subjects, "path").map((s) => s.id)).toEqual(["r", "v"]);
+  });
+  it("resolvers keeps only Resolver targets", () => {
+    expect(subjectsForScope(subjects, "resolvers").map((s) => s.id)).toEqual(["dns"]);
   });
   it("pools keeps only non-local pools", () => {
     expect(subjectsForScope(subjects, "pools").map((s) => s.id)).toEqual(["p"]);
@@ -250,7 +254,7 @@ describe("subjectsForScope", () => {
     expect(subjectsForScope(subjects, "local").map((s) => s.id)).toEqual(["n", "lp"]);
   });
   it("partitions every subject exactly once", () => {
-    const ids = (["path", "pools", "local"] as const)
+    const ids = (["path", "pools", "resolvers", "local"] as const)
       .flatMap((sc) => subjectsForScope(subjects, sc).map((s) => s.id)).sort();
     expect(ids).toEqual(subjects.map((s) => s.id).sort());
   });

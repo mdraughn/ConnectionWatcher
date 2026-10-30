@@ -92,7 +92,7 @@ function LedgerSection() {
 }
 
 const SCOPES: ReadonlyArray<readonly [HistoryScope, string]> =
-  [["path", "Path"], ["pools", "Pools"], ["local", "LAN"]];
+  [["path", "Path"], ["pools", "Pools"], ["resolvers", "Resolvers"], ["local", "LAN"]];
 
 function App({ subjects }: { subjects: Subject[] }) {
   const groups = SCOPES.filter(([key]) => subjectsForScope(subjects, key).length > 0);

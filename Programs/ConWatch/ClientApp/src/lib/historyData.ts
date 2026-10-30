@@ -1,4 +1,5 @@
 // Pure helpers for the History page (unit-tested).
+import { isLocal, isResolver } from "./scope";
 import type { RollupPoint, TransitionEvent } from "./types";
 
 /** Ping-count-weighted uptime percentage, or null with no data. */
@@ -158,15 +159,17 @@ export function ribbonSegments(transitions: TransitionEvent[],
   return segments;
 }
 
-export type HistoryScope = "path" | "pools" | "local";
+export type HistoryScope = "path" | "pools" | "resolvers" | "local";
 
 /**
- * The History subjects for one scope: LAN devices ("local"), non-LAN pools
- * ("pools"), or everything else — the verdict and the path targets ("path").
+ * The History subjects for one scope: LAN devices ("local"), DNS resolvers
+ * ("resolvers"), pools that are neither ("pools"), or everything else — the
+ * verdict and the tree targets ("path").
  */
 export function subjectsForScope<T extends { scope?: string; kind?: string }>(subjects: T[], scope: HistoryScope): T[] {
   return subjects.filter((s) => {
-    if (s.scope === "Local") return scope === "local";
+    if (isLocal(s)) return scope === "local";
+    if (isResolver(s)) return scope === "resolvers";
     return scope === "pools" ? s.kind === "pool" : scope === "path" && s.kind !== "pool";
   });
 }
