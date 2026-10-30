@@ -18,25 +18,7 @@ public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
     protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
-        db.Transitions.AddRange(batch.Select(ToRow));
+        db.Transitions.AddRange(batch.Select(TransitionRow.From));
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
-
-    private static TransitionRow ToRow(TargetTransition t) => new()
-    {
-        TimestampUtc = t.Timestamp.UtcDateTime,
-        SubjectId = t.TargetId,
-        SubjectName = t.TargetName,
-        SubjectKind = t.Kind.ToString(),
-        FromState = t.From.ToString(),
-        ToState = t.To.ToString(),
-        Trigger = t.Reason.Trigger.ToString(),
-        SuccessRate = t.Reason.SuccessRate,
-        SampleSize = t.Reason.SampleSize,
-        BurstLossRate = t.Reason.BurstLossRate,
-        AncestorId = t.Reason.AncestorId,
-        Detail = t.Reason.Detail,
-        Verdict = t.Reason.Verdict,
-        AvgRtt = t.AverageRoundtripTime,
-    };
 }

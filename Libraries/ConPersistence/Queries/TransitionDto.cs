@@ -54,24 +54,9 @@ public sealed record TransitionDto
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TransitionDnsBlame? Dns { get; init; }
 
-    public static TransitionDto From(TargetTransition t) => new()
-    {
-        Timestamp = t.Timestamp.ToUniversalTime(),
-        SubjectId = t.TargetId,
-        SubjectName = t.TargetName,
-        SubjectKind = t.Kind.ToString(),
-        FromState = t.From.ToString(),
-        ToState = t.To.ToString(),
-        Trigger = t.Reason.Trigger.ToString(),
-        SuccessRate = t.Reason.SuccessRate,
-        SampleSize = t.Reason.SampleSize,
-        BurstLossRate = t.Reason.BurstLossRate,
-        AncestorId = t.Reason.AncestorId,
-        Detail = t.Reason.Detail,
-        Verdict = t.Reason.Verdict,
-        AvgRtt = t.AverageRoundtripTime,
-        Dns = TransitionDnsBlame.From(t.Reason.Dns),
-    };
+    /// <summary>A live transition: the stored-row mapping, minus the log id, plus the DNS blame.</summary>
+    public static TransitionDto From(TargetTransition t) =>
+        From(TransitionRow.From(t)) with { Id = null, Dns = TransitionDnsBlame.From(t.Reason.Dns) };
 
     public static TransitionDto From(TransitionRow r) => new()
     {

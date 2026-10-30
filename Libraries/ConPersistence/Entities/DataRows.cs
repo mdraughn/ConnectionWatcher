@@ -1,3 +1,5 @@
+using ConEngine.Events;
+
 namespace ConPersistence.Entities;
 
 /// <summary>A recorded state transition with its evidence. Pruned after
@@ -20,6 +22,25 @@ public class TransitionRow
     public string? Detail { get; set; }
     public string? Verdict { get; set; }
     public double AvgRtt { get; set; }
+
+    /// <summary>The one TargetTransition-to-row field list (the recorder stores it; the live DTO maps through it).</summary>
+    public static TransitionRow From(TargetTransition t) => new()
+    {
+        TimestampUtc = t.Timestamp.UtcDateTime,
+        SubjectId = t.TargetId,
+        SubjectName = t.TargetName,
+        SubjectKind = t.Kind.ToString(),
+        FromState = t.From.ToString(),
+        ToState = t.To.ToString(),
+        Trigger = t.Reason.Trigger.ToString(),
+        SuccessRate = t.Reason.SuccessRate,
+        SampleSize = t.Reason.SampleSize,
+        BurstLossRate = t.Reason.BurstLossRate,
+        AncestorId = t.Reason.AncestorId,
+        Detail = t.Reason.Detail,
+        Verdict = t.Reason.Verdict,
+        AvgRtt = t.AverageRoundtripTime,
+    };
 }
 
 /// <summary>A sub-Faltering loss episode: trouble too small to move the state
