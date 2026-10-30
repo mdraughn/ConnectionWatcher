@@ -5,7 +5,7 @@ namespace ConEngine.Events;
 public enum OutboxMode
 {
     /// <summary>Drain blocks until no other thread is publishing, so on return the caller's items are
-    /// delivered. TargetMonitor: callers (and tests) rely on a transition being out when the call returns.</summary>
+    /// delivered, or are being delivered by the thread that dequeued them. TargetMonitor: callers (and tests) rely on a transition being out when the call returns.</summary>
     Wait,
     /// <summary>Drain returns at once when another thread is publishing; that thread re-checks the queue
     /// after it lets go and delivers the item. Coordinators: they never wait inside another delivery.</summary>

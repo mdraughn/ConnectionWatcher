@@ -22,6 +22,14 @@ public class StateGroupTests
         Assert.Equal(healthy, s.IsHealthy());
     }
 
+    [Fact]
+    public void The_group_theories_cover_every_state()
+    {
+        // A new enum member must get a row in the theories above and below.
+        Assert.Equal(7, Enum.GetValues<HostState>().Length);
+        Assert.Equal(7, Enum.GetValues<VerdictState>().Length);
+    }
+
     [Theory]
     [InlineData(VerdictState.Unknown, false)]
     [InlineData(VerdictState.LinkDown, false)]

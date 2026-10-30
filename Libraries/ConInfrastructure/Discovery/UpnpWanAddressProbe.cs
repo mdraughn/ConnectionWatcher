@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -116,7 +115,9 @@ public partial class UpnpWanAddressProbe : IWanAddressProbe
 
     private static async Task<(bool Ok, long? RttMs)> TestPingAsync(string address, CancellationToken ct)
     {
-        var rtt = await IcmpEcho.TryPingAsync(IPAddress.Parse(address), TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+        if (!IPAddress.TryParse(address, out var ip))
+            return (false, null);
+        var rtt = await IcmpEcho.TryPingAsync(ip, TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
         return (rtt is not null, rtt);
     }
 

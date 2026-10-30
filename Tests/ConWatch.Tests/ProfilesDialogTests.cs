@@ -12,10 +12,13 @@ public class ProfilesDialogTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
-            var d = ProfilesModel.DialogDefaults;
+            var d = ProfilesModel.BuildDialogDefaults();
             Assert.Equal("10", d["normalIntervalSeconds"]);
             Assert.Equal("0.95", d["respondingThreshold"]);
             Assert.Equal("100", d["historySize"]);
+            Assert.Equal("0.1", d["downThreshold"]);
+            Assert.Equal(10, d.Count);
+            Assert.All(d.Values, v => Assert.DoesNotContain(",", v));
         }
         finally { CultureInfo.CurrentCulture = saved; }
     }

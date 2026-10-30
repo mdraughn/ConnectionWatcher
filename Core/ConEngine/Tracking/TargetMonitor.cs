@@ -15,7 +15,8 @@ namespace ConEngine.Tracking;
 /// Threading contract: state changes happen under <c>_lock</c>; every
 /// publication is queued while the lock is held (so delivery order equals
 /// state order) and delivered only after it is released, serialized through
-/// the outbox (Wait mode). Subscribers may therefore take other monitors' locks
+/// the outbox (Wait mode; on return a caller's items are delivered, or are being delivered by
+/// the thread that dequeued them). Subscribers may therefore take other monitors' locks
 /// freely — nothing they can reach is held while they run.
 /// The HostTracker it owns is pure; this monitor's _lock is the only lock around it.
 /// </summary>

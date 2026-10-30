@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using ConCore.Discovery;
 using ConInfrastructure.Net;
 

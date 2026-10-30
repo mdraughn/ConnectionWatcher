@@ -23,7 +23,7 @@ public class TargetConfig
     public string Address { get; set; } = "";
     /// <summary>Name of the parent target in the reachability tree.</summary>
     public string? Parent { get; set; }
-    public string Profile { get; set; } = "Public";
+    public string Profile { get; set; } = PingProfile.Public.Name;
     public bool Enabled { get; set; } = true;
     /// <summary>Optional operator/ISP name for attribution wording.</summary>
     public string? Operator { get; set; }

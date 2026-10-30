@@ -39,6 +39,11 @@ public class DnsResultLogTests
     [InlineData("TimedOut (example.org)", "TimedOut", "example.org", "")]
     [InlineData("NoLookupNames", "NoLookupNames", null, "")]
     [InlineData("ConnectionReset (dns.quad9.net)", "ConnectionReset", "dns.quad9.net", "")]
+    [InlineData("", "", null, "")]
+    [InlineData(":", "", null, "")]
+    [InlineData("x (", "x", null, "(")]
+    [InlineData(")", ")", null, "")]
+    [InlineData("a ()", "a", null, "")]
     public void Outcome_and_name_are_parsed_from_the_message(string message, string outcome, string? name, string detail)
     {
         var (parsedOutcome, parsedName, parsedDetail) = DnsResultLog.Parse(message);

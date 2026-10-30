@@ -322,8 +322,6 @@ public class VerdictCoordinator : IDisposable
         _waitTimer = null;
     }
 
-
-
     private (VerdictState, string, string? Operator, DnsBlame? Dns) Classify(IReadOnlyDictionary<Guid, HostState> states)
     {
         var anchors = _anchors.Select(a => (Monitor: a, State: states[a.Target.Id])).ToList();

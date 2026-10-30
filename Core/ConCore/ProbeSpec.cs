@@ -96,7 +96,7 @@ public static class ProbePolicy
     }
 
     /// <summary>
-    /// <see cref="IsPrivate"/> plus carrier-grade NAT space (100.64.0.0/10):
+    /// <see cref="IsPrivate(IPAddress)"/> plus carrier-grade NAT space (100.64.0.0/10):
     /// an address that is not routable on the public internet. Used to
     /// classify traceroute hops and to keep such addresses out of external
     /// lookups. Not used by the TCP port policy, which treats CGNAT as public.

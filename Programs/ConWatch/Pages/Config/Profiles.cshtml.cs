@@ -13,7 +13,7 @@ public class ProfilesModel(ConfigStore store, ConfigHealth health) : PageModel
     /// a default <see cref="PingProfileConfig"/>, formatted invariantly for number inputs.</summary>
     public static IReadOnlyDictionary<string, string> DialogDefaults { get; } = BuildDialogDefaults();
 
-    private static Dictionary<string, string> BuildDialogDefaults()
+    internal static Dictionary<string, string> BuildDialogDefaults()
     {
         var c = new PingProfileConfig();
         static string F(double v) => v.ToString("R", CultureInfo.InvariantCulture);

@@ -158,6 +158,24 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_tagged_hop_behind_a_disabled_hop_still_makes_the_anchors_isp_owned()
+    {
+        // The walk goes through the disabled Modem; the enabled, tagged Router above it counts.
+        await _service.UpsertTargetAsync((await Existing("Router")) with { Operator = "Comcast" });
+        await _service.UpsertTargetAsync((await Existing("Modem")) with { Enabled = false });
+        await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });
+        await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Operator = "Comcast" });
+        Assert.Contains("anchors-all-isp", await Codes());
+    }
+
+    [Fact]
+    public async Task A_disabled_anchor_also_falls_below_the_recommended_count()
+    {
+        await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Enabled = false });
+        Assert.Contains("anchors-below-recommended", await AnchorCodes());
+    }
+
+    [Fact]
     public async Task No_isp_tag_on_the_path_never_warns_unprovable()
     {
         await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });

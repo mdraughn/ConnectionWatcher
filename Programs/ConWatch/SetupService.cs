@@ -57,6 +57,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 Name = Unique(request.Router.Name),
                 Address = request.Router.Address,
                 Profile = TargetRole.Router.Profile,
+                Scope = TargetRole.Router.Scope,
                 Critical = TargetRole.Router.Critical,
             });
 
@@ -70,6 +71,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                     Address = outer.Address,
                     Parent = routerName,
                     Profile = TargetRole.PathHop.Profile,
+                    Scope = TargetRole.PathHop.Scope,
                     // The WAN hop is where the ISP's service begins.
                     Operator = request.IspName,
                 });
@@ -83,6 +85,7 @@ public class SetupService(ConfigService config, SettingsStore settings, ILogger<
                 {
                     Name = Unique(catalogEntry?.Name ?? address),
                     Address = address, Parent = pathLeaf, Profile = TargetRole.Anchor.Profile,
+                    Scope = TargetRole.Anchor.Scope,
                     Operator = catalogEntry?.Operator,
                 }));
             }

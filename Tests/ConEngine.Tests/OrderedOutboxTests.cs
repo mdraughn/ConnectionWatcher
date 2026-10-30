@@ -41,14 +41,17 @@ public class OrderedOutboxTests
         Assert.Equal([1, 2], seen);
     }
 
-    [Fact]
-    public void A_throwing_publish_leaves_later_items_for_the_next_drain()
+    [Theory]
+    [InlineData(OutboxMode.Wait)]
+    [InlineData(OutboxMode.Skip)]
+    public async Task A_throwing_publish_leaves_later_items_for_the_next_drain(OutboxMode mode)
     {
         var seen = new List<int>();
-        var box = new OrderedOutbox<int>(i => { if (i == 1) throw new InvalidOperationException(); seen.Add(i); }, OutboxMode.Skip);
+        var box = new OrderedOutbox<int>(i => { if (i == 1) throw new InvalidOperationException(); seen.Add(i); }, mode);
         box.Enqueue(1); box.Enqueue(2);
         Assert.Throws<InvalidOperationException>(box.Drain);
-        box.Drain();
+        // Another thread: the publish lock is reentrant, so only a different thread proves it was released.
+        await Task.Run(box.Drain).WaitAsync(Timeout);
         Assert.Equal([2], seen);
     }
 }

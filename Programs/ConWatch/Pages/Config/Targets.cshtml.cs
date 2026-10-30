@@ -44,7 +44,7 @@ public class TargetsModel(ConfigStore store, ConfigHealth health, SettingsStore 
     public string DefaultProfile =>
         Config.Profiles.Any(p => p.Name.Equals(PrefillProfile, StringComparison.OrdinalIgnoreCase))
             ? PrefillProfile!
-            : string.Equals(PrefillScope, "Local", StringComparison.OrdinalIgnoreCase) ? TargetRole.LocalDevice.Profile : TargetRole.Anchor.Profile;
+            : string.Equals(PrefillScope, nameof(TargetScope.Local), StringComparison.OrdinalIgnoreCase) ? TargetRole.LocalDevice.Profile : TargetRole.Anchor.Profile;
 
     public async Task OnGetAsync()
     {
