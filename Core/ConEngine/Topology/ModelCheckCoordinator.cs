@@ -222,7 +222,8 @@ public class ModelCheckCoordinator : IDisposable
                 var hop = _monitors[id];
                 var witness = _monitors[witnessId].Target.Name;
                 var probe = hop.Target.ParsedProbe().Describe();
-                bool neverAnswered = hop.AcceptedReplies + hop.RefusedReplies == 0;
+                // A hop carried over answering did answer, in the engine before this one.
+                bool neverAnswered = hop.AcceptedReplies + hop.RefusedReplies == 0 && !hop.SeededAnswering;
                 if (neverAnswered)
                 {
                     // No condition until the wait is up: after a rebuild or restart the counters

@@ -236,6 +236,27 @@ public class ModelCheckCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public void A_hop_carried_over_answering_is_bypassed_at_once_when_it_fails_before_its_first_reply()
+    {
+        // A rebuild warm-starts Inside as Responding: it answered in the engine
+        // this one replaced. Failing before a single reply here, it is a bypassed
+        // hop now, not a "never answered" one five minutes from now.
+        var inside = _monitors[Id("Inside")];
+        var carried = new TargetMonitor(inside.Target, Fast, new PingDiscipline(Fast, _time),
+            _time, NullLoggerFactory.Instance);
+        carried.Seed(HostState.Responding);
+        carried.StartTracking(inside.ResolvedAddress!);
+        _monitors[Id("Inside")] = carried;
+        inside.Dispose();
+        StartCheck();
+        foreach (var name in new[] { "Router", "External", "Google", "Cloudflare" })
+            Feed(name, 5, true);
+        Feed("Inside", 20, false);
+
+        Assert.Equal(ModelWarningKind.HopBypassed, Assert.Single(_check.Active).Kind);
+    }
+
+    [Fact]
     public void A_hop_that_answered_once_is_never_never_answered()
     {
         StartCheck();

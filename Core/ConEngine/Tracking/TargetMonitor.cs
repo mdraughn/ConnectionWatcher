@@ -78,6 +78,13 @@ public class TargetMonitor : IDisposable
         get { lock (_lock) { return _tracker?.Assumed ?? _seedState is not null; } }
     }
 
+    /// <summary>Warm-started in an answering state: it answered in the engine this
+    /// one replaced, though its reply counters here start at zero.</summary>
+    public bool SeededAnswering
+    {
+        get { lock (_lock) { return _seedState?.IsAnswering() == true; } }
+    }
+
     /// <summary>Successful pings/connects whose message was not "Refused" (ICMP replies, accepted TCP connects).</summary>
     public long AcceptedReplies => Interlocked.Read(ref _acceptedReplies);
 
