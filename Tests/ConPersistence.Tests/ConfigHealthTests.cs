@@ -142,6 +142,22 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_disabled_isp_hop_does_not_make_the_anchors_isp_owned()
+    {
+        await _service.UpsertTargetAsync((await Existing("Modem")) with { Operator = "Comcast", Enabled = false });
+        await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });
+        await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Operator = "Comcast" });
+        Assert.DoesNotContain("anchors-all-isp", await Codes()); // the engine monitors no tagged hop
+    }
+
+    [Fact]
+    public async Task A_disabled_anchor_does_not_count_toward_the_threshold()
+    {
+        await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Enabled = false });
+        Assert.Contains("anchors-below-threshold", await AnchorCodes()); // one enabled anchor, threshold 2
+    }
+
+    [Fact]
     public async Task No_isp_tag_on_the_path_never_warns_unprovable()
     {
         await _service.UpsertTargetAsync((await Existing("Google")) with { Operator = "Comcast" });

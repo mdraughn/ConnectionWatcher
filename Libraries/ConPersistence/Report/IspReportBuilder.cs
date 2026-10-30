@@ -2,6 +2,7 @@ using ConCore.Targets;
 using ConEngine.Events;
 using ConEngine.Topology;
 using ConPersistence.Entities;
+using ConPersistence.Queries;
 using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
@@ -132,10 +133,7 @@ public class IspReportBuilder(IDbContextFactory<ConWatchDbContext> dbFactory, Se
     private async Task<(List<string> Path, List<string> Anchors, string? OperatorName)> BuildTopologyAsync(ConWatchDbContext db)
     {
         var anchorPoolName = await settings.GetAsync(SettingKeys.AnchorPool);
-        var pool = anchorPoolName is { Length: > 0 }
-            ? await db.Pools.AsNoTracking().Include(p => p.Members)
-                .SingleOrDefaultAsync(p => p.Name == anchorPoolName)
-            : null;
+        var pool = await TopologyQueries.AnchorPoolAsync(db, anchorPoolName);
         if (pool is null)
             return ([], [], null);
 

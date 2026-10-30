@@ -1,4 +1,6 @@
 using ConCore.Targets;
+using ConPersistence.Entities;
+using ConPersistence.Queries;
 using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,8 +50,7 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         }
 
         await using var db = await dbFactory.CreateDbContextAsync();
-        var pool = await db.Pools.Include(p => p.Members)
-            .SingleOrDefaultAsync(p => p.Name == anchorPool);
+        var pool = await TopologyQueries.AnchorPoolAsync(db, anchorPool);
         if (pool is null)
         {
             warnings.Add(new HealthWarning("anchor-pool-missing",
@@ -57,8 +58,15 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
             return warnings;
         }
 
-        var threshold = await settings.GetIntAsync(SettingKeys.WeatherThreshold, 2);
-        var anchors = pool.Members.Count;
+        // Every stored target, enabled or not: the engine walks through disabled hops,
+        // but only enabled targets are monitored, so only they count as anchors or tagged hops.
+        var byId = await db.Targets.AsNoTracking().ToDictionaryAsync(t => t.Id);
+        var enabledAnchors = pool.Members
+            .Select(m => byId.GetValueOrDefault(m.TargetId))
+            .OfType<TargetRow>().Where(t => t.Enabled).ToList();
+
+        var threshold = await settings.GetIntAsync(SettingKeys.WeatherThreshold, SettingsDefaults.WeatherThreshold);
+        var anchors = enabledAnchors.Count;
         if (anchors < threshold)
             warnings.Add(new HealthWarning("anchors-below-threshold",
                 $"Pool '{anchorPool}' has {anchors} anchor(s) but the weather threshold is {threshold} — " +
@@ -67,14 +75,14 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
             warnings.Add(new HealthWarning("anchors-below-recommended",
                 $"Pool '{anchorPool}' has {anchors} anchor(s); {RecommendedAnchors} or more give a more reliable verdict."));
 
-        if (await AllAnchorsIspOwnedAsync(db, pool) is { } unprovable)
+        if (AllAnchorsIspOwned(pool, enabledAnchors, byId) is { } unprovable)
             warnings.Add(unprovable);
 
         // Pool-parent drift: re-parenting the members does not move the pool,
         // and a pool parented above (or without) the members' real parent
         // silently truncates the ISP report's trunk walk. The verdict layer
         // is immune (it walks anchor chains), which makes this easy to miss.
-        if (await PoolParentDriftAsync(db, pool) is { } drift)
+        if (PoolParentDrift(pool, byId) is { } drift)
             warnings.Add(drift);
         return warnings;
     }
@@ -109,32 +117,18 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         }
     }
 
-    /// <summary>Every anchor carries the ISP's operator tag: the verdict then
+    /// <summary>Every counted anchor carries the ISP's operator tag: the verdict then
     /// falls back to the ISP's own servers and cannot prove the internet
-    /// beyond the ISP is up (spec 2026-10-09 §4.1, the UnprovableUp note).</summary>
-    private static async Task<HealthWarning?> AllAnchorsIspOwnedAsync(ConWatchDbContext db,
-        Entities.PoolRow pool)
+    /// beyond the ISP is up (spec 2026-10-09 §4.1, the UnprovableUp note). Judged with
+    /// the engine's own rule over enabled targets.</summary>
+    private static HealthWarning? AllAnchorsIspOwned(Entities.PoolRow pool,
+        IReadOnlyList<TargetRow> enabledAnchors, Dictionary<Guid, TargetRow> byId)
     {
-        static string? Normalize(string? op) =>
-            op?.Trim() is { Length: > 0 } t ? t.ToLowerInvariant() : null;
+        TargetRow? ParentOf(TargetRow t) => t.ParentId is { } pid ? byId.GetValueOrDefault(pid) : null;
 
-        var targets = await db.Targets.ToDictionaryAsync(t => t.Id);
-        var memberIds = pool.Members.Select(m => m.TargetId).Where(targets.ContainsKey).ToHashSet();
-        if (memberIds.Count == 0)
-            return null;
-
-        var isp = new HashSet<string>();
-        foreach (var id in memberIds)
-        {
-            var parentId = targets[id].ParentId;
-            for (var depth = 0; depth < 20 && parentId is { } pid && targets.TryGetValue(pid, out var hop); depth++)
-            {
-                if (!memberIds.Contains(pid) && Normalize(hop.Operator) is { } op)
-                    isp.Add(op);
-                parentId = hop.ParentId;
-            }
-        }
-        if (isp.Count == 0 || !memberIds.All(id => Normalize(targets[id].Operator) is { } op && isp.Contains(op)))
+        var trunk = TreeWalk.TrunkOf(enabledAnchors, ParentOf).Where(t => t.Enabled);
+        IspRule.CountedAnchors(enabledAnchors, trunk, t => t.Operator, out var usingIspFallback);
+        if (!usingIspFallback)
             return null;
 
         return new HealthWarning("anchors-all-isp",
@@ -143,11 +137,8 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
             "(or add an anchor outside your ISP) so ConnectionWatcher can prove your internet is up.");
     }
 
-    private static async Task<HealthWarning?> PoolParentDriftAsync(ConWatchDbContext db,
-        Entities.PoolRow pool)
+    private static HealthWarning? PoolParentDrift(Entities.PoolRow pool, Dictionary<Guid, TargetRow> targets)
     {
-        var targets = await db.Targets.ToDictionaryAsync(t => t.Id);
-
         // Each member's ancestor chain, nearest first.
         var chains = new List<List<Guid>>();
         foreach (var member in pool.Members)
