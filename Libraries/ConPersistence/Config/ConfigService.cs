@@ -310,7 +310,15 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
 
         await using var db = await dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
-        await ConfigStore.WriteDocumentAsync(db, doc);
+        try
+        {
+            await ConfigStore.WriteDocumentAsync(db, doc);
+        }
+        catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
+        {
+            return UniquenessFailure(ex, "Config import");
+        }
+
         await tx.CommitAsync();
         _log.LogInformation("Imported configuration: {Targets} targets, {Pools} pools",
             doc.Targets.Count, doc.Pools.Count);
@@ -360,14 +368,19 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         }
         catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
         {
-            _log.LogDebug(ex, "Config edit rejected by a uniqueness constraint");
-            return ConfigResult.Fail(ConfigErrorKind.Validation,
-                "Change violates a uniqueness constraint (duplicate name or address).");
+            return UniquenessFailure(ex, "Config edit");
         }
 
         await tx.CommitAsync();
         ConfigChanged?.Invoke();
         return result;
+    }
+
+    private ConfigResult UniquenessFailure(DbUpdateException ex, string what)
+    {
+        _log.LogDebug(ex, "{What} rejected by a uniqueness constraint", what);
+        return ConfigResult.Fail(ConfigErrorKind.Validation,
+            "Change violates a uniqueness constraint (duplicate name or address).");
     }
 
     /// <summary>Apply a mutation, validate the whole resulting config, commit or roll back.</summary>
@@ -386,9 +399,7 @@ public class ConfigService(IDbContextFactory<ConWatchDbContext> dbFactory, Confi
         }
         catch (DbUpdateException ex) when (SqliteErrors.IsUniqueViolation(ex))
         {
-            _log.LogDebug(ex, "Config mutation rejected by a uniqueness constraint");
-            return ConfigResult.Fail(ConfigErrorKind.Validation,
-                "Change violates a uniqueness constraint (duplicate name or address).");
+            return UniquenessFailure(ex, "Config mutation");
         }
 
         var options = await store.LoadWatcherOptionsAsync(db);

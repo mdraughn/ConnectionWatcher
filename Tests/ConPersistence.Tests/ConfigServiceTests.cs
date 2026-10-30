@@ -288,6 +288,20 @@ public class ConfigServiceTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Import_with_names_differing_only_in_case_is_a_validation_failure()
+    {
+        var doc = await _store.ExportAsync();
+        doc.Profiles.Add(new ProfileDto { Name = "Fancy" });
+        doc.Profiles.Add(new ProfileDto { Name = "FANCY" });
+        var result = await _service.ImportAsync(doc);
+        Assert.False(result.Success);
+        Assert.Equal(ConfigErrorKind.Validation, result.Kind);
+        var export = await _store.ExportAsync();
+        Assert.DoesNotContain(export.Profiles, p => p.Name.Equals("Fancy", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(4, export.Targets.Count);
+    }
+
+    [Fact]
     public async Task EditDocument_commits_once_and_keeps_untouched_ids()
     {
         var routerId = await IdOf("Router");
