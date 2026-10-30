@@ -7,10 +7,22 @@ async function apiFetch(method, url, body) {
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(body);
     }
-    const response = await fetch(url, options);
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (error) {
+        // The request never got an answer (service restarting, network down): a failed result, not a throw.
+        return { ok: false, status: 0, body: { errors: [`Could not reach the server (${error.message}).`] } };
+    }
     let payload = null;
     try { payload = await response.json(); } catch { /* empty body */ }
     return { ok: response.ok, status: response.status, body: payload };
+}
+
+// Marks el busy while fn runs; the mark always clears, even if fn throws.
+async function withBusy(el, fn) {
+    el.setAttribute("aria-busy", "true");
+    try { return await fn(); } finally { el.removeAttribute("aria-busy"); }
 }
 
 function showErrors(listEl, result) {

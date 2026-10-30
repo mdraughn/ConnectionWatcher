@@ -79,10 +79,8 @@ wireDanger("reset-confirm", "reset-btn", "RESET", "/api/v1/admin/factory-reset")
             showErrors(errors, { body: { errors: ["Pick a cutoff date first."] } });
             return;
         }
-        button.setAttribute("aria-busy", "true");
-        const result = await apiFetch("POST", "/api/v1/admin/prune",
-            { beforeUtc: date + "T00:00:00Z", confirm: input.value });
-        button.removeAttribute("aria-busy");
+        const result = await withBusy(button, () => apiFetch("POST", "/api/v1/admin/prune",
+            { beforeUtc: date + "T00:00:00Z", confirm: input.value }));
         if (!result.ok) { showErrors(errors, result); return; }
         const r = result.body;
         const freed = Math.max(0, r.fileSizeBefore - r.fileSizeAfter) / 1048576;
@@ -100,11 +98,9 @@ if (engineToggle) {
     engineToggle.addEventListener("click", async () => {
         const errors = document.getElementById("engine-errors");
         clearErrors(errors);
-        engineToggle.setAttribute("aria-busy", "true");
-        const result = await apiFetch("PUT", "/api/v1/settings", {
+        const result = await withBusy(engineToggle, () => apiFetch("PUT", "/api/v1/settings", {
             "Engine.Enabled": engineToggle.dataset.enable,
-        });
-        engineToggle.removeAttribute("aria-busy");
+        }));
         if (result.ok) location.reload();
         else showErrors(errors, result);
     });
@@ -120,12 +116,10 @@ if (takeoverBtn) {
         clearErrors(errors);
         insecure.hidden = true;
         out.textContent = "taking over — disabling source, final sync…";
-        takeoverBtn.setAttribute("aria-busy", "true");
-        const result = await apiFetch("POST", "/api/v1/setup/takeover", {
+        const result = await withBusy(takeoverBtn, () => apiFetch("POST", "/api/v1/setup/takeover", {
             sourcePassword: document.getElementById("takeover-password").value || null,
             allowInsecure,
-        });
-        takeoverBtn.removeAttribute("aria-busy");
+        }));
         if (result.ok) {
             out.textContent = "Done — this node is live; the source is a disabled archive.";
             setTimeout(() => location.href = "/", 1500);

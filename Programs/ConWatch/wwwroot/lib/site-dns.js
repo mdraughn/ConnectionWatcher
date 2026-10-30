@@ -28,8 +28,6 @@ document.getElementById("dns-enabled").addEventListener("change", async (e) => {
     let result;
     try {
         result = await apiFetch("PUT", "/api/v1/settings", { "Dns.Enabled": hidden.value });
-    } catch {
-        result = null; // the request itself failed (service restarting, network): treated as a failed save
     } finally {
         e.target.disabled = false;
     }

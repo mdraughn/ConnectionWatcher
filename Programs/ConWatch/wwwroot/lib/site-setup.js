@@ -68,9 +68,7 @@ async function loadAnchors() {
 document.getElementById("wan-probe").addEventListener("click", async () => {
     const button = document.getElementById("wan-probe");
     const out = document.getElementById("wan-result");
-    button.setAttribute("aria-busy", "true");
-    const result = await apiFetch("POST", "/api/v1/setup/wan-probe");
-    button.removeAttribute("aria-busy");
+    const result = await withBusy(button, () => apiFetch("POST", "/api/v1/setup/wan-probe"));
     const probe = result.body;
     if (!result.ok || !probe?.address) {
         out.textContent = `Skipped: ${probe?.failureReason ?? "probe failed"}. ` +
@@ -114,9 +112,7 @@ document.getElementById("apply").addEventListener("click", async () => {
         ispName: document.getElementById("isp-name").value.trim() || null,
     };
     const button = document.getElementById("apply");
-    button.setAttribute("aria-busy", "true");
-    const result = await apiFetch("POST", "/api/v1/setup/apply", body);
-    button.removeAttribute("aria-busy");
+    const result = await withBusy(button, () => apiFetch("POST", "/api/v1/setup/apply", body));
     if (result.ok) location.href = "/";
     else showErrors(errors, result);
 });
