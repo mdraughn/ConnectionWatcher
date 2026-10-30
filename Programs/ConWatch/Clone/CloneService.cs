@@ -199,11 +199,25 @@ public class CloneService(IHttpClientFactory httpFactory,
             return CloneOutcome.Fail(400, "import-failed",
                 ex.Message + " The source has been disabled; this node is unchanged.");
         }
-        catch (SnapshotImportException ex) when (ex.InnerException is InvalidOperationException inner)
+        catch (SnapshotImportException ex) when (!ex.ConfigCommitted && ex.InnerException is InvalidOperationException inner)
         {
             // as before the importer named its phases: an InvalidOperationException is a 400
             return CloneOutcome.Fail(400, "import-failed",
                 inner.Message + " The source has been disabled; this node is unchanged.");
+        }
+        catch (SnapshotImportException ex) when (!ex.ConfigCommitted)
+        {
+            log.LogError(ex, "Take-over import failed before the config was committed");
+            return CloneOutcome.Fail(500, "import-error",
+                ex.Message + " The source has been disabled; this node is unchanged.");
+        }
+        catch (SnapshotImportException ex)
+        {
+            // The node now holds the source's config, and the source is already disabled.
+            log.LogError(ex, "Take-over import failed after the config was committed");
+            return CloneOutcome.Fail(500, "import-incomplete",
+                ex.Message + " The source has been disabled. This node holds the source's config but is left disabled; " +
+                "take over again, or re-enable the source from its Settings page.");
         }
 
         // 4. Go live. The warm restart seeds from the just-imported data, so

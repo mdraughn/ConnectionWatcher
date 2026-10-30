@@ -390,6 +390,37 @@ public class CloneTests : IDisposable
         Assert.True(bomb.Fired > 0);
     }
 
+    [Fact]
+    public async Task Takeover_whose_history_cannot_be_written_says_the_source_is_disabled()
+    {
+        await SeedSourceAsync();
+        await ConfigApiTests.Eventually(async () =>
+            (await GetJson(_sourceClient, "/api/v1/transitions?limit=10"))
+                .GetProperty("items").GetArrayLength() > 0);
+        // The source's own snapshot with its first transition written twice: the config
+        // commits, then tracking the second history row with the same Id throws.
+        var snapshot = System.Text.Json.Nodes.JsonNode.Parse(
+            await _sourceClient.GetStringAsync("/api/v1/export/snapshot"))!;
+        var rows = snapshot["transitions"]!.AsArray();
+        rows.Add(rows[0]!.DeepClone());
+
+        var target = MakeTarget(s => s.AddHttpClient(CloneService.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new FixedSnapshotHandler(snapshot.ToJsonString())));
+        var client = target.CreateClient();
+        var settings = target.Services.GetRequiredService<ConPersistence.Settings.SettingsStore>();
+        await settings.SetManyAsync(new Dictionary<string, string?>
+        {
+            [ConPersistence.Settings.SettingKeys.CloneSourceUrl] = "http://source.test/",
+        });
+
+        var response = await client.PostAsJsonAsync("/api/v1/setup/takeover", new { allowInsecure = true });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+        Assert.Equal("import-incomplete", body.GetProperty("code").GetString());
+        Assert.Contains("source has been disabled", body.GetProperty("errors")[0].GetString());
+    }
+
     /// <summary>Answers every request with one fixed JSON body: a source node whose snapshot we control.</summary>
     private sealed class FixedSnapshotHandler(string json) : HttpMessageHandler
     {
