@@ -29,4 +29,8 @@ public record Target
     /// OS resolver list (spec 2026-10-10 §4.1). The admin may disable it but
     /// not re-address or delete it. Always a Resolver-scope target.</summary>
     public bool SystemManaged { get; init; }
+
+    /// <summary>The probe as a spec; an absent or unparseable string reads as ICMP.
+    /// A method, so it never joins equality or serialization.</summary>
+    public ProbeSpec ParsedProbe() => ProbeSpec.TryParse(Probe, out var spec) ? spec : ProbeSpec.Icmp;
 }

@@ -221,7 +221,7 @@ public class ModelCheckCoordinator : IDisposable
 
                 var hop = _monitors[id];
                 var witness = _monitors[witnessId].Target.Name;
-                var probe = ProbeText(hop.Target);
+                var probe = hop.Target.ParsedProbe().Describe();
                 bool neverAnswered = hop.AcceptedReplies + hop.RefusedReplies == 0;
                 if (neverAnswered)
                 {
@@ -281,7 +281,7 @@ public class ModelCheckCoordinator : IDisposable
             : probeOnly >= ProbeOnlyRaise && forwarding <= ForwardingRaise;
         if (!holds)
             return;
-        ProbeSpec.TryParse(hop.Target.Probe, out var probe);
+        var probe = hop.Target.ParsedProbe();
         var advice = probe.Kind == ProbeKind.Tcp ? "consider a different probe" : "consider a TCP probe";
         Add(found, ModelWarningKind.ProbeOnlyLoss, hop.Target,
             $"{hop.Target.Name} drops some of its own pings but forwards fine (loss {Pct(own)} · " +
@@ -373,18 +373,6 @@ public class ModelCheckCoordinator : IDisposable
     {
         var key = ModelCondition.KeyFor(kind, target?.Id);
         found[key] = new ModelCondition(key, kind, target?.Id, target?.Name, message);
-    }
-
-    /// <summary>"tcp/80" for a TCP probe, "dns" for a DNS query, "ping" for ICMP echo.</summary>
-    private static string ProbeText(Target target)
-    {
-        ProbeSpec.TryParse(target.Probe, out var probe);
-        return probe.Kind switch
-        {
-            ProbeKind.Tcp => $"tcp/{probe.Port}",
-            ProbeKind.Dns => "dns",
-            _ => "ping",
-        };
     }
 
     public void Dispose()

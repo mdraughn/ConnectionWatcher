@@ -374,7 +374,7 @@ public class WatcherEngine
         // Bursts shorten the timeout: replies arrive in well under a second,
         // and against a dead host the steady timeout dominates burst cost.
         var steadyTimeoutMs = (int)monitor.Profile.PingTimeout.TotalMilliseconds;
-        ProbeSpec.TryParse(monitor.Target.Probe, out var probe);
+        var probe = monitor.Target.ParsedProbe();
         // Bursts shorten the timeout — but a refused TCP connect takes ~2s to
         // surface on Windows (the stack retries after the RST), so TCP probes
         // keep enough budget to classify Refused as a reply during bursts. A

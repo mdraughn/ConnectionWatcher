@@ -1,4 +1,5 @@
 using ConCore;
+using ConCore.Targets;
 
 namespace ConEngine.Tests;
 
@@ -158,4 +159,18 @@ public class ProbeSpecTests
         Assert.True(ProbeSpec.TryParse(text, out var spec));
         Assert.Equal(new ProbeSpec(ProbeKind.Tcp, 80), spec);
     }
+
+    [Theory]
+    [InlineData("tcp:80", "tcp/80")]
+    [InlineData("dns", "dns")]
+    [InlineData(null, "ping")]
+    public void Describe_is_the_model_note_wording(string? stored, string expected)
+    {
+        ProbeSpec.TryParse(stored, out var spec);
+        Assert.Equal(expected, spec.Describe());
+    }
+
+    [Fact]
+    public void An_unparseable_probe_reads_as_icmp() =>
+        Assert.Equal(ProbeSpec.Icmp, new Target { Id = Guid.NewGuid(), Name = "x", Address = "1.1.1.1", ProfileName = "Public", Probe = "tcp:0" }.ParsedProbe());
 }

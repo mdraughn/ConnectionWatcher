@@ -46,6 +46,15 @@ public readonly record struct ProbeSpec(ProbeKind Kind, int Port = 0)
         _ => "icmp",
     };
 
+    /// <summary>The model-note wording: "tcp/80", "dns" or "ping". Differs from
+    /// <see cref="ToString"/>'s config form on purpose.</summary>
+    public string Describe() => Kind switch
+    {
+        ProbeKind.Tcp => $"tcp/{Port}",
+        ProbeKind.Dns => "dns",
+        _ => "ping",
+    };
+
     /// <summary>The storage form: null for the ICMP default.</summary>
     public string? ToConfigString() => Kind == ProbeKind.Icmp ? null : ToString();
 }
