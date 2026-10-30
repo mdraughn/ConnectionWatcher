@@ -82,6 +82,7 @@ public static class ConWatchServices
         services.AddSingleton<SettingsStore>();
         services.AddSingleton<ConCore.Dns.IDohDetector>(_ => ConInfrastructure.NameResolution.DohConfiguration.ForThisPlatform());
         services.AddSingleton<ConfigHealth>();
+        services.AddSingleton<Health.HealthReport>();
         services.AddSingleton<ConPersistence.Report.IspReportBuilder>();
         services.AddSingleton<TransitionRecorder>();
         services.AddSingleton<GlitchRecorder>();
@@ -98,7 +99,6 @@ public static class ConWatchServices
             c => c.Timeout = TimeSpan.FromSeconds(60)); // a full snapshot can be MBs
         services.AddSingleton<Clone.CloneService>();
         services.AddSingleton<Clone.CloneHealth>();
-        services.AddSingleton<Health.HealthReport>();
         return services;
     }
 

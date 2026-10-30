@@ -19,6 +19,7 @@ public class SettingsModel(SettingsStore settingsStore, AdminGate gate,
     public async Task OnGetAsync()
     {
         Settings = await settingsStore.GetAllAsync();
+        // Deliberately awaited: a cold clone-source probe can take up to 2 s here (cached 30 s).
         Warnings = await health.AllAsync();
     }
 

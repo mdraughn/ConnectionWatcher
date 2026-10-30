@@ -33,7 +33,6 @@ public class CloneService(IHttpClientFactory httpFactory,
 {
     public const string HttpClientName = "clone";
 
-
     public async Task<CloneOutcome> CloneAsync(string? sourceUrl, string? sourcePassword,
         bool includeSecrets, bool allowInsecure, bool includeLocalDevices, CancellationToken ct)
     {

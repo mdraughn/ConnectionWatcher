@@ -92,7 +92,15 @@ internal sealed class SettingsForm : Form
         _testResult.ForeColor = SystemColors.GrayText;
         _testResult.Text = "testing…";
         var url = ConfigResolver.NormalizeServerUrl(_urlBox.Text);
-        var result = await _probe.ProbeAsync(url, CancellationToken.None);
+        HealthResult result;
+        try { result = await _probe.ProbeAsync(url, CancellationToken.None); }
+        catch (Exception)
+        {
+            // Runs from an async-void click handler: nothing may reach WinForms' unhandled-exception dialog.
+            _testResult.ForeColor = Color.FromArgb(204, 51, 51);
+            _testResult.Text = "Could not connect: unexpected error.";
+            return;
+        }
         if (result.Failure is null)
         {
             _testResult.ForeColor = Color.FromArgb(46, 158, 82);

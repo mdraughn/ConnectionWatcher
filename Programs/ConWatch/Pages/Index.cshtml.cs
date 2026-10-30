@@ -11,7 +11,6 @@ public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport he
     ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
     ConPersistence.Config.ConfigStore configStore, StatusSource status) : PageModel
 {
-
     public string InitialDataJson { get; private set; } = "{}";
     public int WarningCount { get; private set; }
     /// <summary>The one page every current warning is fixed on, or null when they differ.</summary>

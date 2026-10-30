@@ -8,7 +8,6 @@ namespace ConWatch.Pages;
 
 public class HistoryModel(SettingsStore settingsStore, ConfigStore configStore) : PageModel
 {
-
     public string SubjectsJson { get; private set; } = "[]";
     public string TopologyJson { get; private set; } = "{}";
 

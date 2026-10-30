@@ -21,6 +21,7 @@ public record HealthWarning(string Code, string Message)
     };
 
     /// <summary>True when the fix lives on a Config tab (as opposed to the Settings page).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool IsConfigTab => Page.StartsWith("/Config/", StringComparison.Ordinal);
 
     /// <summary>The page's name as the UI labels it ("DNS", "Pools", "Targets", "Settings").</summary>

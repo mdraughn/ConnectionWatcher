@@ -113,6 +113,7 @@ public class RuntimeHealthTests : IDisposable
         var n = warnings.GetArrayLength();
 
         Assert.Contains($"⚠ {n} configuration warning", await _client.GetStringAsync("/"));
-        Assert.Contains("data-code=\"tcp-refused\"", await _client.GetStringAsync("/Config/Dns"));
+        foreach (var tab in new[] { "Dns", "Pools", "Profiles", "Targets" })
+            Assert.Contains("data-code=\"tcp-refused\"", await _client.GetStringAsync($"/Config/{tab}"));
     }
 }

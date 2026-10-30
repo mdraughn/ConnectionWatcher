@@ -51,6 +51,16 @@ public sealed class ConfigResolverTests
     }
 
     [Fact]
+    public void A_blank_server_url_falls_through_like_an_absent_one()
+    {
+        var machine = new ConWatchConfig(ServerUrl: "http://nas:2");
+        Assert.Equal(("http://nas:2", ConfigSource.Machine),
+            Pair(ConfigResolver.ServerUrl(Paths, new ConWatchConfig(ServerUrl: "   "), machine)));
+        Assert.Equal(("http://localhost:3", ConfigSource.Machine),
+            Pair(ConfigResolver.ServerUrl(Paths, null, new ConWatchConfig(ListenUrl: "http://0.0.0.0:3", ServerUrl: " / "))));
+    }
+
+    [Fact]
     public void Notifications_default_true()
     {
         Assert.True(ConfigResolver.Notifications(null));

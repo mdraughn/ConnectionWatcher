@@ -210,5 +210,7 @@ public class ConfigApiTests : IDisposable
         var health = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/v1/config/health");
         Assert.Contains(health.GetProperty("warnings").EnumerateArray(),
             w => w.GetProperty("code").GetString() == "anchor-pool-missing");
+        // IsConfigTab is computed for the pages; it is not part of the wire shape.
+        Assert.All(health.GetProperty("warnings").EnumerateArray(), w => Assert.False(w.TryGetProperty("isConfigTab", out _)));
     }
 }

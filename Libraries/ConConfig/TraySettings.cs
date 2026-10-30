@@ -29,7 +29,7 @@ public sealed class TraySettings
 
     public string? OverrideUrl => _user.ServerUrl;
     public bool NotificationsEnabled => ConfigResolver.Notifications(_user);
-    public bool HasOverride => OverrideUrl is { Length: > 0 };
+    public bool HasOverride => !string.IsNullOrWhiteSpace(OverrideUrl);
 
     /// <summary>The machine config's server URL (or its listen URL rewritten), if an install wrote one.</summary>
     public string? InstalledDefaultUrl =>

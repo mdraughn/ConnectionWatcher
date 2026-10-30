@@ -34,6 +34,7 @@ internal sealed class TrayContext : ApplicationContext
     private long _lastDoubleClick = long.MinValue / 2;
     // Races ::1 and 127.0.0.1: the default service listens on IPv4 only, and trying
     // ::1 first cost ~2 s per new connection (and made a dead server read as a timeout).
+    private readonly ConConfig.HttpHealthProbe _healthProbe = new();
     private readonly HttpClient _http = new(ConConfig.LocalServerHttp.CreateHandler()) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly TraySettings _settings = new();
     private readonly Dictionary<(TrayState, bool), Icon> _icons = new();
@@ -239,7 +240,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowSettings()
     {
-        using var dialog = new SettingsForm(_settings, new ConConfig.HttpHealthProbe(), _scoutPasswords, _scoutSession.ForgetConsent);
+        using var dialog = new SettingsForm(_settings, _healthProbe, _scoutPasswords, _scoutSession.ForgetConsent);
         if (dialog.ShowDialog() == DialogResult.OK)
             _ = RefreshAsync(); // apply immediately
     }
@@ -343,6 +344,7 @@ internal sealed class TrayContext : ApplicationContext
         _timer.Dispose();
         _clickTimer.Dispose();
         _http.Dispose();
+        _healthProbe.Dispose();
         _scoutHttp.Dispose();
         base.ExitThreadCore();
     }

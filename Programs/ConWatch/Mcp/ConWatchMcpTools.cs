@@ -28,7 +28,6 @@ public class ConWatchMcpTools(WatcherHostService host,
     DiscoveryStore discoveries, AdminGate gate, IHttpContextAccessor http,
     StatusSource status)
 {
-
     [McpServerTool(Name = "get_current_status", ReadOnly = true)]
     [Description("Live status right now: the overall internet verdict (Healthy, " +
         "SiteIncident, InternetWeather, LinkDegraded, DnsDown, LinkDown) with its evidence and " +

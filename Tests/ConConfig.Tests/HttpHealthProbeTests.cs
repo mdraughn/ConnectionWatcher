@@ -110,6 +110,8 @@ public sealed class HttpHealthProbeTests
     [Theory]
     [InlineData("localhost:8080")]
     [InlineData("http://")]
+    [InlineData("ftp://x")]
+    [InlineData("")]
     public async Task A_url_that_is_not_absolute_reports_invalid_url(string url)
     {
         var result = await new HttpHealthProbe().ProbeAsync(url, CancellationToken.None);

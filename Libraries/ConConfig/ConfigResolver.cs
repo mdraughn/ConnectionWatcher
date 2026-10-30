@@ -20,10 +20,10 @@ public static class ConfigResolver
 
     public static Resolved<string> ServerUrl(ConfigPaths paths, ConWatchConfig? user, ConWatchConfig? machine)
     {
-        if (user?.ServerUrl is { Length: > 0 } u)
-            return new(NormalizeServerUrl(u), ConfigSource.User, paths.UserFile);
-        if (machine?.ServerUrl is { Length: > 0 } m)
-            return new(NormalizeServerUrl(m), ConfigSource.Machine, paths.MachineFile);
+        if (user?.ServerUrl is { } u && NormalizeServerUrl(u) is { Length: > 0 } nu)
+            return new(nu, ConfigSource.User, paths.UserFile);
+        if (machine?.ServerUrl is { } m && NormalizeServerUrl(m) is { Length: > 0 } nm)
+            return new(nm, ConfigSource.Machine, paths.MachineFile);
         if (machine?.ListenUrl is { Length: > 0 } l)
             return new(ListenToServerUrl(l), ConfigSource.Machine, paths.MachineFile);
         return new(FallbackServerUrl, ConfigSource.Default);

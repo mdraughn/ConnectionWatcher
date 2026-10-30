@@ -25,4 +25,15 @@ public sealed class LegacyTrayFileTests : IDisposable
         File.WriteAllText(bad, "nope");
         Assert.Null(LegacyTrayFile.TryRead(bad));
     }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("\"text\"")]
+    [InlineData("42")]
+    public void A_root_that_is_not_an_object_is_null(string json)
+    {
+        var path = Path.Combine(_root, "notobject.json");
+        File.WriteAllText(path, json);
+        Assert.Null(LegacyTrayFile.TryRead(path));
+    }
 }
