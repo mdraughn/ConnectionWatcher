@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence.Settings;
 using Microsoft.EntityFrameworkCore;
 
@@ -153,15 +154,9 @@ public class ConfigHealth(IDbContextFactory<ConWatchDbContext> dbFactory, Settin
         {
             if (!targets.TryGetValue(member.TargetId, out var target))
                 continue;
-            var chain = new List<Guid>();
-            var parentId = target.ParentId;
-            for (var depth = 0; depth < 20 && parentId is { } pid; depth++)
-            {
-                if (!targets.TryGetValue(pid, out var ancestor))
-                    break;
-                chain.Add(pid);
-                parentId = ancestor.ParentId;
-            }
+            var chain = TreeWalk.ChainToRoot(target,
+                    t => t.ParentId is { } pid && targets.TryGetValue(pid, out var parent) ? parent : null)
+                .Skip(1).Select(t => t.Id).ToList();
             chains.Add(chain);
         }
         if (chains.Count == 0)

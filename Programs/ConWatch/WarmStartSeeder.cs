@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConEngine;
 using ConEngine.Configuration;
 using ConEngine.Topology;
@@ -94,7 +95,7 @@ public sealed class WarmStartSeeder(IDbContextFactory<ConWatchDbContext> dbFacto
 
     /// <summary>An Unreachable presumption is only coherent behind a Down
     /// ancestor; without one, that target cold-starts instead. Config links
-    /// parents by name, so the walk goes name-by-name (depth-capped).</summary>
+    /// parents by name, so the walk goes name-by-name (TreeWalk: cycle-safe, depth-capped).</summary>
     private static void DropUnjustifiedUnreachable(EngineSeed seed,
         IReadOnlyDictionary<Guid, TargetConfig> targetsById)
     {
@@ -107,20 +108,12 @@ public sealed class WarmStartSeeder(IDbContextFactory<ConWatchDbContext> dbFacto
         {
             if (targetSeed.State != HostState.Unreachable)
                 continue;
-            var justified = false;
-            var parentName = targetsById.TryGetValue(id, out var t) ? t.Parent : null;
-            for (var depth = 0; depth < 20 && parentName is { Length: > 0 }; depth++)
-            {
-                if (!byName.TryGetValue(parentName, out var ancestor))
-                    break;
-                if (seed.Targets.TryGetValue(ancestor.Id, out var ancestorSeed) &&
-                    ancestorSeed.State == HostState.Down)
-                {
-                    justified = true;
-                    break;
-                }
-                parentName = ancestor.Config.Parent;
-            }
+            var justified = targetsById.TryGetValue(id, out var self) &&
+                TreeWalk.ChainToRoot(self, c =>
+                        c.Parent is { Length: > 0 } p && byName.TryGetValue(p, out var a) ? a.Config : null)
+                    .Skip(1)
+                    .Any(c => seed.Targets.TryGetValue(byName[c.Name].Id, out var ancestorSeed) &&
+                              ancestorSeed.State == HostState.Down);
             if (!justified)
                 seed.Targets.Remove(id);
         }
