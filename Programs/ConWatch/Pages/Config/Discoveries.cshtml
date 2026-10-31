@@ -106,14 +106,12 @@ else
 
 @section Scripts {
     <script src="~/lib/site-config.js" asp-append-version="true"></script>
+    <script src="~/lib/site-time.js" asp-append-version="true"></script>
     <script>
         const errors = document.getElementById("errors");
         const statusLine = document.getElementById("search-status");
 
-        document.querySelectorAll("[data-utc]").forEach((el) => {
-            const when = new Date(el.dataset.utc);
-            if (!isNaN(when)) el.textContent = when.toLocaleString();
-        });
+        localizeTimes("[data-utc]", "data-utc");
 
         async function search(button, url, label, nothingFound = "Nothing found.") {
             clearErrors(errors);

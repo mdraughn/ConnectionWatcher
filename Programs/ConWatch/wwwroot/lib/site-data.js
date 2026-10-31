@@ -21,16 +21,6 @@ async function loadStats() {
         stat(s.lastRetentionRunUtc ? new Date(s.lastRetentionRunUtc).toLocaleString() : "—", "last retention run");
 }
 
-document.getElementById("retention-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const errors = document.getElementById("retention-errors");
-    clearErrors(errors);
-    const values = {};
-    for (const field of e.target.querySelectorAll("[name]"))
-        values[field.name] = field.value === "" ? null : field.value;
-    const result = await apiFetch("PUT", "/api/v1/settings", values);
-    if (result.ok) location.reload();
-    else showErrors(errors, result);
-});
+wireSettingsForm("retention-form", "retention-errors");
 
 loadStats();

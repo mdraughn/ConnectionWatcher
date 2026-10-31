@@ -120,23 +120,23 @@ value so incidents can be correlated with a provider's own (usually UTC) logs.</
     .cw-lt:empty + .cw-utc { font-size: inherit; opacity: 1; } /* no JS: UTC is the only time */
     .cw-lt:not(:empty) + .cw-utc { display: block; font-size: 0.75em; opacity: 0.6; }
 </style>
-<script>
-    // Localize every dual-time cell; the UTC line stays for correlation.
-    (function () {
-        var zone;
-        try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return; }
-        var times = document.querySelectorAll("time.cw-lt");
-        if (!zone || times.length === 0) return;
-        times.forEach(function (el) {
-            var d = new Date(el.getAttribute("datetime"));
-            if (isNaN(d)) return;
-            el.textContent = d.toLocaleString(undefined, {
+@section Scripts {
+    <script src="~/lib/site-time.js" asp-append-version="true"></script>
+    <script>
+        // Localize every dual-time cell; the UTC line stays for correlation.
+        (function () {
+            var zone;
+            try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return; }
+            if (!zone) return;
+            var localized = localizeTimes("time.cw-lt", "datetime", {
                 year: "numeric", month: "2-digit", day: "2-digit",
                 hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
             });
-        });
-        document.getElementById("tz-name").textContent = zone;
-        document.getElementById("tz-detail").textContent =
-            " (this browser's time zone); the small line under each time is UTC";
-    })();
-</script>
+            if (localized > 0) {
+                document.getElementById("tz-name").textContent = zone;
+                document.getElementById("tz-detail").textContent =
+                    " (this browser's time zone); the small line under each time is UTC";
+            }
+        })();
+    </script>
+}

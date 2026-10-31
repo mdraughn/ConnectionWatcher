@@ -125,14 +125,14 @@ loadAnchors();
 // --- Clone from a running node -------------------------------------------
 // Transport policy lives on THIS (requesting) node: plain HTTP to a
 // non-loopback host with secrets involved needs the explicit override below.
-function cloneNeedsWarning(url, password) {
+function cloneNeedsWarning(url) {
     let parsed;
     try { parsed = new URL(url); } catch { return false; } // server rejects it
     if (parsed.protocol === "https:") return false;
     const host = parsed.hostname;
     if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1")
         return false;
-    return true; // secrets are requested by default; password may also be set
+    return true; // secrets are requested by default
 }
 
 async function runClone(includeSecrets, allowInsecure) {
@@ -163,8 +163,7 @@ async function runClone(includeSecrets, allowInsecure) {
 
 document.getElementById("clone-btn").addEventListener("click", () => {
     const url = document.getElementById("clone-url").value.trim();
-    const password = document.getElementById("clone-password").value;
-    if (cloneNeedsWarning(url, password)) {
+    if (cloneNeedsWarning(url)) {
         document.getElementById("clone-insecure").hidden = false;
         return;
     }
