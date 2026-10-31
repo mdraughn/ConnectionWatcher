@@ -48,9 +48,9 @@ export function TargetRow({ target, rails = [], spine = "none", show }: {
         {target.address}{target.probe ? ` · ${target.probe.replace(":", "/")}` : ""}
       </span>
       <span className="stats">
-        {/* a critical row always shows its state (spec §4.7: prominently) */}
+        {/* a critical row shows its chip even where the LAN section hides chips (spec §4.7) */}
         {(stateChip || target.critical) &&
-          <StateChip state={target.state} always={target.critical} style={{ marginRight: 10 }} />}
+          <StateChip state={target.state} style={{ marginRight: 10 }} />}
         {successRate && <span className="pct">{(target.successRate * 100).toFixed(0)}%</span>}
         {successRate && rtt && <span className="sep">·</span>}
         {rtt && <span className="rtt">{target.avgRtt.toFixed(0)} ms</span>}

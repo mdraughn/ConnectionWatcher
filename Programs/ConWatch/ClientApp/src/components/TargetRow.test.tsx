@@ -45,10 +45,10 @@ describe("TargetRow", () => {
     expect(html).toContain('class="statechip down"');
     expect(html).not.toMatch(/statechip[^>]*color/);
   });
-  it("shows no chip for a Responding row unless it is critical", () => {
+  it("shows no chip for a Responding row, critical or not", () => {
     expect(renderToStaticMarkup(<TargetRow target={t({ state: "Responding" })} />))
       .not.toContain("statechip");
     expect(renderToStaticMarkup(<TargetRow target={t({ state: "Responding", critical: true })} />))
-      .toContain('class="statechip responding"');
+      .not.toContain("statechip");
   });
 });
