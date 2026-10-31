@@ -2,7 +2,7 @@
 // open APIs. Page-agnostic: the dashboard uses it today; any page can.
 import { useEffect, useState } from "react";
 import type { Mark } from "./encoding";
-import { fetchGlitches, fetchTransitions } from "./api";
+import { fetchGlitchesOrNull, fetchTransitionsNewestFirst } from "./api";
 import { isoCompare, localDayStart } from "./localTime";
 import {
   buildLedger, punchcardCells, stripBins, verdictWindows, windowMark,
@@ -37,10 +37,15 @@ async function fetchAndDerive(topology: StoryTopology, from: Date): Promise<Deri
   const anchors = new Set(topology.anchorNames ?? []);
   const threshold = topology.weatherThreshold ?? 2;
 
-  const [transitions, glitches] = await Promise.all([
-    fetchTransitions({ from, limit: 1000, scope: "internet" }),
-    fetchGlitches({ from, limit: 1000, scope: "internet" }),
+  const [newestFirst, glitches] = await Promise.all([
+    fetchTransitionsNewestFirst({ from, limit: 1000, scope: "internet" }),
+    fetchGlitchesOrNull({ from, limit: 1000, scope: "internet" }),
   ]);
+  // No data is not "all quiet": fail so callers keep their last good view.
+  if (!newestFirst || !glitches) throw new Error("The service did not answer.");
+  // Chronological: the opening rows first, then the in-range rows oldest first.
+  const transitions = [...newestFirst.filter((i) => i.opening).reverse(),
+    ...newestFirst.filter((i) => !i.opening).reverse()];
 
   const windows = verdictWindows(
     transitions.filter((t) => t.subjectKind === "Verdict"), now.toISOString());

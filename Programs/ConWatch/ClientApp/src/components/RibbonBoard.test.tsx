@@ -30,7 +30,7 @@ describe("RibbonBoard", () => {
       root.render(<RibbonBoard subjects={subjects} rangeStart={new Date(T0)}
         rangeEnd={new Date(T0 + 100 * 60_000)} />);
     });
-    await vi.waitFor(() => expect(host.querySelectorAll("rect[fill]").length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(host.querySelectorAll("rect > title").length).toBe(3));
     const rects = [...host.querySelectorAll("rect[fill]")].filter((r) => r.querySelector("title"));
     expect(rects.map((r) => r.getAttribute("fill")))
       .toEqual(["var(--healthy)", "url(#cw-hatch)", RAMP.warm.out]);

@@ -45,11 +45,9 @@ function Row({ subject, segments, rangeStart, rangeEnd }: {
   return (
     <RibbonSvg segments={segments} rangeStart={rangeStart} rangeEnd={rangeEnd} height={16}
       hatchId="cw-hatch" fillFor={(s) => ribbonFill(subject.role, s.state)}
-      titleFor={(s) => `${subject.name} — ${s.state === "Unreachable" ? UNREACHABLE_LABEL : s.state}
-` +
+      titleFor={(s) => `${subject.name} — ${s.state === "Unreachable" ? UNREACHABLE_LABEL : s.state}\n` +
         `${new Date(s.from).toLocaleString()} → ${new Date(s.to).toLocaleString()}` +
-        `${s.evidence ? `
-${s.evidence}` : ""}`} />
+        `${s.evidence ? `\n${s.evidence}` : ""}`} />
   );
 }
 

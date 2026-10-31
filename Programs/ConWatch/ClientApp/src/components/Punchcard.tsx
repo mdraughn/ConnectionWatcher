@@ -1,7 +1,7 @@
 // The 30-day punchcard: hours as rows, days as columns, ink only for trouble.
 // Placement-agnostic: feed it cells from lib/story and put it on any page.
 import type { PunchcardCell } from "../lib/incidents";
-import { localDayStart, localHourKey } from "../lib/localTime";
+import { localDayStart, localHourAt, localHourKey } from "../lib/localTime";
 import { describeMark, EncodingLegend, MarkCell } from "./marks";
 
 const CELL_W = 22;
@@ -32,7 +32,8 @@ export function Punchcard({ cells, days, now }: {
             </div>
             {Array.from({ length: days }, (_, day) => {
               const d = dayDate(day);
-              const cell = cells.get(localHourKey(new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour)));
+              const at = localHourAt(d, hour);
+              const cell = at ? cells.get(localHourKey(at)) : undefined;
               const base: React.CSSProperties = { height: CELL_H, borderRadius: 2 };
               if (!cell) {
                 return <div key={`c${day}-${hour}`}

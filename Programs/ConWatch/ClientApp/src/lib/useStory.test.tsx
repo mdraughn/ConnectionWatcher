@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { useStory, type Story } from "./story";
 
 const api = vi.hoisted(() => ({
-  fetchTransitions: vi.fn(async () => []),
-  fetchGlitches: vi.fn(async () => []),
+  fetchTransitionsNewestFirst: vi.fn(async () => []),
+  fetchGlitchesOrNull: vi.fn(async () => []),
 }));
 vi.mock("./api", () => api);
 
@@ -29,10 +29,10 @@ describe("useStory", () => {
     root = createRoot(el);
     await act(async () => { root!.render(<Probe refreshKey={1} />); });
     await vi.waitFor(() => expect(seen).not.toBeNull());
-    expect(api.fetchTransitions).toHaveBeenCalledTimes(1);
+    expect(api.fetchTransitionsNewestFirst).toHaveBeenCalledTimes(1);
 
     await act(async () => { root!.render(<Probe refreshKey={2} />); });
-    await vi.waitFor(() => expect(api.fetchTransitions).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(api.fetchTransitionsNewestFirst).toHaveBeenCalledTimes(2));
   });
 
   it("does not let a superseded fetch overwrite the newer story", async () => {
@@ -40,7 +40,7 @@ describe("useStory", () => {
     try {
       let releaseOld!: () => void;
       vi.setSystemTime(1_000_000);
-      api.fetchTransitions.mockImplementationOnce(
+      api.fetchTransitionsNewestFirst.mockImplementationOnce(
         () => new Promise((r) => { releaseOld = () => r([]); }));
       const el = document.createElement("div");
       root = createRoot(el);
@@ -62,11 +62,11 @@ describe("useStory", () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (e: PromiseRejectionEvent) => { unhandled.push(e.reason); };
     window.addEventListener("unhandledrejection", onUnhandled);
-    api.fetchTransitions.mockRejectedValueOnce(new Error("boom"));
+    api.fetchTransitionsNewestFirst.mockRejectedValueOnce(new Error("boom"));
     const el = document.createElement("div");
     root = createRoot(el);
     await act(async () => { root!.render(<Probe refreshKey={1} />); });
-    await vi.waitFor(() => expect(api.fetchGlitches).toHaveBeenCalled());
+    await vi.waitFor(() => expect(api.fetchGlitchesOrNull).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     window.removeEventListener("unhandledrejection", onUnhandled);
     expect(seen).toBeNull();

@@ -30,7 +30,7 @@ describe("TargetRow", () => {
     const html = renderToStaticMarkup(<TargetRow target={t({ assumed: true })} />);
     expect(html).toContain("(assumed)");
   });
-  it("marks a critical target and always shows its state chip", () => {
+  it("marks a critical target and shows the chip for a coloured state", () => {
     const html = renderToStaticMarkup(
       <TargetRow target={t({ critical: true })} show={{ stateChip: false, rtt: false }} />);
     expect(html).toContain("cw-critical");

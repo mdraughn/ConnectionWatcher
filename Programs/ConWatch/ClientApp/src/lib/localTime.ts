@@ -14,6 +14,12 @@ export function localHourKey(at: Date): string {
   return `${at.getFullYear()}-${at.getMonth() + 1}-${at.getDate()}-${at.getHours()}`;
 }
 
+/** `hour` o'clock on local day `day`; null when that wall-clock hour does not exist (a spring-forward gap). */
+export function localHourAt(day: Date, hour: number): Date | null {
+  const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour);
+  return at.getHours() === hour ? at : null;
+}
+
 /** An ISO-8601 instant as epoch milliseconds. */
 export function isoMs(iso: string): number {
   return Date.parse(iso);

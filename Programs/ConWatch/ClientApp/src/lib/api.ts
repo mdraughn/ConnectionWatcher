@@ -14,9 +14,9 @@ export interface TransitionQuery {
   opening?: boolean;
 }
 
-async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+async function getJson<T>(url: string): Promise<T | null> {
   try {
-    const response = await fetch(url, init);
+    const response = await fetch(url);
     if (!response.ok) return null;
     return (await response.json()) as T;
   } catch {
@@ -52,12 +52,18 @@ export async function fetchTransitions(q: TransitionQuery): Promise<TransitionEv
   return [...items.filter((i) => i.opening).reverse(), ...items.filter((i) => !i.opening).reverse()];
 }
 
-export async function fetchGlitches(
-  q: { from: Date; to?: Date; limit: number; scope?: ScopeFilter }): Promise<GlitchItem[]> {
+/** The glitches as the API sends them. null when there is no data. */
+export async function fetchGlitchesOrNull(
+  q: { from: Date; to?: Date; limit: number; scope?: ScopeFilter }): Promise<GlitchItem[] | null> {
   const body = await getJson<{ items?: GlitchItem[] }>(withQuery("/api/v1/glitches", [
     ["from", q.from.toISOString()], ["to", q.to?.toISOString()], ["limit", q.limit], ["scope", q.scope],
   ]));
-  return Array.isArray(body?.items) ? body.items : [];
+  return Array.isArray(body?.items) ? body.items : null;
+}
+
+export async function fetchGlitches(
+  q: { from: Date; to?: Date; limit: number; scope?: ScopeFilter }): Promise<GlitchItem[]> {
+  return (await fetchGlitchesOrNull(q)) ?? [];
 }
 
 export async function fetchRollups(subjectId: string, from: Date, to: Date): Promise<RollupPoint[]> {

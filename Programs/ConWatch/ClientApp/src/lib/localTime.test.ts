@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { DAY_MS, HOUR_MS, isoCompare, isoMs, localDayStart, localHourKey } from "./localTime";
+import { describe, expect, it, vi } from "vitest";
+import { DAY_MS, HOUR_MS, isoCompare, isoMs, localDayStart, localHourAt, localHourKey } from "./localTime";
 
 describe("localTime", () => {
   it("has the unit constants", () => {
@@ -20,5 +20,25 @@ describe("localTime", () => {
     expect(isoCompare("2026-10-29T10:00:00.9+00:00", "2026-10-29T10:00:00.900Z")).toBe(0);
     expect(isoCompare("2026-10-29T10:00:00.1234567+00:00", "2026-10-29T10:00:00.123Z")).toBe(0);
     expect(isoCompare("2026-10-29T10:00:00+00:00", "2026-10-29T10:00:00.500Z")).toBeLessThan(0);
+  });
+  it("localHourAt builds each hour of an ordinary day", () => {
+    const day = new Date(2026, 5, 15);
+    for (const h of [0, 2, 3, 12, 23]) expect(localHourAt(day, h)!.getHours()).toBe(h);
+  });
+  it("localHourAt is null when the wall-clock hour does not exist (zone-independent stub)", () => {
+    const RealDate = Date;
+    // A clock whose constructor skips hour 2, as a spring-forward day does.
+    class Gap extends RealDate {
+      constructor(y: number, m: number, d: number, h = 0) {
+        super(y, m, d, h === 2 ? 3 : h);
+      }
+    }
+    vi.stubGlobal("Date", Gap);
+    try {
+      expect(localHourAt(new RealDate(2026, 2, 8), 2)).toBeNull();
+      expect(localHourAt(new RealDate(2026, 2, 8), 3)!.getHours()).toBe(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -425,7 +425,6 @@ public class IspReportBuilderTests : IAsyncLifetime, IDisposable
         Assert.Equal(TimeSpan.FromMinutes(15), report.DnsDownTime);
         Assert.DoesNotContain(report.Episodes, e => e.Kind == "DnsDown");
         Assert.Equal(TimeSpan.FromMinutes(5), report.LinkDownTime);
-        Assert.DoesNotContain(report.Episodes, e => e.Kind == "DnsDown");
     }
 
     [Fact]

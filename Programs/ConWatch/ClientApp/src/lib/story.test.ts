@@ -3,7 +3,7 @@
 // site's trouble (the window stays "degraded" weather); two different anchors
 // meet the weather threshold and the window reads as the internet going out.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchStory } from "./story";
+import { fetchStory, fetchStrip } from "./story";
 import type { TransitionEvent } from "./types";
 
 const MINUTE = 60_000;
@@ -76,5 +76,25 @@ describe("fetchStory", () => {
     expect(story.ledger).toHaveLength(1);
     expect(story.ledger[0].lead).toMatch(/^The internet went out for .* not your line\.$/);
     expect(story.ledger[0].mark).toMatchObject({ shape: "bar", hue: "warm", depth: "out" });
+  });
+
+  describe("when the service does not answer", () => {
+    const hour = 3_600_000;
+    it("a rejected fetch fails the story and the strip instead of reading quiet", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("network"); }));
+      await expect(fetchStory(topology, 7)).rejects.toThrow();
+      await expect(fetchStrip(topology, hour, 24)).rejects.toThrow();
+    });
+    it("a 500 fails the story and the strip", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as Response));
+      await expect(fetchStory(topology, 7)).rejects.toThrow();
+      await expect(fetchStrip(topology, hour, 24)).rejects.toThrow();
+    });
+    it("a failed glitch fetch alone fails the story", async () => {
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => url.startsWith("/api/v1/glitches")
+        ? ({ ok: false, status: 500, json: async () => ({}) }) as Response
+        : ({ ok: true, json: async () => ({ items: [] }) }) as Response));
+      await expect(fetchStory(topology, 7)).rejects.toThrow();
+    });
   });
 });
