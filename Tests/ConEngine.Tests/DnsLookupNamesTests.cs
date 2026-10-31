@@ -28,8 +28,8 @@ public class DnsLookupNamesTests
         Assert.Empty(DnsLookupName.FromJson(null));
         Assert.Empty(DnsLookupName.FromJson(""));
         Assert.Empty(DnsLookupName.FromJson("not json"));
-        Assert.False(DnsLookupName.TryFromJson("not json", out _));
-        Assert.True(DnsLookupName.TryFromJson("[]", out var none));
+        Assert.False(DnsLookupName.TryFromJson("not json", out _, out _));
+        Assert.True(DnsLookupName.TryFromJson("[]", out var none, out _));
         Assert.Empty(none);
 
         var admin = DnsLookupName.FromJson("[{\"name\":\"example.org\"}]");
@@ -66,34 +66,34 @@ public class DnsLookupNamesTests
         var longLabel = new string('a', 64) + ".test";
         var longName = string.Join('.', Enumerable.Repeat(new string('a', 62), 4)) + ".bc";
         Assert.Equal(254, longName.Length);
-        Assert.False(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(longLabel, [])]), out _));
-        Assert.False(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(longName, [])]), out _));
+        Assert.False(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(longLabel, [])]), out _, out _));
+        Assert.False(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(longName, [])]), out _, out _));
         var exactly253 = string.Join('.', new string('a', 63), new string('a', 62), new string('a', 62), new string('b', 63));
         Assert.Equal(253, exactly253.Length);
-        Assert.True(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(exactly253, [])]), out _));
+        Assert.True(DnsLookupName.TryFromJson(DnsLookupName.ToJson([new DnsLookupName(exactly253, [])]), out _, out _));
     }
 
     [Fact]
     public void A_hyphenated_multi_label_name_is_accepted()
     {
-        Assert.True(DnsLookupName.TryFromJson("[{\"name\":\"sub-domain.example-1.test\"}]", out var names));
+        Assert.True(DnsLookupName.TryFromJson("[{\"name\":\"sub-domain.example-1.test\"}]", out var names, out _));
         Assert.Equal("sub-domain.example-1.test", Assert.Single(names).Name);
     }
 
     [Fact]
     public void Null_elements_are_dropped_and_blank_text_is_valid_and_empty()
     {
-        Assert.True(DnsLookupName.TryFromJson("[null,{\"name\":\"a.test\"}]", out var names));
+        Assert.True(DnsLookupName.TryFromJson("[null,{\"name\":\"a.test\"}]", out var names, out _));
         Assert.Equal("a.test", Assert.Single(names).Name);
         Assert.Single(DnsLookupName.FromJson("[null,{\"name\":\"a.test\"}]"));
-        Assert.True(DnsLookupName.TryFromJson("[null]", out var none));
+        Assert.True(DnsLookupName.TryFromJson("[null]", out var none, out _));
         Assert.Empty(none);
 
-        Assert.True(DnsLookupName.TryFromJson("", out var blank));
+        Assert.True(DnsLookupName.TryFromJson("", out var blank, out _));
         Assert.Empty(blank);
-        Assert.True(DnsLookupName.TryFromJson("   ", out var spaces));
+        Assert.True(DnsLookupName.TryFromJson("   ", out var spaces, out _));
         Assert.Empty(spaces);
-        Assert.True(DnsLookupName.TryFromJson(null, out var nul));
+        Assert.True(DnsLookupName.TryFromJson(null, out var nul, out _));
         Assert.Empty(nul);
     }
 

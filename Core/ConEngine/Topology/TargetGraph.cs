@@ -75,12 +75,12 @@ public class TargetGraph
         return new TargetGraph(targets, poolDefs, profiles);
     }
 
-    public Target GetByName(string name) => _targets[_targetIdsByName[name]];
-    public PoolDefinition GetPoolByName(string name) => _pools[_poolIdsByName[name]];
+    internal Target GetByName(string name) => _targets[_targetIdsByName[name]];
+    internal PoolDefinition GetPoolByName(string name) => _pools[_poolIdsByName[name]];
     public PingProfile ProfileFor(Target target) => _profiles[target.ProfileName];
 
     /// <summary>Direct children of a target.</summary>
-    public IReadOnlyList<Target> GetChildren(Guid parentId) => _childrenByParent[parentId].ToList();
+    internal IReadOnlyList<Target> GetChildren(Guid parentId) => _childrenByParent[parentId].ToList();
 
     /// <summary>The target's ancestors, root first, itself excluded; only those <paramref name="include"/>
     /// accepts (all when null), walking through the rest. Cycle-safe; capped at TreeWalk.MaxDepth.</summary>

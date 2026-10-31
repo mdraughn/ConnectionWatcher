@@ -66,7 +66,6 @@ file sealed class NoFolderLockdown : IFolderLockdown
 }
 file sealed class UnsupportedTrayAutostart : ITrayAutostart
 {
-    public bool IsInstalled => false;
     public void Install(string trayExePath) => throw new PlatformNotSupportedException("tray autostart is not implemented on this platform");
     public void Uninstall() => throw new PlatformNotSupportedException("tray autostart is not implemented on this platform");
 }

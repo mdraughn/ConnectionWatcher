@@ -26,9 +26,6 @@ public class TracerouteRunner(ITtlProbe probe, IAsnLookup asnLookup, ILogger<Tra
     private const int ProbeTimeoutMs = 2000;
     private const int LookupParallelism = 8;
 
-    public Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct) =>
-        RunAsync(host, lookupOperators: false, ct);
-
     public Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, bool lookupOperators, CancellationToken ct) =>
         RunAsync(host, lookupOperators, stopWhen: null, ct);
 

@@ -1,4 +1,6 @@
-namespace ConEngine.Scheduling;
+using ConEngine.Scheduling;
+
+namespace ConEngine.Tests.Fakes;
 
 /// <summary>Simple constant-interval cadence (used by tests and as a plain default).</summary>
 public class FixedIntervalCadence(TimeSpan interval, TimeProvider timeProvider) : IPingCadence

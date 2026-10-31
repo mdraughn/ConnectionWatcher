@@ -48,7 +48,7 @@ public class AdminGate(string filePath, ILogger<AdminGate> log)
         return false;
     }
 
-    public bool Verify(string password)
+    internal bool Verify(string password)
     {
         try
         {

@@ -46,7 +46,7 @@ public sealed class LossWindows
     }
 
     /// <summary>This target's count in the newest open window, or null.</summary>
-    public WindowCount? Open(Guid targetId)
+    internal WindowCount? Open(Guid targetId)
     {
         lock (_lock)
         {

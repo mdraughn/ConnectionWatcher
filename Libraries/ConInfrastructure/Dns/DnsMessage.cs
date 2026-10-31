@@ -44,7 +44,7 @@ public static class DnsMessage
     }
 
     /// <summary>The first question's name, for a fake server to echo. False when malformed.</summary>
-    public static bool TryReadQuestionName(ReadOnlySpan<byte> datagram, out string name)
+    internal static bool TryReadQuestionName(ReadOnlySpan<byte> datagram, out string name)
     {
         name = "";
         if (datagram.Length < HeaderLength)

@@ -27,9 +27,9 @@ public sealed class TraySettings
         _userFileCorrupt = userError is not null && !unreadable;
     }
 
-    public string? OverrideUrl => _user.ServerUrl;
+    private string? OverrideUrl => _user.ServerUrl;
     public bool NotificationsEnabled => ConfigResolver.Notifications(_user);
-    public bool HasOverride => !string.IsNullOrWhiteSpace(OverrideUrl);
+    private bool HasOverride => !string.IsNullOrWhiteSpace(OverrideUrl);
 
     /// <summary>The machine config's server URL (or its listen URL rewritten), if an install wrote one.</summary>
     public string? InstalledDefaultUrl =>

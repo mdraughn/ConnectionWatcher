@@ -16,7 +16,7 @@ public record SetupApplyRequest(SetupTarget Router, SetupTarget? OuterIp, List<s
 /// </summary>
 public class SetupService(ConfigService config, SettingsStore settings, ILogger<SetupService> log)
 {
-    public const string PoolName = "Internet";
+    private const string PoolName = "Internet";
 
     /// <summary>The wizard's anchor catalog: anycast resolvers built for public
     /// traffic, one per operator. The operator tag is what the verdict counts

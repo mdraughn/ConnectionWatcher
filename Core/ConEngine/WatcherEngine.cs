@@ -138,7 +138,7 @@ public class WatcherEngine
     /// carry only an id, so the notifiers use this to leave Local targets out.
     /// False for pools, the verdict subject, unknown ids and before the engine starts.
     /// </summary>
-    public bool IsLocalSubject(Guid subjectId) =>
+    internal bool IsLocalSubject(Guid subjectId) =>
         _graph is { } graph && graph.Targets.TryGetValue(subjectId, out var target)
         && target.Scope == TargetScope.Local;
 

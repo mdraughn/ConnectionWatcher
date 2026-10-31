@@ -31,7 +31,7 @@ public sealed class OuiTable : IVendorLookup
         }
     }
 
-    public int Count => _vendors.Count;
+    internal int Count => _vendors.Count;
 
     public string? Describe(string mac)
     {

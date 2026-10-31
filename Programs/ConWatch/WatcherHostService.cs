@@ -75,7 +75,7 @@ public class WatcherHostService(
     /// <summary>The running engine, or null before start / mid-rebuild.</summary>
     public WatcherEngine? Engine { get; private set; }
 
-    public bool EngineRunning => Engine is not null;
+    internal bool EngineRunning => Engine is not null;
 
     /// <summary>The master enable switch as last read by StartEngineAsync; the
     /// health, status and metrics endpoints read this instead of the database.</summary>

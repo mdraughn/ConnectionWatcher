@@ -28,7 +28,7 @@ public class TracerouteRunnerTests
     {
         var runner = new TracerouteRunner(new FakeProbe("10.0.0.1", "198.51.100.11", "8.8.8.8"),
             NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
-        var hops = await runner.RunAsync("8.8.8.8", CancellationToken.None);
+        var hops = await runner.RunAsync("8.8.8.8", lookupOperators: false, CancellationToken.None);
 
         Assert.Equal(3, hops.Count);
         Assert.Equal([1, 2, 3], hops.Select(h => h.Ttl));
@@ -43,7 +43,7 @@ public class TracerouteRunnerTests
     {
         var runner = new TracerouteRunner(new FakeProbe("10.0.0.1", null, "8.8.8.8"),
             NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
-        var hops = await runner.RunAsync("8.8.8.8", CancellationToken.None);
+        var hops = await runner.RunAsync("8.8.8.8", lookupOperators: false, CancellationToken.None);
 
         Assert.Equal(3, hops.Count);
         Assert.Null(hops[1].Address);
@@ -56,7 +56,7 @@ public class TracerouteRunnerTests
     {
         var runner = new TracerouteRunner(new FakeProbe("8.8.8.8"), NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            runner.RunAsync("definitely-not-a-real-host.invalid", CancellationToken.None));
+            runner.RunAsync("definitely-not-a-real-host.invalid", lookupOperators: false, CancellationToken.None));
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class TracerouteRunnerTests
         // Every TTL returns the same non-destination hop; runner must stop at 30.
         var hops = Enumerable.Repeat<string?>("10.0.0.1", 40).ToArray();
         var runner = new TracerouteRunner(new FakeProbe(hops), NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
-        var result = await runner.RunAsync("8.8.8.8", CancellationToken.None);
+        var result = await runner.RunAsync("8.8.8.8", lookupOperators: false, CancellationToken.None);
         Assert.Equal(30, result.Count);
         Assert.False(result.Last().ReachedDestination);
     }
@@ -178,7 +178,7 @@ public class TracerouteRunnerTests
         });
         var runner = new TracerouteRunner(probe, NullAsnLookup.Instance, NullLogger<TracerouteRunner>.Instance);
 
-        var hops = await runner.RunAsync("198.51.100.9", CancellationToken.None);
+        var hops = await runner.RunAsync("198.51.100.9", lookupOperators: false, CancellationToken.None);
 
         var hop = Assert.Single(hops);
         Assert.Equal(3, probe.CallsPerTtl[1]);

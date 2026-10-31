@@ -3,6 +3,7 @@ using System.Net;
 using ConCore;
 using ConEngine.Network;
 using ConEngine.Scheduling;
+using ConEngine.Tests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConEngine.Tests;

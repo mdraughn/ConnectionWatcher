@@ -13,7 +13,7 @@ namespace ConPersistence.Snapshots;
 public static class SnapshotImporter
 {
     /// <summary>Creates (or migrates) the SQLite file at dbPath and imports into it.</summary>
-    public static async Task ImportToFileAsync(string dbPath, Snapshot snapshot, CancellationToken ct = default)
+    internal static async Task ImportToFileAsync(string dbPath, Snapshot snapshot, CancellationToken ct = default)
     {
         var options = new DbContextOptionsBuilder<ConWatchDbContext>()
             .UseSqlite($"Data Source={dbPath}").Options;

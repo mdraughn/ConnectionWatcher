@@ -43,14 +43,9 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
     }
 
     /// <summary>False when the text is not a JSON array of objects, or when a name is not a
-    /// valid host name (see <see cref="IsValidName"/>). Null or
-    /// blank text is valid and means no names. Null elements, blank names and
-    /// expected entries that are not IP literals are dropped, not errors.</summary>
-    public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names) =>
-        TryFromJson(json, out names, out _);
-
-    /// <summary>As above, and also false when a name is not a valid host name (see
-    /// <see cref="IsValidName"/>); <paramref name="badName"/> then holds the first offender.</summary>
+    /// valid host name (see <see cref="IsValidName"/>); <paramref name="badName"/> then holds the
+    /// first offender. Null or blank text is valid and means no names. Null elements, blank
+    /// names and expected entries that are not IP literals are dropped, not errors.</summary>
     public static bool TryFromJson(string? json, out IReadOnlyList<DnsLookupName> names, out string? badName)
     {
         names = [];
@@ -82,7 +77,7 @@ public sealed record DnsLookupName(string Name, IReadOnlyList<string> Expected)
     /// <summary>ASCII letters, digits, hyphen and dot only; labels 1-63 characters, none
     /// empty and none starting or ending with a hyphen; at most 253 characters in all.
     /// A single trailing dot (the root) is tolerated.</summary>
-    public static bool IsValidName(string name)
+    private static bool IsValidName(string name)
     {
         if (name.EndsWith('.'))
             name = name[..^1];

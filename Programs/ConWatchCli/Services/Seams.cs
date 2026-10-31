@@ -64,7 +64,6 @@ public interface IFolderLockdown
 
 public interface ITrayAutostart
 {
-    bool IsInstalled { get; }
     void Install(string trayExePath);
     void Uninstall();
 }

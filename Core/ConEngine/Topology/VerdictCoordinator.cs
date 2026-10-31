@@ -82,7 +82,7 @@ public class VerdictCoordinator : IDisposable
     public VerdictSnapshot Current { get; private set; } = new(VerdictState.Unknown, null, null);
 
     public VerdictState CurrentVerdict => Current.State;
-    public string? CurrentDetail => Current.Detail;
+    internal string? CurrentDetail => Current.Detail;
     /// <summary>The ISP/operator being blamed by a Link* verdict (from the
     /// blamed trunk target's Operator tag), else null.</summary>
     public string? CurrentOperator => Current.Operator;

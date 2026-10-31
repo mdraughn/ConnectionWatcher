@@ -10,11 +10,6 @@ public sealed class WindowsTrayAutostart : ITrayAutostart
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "ConnectionWatcherTray";
 
-    public bool IsInstalled
-    {
-        get { using var key = Registry.CurrentUser.OpenSubKey(RunKey); return key?.GetValue(ValueName) is not null; }
-    }
-
     public void Install(string trayExePath)
     {
         using var key = Registry.CurrentUser.CreateSubKey(RunKey);

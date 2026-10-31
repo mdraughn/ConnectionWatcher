@@ -23,7 +23,7 @@ public sealed class SystemResolverService(ISystemResolverSource source, ConfigSe
     ConfigStore store, SettingsStore settings, TimeProvider time, ILogger<SystemResolverService> log)
     : BackgroundService
 {
-    public static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
 
     private readonly Channel<bool> _wake = Channel.CreateBounded<bool>(
         new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });

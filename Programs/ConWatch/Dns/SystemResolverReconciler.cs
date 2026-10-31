@@ -19,7 +19,7 @@ public static class SystemResolverReconciler
 
     public sealed record Plan(IReadOnlyList<TargetDto> Targets, IReadOnlySet<string> Retired, bool Changed, IReadOnlyList<string> Log);
 
-    public static string NameFor(SystemResolver resolver) =>
+    private static string NameFor(SystemResolver resolver) =>
         resolver.IsDockerEmbedded ? "Docker's resolver" : $"Your resolver {resolver.Address}";
 
     public static Plan Reconcile(IReadOnlyList<TargetDto> targets, IReadOnlyList<SystemResolver> found,

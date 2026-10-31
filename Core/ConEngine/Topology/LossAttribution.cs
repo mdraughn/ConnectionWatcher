@@ -14,7 +14,7 @@ public static class LossAttribution
     public sealed record HopLoss(double Own, double Forwarding)
     {
         /// <summary>Loss of the hop's own probe only.</summary>
-        public double ProbeOnly => Own - Forwarding;
+        internal double ProbeOnly => Own - Forwarding;
     }
 
     /// <summary>Null when the hop has too few samples, or nothing beyond it is a

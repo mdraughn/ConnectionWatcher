@@ -59,10 +59,10 @@ public static class CsvExport
         g.SampleCount.ToString(CultureInfo.InvariantCulture),
         g.Detail ?? "");
 
-    public static IEnumerable<string> TransitionLines(IEnumerable<TransitionRow> rows) =>
+    internal static IEnumerable<string> TransitionLines(IEnumerable<TransitionRow> rows) =>
         rows.Select(TransitionLine).Prepend(TransitionHeader);
 
-    public static IEnumerable<string> RollupLines(IEnumerable<RollupRow> rows) =>
+    internal static IEnumerable<string> RollupLines(IEnumerable<RollupRow> rows) =>
         rows.Select(RollupLine).Prepend(RollupHeader);
 
     private static string Iso(DateTime utc) =>
