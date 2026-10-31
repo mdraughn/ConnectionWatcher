@@ -35,21 +35,41 @@ describe("useStory", () => {
     await vi.waitFor(() => expect(api.fetchTransitions).toHaveBeenCalledTimes(2));
   });
 
-  it("ignores a result that arrives after unmount", async () => {
-    let release!: () => void;
-    api.fetchTransitions.mockImplementationOnce(
-      () => new Promise((r) => { release = () => r([]); }));
+  it("does not let a superseded fetch overwrite the newer story", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      let releaseOld!: () => void;
+      vi.setSystemTime(1_000_000);
+      api.fetchTransitions.mockImplementationOnce(
+        () => new Promise((r) => { releaseOld = () => r([]); }));
+      const el = document.createElement("div");
+      root = createRoot(el);
+      await act(async () => { root!.render(<Probe refreshKey={1} />); });
+
+      vi.setSystemTime(2_000_000);
+      await act(async () => { root!.render(<Probe refreshKey={2} />); });
+      await vi.waitFor(() => expect(seen?.now.getTime()).toBe(2_000_000));
+
+      await act(async () => { releaseOld(); });
+      await Promise.resolve();
+      expect(seen?.now.getTime()).toBe(2_000_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves the story null, and nothing unhandled, when the fetch fails", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: PromiseRejectionEvent) => { unhandled.push(e.reason); };
+    window.addEventListener("unhandledrejection", onUnhandled);
+    api.fetchTransitions.mockRejectedValueOnce(new Error("boom"));
     const el = document.createElement("div");
     root = createRoot(el);
-    act(() => root!.render(<Probe refreshKey={1} />));
-    act(() => root!.unmount());
-    root = null;
-    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    release();
+    await act(async () => { root!.render(<Probe refreshKey={1} />); });
     await vi.waitFor(() => expect(api.fetchGlitches).toHaveBeenCalled());
-    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    window.removeEventListener("unhandledrejection", onUnhandled);
     expect(seen).toBeNull();
-    expect(errors).not.toHaveBeenCalled();
-    errors.mockRestore();
+    expect(unhandled).toEqual([]);
   });
 });

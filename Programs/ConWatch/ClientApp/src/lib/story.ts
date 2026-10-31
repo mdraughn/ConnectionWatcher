@@ -81,7 +81,7 @@ export function useStory(topology: StoryTopology, days: number, refreshKey?: num
   const [story, setStory] = useState<Story | null>(null);
   useEffect(() => {
     let live = true;
-    void fetchStory(topology, days).then((s) => { if (live) setStory(s); });
+    fetchStory(topology, days).then((s) => { if (live) setStory(s); }).catch(() => undefined);
     return () => { live = false; };
   }, [days, refreshKey]);
   return story;
