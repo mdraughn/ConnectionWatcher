@@ -120,7 +120,7 @@ public class WatcherEngine
 
     /// <summary>
     /// True when <paramref name="subjectId"/> is a Local-scope target. Transitions
-    /// carry only an id, so the notifiers use this to leave Local targets out.
+    /// carry only an id, so tests use this to check a subject's scope (the notifiers use IsSideSubject).
     /// False for pools, the verdict subject, unknown ids and before the engine starts.
     /// </summary>
     internal bool IsLocalSubject(Guid subjectId) =>

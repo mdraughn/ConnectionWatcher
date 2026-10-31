@@ -15,14 +15,21 @@ public class ServiceRegistrationTests : IDisposable
     [Fact]
     public void Discovery_and_dns_services_resolve()
     {
-        using var scope = _factory.Services.CreateScope();
-        var sp = scope.ServiceProvider;
+        var sp = _factory.Services;
         Assert.NotNull(sp.GetRequiredService<IGatewayDiscovery>());
         Assert.NotNull(sp.GetRequiredService<IWanAddressProbe>());
         Assert.NotNull(sp.GetRequiredService<DiscoveryStore>());
         Assert.NotNull(sp.GetRequiredService<LanScanner>());
         Assert.NotNull(sp.GetRequiredService<IDiscoveryScanner>());
         Assert.NotNull(sp.GetRequiredService<DiscoverySearchService>());
-        Assert.NotNull(sp.GetRequiredService<IDohDetector>());
+    }
+
+    [Fact]
+    public void Engine_registration_includes_the_doh_detector()
+    {
+        // ConWatchFactory swaps the detector for a null one, so pin the product registration itself.
+        var services = new ServiceCollection();
+        services.AddConWatchEngine();
+        Assert.Contains(services, d => d.ServiceType == typeof(IDohDetector));
     }
 }

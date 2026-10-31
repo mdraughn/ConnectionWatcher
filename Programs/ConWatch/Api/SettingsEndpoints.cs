@@ -1,7 +1,7 @@
-using ConWatch.Health;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;
+using ConWatch.Health;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConWatch.Api;
@@ -13,7 +13,7 @@ public static class SettingsEndpoints
     {
         // Health warnings feed banners on open pages; settings themselves are
         // admin-only (the GET includes the MQTT broker password).
-        open.MapGet("/config/health", async (ConWatch.Health.HealthReport report) =>
+        open.MapGet("/config/health", async (HealthReport report) =>
             new
             {
                 warnings = (await report.AllAsync())

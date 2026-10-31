@@ -2,7 +2,6 @@ using System.Net;
 using ConCore;
 using ConCore.Dns;
 using ConEngine.Tests.Fakes;
-using ConInfrastructure;
 using ConInfrastructure.NameResolution;
 using ConInfrastructure.Probes;
 

@@ -1,7 +1,7 @@
 // Reusable mark-drawing primitives for the shared incident encoding.
 // Every display (punchcard, ledger, ribbons, legends) draws marks through
 // these, so the encoding has exactly one visual implementation.
-import { HATCH, markCss, RAMP, RESOLVER_OUT, type Mark } from "../lib/encoding";
+import { HATCH, markCss, RESOLVER_OUT, type Mark } from "../lib/encoding";
 
 /** One mark, drawn at swatch size: a rounded bar, or a centered dot. */
 export function MarkSwatch({ mark, barWidth = 22, size = 9 }: {

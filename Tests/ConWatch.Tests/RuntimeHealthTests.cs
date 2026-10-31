@@ -1,7 +1,7 @@
-using ConWatch.Health;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConWatch.Health;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConWatch.Tests;
@@ -112,6 +112,10 @@ public class RuntimeHealthTests : IDisposable
         var warnings = doc.RootElement.GetProperty("warnings");
         Assert.Contains(warnings.EnumerateArray(), w => w.GetProperty("code").GetString() == "tcp-refused");
         var n = warnings.GetArrayLength();
+
+        // Wire shape pin: exactly these keys, in this order (no leaked IsConfigTab).
+        Assert.Equal(new[] { "code", "message", "page", "pageName" },
+            warnings.EnumerateArray().First().EnumerateObject().Select(p => p.Name));
 
         Assert.Contains($"⚠ {n} configuration warning", await _client.GetStringAsync("/"));
         foreach (var tab in new[] { "Dns", "Pools", "Profiles", "Targets" })

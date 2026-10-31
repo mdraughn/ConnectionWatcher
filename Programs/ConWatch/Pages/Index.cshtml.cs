@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ConWatch.Pages;
 
-public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport health,
+public class IndexModel(WatcherHostService host, HealthReport health,
     ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
     ConPersistence.Config.ConfigStore configStore, StatusSource status) : PageModel
 {

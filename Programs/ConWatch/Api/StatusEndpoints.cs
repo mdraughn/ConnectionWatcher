@@ -1,4 +1,5 @@
 using ConWatch.Health;
+
 namespace ConWatch.Api;
 
 /// <summary>Live status and health from the running engine.</summary>

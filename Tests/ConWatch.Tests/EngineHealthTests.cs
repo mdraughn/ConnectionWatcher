@@ -1,8 +1,8 @@
-using ConWatch.Health;
 using System.Net;
 using ConCore;
 using ConEngine.Configuration;
 using ConEngine.Tests.Fakes;
+using ConWatch.Health;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 

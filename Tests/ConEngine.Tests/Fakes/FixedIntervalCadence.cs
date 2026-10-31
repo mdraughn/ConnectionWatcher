@@ -2,7 +2,7 @@ using ConEngine.Scheduling;
 
 namespace ConEngine.Tests.Fakes;
 
-/// <summary>Simple constant-interval cadence (used by tests and as a plain default).</summary>
+/// <summary>Simple constant-interval cadence (a test fake).</summary>
 public class FixedIntervalCadence(TimeSpan interval, TimeProvider timeProvider) : IPingCadence
 {
     public Task WaitForNextPingAsync(CancellationToken ct) =>

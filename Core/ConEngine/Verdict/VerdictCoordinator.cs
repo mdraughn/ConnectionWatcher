@@ -7,6 +7,7 @@ using ConEngine.Tracking;
 using Microsoft.Extensions.Logging;
 
 namespace ConEngine.Topology;
+
 /// <summary>
 /// Classifies overall internet health (spec 2026-10-09 §4.1–4.3). The ANCHORS
 /// decide whether the internet is reachable — one answering anchor that is

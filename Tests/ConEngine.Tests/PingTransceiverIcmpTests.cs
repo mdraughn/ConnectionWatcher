@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
-using ConInfrastructure;
 using ConInfrastructure.Probes;
 
 namespace ConEngine.Tests;

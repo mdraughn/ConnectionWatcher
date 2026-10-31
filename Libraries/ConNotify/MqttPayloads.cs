@@ -3,10 +3,8 @@ using System.Text.Json;
 using ConCore.Targets;
 using ConEngine;
 using ConEngine.Dns;
-using ConEngine.Events;
 using ConEngine.Topology;
 using ConEngine.Tracking;
-using ConPersistence.Queries;
 
 namespace ConNotify;
 

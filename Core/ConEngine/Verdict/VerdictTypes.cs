@@ -1,6 +1,5 @@
 namespace ConEngine.Topology;
 
-
 /// <summary>Overall internet health classification.</summary>
 public enum VerdictState
 {

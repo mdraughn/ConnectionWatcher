@@ -1,4 +1,3 @@
-using ConEngine;
 using ConEngine.Topology;
 using ConPersistence.Entities;
 using ConPersistence.Recording;

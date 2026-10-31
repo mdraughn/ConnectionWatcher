@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
 using ConCore;
-using ConCore.Targets;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging;
 
@@ -45,7 +44,7 @@ internal sealed class HostnameFollower
     /// <summary>
     /// Owns a hostname target for the engine's lifetime: resolves (with backoff
     /// until the first answer), activates, then keeps re-resolving every
-    /// the refresh interval and immediately when the target goes
+    /// refresh interval and immediately when the target goes
     /// Down. The current address is kept while it is still in the answer set;
     /// when it drops out the target is re-pointed at the first address. A
     /// failed refresh keeps the current address.
