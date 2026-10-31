@@ -9,7 +9,7 @@ namespace ConPersistence.Recording;
 /// <summary>Persists engine transitions (see <see cref="ChannelRecorder{TEvent}"/> for the mechanics).</summary>
 public class TransitionRecorder(IDbContextFactory<ConWatchDbContext> dbFactory,
     ILogger<TransitionRecorder> log, TimeSpan? retryDelay = null, int capacity = 1000)
-    : ChannelRecorder<TargetTransition>(log, capacity, retryDelay: retryDelay)
+    : EngineChannelRecorder<TargetTransition>(log, capacity, retryDelay: retryDelay)
 {
     protected override string EventNoun => "transitions";
 

@@ -25,6 +25,14 @@ public class RecorderCollectorTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
+    [Fact]
+    public void Only_engine_fed_recorders_are_engine_observers()
+    {
+        Assert.True(typeof(IEngineObserver).IsAssignableFrom(typeof(TransitionRecorder)));
+        Assert.True(typeof(IEngineObserver).IsAssignableFrom(typeof(GlitchRecorder)));
+        Assert.False(typeof(IEngineObserver).IsAssignableFrom(typeof(ConPersistence.Warnings.ModelWarningRecorder)));
+    }
+
     private static TargetTransition Transition(TransitionSubjectKind kind, string name,
         HostState to, string? verdict = null) => new()
     {
@@ -336,7 +344,6 @@ public class RecorderCollectorTests : IDisposable
         private int _writes;
         public int Writes => _writes;
         protected override string EventNoun => "test events";
-        protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
         protected override async Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct)
         {
             if (Interlocked.Increment(ref _writes) == 1)
@@ -536,7 +543,6 @@ public class RecorderCollectorTests : IDisposable
     private sealed class LoggedRecorder(ILogger log, int capacity) : ChannelRecorder<TargetTransition>(log, capacity)
     {
         protected override string EventNoun => "test events";
-        protected override IObservable<TargetTransition> SourceOf(WatcherEngine engine) => engine.TransitionSource;
         protected override Task WriteBatchAsync(IReadOnlyList<TargetTransition> batch, CancellationToken ct) => Task.CompletedTask;
     }
 

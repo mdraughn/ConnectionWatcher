@@ -27,9 +27,6 @@ public class ModelWarningRecorder(IDbContextFactory<ConWatchDbContext> dbFactory
 {
     protected override string EventNoun => "model warnings";
 
-    protected override IObservable<ModelWarningOp> SourceOf(WatcherEngine engine) =>
-        throw new NotSupportedException("Fed by ModelWarningLedger, not by the engine.");
-
     protected override async Task WriteBatchAsync(IReadOnlyList<ModelWarningOp> batch, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);

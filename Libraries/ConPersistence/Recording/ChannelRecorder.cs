@@ -1,7 +1,6 @@
 using System.Reactive.Disposables;
 using System.Threading.Channels;
 using ConCore.Logging;
-using ConEngine;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +13,7 @@ namespace ConPersistence.Recording;
 /// stays pending and is retried on a timer, not on the next event.
 /// </summary>
 /// <typeparam name="TEvent">The engine event being persisted.</typeparam>
-public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserver
+public abstract class ChannelRecorder<TEvent> : BackgroundService
 {
     private readonly ILogger _log;
     private readonly int _batchSize;
@@ -54,9 +53,6 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
     /// <summary>Writes one whole batch. Throwing keeps the batch pending for the next flush.</summary>
     protected abstract Task WriteBatchAsync(IReadOnlyList<TEvent> batch, CancellationToken ct);
 
-    /// <summary>Which of the engine's streams this recorder persists.</summary>
-    protected abstract IObservable<TEvent> SourceOf(WatcherEngine engine);
-
     /// <summary>Subscribes to an event stream, replacing any prior subscription.</summary>
     public void Attach(IObservable<TEvent> source)
     {
@@ -64,8 +60,6 @@ public abstract class ChannelRecorder<TEvent> : BackgroundService, IEngineObserv
             e => _channel.Writer.TryWrite(e),
             ex => _log.LogError(ex, "{Noun} stream error", EventNoun));
     }
-
-    public void Attach(WatcherEngine engine) => Attach(SourceOf(engine));
 
     public void Detach()
     {
