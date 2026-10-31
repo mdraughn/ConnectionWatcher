@@ -3,6 +3,7 @@
 // plain-English ledger. Pure functions, unit-tested.
 import type { Mark } from "./encoding";
 import { markRank } from "./encoding";
+import { formatProse } from "./format";
 import type { GlitchItem } from "./glitchData";
 import type { TransitionEvent } from "./types";
 
@@ -146,17 +147,6 @@ export interface LedgerItem {
   mark: Mark;
 }
 
-export function humanDuration(ms: number): string {
-  const seconds = Math.max(1, Math.round(ms / 1000));
-  if (seconds < 120) return `${seconds} s`;
-  const minutes = Math.floor(seconds / 60);
-  // Short events keep their seconds — a 9½-minute outage is not "10 min".
-  if (minutes < 10)
-    return seconds % 60 === 0 ? `${minutes} min` : `${minutes} min ${seconds % 60} s`;
-  if (minutes < 120) return `${Math.round(seconds / 60)} min`;
-  return `${(minutes / 60).toFixed(1)} h`;
-}
-
 /** The dashboard's plain-English incident list, newest first. */
 export function buildLedger(windows: VerdictWindow[], windowMarks: Map<VerdictWindow, Mark>,
   glitches: GlitchItem[], trunkNames: Set<string>): LedgerItem[] {
@@ -164,7 +154,7 @@ export function buildLedger(windows: VerdictWindow[], windowMarks: Map<VerdictWi
 
   for (const w of windows) {
     const mark = windowMarks.get(w) ?? windowMark(w, 0, 2);
-    const dur = humanDuration(Date.parse(w.to) - Date.parse(w.from));
+    const dur = formatProse(Date.parse(w.to) - Date.parse(w.from));
     const lead =
       w.kind === "LinkDown" ? `Your link went down for ${dur}.`
       : w.kind === "LinkDegraded" ? `Your link was degraded for ${dur}.`
@@ -175,7 +165,7 @@ export function buildLedger(windows: VerdictWindow[], windowMarks: Map<VerdictWi
 
   for (const g of glitches) {
     const mark = glitchMark(g, trunkNames);
-    const dur = humanDuration(Date.parse(g.endUtc) - Date.parse(g.startUtc));
+    const dur = formatProse(Date.parse(g.endUtc) - Date.parse(g.startUtc));
     const lead =
       g.class === "Internet" ? `Internet-wide blip (${dur}).`
       : trunkNames.has(g.targetName)

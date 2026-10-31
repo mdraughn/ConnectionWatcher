@@ -1,22 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill, verdictFill } from "./encoding";
 import {
-  buildLedger, glitchMark, humanDuration, punchcardCells, stripBins, verdictWindows, windowMark,
+  buildLedger, glitchMark, punchcardCells, stripBins, verdictWindows, windowMark,
 } from "./incidents";
 import type { GlitchItem } from "./glitchData";
 import type { TransitionEvent } from "./types";
-
-describe("humanDuration", () => {
-  it("keeps seconds on short events and never blurs them into round minutes", () => {
-    expect(humanDuration(26_000)).toBe("26 s");
-    expect(humanDuration(115_000)).toBe("115 s");
-    expect(humanDuration(4 * 60_000 + 10_000)).toBe("4 min 10 s");
-    expect(humanDuration(9 * 60_000 + 40_000)).toBe("9 min 40 s");
-    expect(humanDuration(4 * 60_000)).toBe("4 min");
-    expect(humanDuration(45 * 60_000 + 40_000)).toBe("46 min");
-    expect(humanDuration(150 * 60_000)).toBe("2.5 h");
-  });
-});
 
 function vt(timestamp: string, from: string, to: string, verdict: string, detail = ""): TransitionEvent {
   return {

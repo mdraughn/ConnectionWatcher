@@ -1,9 +1,6 @@
-function duration(ms: number): string {
-  if (ms <= 0) return "—";
-  if (ms < 90_000) return `${Math.round(ms / 1000)} s`;
-  if (ms < 90 * 60_000) return `${Math.round(ms / 60_000)} min`;
-  return `${(ms / 3_600_000).toFixed(1)} h`;
-}
+import { formatProse } from "../lib/format";
+
+const duration = (ms: number) => (ms <= 0 ? "—" : formatProse(ms));
 
 export function StatsRow({ uptime, outageCount, longestOutageMs, unreachableMs, avgRtt }: {
   uptime: number | null;

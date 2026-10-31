@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerClock, formatDuration } from "./verdictClock";
+import { answerClock } from "./verdictClock";
 import type { TransitionEvent } from "./types";
 
 const NOW = "2026-09-16T12:00:00Z";
@@ -60,16 +60,5 @@ describe("answerClock", () => {
     const lagged = answerClock("LinkDown", [v("Healthy", ago(72))], NOW, true);
     expect(lagged.sinceIso).toBe(NOW);
     expect(lagged.upStreakMs).toBeNull();
-  });
-});
-
-describe("formatDuration", () => {
-  it("shows seconds up to an hour and minutes forever — the clock must visibly tick", () => {
-    expect(formatDuration(42_000)).toBe("42s");
-    expect(formatDuration(5 * 60_000 + 12_000)).toBe("5m 12s");
-    expect(formatDuration(3 * 3_600_000 + 24 * 60_000)).toBe("3h 24m");
-    expect(formatDuration(6 * 86_400_000 + 4 * 3_600_000 + 12 * 60_000)).toBe("6d 4h 12m");
-    // Hundreds of days in, the minutes still change every minute.
-    expect(formatDuration(247 * 86_400_000 + 13 * 3_600_000 + 22 * 60_000)).toBe("247d 13h 22m");
   });
 });

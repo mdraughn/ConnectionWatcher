@@ -5,7 +5,8 @@
 // ledger. The technical detail survives as a hover tooltip.
 import type { Mark } from "../lib/encoding";
 import type { DnsStatus, VerdictStatus } from "../lib/types";
-import { formatDuration, type AnswerClock } from "../lib/verdictClock";
+import { type AnswerClock } from "../lib/verdictClock";
+import { formatClock } from "../lib/format";
 import { MarkSwatch } from "./marks";
 
 interface Slab {
@@ -115,12 +116,12 @@ function Clock({ clock }: { clock: AnswerClock }) {
     <div className="vb-clock"
       title={`since ${new Date(clock.sinceIso).toLocaleString()}`}>
       <div className="lbl">{CLOCK_LABEL[clock.cls]}</div>
-      <div className="num">{formatDuration(sinceMs)}{clock.atLeast ? "+" : ""}</div>
+      <div className="num">{formatClock(sinceMs)}{clock.atLeast ? "+" : ""}</div>
       {clock.upStreakMs !== null && (
         <div className="prev">
           {clock.cls === "struggling"
-            ? `up ${formatDuration(clock.upStreakMs)}`
-            : `up ${formatDuration(clock.upStreakMs)} before this`}
+            ? `up ${formatClock(clock.upStreakMs)}`
+            : `up ${formatClock(clock.upStreakMs)} before this`}
         </div>
       )}
     </div>
