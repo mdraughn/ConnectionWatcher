@@ -48,10 +48,6 @@ public class PoolCoordinator : IDisposable
         }, OutboxMode.Skip);
     }
 
-    /// <summary>Stagger offset for member k of n at the given normal interval.</summary>
-    public static TimeSpan PhaseOffset(int memberIndex, int memberCount, TimeSpan interval) =>
-        interval * memberIndex / memberCount;
-
     /// <summary>Warm restart: adopt a presumed aggregate state silently — no
     /// transition. Start() checks it once against the members' (presumed)
     /// states; member transitions recalculate (and correct) it as usual.</summary>

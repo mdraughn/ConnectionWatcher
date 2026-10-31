@@ -1,4 +1,5 @@
 using ConCore.Targets;
+using ConEngine.Scheduling;
 
 namespace ConEngine.Tests;
 
@@ -10,9 +11,18 @@ public class PoolStaggerTests
         var shared = Guid.NewGuid();
         var alpha = new PoolDefinition { Id = Guid.NewGuid(), Name = "Alpha", MemberTargetIds = [Guid.NewGuid(), shared, Guid.NewGuid()] };
         var beta = new PoolDefinition { Id = Guid.NewGuid(), Name = "beta", MemberTargetIds = [shared, Guid.NewGuid()] };
-        var ab = WatcherEngine.PoolPositions([alpha, beta]);
-        var ba = WatcherEngine.PoolPositions([beta, alpha]);
+        var ab = PoolStagger.Positions([alpha, beta]);
+        var ba = PoolStagger.Positions([beta, alpha]);
         Assert.Equal((1, 3), ab[shared]);
         Assert.Equal(ab[shared], ba[shared]);
+    }
+
+    [Fact]
+    public void Phase_offset_spreads_members_across_the_interval()
+    {
+        var interval = TimeSpan.FromSeconds(15);
+        Assert.Equal(TimeSpan.Zero, PoolStagger.PhaseOffset(0, 3, interval));
+        Assert.Equal(TimeSpan.FromSeconds(5), PoolStagger.PhaseOffset(1, 3, interval));
+        Assert.Equal(TimeSpan.FromSeconds(10), PoolStagger.PhaseOffset(2, 3, interval));
     }
 }

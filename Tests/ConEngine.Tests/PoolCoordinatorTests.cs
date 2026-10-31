@@ -68,15 +68,6 @@ public class PoolCoordinatorTests
     }
 
     [Fact]
-    public void Phase_offsets_stagger_members()
-    {
-        var interval = TimeSpan.FromSeconds(15);
-        Assert.Equal(TimeSpan.Zero, PoolCoordinator.PhaseOffset(0, 3, interval));
-        Assert.Equal(TimeSpan.FromSeconds(5), PoolCoordinator.PhaseOffset(1, 3, interval));
-        Assert.Equal(TimeSpan.FromSeconds(10), PoolCoordinator.PhaseOffset(2, 3, interval));
-    }
-
-    [Fact]
     public void Pool_responds_when_any_member_responds()
     {
         Feed(_google, 5, true);

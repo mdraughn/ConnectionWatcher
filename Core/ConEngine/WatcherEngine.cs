@@ -52,18 +52,6 @@ public class WatcherEngine
     /// record changes without hammering the resolver.</summary>
     private static readonly TimeSpan DefaultDnsRefreshInterval = TimeSpan.FromMinutes(5);
 
-    /// <summary>Pool membership index for phase staggering: targetId → (memberIndex, memberCount).
-    /// A target in several pools takes the first pool by name, so its slot does not depend on
-    /// the order pools were loaded in.</summary>
-    public static Dictionary<Guid, (int Index, int Count)> PoolPositions(IEnumerable<PoolDefinition> pools)
-    {
-        var positions = new Dictionary<Guid, (int, int)>();
-        foreach (var pool in pools.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
-            for (int i = 0; i < pool.MemberTargetIds.Count; i++)
-                positions.TryAdd(pool.MemberTargetIds[i], (i, pool.MemberTargetIds.Count));
-        return positions;
-    }
-
     public WatcherEngine(TimeProvider timeProvider, IPingTransceiverFactory pingFactory,
         IDomainNameResolverFactory resolverFactory, ILoggerFactory loggerFactory,
         IOptions<WatcherOptions> options, IOptions<VerdictOptions>? verdictOptions = null,
@@ -188,14 +176,14 @@ public class WatcherEngine
         if (profiles.Count > 0)
             StallAfter = profiles.Max(p => p.NormalInterval) * 3 + profiles.Max(p => p.PingTimeout);
 
-        var poolPosition = PoolPositions(_graph.Pools.Values);
+        var poolPosition = PoolStagger.Positions(_graph.Pools.Values);
 
         // Monitors and disciplines for enabled targets.
         foreach (var target in _graph.Targets.Values.Where(t => t.Enabled))
         {
             var profile = _graph.ProfileFor(target);
             var phaseOffset = poolPosition.TryGetValue(target.Id, out var pos)
-                ? PoolCoordinator.PhaseOffset(pos.Index, pos.Count, profile.NormalInterval)
+                ? PoolStagger.PhaseOffset(pos.Index, pos.Count, profile.NormalInterval)
                 : TimeSpan.Zero;
             var discipline = new PingDiscipline(profile, _timeProvider, phaseOffset);
             var monitor = new TargetMonitor(target, profile, discipline, _timeProvider, _loggerFactory);
