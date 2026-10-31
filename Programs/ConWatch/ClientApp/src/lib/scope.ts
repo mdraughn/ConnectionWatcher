@@ -14,7 +14,6 @@ export const isTreeTarget = (t: { scope?: string }): boolean => t.scope === "Ver
 export interface LanSummary {
   total: number;
   up: number;
-  down: number;
 }
 
 export function summarizeLan(targets: TargetStatus[]): LanSummary {
@@ -22,6 +21,5 @@ export function summarizeLan(targets: TargetStatus[]): LanSummary {
   return {
     total: lan.length,
     up: lan.filter((t) => t.state === "Responding").length,
-    down: lan.filter((t) => t.state === "Down" || t.state === "Unreachable").length,
   };
 }

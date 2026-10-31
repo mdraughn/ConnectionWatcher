@@ -4,10 +4,6 @@
 import { useEffect } from "react";
 import type { ModelWarning } from "../lib/types";
 
-export function unacknowledgedCount(warnings: ModelWarning[]): number {
-  return warnings.filter((w) => !w.acknowledged).length;
-}
-
 export function NotesPanel({ warnings, onAcknowledge }: {
   warnings: ModelWarning[];
   onAcknowledge?: (key: string) => void;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { NotesPanel, unacknowledgedCount } from "./NotesPanel";
+import { NotesPanel } from "./NotesPanel";
 import type { ModelWarning } from "../lib/types";
 
 const w = (over: Partial<ModelWarning> = {}): ModelWarning => ({
@@ -27,8 +27,5 @@ describe("NotesPanel", () => {
   });
   it("offers no button without an acknowledge handler", () => {
     expect(renderToStaticMarkup(<NotesPanel warnings={[w()]} />)).not.toContain("<button");
-  });
-  it("counts only unacknowledged notes for the badge", () => {
-    expect(unacknowledgedCount([w(), w({ key: "b", acknowledged: true })])).toBe(1);
   });
 });

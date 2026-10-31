@@ -5,9 +5,7 @@ import type { TargetStatus } from "../lib/types";
 
 export interface RowParts {
   stateChip?: boolean;
-  successRate?: boolean;
   rtt?: boolean;
-  led?: boolean;
 }
 
 const SPINE_BG: Record<SpineSegment, string | undefined> = {
@@ -32,7 +30,7 @@ export function StateChip({ state, always = false, style }: {
 export function TargetRow({ target, rails = [], spine = "none", show }: {
   target: TargetStatus; rails?: RailCell[]; spine?: SpineSegment; show?: RowParts;
 }) {
-  const { stateChip = true, successRate = true, rtt = true, led = true } = show ?? {};
+  const { stateChip = true, rtt = true } = show ?? {};
   const assumedTitle = target.assumed
     ? "assumed from before the restart — confirming with fresh pings" : null;
   return (
@@ -51,13 +49,13 @@ export function TargetRow({ target, rails = [], spine = "none", show }: {
         {/* a critical row shows its chip even where the LAN section hides chips (spec §4.7) */}
         {(stateChip || target.critical) &&
           <StateChip state={target.state} style={{ marginRight: 10 }} />}
-        {successRate && <span className="pct">{(target.successRate * 100).toFixed(0)}%</span>}
-        {successRate && rtt && <span className="sep">·</span>}
+        <span className="pct">{(target.successRate * 100).toFixed(0)}%</span>
+        {rtt && <span className="sep">·</span>}
         {rtt && <span className="rtt">{target.avgRtt.toFixed(0)} ms</span>}
       </span>
       {/* Activity LED, drive-light style: keyed by the monotonic ping count,
           so a changed count remounts the node and replays the flash. */}
-      {led && target.pingCount !== undefined &&
+      {target.pingCount !== undefined &&
         <span className="cw-led" key={`led-${target.pingCount}`}
           title="ping activity" aria-hidden="true"></span>}
     </div>

@@ -24,10 +24,10 @@ describe("summarizeLan", () => {
       t({ id: "d", scope: "Local", state: "Starting" }),
       t({ id: "e", scope: "Verdict", state: "Down" }),
     ]);
-    expect(s).toEqual({ total: 4, up: 1, down: 2 });
+    expect(s).toEqual({ total: 4, up: 1 });
   });
   it("is all zeros with no Local targets", () => {
-    expect(summarizeLan([t({})])).toEqual({ total: 0, up: 0, down: 0 });
+    expect(summarizeLan([t({})])).toEqual({ total: 0, up: 0 });
   });
 });
 

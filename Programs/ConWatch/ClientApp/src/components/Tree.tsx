@@ -21,9 +21,8 @@ function Section({ label, rows }: { label: string; rows: TreeRow[] }) {
   );
 }
 
-function Branch({ parentId, targets, byParent }: {
+function Branch({ parentId, byParent }: {
   parentId: string | null;
-  targets: Map<string, TargetStatus>;
   byParent: Map<string | null, TargetStatus[]>;
 }) {
   const children = byParent.get(parentId) ?? [];
@@ -33,7 +32,7 @@ function Branch({ parentId, targets, byParent }: {
       {children.map((t) => (
         <li key={t.id}>
           <TargetRow target={t} />
-          <Branch parentId={t.id} targets={targets} byParent={byParent} />
+          <Branch parentId={t.id} byParent={byParent} />
         </li>
       ))}
     </ul>
@@ -62,7 +61,7 @@ export function Tree({ topology, targets, pools, trunkNames, anchorNames }: {
     // Plain fallback: the classic nested tree for configs without an anchor
     // pool (nothing to call "the path" yet).
     const byParent = groupByParent(targets, topology.parents);
-    body = <Branch parentId={null} targets={targetMap} byParent={byParent} />;
+    body = <Branch parentId={null} byParent={byParent} />;
   }
 
   return (

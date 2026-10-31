@@ -11,34 +11,19 @@ export interface ChartPoint {
 export interface ChartSeries {
   label: string;
   data: ChartPoint[];
-  secondaryAxisId?: string;
 }
 
-export function TimeChart({ series, height, lossAxis }: {
+export function TimeChart({ series, height }: {
   series: ChartSeries[];
   height?: number;
-  lossAxis?: boolean; // adds a right-hand 0-100% axis with id "loss" (area)
 }) {
   const primaryAxis = useMemo<AxisOptions<ChartPoint>>(
     () => ({ getValue: (d) => d.x, scaleType: "time" }),
     []
   );
   const secondaryAxes = useMemo<AxisOptions<ChartPoint>[]>(() => {
-    const axes: AxisOptions<ChartPoint>[] = [
-      { getValue: (d) => d.y, elementType: "line", min: 0 },
-    ];
-    if (lossAxis) {
-      axes.push({
-        id: "loss",
-        getValue: (d) => d.y,
-        elementType: "area",
-        min: 0,
-        max: 100,
-        position: "right",
-      });
-    }
-    return axes;
-  }, [lossAxis]);
+    return [{ getValue: (d) => d.y, elementType: "line", min: 0 }];
+  }, []);
 
   const nonEmpty = series.filter((s) => s.data.length > 0);
   if (nonEmpty.length === 0) {

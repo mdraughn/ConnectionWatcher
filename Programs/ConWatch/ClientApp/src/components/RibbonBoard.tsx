@@ -19,7 +19,7 @@ export interface BoardSubject {
 }
 
 /** Trunk root→leaf, then anchors, then the rest — cause reads top-down. */
-export function orderRows(subjects: BoardSubject[]): BoardSubject[] {
+function orderRows(subjects: BoardSubject[]): BoardSubject[] {
   const targets = subjects.filter((s) => s.kind === "target");
   const depth = (s: BoardSubject): number => {
     let d = 0;

@@ -99,5 +99,3 @@ export function EncodingLegend({ withHatch = false }: { withHatch?: boolean }) {
     </div>
   );
 }
-
-export { RAMP };
