@@ -427,7 +427,7 @@ dotnet run --project Programs/ConWatch
 | `Programs/ConWatch` | The web host: monitoring engine + SQLite persistence + REST API + UI (what the container runs) |
 | `Programs/ConWatchCli` | `conwatch.exe`: hosts the same app on Windows and manages the service, config and tray |
 | `Programs/ConWatchTray` | `conwatch-tray.exe`, the Windows tray companion |
-| `Core/ConEngine` | The engine: adaptive ping disciplines, reachability tree, pools, verdict layer |
+| `Core/ConEngine` | The engine: adaptive ping disciplines, reachability tree, pools, verdict layer. `Topology/`, `Verdict/` and `Diagnostics/` share `namespace ConEngine.Topology` by design (one namespace, three folders). |
 | `Core/ConCore` | Contracts and domain primitives |
 | `Libraries/ConConfig` | The install-time config files (`conwatch.json`, `tray.json`) and their precedence |
 | `Libraries/ConInfrastructure` | Real ICMP/TCP probes, DNS, gateway discovery, traceroute |
