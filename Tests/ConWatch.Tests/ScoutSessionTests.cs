@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using ConCore.Discovery;
-using ConInfrastructure.Discovery;
 using ConInfrastructure.Tray;
 
 namespace ConWatch.Tests;

@@ -1,5 +1,4 @@
 using System.Text;
-using ConInfrastructure.Discovery;
 
 namespace ConInfrastructure.Tray;
 

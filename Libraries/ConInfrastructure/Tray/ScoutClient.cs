@@ -4,7 +4,7 @@ using System.Text.Json;
 using ConCore.Discovery;
 using ConInfrastructure.Net;
 
-namespace ConInfrastructure.Discovery;
+namespace ConInfrastructure.Tray;
 
 public sealed record ScoutItem(string Address, string? Hostname, DiscoveryKind Kind, DiscoveryMethod Method,
     string Origin, string? Evidence);

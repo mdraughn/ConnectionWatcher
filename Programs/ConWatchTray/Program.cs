@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using ConConfig;
-using ConInfrastructure.Discovery;
 using ConInfrastructure.Tray;
 
 namespace ConWatchTray;
