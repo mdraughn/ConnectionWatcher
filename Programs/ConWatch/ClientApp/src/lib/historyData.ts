@@ -1,5 +1,6 @@
 // Pure helpers for the History page (unit-tested).
 import { isLocal, isResolver } from "./scope";
+import { isoCompare } from "./localTime";
 import type { RollupPoint, TransitionEvent } from "./types";
 
 /** Ping-count-weighted uptime percentage, or null with no data. */
@@ -148,7 +149,7 @@ export function ribbonSegments(transitions: TransitionEvent[],
   let state = transitions[0].from;
   let evidence: string | null = null;
   for (const t of transitions) {
-    if (t.timestamp > cursor) {
+    if (isoCompare(t.timestamp, cursor) > 0) {
       segments.push({ state, from: cursor, to: t.timestamp, evidence });
       cursor = t.timestamp;
     }

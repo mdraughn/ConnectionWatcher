@@ -2,6 +2,8 @@
 // LOCAL time (consistent with the rest of the History page): the nightly-
 // pattern heatmap only makes sense in the viewer's own clock.
 
+import { DAY_MS, localHourKey } from "./localTime";
+
 export interface GlitchItem {
   id: number;
   targetId: string;
@@ -19,13 +21,13 @@ export interface GlitchItem {
  * the reporting-layer "chronically glitchy" indicator.
  */
 export function chronicTargets(glitches: GlitchItem[], now: Date): string[] {
-  const cutoff = now.getTime() - 24 * 3_600_000;
+  const cutoff = now.getTime() - DAY_MS;
   const hoursByTarget = new Map<string, Set<string>>();
   for (const g of glitches) {
     if (g.class !== "Target") continue;
     const at = new Date(g.startUtc);
     if (at.getTime() < cutoff || at.getTime() > now.getTime()) continue;
-    const key = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}-${at.getHours()}`;
+    const key = localHourKey(at);
     if (!hoursByTarget.has(g.targetName)) hoursByTarget.set(g.targetName, new Set());
     hoursByTarget.get(g.targetName)!.add(key);
   }

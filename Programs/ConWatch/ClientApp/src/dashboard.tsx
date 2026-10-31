@@ -12,6 +12,7 @@ import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
 import { startHub } from "./lib/hub";
 import { isTreeTarget } from "./lib/scope";
+import { DAY_MS, isoCompare } from "./lib/localTime";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
 import { VERDICT_SUBJECT_ID } from "./lib/verdictSubject";
@@ -76,7 +77,7 @@ function App({ store, topology, initial }: {
   useEffect(() => {
     const t = state.latestTransition;
     if (!t?.verdict) return; // only verdict-subject rows carry a verdict
-    setTrail((prev) => prev && prev.items[0]?.timestamp !== t.timestamp
+    setTrail((prev) => prev && (!prev.items[0] || isoCompare(prev.items[0].timestamp, t.timestamp) !== 0)
       ? { ...prev, items: [t, ...prev.items] } : prev);
   }, [state.latestTransition]);
   const clock = trail && state.verdict
@@ -91,7 +92,7 @@ function App({ store, topology, initial }: {
   // Recent glitches cover the last 24 h, fixed at page load.
   const [glitchRange] = useState(() => {
     const to = new Date();
-    return { from: new Date(to.getTime() - 24 * 3_600_000), to };
+    return { from: new Date(to.getTime() - DAY_MS), to };
   });
 
   if (initial.engineDisabled || state.disabled) {

@@ -2,6 +2,7 @@
 // open APIs. Page-agnostic: the dashboard uses it today; any page can.
 import type { Mark } from "./encoding";
 import type { GlitchItem } from "./glitchData";
+import { isoCompare, localDayStart } from "./localTime";
 import {
   buildLedger, punchcardCells, stripBins, verdictWindows, windowMark,
   type LedgerItem, type PunchcardCell, type VerdictWindow,
@@ -48,7 +49,7 @@ async function fetchAndDerive(topology: StoryTopology, from: Date): Promise<Deri
     transitions.filter((t) => t.subjectKind === "Verdict"), now.toISOString());
   const anchorDowns = (w: VerdictWindow) => new Set(transitions
     .filter((t) => t.to === "Down" && anchors.has(t.subjectName)
-      && t.timestamp >= w.from && t.timestamp <= w.to)
+      && isoCompare(t.timestamp, w.from) >= 0 && isoCompare(t.timestamp, w.to) <= 0)
     .map((t) => t.subjectName)).size;
   const marks = new Map<VerdictWindow, Mark>(
     windows.map((w) => [w, windowMark(w, anchorDowns(w), threshold)]));
@@ -58,7 +59,7 @@ async function fetchAndDerive(topology: StoryTopology, from: Date): Promise<Deri
 
 export async function fetchStory(topology: StoryTopology, days: number): Promise<Story> {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+  const from = localDayStart(now, days - 1);
   const d = await fetchAndDerive(topology, from);
   return {
     cells: punchcardCells(d.windows, d.marks, d.glitches, d.trunk, days, d.now),

@@ -8,6 +8,7 @@ import { TimeChart } from "./components/TimeChart";
 import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
 import { isTreeTarget } from "./lib/scope";
+import { DAY_MS, isoCompare } from "./lib/localTime";
 import { fetchStory, type Story, type StoryTopology } from "./lib/story";
 import { clipAtReset, incidents, lossPercent, ribbonSegments, subjectsForScope, uptimePercent, weightedRtt, type HistoryScope } from "./lib/historyData";
 import type { RollupPoint, TargetScope, TransitionEvent } from "./lib/types";
@@ -21,11 +22,11 @@ interface Subject {
   scope?: TargetScope;
 }
 
-const RANGES: Record<string, number> = {
-  "24h": 24 * 3_600_000,
-  "7d": 7 * 24 * 3_600_000,
-  "30d": 30 * 24 * 3_600_000,
-};
+const RANGES = [
+  { key: "24h", label: "24 h", ms: DAY_MS },
+  { key: "7d", label: "7 days", ms: 7 * DAY_MS },
+  { key: "30d", label: "30 days", ms: 30 * DAY_MS },
+];
 
 async function fetchRollups(subjectId: string, from: Date, to: Date): Promise<RollupPoint[]> {
   const url = `/api/v1/rollups/${subjectId}?from=${from.toISOString()}&to=${to.toISOString()}&resolution=auto`;
@@ -106,7 +107,7 @@ function App({ subjects }: { subjects: Subject[] }) {
 
   const subject = visible.find((s) => s.id === subjectId);
   const to = useMemo(() => new Date(), [subjectId, rangeKey]);
-  const from = useMemo(() => new Date(to.getTime() - (RANGES[rangeKey] ?? RANGES["24h"])), [to, rangeKey]);
+  const from = useMemo(() => new Date(to.getTime() - (RANGES.find((r) => r.key === rangeKey) ?? RANGES[0]).ms), [to, rangeKey]);
 
   useEffect(() => {
     if (!subject) return;
@@ -149,7 +150,7 @@ function App({ subjects }: { subjects: Subject[] }) {
   // the earlier era, dimmed.
   const { transitions: clipped, resetAt } = clipAtReset(transitions);
   const measuredRollups = resetAt
-    ? rollups.filter((p) => p.periodStart >= resetAt)
+    ? rollups.filter((p) => isoCompare(p.periodStart, resetAt) >= 0)
     : rollups;
 
   const stats = incidents(clipped, (resetAt ?? from.toISOString()), to.toISOString());
@@ -174,7 +175,7 @@ function App({ subjects }: { subjects: Subject[] }) {
           ))}
         </select>
         <div className="cw-segmented" style={{ alignSelf: "center" }}>
-          {[["24h", "24 h"], ["7d", "7 days"], ["30d", "30 days"]].map(([key, label]) => (
+          {RANGES.map(({ key, label }) => (
             <button key={key} type="button" className={rangeKey === key ? "active" : ""}
               onClick={() => setRangeKey(key)}>{label}</button>
           ))}
@@ -219,7 +220,7 @@ function App({ subjects }: { subjects: Subject[] }) {
           <RecurrenceSection to={to} />
 
           <h4>Internet targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
-          <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * 24 * 3_600_000)} rangeEnd={to}
+          <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * DAY_MS)} rangeEnd={to}
             subjects={subjects.filter((s): s is Subject & { kind: "target" } => s.kind === "target" && isTreeTarget(s))
               .map((s): BoardSubject => ({
                 id: s.id, name: s.name, kind: s.kind,

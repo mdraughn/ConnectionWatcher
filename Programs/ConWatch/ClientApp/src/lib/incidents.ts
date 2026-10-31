@@ -5,6 +5,7 @@ import type { Mark } from "./encoding";
 import { markRank } from "./encoding";
 import { formatProse } from "./format";
 import type { GlitchItem } from "./glitchData";
+import { localDayStart, localHourKey } from "./localTime";
 import type { TransitionEvent } from "./types";
 
 export interface VerdictWindow {
@@ -69,23 +70,19 @@ export function glitchMark(g: GlitchItem, trunkNames: Set<string>): Mark {
 
 export interface PunchcardCell { mark: Mark; count: number }
 
-function cellKey(at: Date): string {
-  return `${at.getFullYear()}-${at.getMonth() + 1}-${at.getDate()}-${at.getHours()}`;
-}
-
 /** One winning mark per local day×hour cell (by markRank), with the number of
  *  events that landed there. Keys: "yyyy-M-d-H" in local time. */
 export function punchcardCells(windows: VerdictWindow[], windowMarks: Map<VerdictWindow, Mark>,
   glitches: GlitchItem[], trunkNames: Set<string>, days: number, now: Date):
   Map<string, PunchcardCell> {
   const cells = new Map<string, PunchcardCell>();
-  const oldest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1)).getTime();
+  const oldest = localDayStart(now, days - 1).getTime();
 
   const place = (iso: string, mark: Mark) => {
     const at = new Date(iso);
     if (Number.isNaN(at.getTime()) || at.getTime() < oldest || at.getTime() > now.getTime())
       return;
-    const key = cellKey(at);
+    const key = localHourKey(at);
     const cell = cells.get(key);
     if (!cell) cells.set(key, { mark, count: 1 });
     else {

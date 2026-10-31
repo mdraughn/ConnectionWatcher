@@ -2,6 +2,7 @@
 // Placement-agnostic: feed it cells from lib/story and put it on any page.
 import type { PunchcardCell } from "../lib/incidents";
 import { markCss } from "../lib/encoding";
+import { localDayStart, localHourKey } from "../lib/localTime";
 import { describeMark, EncodingLegend, MarkSwatch } from "./marks";
 
 const CELL_W = 22;
@@ -13,7 +14,7 @@ export function Punchcard({ cells, days, now }: {
   now: Date;
 }) {
   const dayDate = (i: number) =>
-    new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i));
+    localDayStart(now, days - 1 - i);
   const dayLabel = (i: number) => {
     const d = dayDate(i);
     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -32,7 +33,7 @@ export function Punchcard({ cells, days, now }: {
             </div>
             {Array.from({ length: days }, (_, day) => {
               const d = dayDate(day);
-              const cell = cells.get(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${hour}`);
+              const cell = cells.get(localHourKey(new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour)));
               const base: React.CSSProperties = { height: CELL_H, borderRadius: 2 };
               if (!cell) {
                 return <div key={`c${day}-${hour}`}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { chronicTargets, type GlitchItem } from "../lib/glitchData";
 import { formatProse } from "../lib/format";
+import { isoMs } from "../lib/localTime";
 
 async function fetchGlitches(from: Date, to: Date): Promise<GlitchItem[]> {
   const url = `/api/v1/glitches?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000&scope=internet`;
@@ -48,7 +49,7 @@ export function GlitchSection({ from, to, subtitle }: {
                 <td>{g.targetName}</td>
                 <td>{g.class === "Internet" ? "🌐 internet" : "target"}</td>
                 <td>{g.lostCount}/{g.sampleCount}</td>
-                <td>{formatProse(Date.parse(g.endUtc) - Date.parse(g.startUtc))}</td>
+                <td>{formatProse(isoMs(g.endUtc) - isoMs(g.startUtc))}</td>
                 <td>{g.detail ?? ""}</td>
               </tr>
             ))}
