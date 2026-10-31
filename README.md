@@ -181,8 +181,7 @@ how to drive the editor.
 
 ### Targets
 
-*(screenshot to come: the Targets page with the path pipeline —
-docs/images/config-targets.png)*
+![The Targets page: the path-to-the-internet pipeline with insert-here buttons, and the table of watched targets](docs/images/config-targets.png)
 
 **Config → Targets** shows your **path to the internet** as a pipeline —
 router, then any hops beyond it, with "⊕ insert here" buttons to add a hop
