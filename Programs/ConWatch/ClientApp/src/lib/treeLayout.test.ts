@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutTree } from "./treeLayout";
+import { groupByParent, layoutTree } from "./treeLayout";
 import type { TargetStatus } from "./types";
 
 const t = (id: string, name: string): TargetStatus =>
@@ -85,5 +85,14 @@ describe("layoutTree", () => {
     expect(path.map((r) => r.target.name).slice(-2)).toEqual(["Lab Switch", "Lab Host"]);
     expect(path.find((r) => r.target.name === "Lab Switch")!.spine).toBe("none");
     expect(path.find((r) => r.target.name === "Lab Host")!.rails).toEqual(["elbow"]);
+  });
+});
+
+describe("groupByParent", () => {
+  it("adopts orphans as roots in input order", () => {
+    const a = t("a", "a"), b = t("b", "b"), c = t("c", "c");
+    const g = groupByParent([a, b, c], { a: "missing", b: null, c: "b" });
+    expect(g.get(null)!.map((x) => x.id)).toEqual(["a", "b"]);
+    expect(g.get("b")!.map((x) => x.id)).toEqual(["c"]);
   });
 });

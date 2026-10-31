@@ -2,7 +2,7 @@
 // History carry the "what happened" story. With trunk/anchor knowledge the
 // tree renders as trunk-and-pool: the path to the internet flush-left on a
 // heavy spine, off-path targets railed off it, anchors as their own section.
-import { layoutTree, type TreeRow } from "../lib/treeLayout";
+import { groupByParent, layoutTree, type TreeRow } from "../lib/treeLayout";
 import { TargetRow } from "./TargetRow";
 import type { PoolStatus, TargetStatus } from "../lib/types";
 
@@ -61,21 +61,7 @@ export function Tree({ topology, targets, pools, trunkNames, anchorNames }: {
   } else {
     // Plain fallback: the classic nested tree for configs without an anchor
     // pool (nothing to call "the path" yet).
-    const byParent = new Map<string | null, TargetStatus[]>();
-    for (const t of targets) {
-      const parent = topology.parents[t.id] ?? null;
-      const list = byParent.get(parent) ?? [];
-      list.push(t);
-      byParent.set(parent, list);
-    }
-    // Targets whose parent is unknown to the topology map render as roots.
-    for (const [parent, list] of [...byParent]) {
-      if (parent !== null && !targetMap.has(parent)) {
-        const roots = byParent.get(null) ?? [];
-        byParent.set(null, roots.concat(list));
-        byParent.delete(parent);
-      }
-    }
+    const byParent = groupByParent(targets, topology.parents);
     body = <Branch parentId={null} targets={targetMap} byParent={byParent} />;
   }
 

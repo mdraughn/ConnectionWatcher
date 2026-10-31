@@ -1,5 +1,6 @@
 // Fetches and derives the incident story (punchcard cells + ledger) from the
 // open APIs. Page-agnostic: the dashboard uses it today; any page can.
+import { useEffect, useState } from "react";
 import type { Mark } from "./encoding";
 import { fetchGlitches, fetchTransitions } from "./api";
 import { isoCompare, localDayStart } from "./localTime";
@@ -71,4 +72,17 @@ export async function fetchStrip(topology: StoryTopology, binMs: number,
   const from = new Date(Date.now() - binMs * binCount);
   const d = await fetchAndDerive(topology, from);
   return stripBins(d.windows, d.marks, d.glitches, d.trunk, binMs, binCount, d.now);
+}
+
+/** The story for `days`, fetched on mount and again whenever `refreshKey`
+ *  changes; a result that lands after unmount (or after a newer fetch began)
+ *  is ignored. `topology` is read at fetch time and is not a dependency. */
+export function useStory(topology: StoryTopology, days: number, refreshKey?: number): Story | null {
+  const [story, setStory] = useState<Story | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchStory(topology, days).then((s) => { if (live) setStory(s); });
+    return () => { live = false; };
+  }, [days, refreshKey]);
+  return story;
 }

@@ -10,7 +10,7 @@ import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
 import { fetchRollups, fetchTransitions } from "./lib/api";
 import { isTreeTarget } from "./lib/scope";
 import { DAY_MS, isoCompare } from "./lib/localTime";
-import { fetchStory, type Story, type StoryTopology } from "./lib/story";
+import { useStory, type StoryTopology } from "./lib/story";
 import { clipAtReset, incidents, lossPercent, ribbonSegments, subjectsForScope, uptimePercent, weightedRtt, type HistoryScope } from "./lib/historyData";
 import type { RollupPoint, TargetScope, TransitionEvent } from "./lib/types";
 
@@ -34,16 +34,8 @@ const RANGES = [
 // short spans stretch both into mush.
 const OVERVIEW_DAYS = 30;
 
-function RecurrenceSection({ to }: { to: Date }) {
-  const topology = JSON.parse(
-    document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
-  const [story, setStory] = useState<Story | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    fetchStory(topology, OVERVIEW_DAYS).then((s) => { if (live) setStory(s); }).catch(() => undefined);
-    return () => { live = false; };
-  }, [to.getTime()]);
+function RecurrenceSection({ topology, to }: { topology: StoryTopology; to: Date }) {
+  const story = useStory(topology, OVERVIEW_DAYS, to.getTime());
 
   if (!story) return null;
   return (
@@ -56,16 +48,8 @@ function RecurrenceSection({ to }: { to: Date }) {
 
 const LEDGER_DAYS = 90;
 
-function LedgerSection() {
-  const topology = JSON.parse(
-    document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
-  const [story, setStory] = useState<Story | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    fetchStory(topology, LEDGER_DAYS).then((s) => { if (live) setStory(s); }).catch(() => undefined);
-    return () => { live = false; };
-  }, []);
+function LedgerSection({ topology }: { topology: StoryTopology }) {
+  const story = useStory(topology, LEDGER_DAYS);
 
   if (!story) return null;
   return (
@@ -79,7 +63,7 @@ function LedgerSection() {
 const SCOPES: ReadonlyArray<readonly [HistoryScope, string]> =
   [["path", "Path"], ["pools", "Pools"], ["resolvers", "Resolvers"], ["local", "LAN"]];
 
-function App({ subjects }: { subjects: Subject[] }) {
+function App({ subjects, topology }: { subjects: Subject[]; topology: StoryTopology }) {
   const groups = SCOPES.filter(([key]) => subjectsForScope(subjects, key).length > 0);
   const [scope, setScope] = useState<HistoryScope>(groups[0]?.[0] ?? "path");
   const visible = subjectsForScope(subjects, scope);
@@ -201,7 +185,7 @@ function App({ subjects }: { subjects: Subject[] }) {
 
       {scope === "path" && (
         <>
-          <RecurrenceSection to={to} />
+          <RecurrenceSection topology={topology} to={to} />
 
           <h4>Internet targets, cause-aligned <small>(last {OVERVIEW_DAYS} days)</small></h4>
           <RibbonBoard rangeStart={new Date(to.getTime() - OVERVIEW_DAYS * DAY_MS)} rangeEnd={to}
@@ -211,7 +195,7 @@ function App({ subjects }: { subjects: Subject[] }) {
                 parent: s.parent ?? null, role: s.role ?? "other",
               }))} />
 
-          <LedgerSection />
+          <LedgerSection topology={topology} />
         </>
       )}
     </div>
@@ -222,5 +206,7 @@ const el = document.getElementById("history-root");
 const dataEl = document.getElementById("history-data");
 if (el && dataEl) {
   const subjects = JSON.parse(dataEl.textContent ?? "[]") as Subject[];
-  createRoot(el).render(<App subjects={subjects} />);
+  const topology = JSON.parse(
+    document.getElementById("history-topology")?.textContent ?? "{}") as StoryTopology;
+  createRoot(el).render(<App subjects={subjects} topology={topology} />);
 }

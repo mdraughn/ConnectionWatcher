@@ -17,7 +17,7 @@ import { DAY_MS, isoCompare } from "./lib/localTime";
 import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
 import { VERDICT_SUBJECT_ID } from "./lib/verdictSubject";
-import { fetchStory, type Story } from "./lib/story";
+import { useStory } from "./lib/story";
 import type { InitialData, TransitionEvent } from "./lib/types";
 
 // The dashboard ledger is the 10 most recent events, looked for across the
@@ -26,12 +26,7 @@ const STORY_DAYS = 90;
 const STORY_EVENTS = 10;
 
 function RecentEvents({ initial }: { initial: InitialData }) {
-  const [story, setStory] = useState<Story | null>(null);
-  useEffect(() => {
-    let live = true;
-    fetchStory(initial, STORY_DAYS).then((s) => { if (live) setStory(s); }).catch(() => undefined);
-    return () => { live = false; };
-  }, []);
+  const story = useStory(initial, STORY_DAYS);
   if (!story) return null;
   return (
     <div id="story-section" style={{ marginTop: "1.5rem" }}>

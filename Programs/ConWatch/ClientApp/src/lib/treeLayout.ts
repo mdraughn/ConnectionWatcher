@@ -27,6 +27,22 @@ interface Topo {
   poolMembers: Record<string, string[]>;
 }
 
+/** Children by parent id; a target whose parent is not among `targets` (or is
+ *  null/unknown) becomes a root under `null`. Input order is kept. */
+export function groupByParent(targets: TargetStatus[],
+  parents: Record<string, string | null>): Map<string | null, TargetStatus[]> {
+  const ids = new Set(targets.map((t) => t.id));
+  const byParent = new Map<string | null, TargetStatus[]>();
+  for (const t of targets) {
+    let parent = parents[t.id] ?? null;
+    if (parent !== null && !ids.has(parent)) parent = null; // adopt orphans as roots
+    const list = byParent.get(parent) ?? [];
+    list.push(t);
+    byParent.set(parent, list);
+  }
+  return byParent;
+}
+
 export function layoutTree(topology: Topo, targets: TargetStatus[],
   trunkNames?: string[], anchorNames?: string[]): TreeLayout {
   const trunk = new Set((trunkNames ?? []).map((n) => n.toLowerCase()));
@@ -34,15 +50,7 @@ export function layoutTree(topology: Topo, targets: TargetStatus[],
   if (trunk.size === 0 || anchors.size === 0)
     return { mode: "plain", rows: [] };
 
-  const byId = new Map(targets.map((t) => [t.id, t]));
-  const byParent = new Map<string | null, TargetStatus[]>();
-  for (const t of targets) {
-    let parent = topology.parents[t.id] ?? null;
-    if (parent !== null && !byId.has(parent)) parent = null; // adopt orphans as roots
-    const list = byParent.get(parent) ?? [];
-    list.push(t);
-    byParent.set(parent, list);
-  }
+  const byParent = groupByParent(targets, topology.parents);
   const isTrunk = (t: TargetStatus) => trunk.has(t.name.toLowerCase());
   const isAnchor = (t: TargetStatus) => anchors.has(t.name.toLowerCase());
   const rows: TreeRow[] = [];
