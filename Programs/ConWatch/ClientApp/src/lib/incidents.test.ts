@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill } from "./encoding";
+import {
+  HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill, type Depth, type Hue,
+} from "./encoding";
 import { verdictFill } from "./verdicts";
 import {
   buildLedger, glitchMark, punchcardCells, stripBins, verdictWindows, windowMark,
@@ -36,6 +38,23 @@ describe("verdictWindows", () => {
       { kind: "LinkDown", from: "2026-09-09T05:38:00Z", to: "2026-09-09T05:42:00Z", detail: "LinkDown: Comcast — Comcast Edge is Down" },
       { kind: "InternetWeather", from: "2026-09-09T06:00:00Z", to: "2026-09-09T06:30:00Z", detail: "2 of 4 anchors degraded" },
     ]);
+  });
+});
+
+describe("DnsDown windows", () => {
+  it("a DnsDown verdict opens a resolver window that closes at the next verdict", () => {
+    const w = verdictWindows([
+      vt("2026-10-29T10:00:00+00:00", "Healthy", "Down", "DnsDown"),
+      vt("2026-10-29T10:20:00+00:00", "Down", "Healthy", "Healthy"),
+    ], "2026-10-29T11:00:00+00:00");
+    expect(w).toEqual([{ kind: "DnsDown", from: "2026-10-29T10:00:00+00:00", to: "2026-10-29T10:20:00+00:00", detail: "" }]);
+    expect(windowMark(w[0], 5, 2)).toEqual({ shape: "bar", hue: "resolver", depth: "out" });
+  });
+  it("ranks link-out above resolver-out above weather-out above any degradation", () => {
+    const r = (hue: Hue, depth: Depth) => markRank({ shape: "bar", hue, depth });
+    expect(r("grey", "out")).toBeGreaterThan(r("resolver", "out"));
+    expect(r("resolver", "out")).toBeGreaterThan(r("warm", "out"));
+    expect(r("warm", "out")).toBeGreaterThan(r("grey", "degraded"));
   });
 });
 
@@ -107,8 +126,9 @@ describe("verdictFill", () => {
     expect(verdictFill("Healthy", "Responding")).toBe(HEALTHY);
   });
 
-  it("DnsDown is your gear (the resolver) at the out depth, never the warm internet-outage fill", () => {
-    expect(verdictFill("DnsDown", "Down")).toBe(RAMP.grey.out);
+  it("DnsDown is your resolver at the out depth, never the warm internet-outage fill", () => {
+    expect(verdictFill("DnsDown", "Down")).toBe(RAMP.resolver.out);
+    expect(verdictFill("DnsDown", "Down")).toBe("var(--resolver-out)");
     expect(verdictFill("DnsDown", "Down")).not.toBe(RAMP.warm.out);
   });
 

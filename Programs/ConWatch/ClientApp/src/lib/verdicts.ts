@@ -2,7 +2,7 @@
 // class, slab colour class and mark, ribbon fill, and incident window.
 // Adding a verdict means adding one row here (the coverage test in
 // verdicts.test.ts fails until you do).
-import { HEALTHY, RAMP, ribbonFill, type Mark } from "./encoding";
+import { HEALTHY, RAMP, RESOLVER_OUT, ribbonFill, type Mark } from "./encoding";
 
 export type AnswerClass = "up" | "struggling" | "down" | "checking";
 export type VerdictName =
@@ -52,8 +52,8 @@ export const VERDICTS: Record<VerdictName, VerdictLook> = {
   // Your resolver: your gear, name lookups out.
   DnsDown: {
     answer: "down", slabCls: "linkdown",
-    slabMark: { shape: "bar", hue: "grey", depth: "out" },
-    ribbon: RAMP.grey.out, window: null,
+    slabMark: RESOLVER_OUT,
+    ribbon: RAMP.resolver.out, window: () => RESOLVER_OUT,
   },
 };
 

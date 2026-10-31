@@ -40,6 +40,15 @@ function stubApi(transitions: TransitionEvent[]) {
   }));
 }
 
+/** A 20 minute DnsDown stretch an hour ago (newest first, like the API). */
+function dnsStretch(): TransitionEvent[] {
+  const t0 = Date.now() - 60 * MINUTE;
+  return [
+    row(t0 + 20 * MINUTE, "Verdict", "Internet", "Down", "Responding", "Healthy"),
+    row(t0, "Verdict", "Internet", "Responding", "Down", "DnsDown"),
+  ];
+}
+
 const topology = { anchorNames: ["Google", "Cloudflare"], trunkNames: ["Router"], weatherThreshold: 2 };
 
 describe("fetchStory", () => {
@@ -51,6 +60,14 @@ describe("fetchStory", () => {
     expect(story.ledger).toHaveLength(1);
     expect(story.ledger[0].mark).toMatchObject({ shape: "bar", hue: "warm", depth: "degraded" });
     expect(story.ledger[0].lead).toMatch(/^Internet weather for /);
+  });
+
+  it("a DnsDown stretch is a resolver ledger line, never link time", async () => {
+    stubApi(dnsStretch());
+    const story = await fetchStory(topology, 2);
+    expect(story.ledger).toHaveLength(1);
+    expect(story.ledger[0].lead).toBe("Name lookups failed for 20 min — your connection stayed up.");
+    expect(story.ledger[0].mark).toEqual({ shape: "bar", hue: "resolver", depth: "out" });
   });
 
   it("two distinct anchors going down meet the weather threshold: the internet went out", async () => {

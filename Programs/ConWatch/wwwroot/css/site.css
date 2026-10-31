@@ -18,6 +18,7 @@
        re-point the ramps. */
     --warm-glitch: #eda94f; --warm-degraded: #e08a00; --warm-out: #cc3333;
     --grey-glitch: #d4d4d4; --grey-degraded: #7d7d7d; --grey-out: #2b2b2b;
+    --resolver-glitch: #c6dcef; --resolver-degraded: #5b9bd5; --resolver-out: #0172ad;
     --healthy: #eaf3ec; --healthy-vivid: #4fa96e;
     --ribbon-starting: #dfe8e2; --ribbon-unknown: #e6e6e6;
     --shadow: 0 1px 2px rgba(28, 35, 50, 0.05), 0 1px 1px rgba(28, 35, 50, 0.04);
@@ -37,6 +38,7 @@
     --cw-spine: #3a445a; --cw-rail: #323a4b;
     --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
     --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
+    --resolver-glitch: #1f3347; --resolver-degraded: #3f8fd0; --resolver-out: #01aaff;
     --healthy: #1b2620; --healthy-vivid: #46a86c;
     --ribbon-starting: #1c2a24; --ribbon-unknown: #222836;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
@@ -51,6 +53,7 @@
         --cw-spine: #3a445a; --cw-rail: #323a4b;
         --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
         --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
+        --resolver-glitch: #1f3347; --resolver-degraded: #3f8fd0; --resolver-out: #01aaff;
         --healthy: #1b2620; --healthy-vivid: #46a86c;
         --ribbon-starting: #1c2a24; --ribbon-unknown: #222836;
         --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);

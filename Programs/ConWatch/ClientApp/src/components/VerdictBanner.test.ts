@@ -30,6 +30,11 @@ describe("slabFor", () => {
       { shape: "bar", hue: "grey", depth: "out" });
   });
 
+  it("DnsDown's chip is the resolver mark", () => {
+    expect(slabFor({ state: "DnsDown", detail: null, operator: null }).mark)
+      .toEqual({ shape: "bar", hue: "resolver", depth: "out" });
+  });
+
   it("struggling and down are the only non-green slabs", () => {
     expect(slabFor(v("LinkDegraded"))).toMatchObject(
       { cls: "linkdegraded", headline: "Your internet is STRUGGLING" });

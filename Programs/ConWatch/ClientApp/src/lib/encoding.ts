@@ -1,11 +1,11 @@
 // Mark's shared incident encoding (spec 2026-09-10):
 //   shape = scope (bar = shared path, dot = one target)
-//   hue   = whose gear (warm = out there, grey = your equipment)
+//   hue   = whose gear (warm = out there, grey = your equipment, resolver = your DNS resolver)
 //   depth = severity (pale glitch → mid degraded → deep out)
 // Colorblind-validated: the warm/grey pairs pass CVD separation at every tier.
 
 export type Depth = "glitch" | "degraded" | "out";
-export type Hue = "warm" | "grey";
+export type Hue = "warm" | "grey" | "resolver";
 
 export interface Mark {
   shape: "bar" | "dot";
@@ -22,7 +22,14 @@ export interface Mark {
 export const RAMP: Record<Hue, Record<Depth, string>> = {
   warm: { glitch: "var(--warm-glitch)", degraded: "var(--warm-degraded)", out: "var(--warm-out)" },
   grey: { glitch: "var(--grey-glitch)", degraded: "var(--grey-degraded)", out: "var(--grey-out)" },
+  // Only "out" is drawn today (DnsDown has one severity); RAMP is total over Depth.
+  resolver: {
+    glitch: "var(--resolver-glitch)", degraded: "var(--resolver-degraded)", out: "var(--resolver-out)",
+  },
 };
+
+/** The DnsDown mark everywhere: a shared-path bar in the resolver hue. */
+export const RESOLVER_OUT: Mark = { shape: "bar", hue: "resolver", depth: "out" };
 
 /** Unreachable: own Down explained by an upstream failure; no data
  *  recorded, no blame. */
@@ -69,11 +76,11 @@ export function ribbonFill(role: RowRole, state: string): string {
 }
 
 /** Cell precedence when several marks land in one punchcard cell:
- *  your-gear outages outrank internet outages outrank degradations outrank
+ *  your-gear outages outrank resolver outages outrank internet outages outrank degradations outrank
  *  glitches; any bar (shared path) outranks any dot (one target). */
 export function markRank(mark: Mark): number {
   const depthRank = { out: 3, degraded: 2, glitch: 1 }[mark.depth];
-  const hueRank = mark.hue === "grey" ? 1 : 0;
+  const hueRank = { warm: 0, resolver: 1, grey: 2 }[mark.hue];
   const shapeRank = mark.shape === "bar" ? 10 : 0;
-  return shapeRank + depthRank * 2 + hueRank;
+  return shapeRank + depthRank * 3 + hueRank;
 }

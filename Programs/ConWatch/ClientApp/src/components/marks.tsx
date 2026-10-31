@@ -1,7 +1,7 @@
 // Reusable mark-drawing primitives for the shared incident encoding.
 // Every display (punchcard, ledger, ribbons, legends) draws marks through
 // these, so the encoding has exactly one visual implementation.
-import { HATCH, markCss, RAMP, type Mark } from "../lib/encoding";
+import { HATCH, markCss, RAMP, RESOLVER_OUT, type Mark } from "../lib/encoding";
 
 /** One mark, drawn at swatch size: a rounded bar, or a centered dot. */
 export function MarkSwatch({ mark, barWidth = 22, size = 9 }: {
@@ -24,6 +24,7 @@ export function HatchSwatch({ width = 22, height = 9 }: { width?: number; height
 export function describeMark(mark: Mark): string {
   const who = mark.ambiguous ? "trunk or outside (ambiguous)"
     : mark.hue === "grey" ? "your equipment"
+    : mark.hue === "resolver" ? "your resolver"
     : mark.shape === "dot" ? "one site" : "the internet";
   const how = mark.depth === "out" ? "fully out"
     : mark.depth === "degraded" ? "degraded" : "glitch";
@@ -34,10 +35,11 @@ export function describeMark(mark: Mark): string {
  *  legend every display shares. */
 export function EncodingLegend({ withHatch = false }: { withHatch?: boolean }) {
   const depths = ["glitch", "degraded", "out"] as const;
-  const rows: Array<{ label: string; note: string; mark: (d: typeof depths[number]) => Mark }> = [
+  const rows: Array<{ label: string; note: string; mark: (d: typeof depths[number]) => Mark | null }> = [
     { label: "the internet", note: "bar", mark: (d) => ({ shape: "bar", hue: "warm", depth: d }) },
     { label: "one site", note: "dot", mark: (d) => ({ shape: "dot", hue: "warm", depth: d }) },
     { label: "your equipment", note: "bar", mark: (d) => ({ shape: "bar", hue: "grey", depth: d }) },
+    { label: "your resolver", note: "bar", mark: (d) => (d === "out" ? RESOLVER_OUT : null) },
   ];
   return (
     <div style={{ fontSize: "0.75rem", opacity: 0.85, marginTop: 8 }}>
@@ -49,7 +51,10 @@ export function EncodingLegend({ withHatch = false }: { withHatch?: boolean }) {
         {rows.map((row) => (
           <div key={row.label} style={{ display: "contents" }}>
             <div>{row.label} <small style={{ opacity: 0.6 }}>({row.note})</small></div>
-            {depths.map((d) => <div key={d}><MarkSwatch mark={row.mark(d)} /></div>)}
+            {depths.map((d) => {
+              const mark = row.mark(d);
+              return <div key={d}>{mark && <MarkSwatch mark={mark} />}</div>;
+            })}
             <div />
           </div>
         ))}

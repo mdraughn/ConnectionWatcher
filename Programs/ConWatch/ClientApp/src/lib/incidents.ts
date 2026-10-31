@@ -148,6 +148,7 @@ export function buildLedger(windows: VerdictWindow[], windowMarks: Map<VerdictWi
     const dur = formatProse(Date.parse(w.to) - Date.parse(w.from));
     const lead =
       w.kind === "LinkDown" ? `Your link went down for ${dur}.`
+      : w.kind === "DnsDown" ? `Name lookups failed for ${dur} — your connection stayed up.`
       : w.kind === "LinkDegraded" ? `Your link was degraded for ${dur}.`
       : mark.depth === "out" ? `The internet went out for ${dur} — not your line.`
       : `Internet weather for ${dur}.`;

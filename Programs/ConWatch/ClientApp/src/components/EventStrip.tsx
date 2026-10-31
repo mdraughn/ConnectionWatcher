@@ -74,7 +74,7 @@ export function EventStrip({ topology }: { topology: StoryTopology }) {
           </div>
           <div style={{ fontSize: "0.65rem", opacity: 0.55, marginTop: 2 }}>
             the last {binCount} minutes — green is quiet; warm marks are trouble out there,
-            grey marks are your own gear
+            grey marks are your own gear, blue marks are your resolver
           </div>
         </>
       )}
