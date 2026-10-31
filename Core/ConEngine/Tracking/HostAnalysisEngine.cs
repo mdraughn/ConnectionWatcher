@@ -51,11 +51,9 @@ internal class HostAnalysisEngine
     private bool _seeded;
 
     public DateTimeOffset TrackingStarted { get; private set; }
-    public DateTimeOffset LastUpdated { get; private set; }
+    private DateTimeOffset LastUpdated { get; set; }
 
     public int SampleSize { get; private set; }
-    public int NumSuccess { get; private set; }
-    public int NumFailed { get; private set; }
 
     public double SuccessRate { get; private set; }
     public double FailureRate { get; private set; }
@@ -128,7 +126,7 @@ internal class HostAnalysisEngine
             return null;
         var formerCause = _explainedBy == SeededCause ? null : _explainedBy;
         _seeded = false;
-        SampleSize = 0; NumSuccess = 0; NumFailed = 0;
+        SampleSize = 0;
         SuccessRate = 0; FailureRate = 0; AverageRoundtripTime = 0;
         _own = HostState.Starting;
         _explainedBy = null;
@@ -151,7 +149,8 @@ internal class HostAnalysisEngine
     /// explained or not.</summary>
     public AnalysisOutcome Recalculate(IEnumerable<PingHistoryEntry> samples)
     {
-        SampleSize = 0; NumSuccess = 0; NumFailed = 0;
+        SampleSize = 0;
+        int numSuccess = 0, numFailed = 0;
         double sumRoundtrip = 0d;
 
         foreach (PingHistoryEntry item in samples)
@@ -167,19 +166,19 @@ internal class HostAnalysisEngine
             SampleSize++;
             if (item.Success)
             {
-                NumSuccess++;
+                numSuccess++;
                 sumRoundtrip += item.RoundtripTime;
             }
             else
             {
-                NumFailed++;
+                numFailed++;
             }
         }
 
-        SuccessRate = SampleSize > 0 ? (double)NumSuccess / SampleSize : 0d;
-        FailureRate = SampleSize > 0 ? (double)NumFailed / SampleSize : 0d;
+        SuccessRate = SampleSize > 0 ? (double)numSuccess / SampleSize : 0d;
+        FailureRate = SampleSize > 0 ? (double)numFailed / SampleSize : 0d;
         // Answered pings only: a loss carries 0 ms and would drag the mean down.
-        AverageRoundtripTime = NumSuccess > 0 ? sumRoundtrip / NumSuccess : 0d;
+        AverageRoundtripTime = numSuccess > 0 ? sumRoundtrip / numSuccess : 0d;
 
         HostState next;
         if (_seeded)

@@ -42,4 +42,15 @@ public sealed class GuardedTests
         Assert.Equal(ExitCodes.ServiceControlFailed, code);
         Assert.Contains("timed out somewhere inside", error);
     }
+
+    [Fact]
+    public async Task Platform_not_supported_maps_to_service_control_failed()
+    {
+        using var h = new CliHarness();
+        h.Services.Status = new ServiceStatus(ServiceState.Stopped, "\"x\" serve", true);
+        h.Services.Throw = new PlatformNotSupportedException("no services here");
+        var (code, _, error) = await h.RunAsync("service", "start");
+        Assert.Equal(ExitCodes.ServiceControlFailed, code);
+        Assert.Contains("no services here", error);
+    }
 }

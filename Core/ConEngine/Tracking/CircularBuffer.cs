@@ -23,8 +23,6 @@ public class CircularBuffer<T>
         _buffer = new T[capacity];
     }
 
-    public int Capacity => _capacity;
-
     public int Count => _count;
 
     /// <summary>Adds an item; when full, the oldest item is overwritten.</summary>
@@ -44,18 +42,6 @@ public class CircularBuffer<T>
     {
         for (int i = 0; i < _count; i++)
             yield return _buffer[(_tail - 1 - i + _capacity) % _capacity];
-    }
-
-    /// <summary>Items oldest to newest, as a snapshot.</summary>
-    public T[] ToArray()
-    {
-        if (_count == 0)
-            return [];
-
-        var result = new T[_count];
-        for (int i = 0; i < _count; i++)
-            result[i] = _buffer[(_head + i) % _capacity];
-        return result;
     }
 
     public void Clear()

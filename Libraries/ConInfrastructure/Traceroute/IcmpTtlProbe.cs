@@ -28,7 +28,6 @@ public class IcmpTtlProbe : ITtlProbe
                 IPStatus.Success => new TtlProbeResult(reply.Address, rtt, true, false),
                 IPStatus.TtlExpired or IPStatus.TimeExceeded =>
                     new TtlProbeResult(reply.Address, rtt, false, false),
-                IPStatus.TimedOut => new TtlProbeResult(null, 0, false, true),
                 _ => new TtlProbeResult(null, 0, false, true),
             };
         }

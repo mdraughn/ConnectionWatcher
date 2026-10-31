@@ -67,11 +67,6 @@ public static class CliApp
             s.Err.WriteLine(ex.Message);
             return ExitCodes.ServiceControlFailed;
         }
-        catch (PlatformNotSupportedException ex)
-        {
-            s.Err.WriteLine(ex.Message);
-            return ExitCodes.ServiceControlFailed;
-        }
         catch (Exception ex)
         {
             s.Err.WriteLine(ex.Message);

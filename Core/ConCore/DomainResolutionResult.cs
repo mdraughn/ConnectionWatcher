@@ -55,19 +55,9 @@ namespace ConCore
         public int AddressCount => IpAddresses.Count;
 
         /// <summary>
-        /// Gets the first resolved IP address, or null if none were resolved.
-        /// </summary>
-        public IPAddress? FirstAddress => IpAddresses.FirstOrDefault();
-
-        /// <summary>
         /// Gets all IPv4 addresses from the resolved addresses.
         /// </summary>
         public IEnumerable<IPAddress> IPv4Addresses => IpAddresses.Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-
-        /// <summary>
-        /// Gets all IPv6 addresses from the resolved addresses.
-        /// </summary>
-        public IEnumerable<IPAddress> IPv6Addresses => IpAddresses.Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6);
 
         /// <summary>
         /// Returns a string representation of this DomainResolutionResult.
@@ -81,23 +71,6 @@ namespace ConCore
             else
             {
                 return $"Failed to resolve {DomainName}: {Status}";
-            }
-        }
-
-        /// <summary>
-        /// Returns a detailed string representation of this DomainResolutionResult.
-        /// </summary>
-        public string ToDetailedString()
-        {
-            if (Success)
-            {
-                var ipv4Count = IPv4Addresses.Count();
-                var ipv6Count = IPv6Addresses.Count();
-                return $"Domain: {DomainName}, Success: {Success}, Total: {AddressCount} ({ipv4Count} IPv4, {ipv6Count} IPv6), Time: {ResolutionTimeMs}ms, Status: {Status}";
-            }
-            else
-            {
-                return $"Domain: {DomainName}, Success: {Success}, Status: {Status}, Time: {ResolutionTimeMs}ms";
             }
         }
     }

@@ -26,8 +26,6 @@ public class PingController(IPingTransceiverFactory pingTransceiverFactory, ILog
     private CancellationTokenSource? _linkedCts;
     private CancellationToken _cancellationToken;
 
-    public Task? Task => _pingTask;
-
     /// <summary>
     /// Starts probing the specified IP address, pacing probes via the cadence,
     /// and sending results through the channel.
