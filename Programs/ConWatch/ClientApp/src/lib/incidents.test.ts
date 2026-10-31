@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill, verdictFill } from "./encoding";
+import { HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill } from "./encoding";
+import { verdictFill } from "./verdicts";
 import {
   buildLedger, glitchMark, punchcardCells, stripBins, verdictWindows, windowMark,
 } from "./incidents";

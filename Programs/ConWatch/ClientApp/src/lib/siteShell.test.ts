@@ -5,7 +5,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { answerClassOf, type AnswerClass } from "./verdictClock";
+import { answerClassOf, type AnswerClass } from "./verdicts";
 
 // __dirname, not import.meta.url: under happy-dom the module URL is not a file: URL.
 const source = readFileSync(resolve(__dirname, "../../../wwwroot/lib/site-shell.js"), "utf-8");

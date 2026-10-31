@@ -3,7 +3,8 @@
 // for everything else, verdict names mapped by whose gear was blamed, and
 // hatching for Unreachable (explained by an upstream failure; no data
 // recorded, no blame).
-import { ribbonFill, verdictFill, type RowRole } from "../lib/encoding";
+import { ribbonFill, type RowRole } from "../lib/encoding";
+import { verdictFill } from "../lib/verdicts";
 import type { RibbonSegment } from "../lib/historyData";
 
 export function StateRibbon({ segments, rangeStart, rangeEnd, resetAt, kind = "target", role = "other" }: {

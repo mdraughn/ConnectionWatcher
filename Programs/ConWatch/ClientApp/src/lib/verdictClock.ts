@@ -8,17 +8,7 @@
 //    ledger and History carry the blemishes.
 // Pure functions, unit-tested.
 import type { TransitionEvent } from "./types";
-
-export type AnswerClass = "up" | "struggling" | "down" | "checking";
-
-export function answerClassOf(verdictState: string | null | undefined): AnswerClass {
-  switch (verdictState) {
-    case "Healthy": case "SiteIncident": case "InternetWeather": return "up";
-    case "LinkDegraded": return "struggling";
-    case "LinkDown": case "DnsDown": return "down";
-    default: return "checking";
-  }
-}
+import { answerClassOf, type AnswerClass } from "./verdicts";
 
 export interface AnswerClock {
   cls: AnswerClass;

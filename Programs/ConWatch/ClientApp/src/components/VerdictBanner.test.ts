@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerClassOf } from "../lib/verdictClock";
+import { answerClassOf } from "../lib/verdicts";
 import { slabFor } from "./VerdictBanner";
 
 const v = (state: string, operator: string | null = null) =>

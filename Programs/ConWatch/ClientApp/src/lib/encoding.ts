@@ -68,24 +68,6 @@ export function ribbonFill(role: RowRole, state: string): string {
   }
 }
 
-/** Ribbon fill for the VERDICT subject's timeline. The verdict subject logs
- *  HostStates with the verdict NAME alongside (segment evidence), and the name
- *  carries the attribution: Link* = your gear (grey ramp), weather = out there
- *  (warm), a site incident = pale warm, healthy = quiet. Without a
- *  recognizable name (e.g. the residual segment before the first in-range
- *  transition) fall back to the plain state mapping. */
-export function verdictFill(verdictName: string | null, state: string): string {
-  switch (verdictName) {
-    case "LinkDown": return RAMP.grey.out;
-    case "DnsDown": return RAMP.grey.out; // your resolver: your gear, name lookups out
-    case "LinkDegraded": return RAMP.grey.degraded;
-    case "InternetWeather": return RAMP.warm.degraded;
-    case "SiteIncident": return RAMP.warm.glitch;
-    case "Healthy": return HEALTHY;
-    default: return ribbonFill("other", state);
-  }
-}
-
 /** Cell precedence when several marks land in one punchcard cell:
  *  your-gear outages outrank internet outages outrank degradations outrank
  *  glitches; any bar (shared path) outranks any dot (one target). */

@@ -5,17 +5,16 @@ import type { Mark } from "./encoding";
 import { markRank } from "./encoding";
 import { formatProse } from "./format";
 import type { GlitchItem } from "./types";
+import { VERDICTS, verdictLook, type VerdictName } from "./verdicts";
 import { localDayStart, localHourKey } from "./localTime";
 import type { TransitionEvent } from "./types";
 
 export interface VerdictWindow {
-  kind: "LinkDown" | "LinkDegraded" | "InternetWeather";
+  kind: VerdictName;
   from: string;
   to: string;
   detail: string | null;
 }
-
-const ATTRIBUTED = new Set(["LinkDown", "LinkDegraded", "InternetWeather"]);
 
 /** Attributed windows from chronological verdict transitions; an open window
  *  closes at the range end. */
@@ -29,7 +28,7 @@ export function verdictWindows(verdictTransitions: TransitionEvent[],
       windows.push(open);
       open = null;
     }
-    if (t.verdict && ATTRIBUTED.has(t.verdict)) {
+    if (verdictLook(t.verdict)?.window) {
       open = {
         kind: t.verdict as VerdictWindow["kind"],
         from: t.timestamp, to: t.timestamp, detail: t.detail,
@@ -47,12 +46,7 @@ export function verdictWindows(verdictTransitions: TransitionEvent[],
  *  when enough anchors were fully Down during the window. */
 export function windowMark(w: VerdictWindow, anchorDownsInWindow: number,
   weatherThreshold: number): Mark {
-  if (w.kind === "LinkDown") return { shape: "bar", hue: "grey", depth: "out" };
-  if (w.kind === "LinkDegraded") return { shape: "bar", hue: "grey", depth: "degraded" };
-  return {
-    shape: "bar", hue: "warm",
-    depth: anchorDownsInWindow >= weatherThreshold ? "out" : "degraded",
-  };
+  return VERDICTS[w.kind].window!(anchorDownsInWindow, weatherThreshold);
 }
 
 /** The encoded mark for a glitch row. */

@@ -13,7 +13,7 @@ import type {
   RollupPoint, Snapshot, TargetScope, TargetStatus, TransitionEvent, VerdictStatus,
 } from "./types";
 import { VERDICT_SUBJECT_ID } from "./verdictSubject";
-import { answerClassOf, type AnswerClass } from "./verdictClock";
+import { answerClassOf, type AnswerClass } from "./verdicts";
 
 // __dirname, not import.meta.url: under happy-dom the module URL is not a file: URL.
 const contracts = resolve(__dirname, "../../../../../Tests/contracts");

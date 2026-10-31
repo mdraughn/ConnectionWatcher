@@ -6,6 +6,7 @@
 import type { Mark } from "../lib/encoding";
 import type { DnsStatus, VerdictStatus } from "../lib/types";
 import { type AnswerClock } from "../lib/verdictClock";
+import { verdictLook } from "../lib/verdicts";
 import { formatClock } from "../lib/format";
 import { MarkSwatch } from "./marks";
 
@@ -50,54 +51,45 @@ function SignalIcon({ state, size = 26 }: { state: Slab["icon"]; size?: number }
 }
 
 export function slabFor(verdict: VerdictStatus, dns?: DnsStatus | null): Slab {
+  const look = verdictLook(verdict.state);
+  if (!look) {
+    return {
+      cls: "unknown", icon: "checking", headline: "Checking your internet…",
+      caveat: "measuring — an answer arrives within a minute or two", caveat2: null, mark: null,
+    };
+  }
+  const base = { cls: look.slabCls, icon: look.answer, mark: look.slabMark, caveat2: null };
   switch (verdict.state) {
-    case "Healthy":
-      return {
-        cls: "healthy", icon: "up", headline: "Your internet is UP",
-        caveat: "no trouble in sight", caveat2: null, mark: null,
-      };
     case "SiteIncident":
       return {
-        cls: "healthy", icon: "up", headline: "Your internet is UP",
+        ...base, headline: "Your internet is UP",
         caveat: "one site out there is having trouble — not your connection",
-        caveat2: null,
-        mark: { shape: "dot", hue: "warm", depth: "glitch" },
       };
     case "InternetWeather":
       return {
-        cls: "healthy", icon: "up", headline: "Your internet is UP",
+        ...base, headline: "Your internet is UP",
         caveat: "but parts of the internet look unreachable right now — the trouble isn't on your end",
-        caveat2: null,
-        mark: { shape: "bar", hue: "warm", depth: "degraded" },
       };
     case "LinkDegraded":
       return {
-        cls: "linkdegraded", icon: "struggling", headline: "Your internet is STRUGGLING",
+        ...base, headline: "Your internet is STRUGGLING",
         caveat: "your connection is losing some traffic — pages may stall or feel slow",
-        caveat2: null,
-        mark: { shape: "bar", hue: "grey", depth: "degraded" },
       };
     case "LinkDown":
       return {
-        cls: "linkdown", icon: "down", headline: "Your internet is DOWN",
+        ...base, headline: "Your internet is DOWN",
         caveat: verdict.operator
           ? `${verdict.operator} is not carrying your traffic`
           : "your connection to the internet is not carrying traffic",
         caveat2: dns?.state === "Down" ? "Name lookups are failing too" : null,
-        mark: { shape: "bar", hue: "grey", depth: "out" },
       };
     case "DnsDown":
       return {
-        cls: "linkdown", icon: "down", headline: "Your internet is UP, but name lookups are failing",
+        ...base, headline: "Your internet is UP, but name lookups are failing",
         caveat: (verdict.detail ?? "").replace(/^DnsDown:\s*/, "") || "your resolver isn't answering",
-        caveat2: null,
-        mark: { shape: "bar", hue: "grey", depth: "out" },
       };
-    default:
-      return {
-        cls: "unknown", icon: "checking", headline: "Checking your internet…",
-        caveat: "measuring — an answer arrives within a minute or two", caveat2: null, mark: null,
-      };
+    default: // Healthy
+      return { ...base, headline: "Your internet is UP", caveat: "no trouble in sight" };
   }
 }
 
