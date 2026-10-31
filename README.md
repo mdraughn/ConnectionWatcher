@@ -58,8 +58,7 @@ service), so expect one UAC prompt naming the same publisher.
 
 ### The install wizard
 
-*(screenshot to come: the installer's "What to install" page —
-docs/images/install-what-to-install.png)*
+![The installer's "What to install" page: two checkboxes, service and tray companion](docs/images/install-what-to-install.png)
 
 1. **License** (MIT) and install folder (default
    `C:\Program Files\DSoftCo\ConnectionWatcher`).
@@ -91,7 +90,7 @@ twice — before touching your data.
 With an empty configuration, the dashboard redirects to the **quick-setup
 wizard**:
 
-*(screenshot to come: the setup wizard — docs/images/setup-wizard.png)*
+![The quick-setup wizard: detected routers, internet anchors, resolver choice, and the router's public address](docs/images/setup-wizard.png)
 
 1. **Your router.** The wizard probes for your gateway and lists the
    candidates it found, with addresses and ping times; pick yours. The
