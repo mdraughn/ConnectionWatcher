@@ -19,9 +19,9 @@ internal sealed class ScoutPasswordStore : IScoutPasswordStore
 
     private readonly string _path;
 
-    public ScoutPasswordStore(ConfigPaths? paths = null)
+    public ScoutPasswordStore()
     {
-        var dir = Path.GetDirectoryName((paths ?? ConfigPaths.Default()).UserFile)!;
+        var dir = Path.GetDirectoryName(ConfigPaths.Default().UserFile)!;
         _path = Path.Combine(dir, "scout.json");
     }
 

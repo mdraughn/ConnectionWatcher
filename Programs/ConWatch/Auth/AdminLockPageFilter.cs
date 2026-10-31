@@ -5,8 +5,8 @@ namespace ConWatch.Auth;
 
 /// <summary>
 /// Redirects a locked-out browser to the dashboard's admin prompt instead of
-/// rendering an admin page. Applied by convention in Program.cs to every
-/// page under /Config plus Admin, Data, Setup and Traceroute, so a new admin
+/// rendering an admin page. Applied by convention in ConWatchServices to every
+/// page under /Config plus Settings, Data, Setup and Traceroute, so a new admin
 /// page cannot forget the check. Inert while no password is set.
 /// </summary>
 public sealed class AdminLockPageFilter(AdminGate gate) : IAsyncPageFilter

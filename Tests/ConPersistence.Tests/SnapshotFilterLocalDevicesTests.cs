@@ -3,13 +3,12 @@ using ConEngine.Topology;
 using ConPersistence.Config;
 using ConPersistence.Entities;
 using ConPersistence.Snapshots;
-using ConWatch.Clone;
 
-namespace ConWatch.Tests;
+namespace ConPersistence.Tests;
 
 /// <summary>Direct tests of the clone filter: Local targets and every row recorded for
 /// them disappear, nothing else does, and the input snapshot is not mutated.</summary>
-public class CloneWithoutLocalDevicesTests
+public class SnapshotFilterLocalDevicesTests
 {
     private static readonly Guid LocalId = Guid.Parse("11111111-1111-4111-8111-111111111111");
     private static readonly Guid VerdictId = Guid.Parse("22222222-2222-4222-8222-222222222222");
@@ -52,7 +51,7 @@ public class CloneWithoutLocalDevicesTests
     [Fact]
     public void Removes_Local_targets_and_all_their_rows_but_nothing_else()
     {
-        var result = CloneService.WithoutLocalDevices(Build());
+        var result = SnapshotFilter.WithoutLocalDevices(Build());
 
         var target = Assert.Single(result.Config.Targets);
         Assert.Equal(VerdictId, target.Id);
@@ -73,7 +72,7 @@ public class CloneWithoutLocalDevicesTests
     public void Does_not_mutate_the_input_snapshot()
     {
         var input = Build();
-        CloneService.WithoutLocalDevices(input);
+        SnapshotFilter.WithoutLocalDevices(input);
 
         Assert.Equal(2, input.Config.Targets.Count);
         Assert.Equal(3, input.Transitions.Count);
@@ -96,7 +95,7 @@ public class CloneWithoutLocalDevicesTests
         input.Rollups.RemoveAll(r => r.TargetId == LocalId);
         input.Glitches.RemoveAll(g => g.TargetId == LocalId);
 
-        var result = CloneService.WithoutLocalDevices(input);
+        var result = SnapshotFilter.WithoutLocalDevices(input);
 
         Assert.Single(result.Config.Targets);
         Assert.Single(result.Config.Pools);

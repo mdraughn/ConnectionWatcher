@@ -1,3 +1,4 @@
+using ConCore.Targets;
 using ConPersistence.Config;
 
 namespace ConPersistence.Snapshots;
@@ -28,4 +29,10 @@ public static class SnapshotFilter
     /// <summary>System resolvers are the SOURCE host's; the destination's
     /// SystemResolverService regenerates its own (spec 2026-10-10 §5.1).</summary>
     public static Snapshot WithoutSystemManaged(Snapshot snapshot) => Without(snapshot, t => t.SystemManaged);
+
+    /// <summary>The snapshot minus every Local-scope target and the transitions, rollups and
+    /// glitches recorded for them. Pools and the verdict cannot reference Local targets
+    /// (validator rule), so nothing else needs rewriting.</summary>
+    public static Snapshot WithoutLocalDevices(Snapshot snapshot)
+        => Without(snapshot, t => t.Scope == TargetScope.Local);
 }

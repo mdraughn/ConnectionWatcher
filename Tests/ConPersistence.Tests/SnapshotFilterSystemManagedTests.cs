@@ -2,13 +2,12 @@ using ConCore.Targets;
 using ConPersistence.Config;
 using ConPersistence.Entities;
 using ConPersistence.Snapshots;
-using ConWatch.Clone;
 
-namespace ConWatch.Tests;
+namespace ConPersistence.Tests;
 
 /// <summary>Spec 2026-10-10 §5.1: a clone never carries the source's system
 /// resolvers — the destination regenerates them from its own OS.</summary>
-public class CloneWithoutSystemManagedTests
+public class SnapshotFilterSystemManagedTests
 {
     private static readonly Guid ManagedId = Guid.Parse("33333333-3333-4333-8333-333333333333");
     private static readonly Guid UpstreamId = Guid.Parse("44444444-4444-4444-8444-444444444444");
@@ -52,7 +51,7 @@ public class CloneWithoutSystemManagedTests
     public void System_managed_targets_and_their_rows_are_dropped_upstream_resolvers_stay()
     {
         var before = Build();
-        var after = CloneService.WithoutSystemManaged(before);
+        var after = SnapshotFilter.WithoutSystemManaged(before);
 
         Assert.Equal([UpstreamId], after.Config.Targets.Select(t => t.Id!.Value));
         Assert.Equal([UpstreamId], after.Transitions.Select(t => t.SubjectId));

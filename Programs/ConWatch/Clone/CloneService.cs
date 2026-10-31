@@ -283,17 +283,8 @@ public class CloneService(IHttpClientFactory httpFactory,
         if (includeLocalDevices)
             return (snapshot, 0);
         var localSkipped = snapshot.Config.Targets.Count(t => t.Scope == TargetScope.Local);
-        return (SnapshotFilter.Without(snapshot, t => t.Scope == TargetScope.Local), localSkipped);
+        return (SnapshotFilter.WithoutLocalDevices(snapshot), localSkipped);
     }
-
-    /// <summary>The snapshot minus every Local-scope target and the transitions, rollups and
-    /// glitches recorded for them. Pools and the verdict cannot reference Local targets
-    /// (validator rule), so nothing else needs rewriting.</summary>
-    internal static Snapshot WithoutLocalDevices(Snapshot snapshot)
-        => SnapshotFilter.Without(snapshot, t => t.Scope == TargetScope.Local);
-
-    internal static Snapshot WithoutSystemManaged(Snapshot snapshot)
-        => SnapshotFilter.WithoutSystemManaged(snapshot);
 
     private static object Summary(Snapshot snapshot, bool includeSecrets, int localDevicesSkipped = 0) => new
     {
