@@ -135,8 +135,7 @@ for the honest trust model). Forgot the password? Delete
 
 ### The tray companion
 
-*(screenshot to come: the tray icon and its menu —
-docs/images/tray-menu.png)*
+![The tray icon with its menu open: dashboard links, network searches, and tray settings](docs/images/tray-menu.png)
 
 `conwatch-tray.exe` keeps the verdict in the corner of your eye:
 
