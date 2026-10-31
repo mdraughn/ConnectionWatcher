@@ -98,7 +98,7 @@ public static class ConWatchServices
         services.AddHttpClient(Clone.CloneService.HttpClientName,
             c => c.Timeout = TimeSpan.FromSeconds(60)); // a full snapshot can be MBs
         services.AddSingleton<Clone.CloneService>();
-        services.AddSingleton<Clone.CloneHealth>();
+        services.AddSingleton<Health.CloneHealth>();
         return services;
     }
 

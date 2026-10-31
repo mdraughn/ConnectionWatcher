@@ -5,7 +5,7 @@ namespace ConWatch.Health;
 /// <summary>The one place that assembles configuration warnings, so every banner and the
 /// dashboard count agree. Pages use <see cref="ForPagesAsync"/> (no network probe);
 /// the open <c>/config/health</c> endpoint and the Settings page use <see cref="AllAsync"/>.</summary>
-public sealed class HealthReport(ConfigHealth config, Clone.CloneHealth clone, WatcherHostService host)
+public sealed class HealthReport(ConfigHealth config, CloneHealth clone, WatcherHostService host)
 {
     /// <summary>Config warnings plus the engine's refused-TCP warnings. Never probes the network.</summary>
     public async Task<IReadOnlyList<HealthWarning>> ForPagesAsync() =>

@@ -1,6 +1,6 @@
 using ConEngine;
 
-namespace ConWatch;
+namespace ConWatch.Health;
 
 /// <summary>
 /// One place that turns engine state into a health verdict. A monitor whose

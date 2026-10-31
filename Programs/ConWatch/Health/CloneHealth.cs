@@ -3,7 +3,7 @@ using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;
 
-namespace ConWatch.Clone;
+namespace ConWatch.Health;
 
 /// <summary>
 /// Warns when the node this one was cloned from appears to still be
@@ -51,7 +51,7 @@ public class CloneHealth(IHttpClientFactory httpFactory, SettingsStore settings,
         try
         {
             using var cts = new CancellationTokenSource(ProbeTimeout);
-            var client = httpFactory.CreateClient(CloneService.HttpClientName);
+            var client = httpFactory.CreateClient(Clone.CloneService.HttpClientName);
             var response = await client.GetAsync(new Uri(source, "api/v1/health"), cts.Token);
             var body = JsonSerializer.Deserialize<JsonElement>(
                 await response.Content.ReadAsStringAsync(cts.Token));

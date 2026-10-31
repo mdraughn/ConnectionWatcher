@@ -1,6 +1,7 @@
 using ConPersistence.Config;
+using ConWatch.Health;
 
-namespace ConPersistence.Tests;
+namespace ConWatch.Tests;
 
 public class HealthWarningPageTests
 {
@@ -20,14 +21,14 @@ public class HealthWarningPageTests
     public void Each_warning_names_the_page_where_it_is_fixed(string code, string page, string pageName)
     {
         var warning = new HealthWarning(code, "m");
-        Assert.Equal(page, warning.Page);
-        Assert.Equal(pageName, warning.PageName);
+        Assert.Equal(page, warning.Page());
+        Assert.Equal(pageName, warning.PageName());
     }
 
     [Fact]
     public void IsConfigTab_is_true_only_for_config_pages()
     {
-        Assert.True(new HealthWarning("dns-not-watched", "m").IsConfigTab);
-        Assert.False(new HealthWarning("clone-source-active", "m").IsConfigTab);
+        Assert.True(new HealthWarning("dns-not-watched", "m").IsConfigTab());
+        Assert.False(new HealthWarning("clone-source-active", "m").IsConfigTab());
     }
 }

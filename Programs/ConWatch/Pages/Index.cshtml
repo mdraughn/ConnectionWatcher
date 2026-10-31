@@ -1,5 +1,6 @@
 @page
 @using ConEngine.Tracking
+@using ConWatch.Health
 @model ConWatch.Pages.IndexModel
 @{
     ViewData["Title"] = "Dashboard — ConnectionWatcher";
@@ -31,13 +32,13 @@
 {
     <p class="cw-health-hint">
         ⚠ @Model.WarningCount configuration warning@(Model.WarningCount == 1 ? "" : "s") —
-        @if (Model.WarningPage is { } fixOn && fixOn.IsConfigTab)
+        @if (Model.WarningPage is { } fixOn && fixOn.IsConfigTab())
         {
-            <a href="@fixOn.Page">review on the Config → @fixOn.PageName tab</a>
+            <a href="@fixOn.Page()">review on the Config → @fixOn.PageName() tab</a>
         }
         else if (Model.WarningPage is { } fixOnPage)
         {
-            <a href="@fixOnPage.Page">review on the @fixOnPage.PageName page</a>
+            <a href="@fixOnPage.Page()">review on the @fixOnPage.PageName() page</a>
         }
         else
         {

@@ -1,3 +1,4 @@
+@using ConWatch.Health
 @model IReadOnlyList<ConPersistence.Config.HealthWarning>
 @if (Model.Count > 0)
 {
@@ -8,9 +9,9 @@
             @foreach (var warning in Model)
             {
                 <li data-code="@warning.Code">@warning.Message
-                    @if (!string.Equals(warning.Page, here, StringComparison.OrdinalIgnoreCase))
+                    @if (!string.Equals(warning.Page(), here, StringComparison.OrdinalIgnoreCase))
                     {
-                        <a href="@warning.Page">→ @warning.PageName @(warning.IsConfigTab ? "tab" : "page")</a>
+                        <a href="@warning.Page()">→ @warning.PageName() @(warning.IsConfigTab() ? "tab" : "page")</a>
                     }
                 </li>
             }

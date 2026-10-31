@@ -1,3 +1,4 @@
+using ConWatch.Health;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Settings;
@@ -13,7 +14,11 @@ public static class SettingsEndpoints
         // Health warnings feed banners on open pages; settings themselves are
         // admin-only (the GET includes the MQTT broker password).
         open.MapGet("/config/health", async (ConWatch.Health.HealthReport report) =>
-            new { warnings = await report.AllAsync() });
+            new
+            {
+                warnings = (await report.AllAsync())
+                    .Select(w => new { w.Code, w.Message, Page = w.Page(), PageName = w.PageName() }),
+            });
 
         locked.MapGet("/settings", async (SettingsStore store) => await store.GetAllAsync());
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ConCore.Targets;
 using ConEngine.Tracking;
+using ConWatch.Health;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -51,7 +52,7 @@ public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport he
 
         var healthWarnings = await health.ForPagesAsync();
         WarningCount = healthWarnings.Count;
-        WarningPage = healthWarnings.Select(w => w.Page).Distinct().Count() == 1 ? healthWarnings[0] : null;
+        WarningPage = healthWarnings.Select(w => w.Page()).Distinct().Count() == 1 ? healthWarnings[0] : null;
         var engine = host.Engine;
         var parents = new Dictionary<string, string?>();
         var poolMembers = new Dictionary<string, string[]>();

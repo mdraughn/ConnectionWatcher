@@ -2,7 +2,7 @@ using ConEngine;
 using ConPersistence;
 using ConPersistence.Config;
 
-namespace ConWatch;
+namespace ConWatch.Health;
 
 /// <summary>Warnings derivable only from the live engine (ConfigHealth is
 /// config-only and cannot see runtime counters).</summary>
