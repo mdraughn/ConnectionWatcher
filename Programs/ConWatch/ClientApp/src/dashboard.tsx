@@ -87,7 +87,7 @@ function App({ store, topology, initial }: {
             pinged or notified. {initial.cloneSource
               ? "Finish the migration or re-enable on the "
               : "Re-enable on the "}
-            <a href="/Admin">Admin page</a>.
+            <a href="/Settings">Settings page</a>.
           </span>
         </div>
         <EventStrip topology={initial} />

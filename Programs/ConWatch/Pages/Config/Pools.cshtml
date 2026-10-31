@@ -33,8 +33,9 @@
                 }
             </select>
         </label>
-        <label>Anchors needed for Healthy
+        <label>Degraded operators that mean internet weather
             <input name="@SettingKeys.WeatherThreshold" type="number" min="@SettingRules.Int(SettingKeys.WeatherThreshold).Min.ToString(CultureInfo.InvariantCulture)" value="@Model.WeatherThreshold" />
+            <small>Below this, failing anchors are a site incident, not weather. Anchors sharing an operator count once.</small>
         </label>
         <div style="align-self: end"><button type="submit">Save verdict settings</button></div>
     </div>

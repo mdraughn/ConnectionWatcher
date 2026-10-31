@@ -129,7 +129,7 @@ export function VerdictBanner({ verdict, dns, connected, clock }: {
   if (!verdict) {
     return (
       <div className={`verdict-banner unknown ${connected ? "" : "reconnecting"}`}>
-        &#9675; VERDICT OFF — pick internet check sites (an anchor pool) on the Admin page
+        &#9675; VERDICT OFF — pick internet check sites (an anchor pool) on the Pools page
         {!connected && <span className="pill">reconnecting…</span>}
       </div>
     );

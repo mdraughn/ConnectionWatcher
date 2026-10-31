@@ -26,7 +26,7 @@ public class PageSmokeTests : IDisposable
     [InlineData("/Config/Targets", "option selected=\"selected\" title=\"Public internet sites")] // the Public default's title
     [InlineData("/Config/Pools", "Pools")]
     [InlineData("/Config/Pools", "Anchor pool")]
-    [InlineData("/Config/Pools", "Anchors needed for Healthy")]
+    [InlineData("/Config/Pools", "Degraded operators that mean internet weather")]
     [InlineData("/Traceroute", "Traceroute")]
     [InlineData("/Settings", "Danger zone")]
     [InlineData("/Settings", "Look up the operator of each hop")]
