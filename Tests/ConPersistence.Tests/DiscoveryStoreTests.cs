@@ -128,7 +128,7 @@ public class DiscoveryStoreTests : IDisposable
     public async Task An_empty_or_oversized_batch_is_rejected()
     {
         Assert.False((await _store.UpsertAsync([])).Success);
-        var big = Enumerable.Range(1, DiscoveryStore.MaxBatch + 1)
+        var big = Enumerable.Range(1, DiscoveryLimits.MaxBatch + 1)
             .Select(i => Router($"198.51.{i / 250}.{i % 250 + 1}")).ToList();
         Assert.False((await _store.UpsertAsync(big)).Success);
     }

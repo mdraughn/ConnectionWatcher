@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using ConCore.Discovery;
 using ConInfrastructure.Discovery;
 using ConPersistence.Discoveries;
 
@@ -78,7 +79,7 @@ public sealed class DiscoverySearchService(IDiscoveryScanner scanner, DiscoveryS
                 return new SearchOutcome(false, !complete, 0, 0, 0, Warning(lan), [], Partial: false);
             // A LAN scan can find more than one store batch holds; file it in batch-sized pieces.
             int created = 0, updated = 0;
-            foreach (var chunk in found.Chunk(DiscoveryStore.MaxBatch))
+            foreach (var chunk in found.Chunk(DiscoveryLimits.MaxBatch))
             {
                 var stored = await store.UpsertAsync(chunk.Select(c => new DiscoveryInput(
                     c.Address, c.Hostname, c.Kind, c.Method, ServerOrigin, c.Evidence)).ToList());

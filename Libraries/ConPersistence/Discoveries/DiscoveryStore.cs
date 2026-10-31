@@ -46,7 +46,6 @@ public static class DiscoveryStatuses
 /// </summary>
 public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactory, TimeProvider? timeProvider = null)
 {
-    public const int MaxBatch = DiscoveryLimits.MaxBatch;
     private const int MaxHostname = 255;
     private const int MaxOrigin = 100;
     private const int MaxEvidence = 1000;
@@ -60,9 +59,9 @@ public sealed class DiscoveryStore(IDbContextFactory<ConWatchDbContext> dbFactor
         var errors = new List<string>();
         if (inputs.Count == 0)
             errors.Add("At least one discovery is required.");
-        if (inputs.Count > MaxBatch)
-            errors.Add($"At most {MaxBatch} discoveries per request.");
-        for (var i = 0; i < inputs.Count && i < MaxBatch; i++)
+        if (inputs.Count > DiscoveryLimits.MaxBatch)
+            errors.Add($"At most {DiscoveryLimits.MaxBatch} discoveries per request.");
+        for (var i = 0; i < inputs.Count && i < DiscoveryLimits.MaxBatch; i++)
         {
             var item = inputs[i];
             var n = i + 1;

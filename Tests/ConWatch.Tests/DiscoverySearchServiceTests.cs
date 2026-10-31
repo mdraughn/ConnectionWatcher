@@ -130,7 +130,7 @@ public class DiscoverySearchServiceTests : IDisposable
     public async Task A_lan_scan_larger_than_one_store_batch_is_stored_in_full()
     {
         var store = new DiscoveryStore(_db);
-        var count = DiscoveryStore.MaxBatch + 100;
+        var count = DiscoveryLimits.MaxBatch + 100;
         var service = new DiscoverySearchService(new BigScanner(count), store, NullLogger<DiscoverySearchService>.Instance);
 
         var first = await service.SearchLanAsync(CancellationToken.None);

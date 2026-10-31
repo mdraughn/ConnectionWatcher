@@ -171,6 +171,12 @@ public class ConfigHealthTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_disabled_anchor_also_falls_below_the_recommended_count()
     {
+        // Three enabled anchors: at the recommended count, so no warning yet.
+        await _service.UpsertTargetAsync(new TargetDto { Name = "Quad9", Address = "9.9.9.9", Parent = "Modem" });
+        var pool = (await _store.ExportAsync()).Pools.Single();
+        await _service.UpsertPoolAsync(pool with { Members = ["Google", "Cloudflare", "Quad9"] });
+        Assert.DoesNotContain("anchors-below-recommended", await AnchorCodes());
+
         await _service.UpsertTargetAsync((await Existing("Cloudflare")) with { Enabled = false });
         Assert.Contains("anchors-below-recommended", await AnchorCodes());
     }

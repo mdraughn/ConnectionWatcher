@@ -53,9 +53,9 @@ internal static class ConfigMapping
         RecoveringThreshold = p.RecoveringThreshold,
     };
 
-    public static ProfileDto ToDto(this PingProfile p, Guid? id = null) => new()
+    public static ProfileDto ToDto(this PingProfile p) => new()
     {
-        Id = id, Name = p.Name,
+        Name = p.Name,
         NormalIntervalSeconds = p.NormalInterval.TotalSeconds,
         PingTimeoutSeconds = p.PingTimeout.TotalSeconds,
         BurstIntervalSeconds = p.BurstInterval.TotalSeconds,

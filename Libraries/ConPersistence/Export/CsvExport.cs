@@ -65,9 +65,6 @@ public static class CsvExport
     public static IEnumerable<string> RollupLines(IEnumerable<RollupRow> rows) =>
         rows.Select(RollupLine).Prepend(RollupHeader);
 
-    public static IEnumerable<string> GlitchLines(IEnumerable<GlitchRow> rows) =>
-        rows.Select(GlitchLine).Prepend(GlitchHeader);
-
     private static string Iso(DateTime utc) =>
         utc.ToString("yyyy-MM-dd'T'HH:mm:ss.FFF'Z'", CultureInfo.InvariantCulture);
 
