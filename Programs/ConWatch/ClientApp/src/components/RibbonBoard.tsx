@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { fetchTransitions } from "../lib/api";
 import { ribbonFill, type RowRole } from "../lib/encoding";
 import { clipAtReset, ribbonSegments, type RibbonSegment } from "../lib/historyData";
-import { HatchSwatch, MarkSwatch } from "./marks";
+import { HatchPattern, HatchSwatch, MarkSwatch, UNREACHABLE_LABEL } from "./marks";
+import { RibbonSvg } from "./StateRibbon";
 
 export interface BoardSubject {
   id: string;
@@ -41,28 +42,14 @@ function Row({ subject, segments, rangeStart, rangeEnd }: {
   rangeStart: Date;
   rangeEnd: Date;
 }) {
-  const total = rangeEnd.getTime() - rangeStart.getTime();
-  if (total <= 0) return null;
-  const clampPct = (ms: number) => Math.max(0, Math.min(100, (100 * (ms - rangeStart.getTime())) / total));
   return (
-    <svg width="100%" height="16" viewBox="0 0 100 10" preserveAspectRatio="none"
-      style={{ display: "block" }}>
-      {segments.map((s, i) => {
-        const x = clampPct(Date.parse(s.from));
-        const width = clampPct(Date.parse(s.to)) - x;
-        if (width <= 0) return null;
-        const fill = ribbonFill(subject.role, s.state);
-        return (
-          <rect key={i} x={x} y="0" width={width} height="10"
-            fill={fill === "hatch" ? "url(#cw-hatch)" : fill}>
-            <title>{`${subject.name} — ${s.state === "Unreachable"
-              ? "Unreachable behind a down parent (no data, no blame)" : s.state}\n` +
-              `${new Date(s.from).toLocaleString()} → ${new Date(s.to).toLocaleString()}` +
-              `${s.evidence ? `\n${s.evidence}` : ""}`}</title>
-          </rect>
-        );
-      })}
-    </svg>
+    <RibbonSvg segments={segments} rangeStart={rangeStart} rangeEnd={rangeEnd} height={16}
+      hatchId="cw-hatch" fillFor={(s) => ribbonFill(subject.role, s.state)}
+      titleFor={(s) => `${subject.name} — ${s.state === "Unreachable" ? UNREACHABLE_LABEL : s.state}
+` +
+        `${new Date(s.from).toLocaleString()} → ${new Date(s.to).toLocaleString()}` +
+        `${s.evidence ? `
+${s.evidence}` : ""}`} />
   );
 }
 
@@ -90,11 +77,7 @@ export function RibbonBoard({ subjects, rangeStart, rangeEnd }: {
     <div>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <defs>
-          <pattern id="cw-hatch" width="6" height="6" patternTransform="rotate(45)"
-            patternUnits="userSpaceOnUse">
-            <rect width="6" height="6" fill="var(--surface-2)" />
-            <rect width="3" height="6" fill="var(--grey-glitch)" />
-          </pattern>
+          <HatchPattern id="cw-hatch" />
         </defs>
       </svg>
       <div style={{ display: "grid", gridTemplateColumns: "10rem 1fr", gap: "3px 10px",
@@ -123,7 +106,7 @@ export function RibbonBoard({ subjects, rangeStart, rangeEnd }: {
         <MarkSwatch mark={{ shape: "bar", hue: "grey", depth: "out" }} barWidth={12} /> your
         equipment&apos;s own trouble &nbsp;·&nbsp;
         <MarkSwatch mark={{ shape: "bar", hue: "warm", depth: "out" }} barWidth={12} /> trouble out
-        there &nbsp;·&nbsp; <HatchSwatch width={12} /> unreachable behind a down parent &nbsp;·&nbsp;
+        there &nbsp;·&nbsp; <HatchSwatch width={12} /> {UNREACHABLE_LABEL.toLowerCase()} &nbsp;·&nbsp;
         one incident reads as a vertical stripe across the rows it touched.
       </p>
     </div>

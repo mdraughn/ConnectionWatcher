@@ -3,9 +3,9 @@
 // painted with the same encoding as everything else. Healthy bins wear the
 // VIVID green: at 10px the pale surface tint is illegible.
 import { useEffect, useRef, useState } from "react";
-import { HEALTHY_VIVID, markCss, type Mark } from "../lib/encoding";
+import { HEALTHY_VIVID, type Mark } from "../lib/encoding";
 import { fetchStrip, type StoryTopology } from "../lib/story";
-import { describeMark } from "./marks";
+import { describeMark, MarkCell } from "./marks";
 
 const BIN_MS = 60_000;
 const CELL = 10;   // px wide
@@ -55,21 +55,10 @@ export function EventStrip({ topology }: { topology: StoryTopology }) {
       {bins && (
         <>
           <div style={{ display: "flex", gap: GAP, alignItems: "center" }}>
-            {bins.map((mark, i) => {
-              if (mark?.shape === "dot") {
-                return (
-                  <span key={i} title={binTitle(i, mark)}
-                    style={{ width: CELL, height: 10, borderRadius: 2, background: HEALTHY_VIVID,
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      flexShrink: 0 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", ...markCss(mark) }} />
-                  </span>
-                );
-              }
-              return <span key={i} title={binTitle(i, mark)}
-                style={{ width: CELL, height: 10, borderRadius: 2, flexShrink: 0,
-                  ...(mark ? markCss(mark) : { background: HEALTHY_VIVID }) }} />;
-            })}
+            {bins.map((mark, i) => (
+              <MarkCell key={i} mark={mark} background={HEALTHY_VIVID} size={7} title={binTitle(i, mark)}
+                style={{ width: CELL, height: 10, borderRadius: 2, flexShrink: 0 }} />
+            ))}
             <span style={{ fontSize: "0.65rem", opacity: 0.55, whiteSpace: "nowrap" }}>now</span>
           </div>
           <div style={{ fontSize: "0.65rem", opacity: 0.55, marginTop: 2 }}>

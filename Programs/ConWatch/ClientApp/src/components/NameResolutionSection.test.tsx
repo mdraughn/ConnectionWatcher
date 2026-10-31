@@ -39,4 +39,14 @@ describe("NameResolutionSection", () => {
     expect(html).not.toContain(">dns.google<"); // a healthy name is not listed
     expect(html).toContain("Down");
   });
+  it("classes each chip by state and still shows Responding", () => {
+    const html = renderToStaticMarkup(<NameResolutionSection dns={dns({
+      systemResolvers: [
+        { id: "a", address: "10.0.0.1", label: "Your resolver 10.0.0.1", state: "Responding", detail: null, enabled: true },
+        { id: "b", address: "10.0.0.2", label: "Your resolver 10.0.0.2", state: "Down", detail: null, enabled: true },
+      ],
+    })} verdictState="Healthy" />);
+    expect(html).toContain('class="statechip down">Down<');
+    expect(html).toContain('class="statechip responding">Responding<');
+  });
 });

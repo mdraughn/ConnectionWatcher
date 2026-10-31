@@ -18,11 +18,16 @@ const SPINE_BG: Record<SpineSegment, string | undefined> = {
   pass: "linear-gradient(var(--cw-spine), var(--cw-spine)) 14px 0 / 2px 100% no-repeat",
 };
 
-const CHIP_COLOR: Record<string, string> = {
-  Faltering: "var(--cw-warn)", Recovering: "var(--cw-warn)",
-  Down: "var(--cw-down)", Unreachable: "var(--cw-unreach)",
-  Starting: "var(--cw-quiet)", Initializing: "var(--cw-quiet)",
-};
+const CHIP_STATES = new Set(["Faltering", "Recovering", "Down", "Unreachable", "Starting", "Initializing"]);
+
+/** A state name in its colour (see `.statechip.*` in site.css). Quiet states
+ *  (Responding, Unknown...) show nothing unless `always`. */
+export function StateChip({ state, always = false, style }: {
+  state: string; always?: boolean; style?: React.CSSProperties;
+}) {
+  if (!always && !CHIP_STATES.has(state)) return null;
+  return <span className={`statechip ${state.toLowerCase()}`} style={style}>{state}</span>;
+}
 
 export function TargetRow({ target, rails = [], spine = "none", show }: {
   target: TargetStatus; rails?: RailCell[]; spine?: SpineSegment; show?: RowParts;
@@ -30,8 +35,6 @@ export function TargetRow({ target, rails = [], spine = "none", show }: {
   const { stateChip = true, successRate = true, rtt = true, led = true } = show ?? {};
   const assumedTitle = target.assumed
     ? "assumed from before the restart — confirming with fresh pings" : null;
-  // a critical row always shows its state (spec §4.7: prominently)
-  const chip = (stateChip || target.critical) ? CHIP_COLOR[target.state] : undefined;
   return (
     <div className="cw-row" title={assumedTitle ?? undefined}
       style={spine !== "none" ? { background: SPINE_BG[spine] } : undefined}>
@@ -45,10 +48,9 @@ export function TargetRow({ target, rails = [], spine = "none", show }: {
         {target.address}{target.probe ? ` · ${target.probe.replace(":", "/")}` : ""}
       </span>
       <span className="stats">
-        {chip && <span className="statechip" style={{
-          color: chip, background: `color-mix(in srgb, ${chip} 14%, transparent)`,
-          marginRight: 10,
-        }}>{target.state}</span>}
+        {/* a critical row always shows its state (spec §4.7: prominently) */}
+        {(stateChip || target.critical) &&
+          <StateChip state={target.state} always={target.critical} style={{ marginRight: 10 }} />}
         {successRate && <span className="pct">{(target.successRate * 100).toFixed(0)}%</span>}
         {successRate && rtt && <span className="sep">·</span>}
         {rtt && <span className="rtt">{target.avgRtt.toFixed(0)} ms</span>}

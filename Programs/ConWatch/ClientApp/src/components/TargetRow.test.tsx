@@ -40,4 +40,15 @@ describe("TargetRow", () => {
   it("leaves non-critical rows unmarked", () => {
     expect(renderToStaticMarkup(<TargetRow target={t()} />)).not.toContain("cw-critical");
   });
+  it("classes the chip by state; colour lives in the stylesheet", () => {
+    const html = renderToStaticMarkup(<TargetRow target={t()} />);
+    expect(html).toContain('class="statechip down"');
+    expect(html).not.toMatch(/statechip[^>]*color/);
+  });
+  it("shows no chip for a Responding row unless it is critical", () => {
+    expect(renderToStaticMarkup(<TargetRow target={t({ state: "Responding" })} />))
+      .not.toContain("statechip");
+    expect(renderToStaticMarkup(<TargetRow target={t({ state: "Responding", critical: true })} />))
+      .toContain('class="statechip responding"');
+  });
 });

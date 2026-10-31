@@ -1,16 +1,10 @@
 // "Name resolution": the host's resolvers and the check names, beside the LAN
 // section (spec 2026-10-10 §5.2, D5). It never colours the verdict or the tray.
 import { dnsHeadline, troubledNames } from "../lib/dnsSummary";
+import { StateChip } from "./TargetRow";
 import type { DnsResolverStatus, DnsStatus } from "../lib/types";
 
-const CHIP_COLOR: Record<string, string> = {
-  Faltering: "var(--cw-warn)", Recovering: "var(--cw-warn)",
-  Down: "var(--cw-down)", Unreachable: "var(--cw-unreach)",
-  Starting: "var(--cw-quiet)", Initializing: "var(--cw-quiet)",
-};
-
 function ResolverRow({ r }: { r: DnsResolverStatus }) {
-  const chip = CHIP_COLOR[r.state];
   return (
     <li>
       <div className="cw-row">
@@ -18,9 +12,7 @@ function ResolverRow({ r }: { r: DnsResolverStatus }) {
         <span>{r.label}</span>
         <span className="addr">{r.address}</span>
         <span className="stats">
-          <span className="statechip" style={chip ? {
-            color: chip, background: `color-mix(in srgb, ${chip} 14%, transparent)`,
-          } : undefined}>{r.state}</span>
+          <StateChip state={r.state} always />
           {r.state !== "Responding" && r.detail && <span className="sep"> · </span>}
           {r.state !== "Responding" && r.detail && <small className="detail">{r.detail}</small>}
         </span>

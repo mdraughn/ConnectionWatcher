@@ -195,6 +195,14 @@ main.container h5 { font-size: 0.85rem; }
 .cw-row .addr { font-family: var(--mono); font-size: 0.735rem; color: var(--faint); white-space: nowrap; }
 .cw-row .statechip { font-size: 0.69rem; font-weight: 640; border-radius: 4px;
     padding: 2px 7px; white-space: nowrap; }
+.statechip.faltering, .statechip.recovering { color: var(--cw-warn);
+    background: color-mix(in srgb, var(--cw-warn) 14%, transparent); }
+.statechip.down { color: var(--cw-down);
+    background: color-mix(in srgb, var(--cw-down) 14%, transparent); }
+.statechip.unreachable { color: var(--cw-unreach);
+    background: color-mix(in srgb, var(--cw-unreach) 14%, transparent); }
+.statechip.starting, .statechip.initializing { color: var(--cw-quiet);
+    background: color-mix(in srgb, var(--cw-quiet) 14%, transparent); }
 .cw-row .stats { margin-left: auto; color: var(--muted); font-size: 0.78rem;
     font-variant-numeric: tabular-nums; white-space: nowrap;
     /* A pool row lists its members here; on a phone that must truncate,

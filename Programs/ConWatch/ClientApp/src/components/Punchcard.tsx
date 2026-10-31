@@ -1,9 +1,8 @@
 // The 30-day punchcard: hours as rows, days as columns, ink only for trouble.
 // Placement-agnostic: feed it cells from lib/story and put it on any page.
 import type { PunchcardCell } from "../lib/incidents";
-import { markCss } from "../lib/encoding";
 import { localDayStart, localHourKey } from "../lib/localTime";
-import { describeMark, EncodingLegend, MarkSwatch } from "./marks";
+import { describeMark, EncodingLegend, MarkCell } from "./marks";
 
 const CELL_W = 22;
 const CELL_H = 14;
@@ -41,17 +40,8 @@ export function Punchcard({ cells, days, now }: {
               }
               const title = `${dayLabel(day)} ${hour}:00 — ${describeMark(cell.mark)}` +
                 (cell.count > 1 ? ` (+${cell.count - 1} more this hour)` : "");
-              if (cell.mark.shape === "dot") {
-                return (
-                  <div key={`c${day}-${hour}`} title={title}
-                    style={{ ...base, background: "rgba(128,128,128,0.10)", display: "flex",
-                      alignItems: "center", justifyContent: "center" }}>
-                    <MarkSwatch mark={cell.mark} />
-                  </div>
-                );
-              }
-              return <div key={`c${day}-${hour}`} title={title}
-                style={{ ...base, ...markCss(cell.mark) }} />;
+              return <MarkCell key={`c${day}-${hour}`} mark={cell.mark} title={title}
+                background="rgba(128,128,128,0.10)" size={9} style={base} />;
             })}
           </div>
         ))}

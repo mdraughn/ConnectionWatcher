@@ -21,6 +21,38 @@ export function HatchSwatch({ width = 22, height = 9 }: { width?: number; height
     verticalAlign: "baseline", background: HATCH }} />;
 }
 
+/** The "unreachable" tooltip/legend wording, shared by every ribbon and legend. */
+export const UNREACHABLE_LABEL = "Unreachable behind a down parent (no data, no blame)";
+
+/** The SVG `<pattern>` behind HATCH, for ribbons drawn as <rect>s. Give each
+ *  svg that defines it its own id. */
+export function HatchPattern({ id }: { id: string }) {
+  return (
+    <pattern id={id} width="6" height="6" patternTransform="rotate(45)"
+      patternUnits="userSpaceOnUse">
+      <rect width="6" height="6" fill="var(--surface-2)" />
+      <rect width="3" height="6" fill="var(--grey-glitch)" />
+    </pattern>
+  );
+}
+
+/** One cell of a grid or strip: a dot mark sits centered on `background`,
+ *  any other mark is the cell's own fill. `size` is the dot's diameter;
+ *  `style` carries the cell's geometry. */
+export function MarkCell({ mark, background, size, title, style }: {
+  mark: Mark | null; background: string; size: number; title?: string; style?: React.CSSProperties;
+}) {
+  if (mark?.shape === "dot") {
+    return (
+      <div title={title}
+        style={{ ...style, background, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, ...markCss(mark) }} />
+      </div>
+    );
+  }
+  return <div title={title} style={{ ...style, ...(mark ? markCss(mark) : { background }) }} />;
+}
+
 export function describeMark(mark: Mark): string {
   const who = mark.ambiguous ? "trunk or outside (ambiguous)"
     : mark.hue === "grey" ? "your equipment"
@@ -62,7 +94,7 @@ export function EncodingLegend({ withHatch = false }: { withHatch?: boolean }) {
       <div style={{ marginTop: 6 }}>
         <MarkSwatch mark={{ shape: "bar", hue: "warm", depth: "glitch", ambiguous: true }} />
         {" "}ambiguous — evidence splits between your equipment and the outside world
-        {withHatch && <>{"  ·  "}<HatchSwatch /> unreachable behind a down parent (no data, no blame)</>}
+        {withHatch && <>{"  ·  "}<HatchSwatch /> {UNREACHABLE_LABEL.toLowerCase()}</>}
       </div>
     </div>
   );
