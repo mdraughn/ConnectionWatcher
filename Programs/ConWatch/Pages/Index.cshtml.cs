@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace ConWatch.Pages;
 
 public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport health,
-    Microsoft.EntityFrameworkCore.IDbContextFactory<ConPersistence.ConWatchDbContext> dbFactory,
     ConWatch.Auth.AdminGate gate, ConPersistence.Settings.SettingsStore settingsStore,
     ConPersistence.Config.ConfigStore configStore, StatusSource status) : PageModel
 {
@@ -44,9 +43,7 @@ public class IndexModel(WatcherHostService host, ConWatch.Health.HealthReport he
         // Never while locked: Setup would bounce straight back here (loop).
         if (!gate.IsLocked(User))
         {
-            await using var db = await dbFactory.CreateDbContextAsync();
-            if (!await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                    .AnyAsync(db.Targets, t => !t.SystemManaged))
+            if (!await configStore.HasUserTargetsAsync())
                 return Redirect("/Setup");
         }
 

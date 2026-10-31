@@ -24,6 +24,14 @@ public class ConfigStore(IDbContextFactory<ConWatchDbContext> dbFactory, ILogger
         return !await db.Profiles.AnyAsync();
     }
 
+    /// <summary>True when any target is user-made; system-managed ones (the
+    /// resolver targets that appear within a second of first boot) do not count.</summary>
+    public async Task<bool> HasUserTargetsAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.Targets.AnyAsync(t => !t.SystemManaged);
+    }
+
     /// <summary>
     /// Seeds built-in profiles and, when valid file config is supplied, its
     /// custom profiles, targets, and pools. Invalid file config is skipped.

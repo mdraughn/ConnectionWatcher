@@ -31,6 +31,33 @@ public class ConfigStoreTests : IDisposable
     };
 
     [Fact]
+    public async Task Has_user_targets_ignores_system_managed_ones()
+    {
+        var service = new ConfigService(_factory, _store);
+        Assert.False(await _store.HasUserTargetsAsync());
+        await _store.SeedAsync(null);
+        Assert.False(await _store.HasUserTargetsAsync());
+
+        await service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto
+            {
+                Name = "Your resolver 203.0.113.1", Address = "203.0.113.1", Profile = "Resolver",
+                Probe = "dns", Scope = ConCore.Targets.TargetScope.Resolver, SystemManaged = true,
+            });
+            return ConfigResult.Ok();
+        });
+        Assert.False(await _store.HasUserTargetsAsync());
+
+        await service.EditDocumentAsync(doc =>
+        {
+            doc.Targets.Add(new TargetDto { Name = "Router", Address = "192.168.1.1", Profile = "Internal" });
+            return ConfigResult.Ok();
+        });
+        Assert.True(await _store.HasUserTargetsAsync());
+    }
+
+    [Fact]
     public async Task Seed_with_null_creates_builtin_profiles_only()
     {
         Assert.True(await _store.IsEmptyAsync());

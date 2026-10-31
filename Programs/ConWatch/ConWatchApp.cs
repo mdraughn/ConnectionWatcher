@@ -56,6 +56,7 @@ public static class ConWatchApp
             .AddConWatchDatabase(builder.Configuration, out var stateDir)
             .AddConWatchEngine()
             .AddConWatchPersistence()
+            .AddConWatchDiscovery()
             .AddConWatchClone()
             .AddConWatchNotifiers()
             .AddConWatchAdminAuth(stateDir)

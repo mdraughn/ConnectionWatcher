@@ -68,6 +68,16 @@ public static class ProbePolicy
 {
     public static readonly int[] PublicPorts = [80, 443, 53];
 
+    /// <summary>The TCP ports worth trying for an address: the common web ports
+    /// for a private address, <see cref="PublicPorts"/> for a public one, plus
+    /// the requested port when the policy allows it. Distinct, order kept.</summary>
+    public static IReadOnlyList<int> CandidatePorts(string address, int? requestedPort) =>
+        (IsPrivate(address) ? new[] { 80, 443, 8080, 8443 } : PublicPorts)
+            .Concat(requestedPort is { } p &&
+                IsAllowed(address, new ProbeSpec(ProbeKind.Tcp, p), out _)
+                ? [p] : Array.Empty<int>())
+            .Distinct().ToList();
+
     public static bool IsAllowed(string address, ProbeSpec probe, out string? reason)
     {
         reason = null;

@@ -52,24 +52,24 @@ public static class ConWatchServices
         services.AddSingleton<ConCore.Dns.IDnsLookupNames>(sp => sp.GetRequiredService<ConInfrastructure.NameResolution.DnsLookupNames>());
         services.AddSingleton<ConInfrastructure.NameResolution.ISystemResolverSource, ConInfrastructure.NameResolution.SystemResolverSource>();
         services.AddSingleton<NameResolution.SystemResolverService>();
+        services.AddSingleton<ConCore.Dns.IDohDetector>(_ => ConInfrastructure.NameResolution.DohConfiguration.ForThisPlatform());
         services.AddSingleton<IPingTransceiverFactory, PingTransceiverFactoryIcmp>();
         services.AddSingleton<IDomainNameResolverFactory, DomainNameResolverFactory>();
         services.AddSingleton<ConInfrastructure.Traceroute.ITtlProbe, ConInfrastructure.Traceroute.IcmpTtlProbe>();
         services.AddSingleton<ConInfrastructure.Asn.IAsnLookup, ConInfrastructure.Asn.CymruAsnLookup>();
         services.AddSingleton<ConInfrastructure.Traceroute.TracerouteRunner>();
-        services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery>(
-            _ => new ConInfrastructure.Discovery.GatewayDiscovery());
-        services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
         services.AddSingleton<SetupService>();
         services.AddSingleton<WarmStartSeeder>();
         services.AddSingleton<WatcherHostService>();
         return services;
     }
 
-    public static IServiceCollection AddConWatchPersistence(this IServiceCollection services)
+    /// <summary>Gateway/WAN discovery and the LAN scanner behind the Discoveries page.</summary>
+    public static IServiceCollection AddConWatchDiscovery(this IServiceCollection services)
     {
-        services.AddSingleton<ConfigStore>();
-        services.AddSingleton<ConfigService>();
+        services.AddSingleton<ConInfrastructure.Discovery.IGatewayDiscovery>(
+            _ => new ConInfrastructure.Discovery.GatewayDiscovery());
+        services.AddSingleton<ConInfrastructure.Discovery.IWanAddressProbe, ConInfrastructure.Discovery.UpnpWanAddressProbe>();
         services.AddSingleton<ConPersistence.Discoveries.DiscoveryStore>();
         services.AddSingleton(new ConInfrastructure.Discovery.LanScanner(
             new ConInfrastructure.Discovery.SystemLocalNetworks(),
@@ -79,8 +79,14 @@ public static class ConWatchServices
             ConInfrastructure.Discovery.LanScanner.ReverseDns));
         services.AddSingleton<ConInfrastructure.Discovery.IDiscoveryScanner, ConInfrastructure.Discovery.DiscoveryScanner>();
         services.AddSingleton<Discoveries.DiscoverySearchService>();
+        return services;
+    }
+
+    public static IServiceCollection AddConWatchPersistence(this IServiceCollection services)
+    {
+        services.AddSingleton<ConfigStore>();
+        services.AddSingleton<ConfigService>();
         services.AddSingleton<SettingsStore>();
-        services.AddSingleton<ConCore.Dns.IDohDetector>(_ => ConInfrastructure.NameResolution.DohConfiguration.ForThisPlatform());
         services.AddSingleton<ConfigHealth>();
         services.AddSingleton<Health.HealthReport>();
         services.AddSingleton<ConPersistence.Report.IspReportBuilder>();

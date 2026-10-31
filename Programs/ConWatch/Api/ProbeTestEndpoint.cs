@@ -41,12 +41,7 @@ public static class ProbeTestEndpoint
                     ResolvedIps = resolvedIps, ResolutionError = resolutionError,
                     Results = Array.Empty<object>() });
 
-            var ports = (ProbePolicy.IsPrivate(request.Address)
-                    ? new[] { 80, 443, 8080, 8443 } : ProbePolicy.PublicPorts)
-                .Concat(request.Port is { } p &&
-                    ProbePolicy.IsAllowed(request.Address, new ProbeSpec(ProbeKind.Tcp, p), out _)
-                    ? [p] : Array.Empty<int>())
-                .Distinct().ToList();
+            var ports = ProbePolicy.CandidatePorts(request.Address, request.Port);
             var candidates = new List<ProbeSpec> { ProbeSpec.Icmp };
             candidates.AddRange(ports.Select(port => new ProbeSpec(ProbeKind.Tcp, port)));
 
