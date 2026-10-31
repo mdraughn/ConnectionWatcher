@@ -6,7 +6,7 @@
 param([string]$Url = "http://nas.example.com:8080")
 $ErrorActionPreference = "Stop"
 
-$out = Join-Path $PSScriptRoot "testdata\nas-snapshot.json"
+$out = Join-Path $PSScriptRoot "..\testdata\nas-snapshot.json"
 New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
 Invoke-WebRequest "$Url/api/v1/export/snapshot" -OutFile $out -TimeoutSec 60
 

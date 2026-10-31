@@ -17,8 +17,4 @@
     <ProjectReference Include="..\ConCore\ConCore.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Examples\" />
-  </ItemGroup>
-
 </Project>

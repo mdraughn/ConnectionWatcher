@@ -12,7 +12,7 @@ namespace ConWatch.Tests;
 /// green. The snapshot is imported into a temp database and pings are faked,
 /// so these tests never touch the network or any production system.
 ///
-/// To refresh: .\Get-NasSnapshot.ps1 (fetches the open, secret-sanitized
+/// To refresh: .\tools\Get-NasSnapshot.ps1 (fetches the open, secret-sanitized
 /// /api/v1/export/snapshot endpoint).
 /// </summary>
 public class RealDataSnapshotTests : IAsyncLifetime
