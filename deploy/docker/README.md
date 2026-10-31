@@ -6,6 +6,9 @@ cd deploy/docker && docker compose up -d
 
 The container needs `NET_RAW` (already in `compose.yaml`) so ping and traceroute work.
 
+**Synology:** create the `./data` folder yourself before the first start — Synology's
+Docker does not auto-create bind-mount folders and fails with "Bind mount failed".
+
 ## Bridge or host networking?
 
 | | Bridge (default) | Host (`network_mode: host`) |

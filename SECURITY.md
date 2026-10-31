@@ -29,8 +29,8 @@ model is deliberately simple:
   API and the MCP `list_discoveries` tool are open only while no admin
   password is set.
 - **The admin surface has a single-password gate.** Setting an admin
-  password locks configuration, admin actions, traceroute, and setup behind
-  a session cookie. It stops casual tinkering; it is not a hardened
+  password locks configuration, settings and admin actions, the Data page,
+  traceroute, and setup behind a session cookie. It stops casual tinkering; it is not a hardened
   authentication system. There is no user management, no rate limiting on
   the login, and password recovery is "delete `admin-password.txt` next to
   the database".
@@ -49,8 +49,8 @@ model is deliberately simple:
   bound to the server URL it was entered for, saved only after the server accepts it, and never sent
   over plain HTTP to another machine unless you approve that host (an approval that lasts only for
   the session). "Forget saved admin password" in the tray settings deletes it.
-- **No telemetry.** See the Privacy section of the README for the complete
-  list of network traffic the app can generate.
+- **No telemetry.** See [PRIVACY.md](PRIVACY.md) for the complete list of
+  network traffic the app can generate.
 
 If you expose ConnectionWatcher beyond your LAN, put it behind an
 HTTPS-terminating reverse proxy and treat the open watching surface as

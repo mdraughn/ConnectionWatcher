@@ -19,7 +19,7 @@
 services:
   conwatch:
     # Published by .github/workflows/publish-image.yml (amd64 + arm64).
-    # While the package is private, log the registry in first:
+    # If the pull is denied, the package may still be private — log in first:
     #   docker login ghcr.io   (username + a PAT with read:packages)
     # To build from source instead, replace `image:` with:
     #   build: { context: ../.. }
