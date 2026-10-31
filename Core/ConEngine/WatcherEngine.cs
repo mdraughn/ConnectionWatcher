@@ -11,7 +11,6 @@ using ConEngine.Topology;
 using ConEngine.Tracking;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
 
 namespace ConEngine;
 
@@ -33,8 +32,6 @@ public class WatcherEngine
     private readonly Dictionary<Guid, TargetMonitor> _monitors = new();
     private readonly List<PoolCoordinator> _poolCoordinators = new();
     private readonly List<IDisposable> _subscriptions = new();
-    /// <summary>Per hostname target: completing the source wakes its DNS refresh loop early.</summary>
-    private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _dnsRefreshRequests = new();
     private readonly Subject<TargetTransition> _transitionSubject = new();
     private readonly Subject<ModelConditionChange> _modelSubject = new();
     private readonly Subject<(Guid TargetId, PingResult Result)> _pingSampleSubject = new();
@@ -322,13 +319,15 @@ public class WatcherEngine
             ex => _log.LogError(ex, "Error in ping result stream"),
             () => _log.LogInformation("Ping result stream completed")));
 
+        var follower = new HostnameFollower(_resolverFactory, _timeProvider,
+            _dnsRefreshInterval, _log, Activate, RepointAsync);
+
         // A hostname target that goes Down while the trunk is fine has most
         // likely had its address retired: re-resolve now, not at the next tick.
         _subscriptions.Add(_transitionSubject.Subscribe(t =>
         {
-            if (t.Kind == TransitionSubjectKind.Target && t.To == HostState.Down &&
-                _dnsRefreshRequests.TryGetValue(t.TargetId, out var request))
-                request.TrySetResult();
+            if (t.Kind == TransitionSubjectKind.Target && t.To == HostState.Down)
+                follower.RequestRefresh(t.TargetId);
         }));
 
         // Activate every enabled target (immediately for IP literals, via DNS otherwise).
@@ -338,7 +337,7 @@ public class WatcherEngine
             if (IPAddress.TryParse(target.Address, out var ip))
                 Activate(monitor, ip);
             else
-                _ = Task.Run(() => ResolveAndActivateAsync(monitor, target.Address, ct), ct);
+                _ = Task.Run(() => follower.FollowAsync(monitor, target.Address, ct), ct);
         }
 
         _log.LogInformation("WatcherEngine started with {MonitorCount} active monitors", _monitors.Count);
@@ -380,111 +379,6 @@ public class WatcherEngine
         monitor.Repoint(ip);
         StartController(monitor, ip);
         monitor.Discipline.TriggerBurst();
-    }
-
-    /// <summary>
-    /// Owns a hostname target for the engine's lifetime: resolves (with backoff
-    /// until the first answer), activates, then keeps re-resolving every
-    /// <see cref="_dnsRefreshInterval"/> and immediately when the target goes
-    /// Down. The current address is kept while it is still in the answer set;
-    /// when it drops out the target is re-pointed at the first address. A
-    /// failed refresh keeps the current address.
-    /// </summary>
-    private async Task ResolveAndActivateAsync(TargetMonitor monitor, string hostname, CancellationToken ct)
-    {
-        var backoff = TimeSpan.FromSeconds(30);
-        var maxBackoff = TimeSpan.FromMinutes(5);
-        using var resolver = _resolverFactory.Create(ct);
-        IPAddress? current = null;
-
-        while (!ct.IsCancellationRequested)
-        {
-            List<IPAddress> answers = [];
-            try
-            {
-                var result = await resolver.ResolveAsync(hostname, 5000).ConfigureAwait(false);
-                answers = result.IPv4Addresses.ToList();
-                if (current is null)
-                {
-                    if (!result.Success)
-                        monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {result.Status}");
-                    else if (answers.Count == 0)
-                        monitor.ReportResolutionFailure($"No IPv4 address for '{hostname}'");
-                }
-                else if (!result.Success)
-                {
-                    _log.LogDebug("DNS refresh failed for {Hostname} ({Status}); keeping {Ip}",
-                        hostname, result.Status, current);
-                }
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception ex)
-            {
-                if (current is null)
-                {
-                    _log.LogWarning(ex, "DNS resolution failed for {Hostname}", hostname);
-                    monitor.ReportResolutionFailure($"DNS lookup failed for '{hostname}': {ex.Message}");
-                }
-                else
-                {
-                    _log.LogDebug(ex, "DNS refresh failed for {Hostname}; keeping {Ip}", hostname, current);
-                }
-            }
-
-            try
-            {
-                if (current is null)
-                {
-                    if (answers.Count == 0)
-                    {
-                        // Not activated yet: retry with backoff until DNS answers.
-                        try { await Task.Delay(backoff, _timeProvider, ct).ConfigureAwait(false); }
-                        catch (OperationCanceledException) { return; }
-                        backoff = backoff * 2 > maxBackoff ? maxBackoff : backoff * 2;
-                        continue;
-                    }
-                    // Adopt the answer only once the call it feeds has
-                    // returned: the catch below promises a retry at the next
-                    // refresh, which it can only keep if a throw leaves
-                    // `current` as it was.
-                    var next = answers[0];
-                    Activate(monitor, next);
-                    current = next;
-                }
-                else if (answers.Count > 0 && !answers.Contains(current))
-                {
-                    _log.LogInformation("{Target}: {Old} left the DNS answer set; re-pointing to {New}",
-                        monitor.Target.Name, current, answers[0]);
-                    var next = answers[0];
-                    await RepointAsync(monitor, next).ConfigureAwait(false);
-                    current = next;
-                }
-            }
-            catch (ObjectDisposedException) when (ct.IsCancellationRequested)
-            {
-                return; // the manager stopped under us
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _log.LogError(ex, "{Target}: activating/re-pointing failed; will retry at the next refresh",
-                    monitor.Target.Name);
-            }
-
-            // Sleep until the refresh interval or a Down transition, whichever first.
-            var request = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _dnsRefreshRequests[monitor.Target.Id] = request;
-            try
-            {
-                await Task.WhenAny(Task.Delay(_dnsRefreshInterval, _timeProvider, ct), request.Task).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
     }
 
     public async Task StopAsync()
