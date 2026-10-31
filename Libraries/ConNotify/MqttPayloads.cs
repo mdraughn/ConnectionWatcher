@@ -199,12 +199,3 @@ public static class HaDiscovery
     public static string VerdictAttributes(string? detail, string? @operator, DnsBlame? dnsBlame) =>
         JsonSerializer.Serialize(new { detail, @operator, dnsBlame = Blame(dnsBlame) }, Options);
 }
-
-/// <summary>Webhook + MQTT transition-event body: the shared transition DTO.</summary>
-public static class WebhookPayload
-{
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
-
-    public static string ToJson(TargetTransition t) =>
-        JsonSerializer.Serialize(TransitionDto.From(t), Options);
-}

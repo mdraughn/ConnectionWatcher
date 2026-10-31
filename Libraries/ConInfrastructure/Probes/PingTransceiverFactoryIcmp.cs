@@ -3,7 +3,7 @@ using ConCore;
 using ConCore.Dns;
 using ConInfrastructure.NameResolution;
 
-namespace ConInfrastructure;
+namespace ConInfrastructure.Probes;
 
 /// <summary>The production transceivers: ICMP echo, TCP connect, or a DNS query
 /// that asks the host-maintained lookup names (none given: every DNS probe

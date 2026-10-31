@@ -95,7 +95,7 @@ public class DnsResultLogTests
             ],
         };
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options));
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);

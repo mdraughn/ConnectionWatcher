@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using ConCore;
 using ConInfrastructure;
+using ConInfrastructure.Probes;
 
 namespace ConEngine.Tests;
 

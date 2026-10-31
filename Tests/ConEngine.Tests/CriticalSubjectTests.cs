@@ -23,7 +23,7 @@ public class CriticalSubjectTests
     public async Task IsCriticalSubject_is_true_only_for_critical_targets()
     {
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(Options()));
         Assert.False(engine.IsCriticalSubject(Guid.NewGuid())); // before start: no graph, no throw
 

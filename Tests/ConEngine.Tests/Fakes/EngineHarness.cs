@@ -110,7 +110,7 @@ public sealed class EngineHarness : IAsyncDisposable
     public async Task StartAsync(EngineSeed? seed = null)
     {
         _started = true;
-        _engine = new WatcherEngine(Time, Pings, new ConInfrastructure.DomainNameResolverFactory(),
+        _engine = new WatcherEngine(Time, Pings, new ConInfrastructure.NameResolution.DomainNameResolverFactory(),
             NullLoggerFactory.Instance, Options.Create(_options), Options.Create(_verdict));
         _subscriptions.Add(_engine.TransitionSource.Subscribe(t => { lock (_gate) _transitions.Add(t); }));
         _subscriptions.Add(_engine.GlitchSource.Subscribe(g => { lock (_gate) _glitches.Add(g); }));

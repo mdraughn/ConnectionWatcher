@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using ConCore;
 
-namespace ConInfrastructure;
+namespace ConInfrastructure.Probes;
 
 /// <summary>
 /// TCP-connect probe: one fresh socket per probe, no data ever sent, closed

@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using ConCore;
 
-namespace ConInfrastructure;
+namespace ConInfrastructure.Probes;
 
 /// <summary>
 /// ICMP echo probe over System.Net.NetworkInformation.Ping. One instance per

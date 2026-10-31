@@ -41,7 +41,7 @@ public class EngineExtensionTests
             Targets = [new TargetConfig { Name = "Router", Address = "10.0.0.9", Profile = "Fast" }],
         };
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options));
         var samples = new List<(Guid, ConCore.PingResult)>();
         engine.PingSampleSource.Subscribe(s => { lock (samples) samples.Add(s); });

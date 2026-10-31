@@ -22,7 +22,7 @@ public class ProbeThreadingTests
         };
         var fake = new FakePingTransceiverFactory();
         var engine = new WatcherEngine(TimeProvider.System, fake,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options));
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);
@@ -73,7 +73,7 @@ public class ProbeThreadingTests
         };
         var fake = new FakePingTransceiverFactory();
         var engine = new WatcherEngine(TimeProvider.System, fake,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options));
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);
@@ -143,7 +143,7 @@ public class ProbeThreadingTests
         };
         var fake = new FakePingTransceiverFactory();
         var engine = new WatcherEngine(TimeProvider.System, fake,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options));
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);

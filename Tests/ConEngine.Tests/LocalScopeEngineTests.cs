@@ -30,7 +30,7 @@ public class LocalScopeEngineTests
     public async Task IsLocalSubject_is_true_only_for_Local_targets()
     {
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(Options()));
         Assert.False(engine.IsLocalSubject(Guid.NewGuid())); // before start: no graph, no throw
 

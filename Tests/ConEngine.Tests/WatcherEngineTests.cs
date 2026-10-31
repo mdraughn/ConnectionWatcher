@@ -44,7 +44,7 @@ public class WatcherEngineTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _engine = new WatcherEngine(TimeProvider.System, _factory,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(Options()));
         _engine.TransitionSource.Subscribe(t => { lock (_transitions) { _transitions.Add(t); } });
         await _engine.StartAsync(_cts.Token);
@@ -81,7 +81,7 @@ public class WatcherEngineTests : IAsyncLifetime
     public void The_loss_windows_exist_before_start()
     {
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(Options()));
         Assert.NotNull(engine.Loss);
         Assert.Empty(engine.Loss.Closed);
@@ -102,7 +102,7 @@ public class WatcherEngineTests : IAsyncLifetime
         };
         var fake = new FakePingTransceiverFactory();
         var engine = new WatcherEngine(TimeProvider.System, fake,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options));
         using var cts = new CancellationTokenSource();
         await engine.StartAsync(cts.Token);
@@ -219,7 +219,7 @@ public class WatcherEngineTests : IAsyncLifetime
     public void Model_conditions_are_empty_not_null_before_start()
     {
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(Options()));
         Assert.Empty(engine.ModelConditions);
         Assert.Null(engine.ModelCheck);

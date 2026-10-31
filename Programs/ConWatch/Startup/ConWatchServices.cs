@@ -1,6 +1,8 @@
 using ConCore;
 using ConEngine.Configuration;
 using ConInfrastructure;
+using ConInfrastructure.NameResolution;
+using ConInfrastructure.Probes;
 using ConPersistence;
 using ConPersistence.Config;
 using ConPersistence.Recording;

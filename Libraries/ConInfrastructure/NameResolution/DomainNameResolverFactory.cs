@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using ConCore;
 
-namespace ConInfrastructure
+namespace ConInfrastructure.NameResolution
 {
     public class DomainNameResolverFactory : IDomainNameResolverFactory
     {

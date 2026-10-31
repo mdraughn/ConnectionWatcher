@@ -218,7 +218,7 @@ public class WarmStartTests
             }
         };
         var engine = new WatcherEngine(TimeProvider.System, factory,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Options.Create(options));
         var cts = new CancellationTokenSource();
         try
@@ -445,7 +445,7 @@ public class WarmStartTests
             },
         };
         var engine = new WatcherEngine(TimeProvider.System, new FakePingTransceiverFactory(),
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Options.Create(options), Options.Create(new VerdictOptions { AnchorPool = "Internet" }));
         using var cts = new CancellationTokenSource();
         try

@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using ConCore;
 
-namespace ConInfrastructure;
+namespace ConInfrastructure.NameResolution;
 
 /// <summary>
 /// Domain name resolver over System.Net.Dns. Cancellation of the token given

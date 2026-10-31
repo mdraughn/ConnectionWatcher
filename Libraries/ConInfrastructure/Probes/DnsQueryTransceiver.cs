@@ -3,8 +3,9 @@ using System.Net;
 using System.Net.Sockets;
 using ConCore;
 using ConCore.Dns;
+using ConInfrastructure.NameResolution;
 
-namespace ConInfrastructure.NameResolution;
+namespace ConInfrastructure.Probes;
 
 /// <summary>
 /// DNS probe (spec 2026-10-10 §4.2): one UDP query per sample for the next

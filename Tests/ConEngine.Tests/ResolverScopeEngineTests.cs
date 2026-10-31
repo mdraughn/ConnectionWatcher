@@ -32,7 +32,7 @@ public class ResolverScopeEngineTests
     {
         var pings = new FakePingTransceiverFactory();
         var engine = new WatcherEngine(TimeProvider.System, pings,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(Options()));
         Assert.False(engine.IsSideSubject(Guid.NewGuid())); // before start: no graph, no throw
 
@@ -104,7 +104,7 @@ public class ResolverScopeEngineTests
         };
         var pings = new FakePingTransceiverFactory();
         var engine = new WatcherEngine(TimeProvider.System, pings,
-            new ConInfrastructure.DomainNameResolverFactory(), NullLoggerFactory.Instance,
+            new ConInfrastructure.NameResolution.DomainNameResolverFactory(), NullLoggerFactory.Instance,
             Microsoft.Extensions.Options.Options.Create(options),
             Microsoft.Extensions.Options.Options.Create(new VerdictOptions { AnchorPool = "Internet" }));
         using var cts = new CancellationTokenSource();
