@@ -1,13 +1,13 @@
 // Fetches and derives the incident story (punchcard cells + ledger) from the
 // open APIs. Page-agnostic: the dashboard uses it today; any page can.
 import type { Mark } from "./encoding";
-import type { GlitchItem } from "./glitchData";
+import { fetchGlitches, fetchTransitions } from "./api";
 import { isoCompare, localDayStart } from "./localTime";
 import {
   buildLedger, punchcardCells, stripBins, verdictWindows, windowMark,
   type LedgerItem, type PunchcardCell, type VerdictWindow,
 } from "./incidents";
-import type { TransitionEvent } from "./types";
+import type { GlitchItem } from "./types";
 
 export interface StoryTopology {
   trunkNames?: string[];
@@ -36,14 +36,10 @@ async function fetchAndDerive(topology: StoryTopology, from: Date): Promise<Deri
   const anchors = new Set(topology.anchorNames ?? []);
   const threshold = topology.weatherThreshold ?? 2;
 
-  const [transitionsRes, glitchesRes] = await Promise.all([
-    fetch(`/api/v1/transitions?from=${from.toISOString()}&limit=1000&scope=internet`),
-    fetch(`/api/v1/glitches?from=${from.toISOString()}&limit=1000&scope=internet`),
+  const [transitions, glitches] = await Promise.all([
+    fetchTransitions({ from, limit: 1000, scope: "internet" }),
+    fetchGlitches({ from, limit: 1000, scope: "internet" }),
   ]);
-  const transitions = (transitionsRes.ok
-    ? ((await transitionsRes.json()).items as TransitionEvent[]) : []).reverse(); // chronological
-  const glitches = glitchesRes.ok
-    ? ((await glitchesRes.json()).items as GlitchItem[]) : [];
 
   const windows = verdictWindows(
     transitions.filter((t) => t.subjectKind === "Verdict"), now.toISOString());

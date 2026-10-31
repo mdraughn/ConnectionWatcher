@@ -1,17 +1,12 @@
 // SignalR wrapper: live snapshots + transitions, resync on reconnect.
 import { HubConnectionBuilder, HubConnectionState } from "@microsoft/signalr";
+import { fetchSnapshot } from "./api";
 import type { Snapshot, TransitionEvent } from "./types";
 
 export interface HubCallbacks {
   onSnapshot: (snapshot: Snapshot) => void;
   onTransition: (transition: TransitionEvent) => void;
   onConnectionChange: (connected: boolean) => void;
-}
-
-export async function fetchSnapshot(): Promise<Snapshot | null> {
-  const response = await fetch("/api/v1/status");
-  if (!response.ok) return null;
-  return (await response.json()) as Snapshot;
 }
 
 export function startHub(callbacks: HubCallbacks): void {

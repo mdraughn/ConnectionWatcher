@@ -4,7 +4,7 @@
 import type { Mark } from "./encoding";
 import { markRank } from "./encoding";
 import { formatProse } from "./format";
-import type { GlitchItem } from "./glitchData";
+import type { GlitchItem } from "./types";
 import { localDayStart, localHourKey } from "./localTime";
 import type { TransitionEvent } from "./types";
 

@@ -7,6 +7,7 @@ import { StatsRow } from "./components/StatsRow";
 import { TimeChart } from "./components/TimeChart";
 import { Punchcard } from "./components/Punchcard";
 import { RibbonBoard, type BoardSubject } from "./components/RibbonBoard";
+import { fetchRollups, fetchTransitions } from "./lib/api";
 import { isTreeTarget } from "./lib/scope";
 import { DAY_MS, isoCompare } from "./lib/localTime";
 import { fetchStory, type Story, type StoryTopology } from "./lib/story";
@@ -27,23 +28,6 @@ const RANGES = [
   { key: "7d", label: "7 days", ms: 7 * DAY_MS },
   { key: "30d", label: "30 days", ms: 30 * DAY_MS },
 ];
-
-async function fetchRollups(subjectId: string, from: Date, to: Date): Promise<RollupPoint[]> {
-  const url = `/api/v1/rollups/${subjectId}?from=${from.toISOString()}&to=${to.toISOString()}&resolution=auto`;
-  const response = await fetch(url);
-  if (!response.ok) return [];
-  return (await response.json()).points as RollupPoint[];
-}
-
-async function fetchTransitions(subjectId: string, from: Date, to: Date): Promise<TransitionEvent[]> {
-  const url = `/api/v1/transitions?subjectId=${subjectId}&from=${from.toISOString()}&to=${to.toISOString()}&limit=1000&opening=true`;
-  const response = await fetch(url);
-  if (!response.ok) return [];
-  const items = (await response.json()).items as TransitionEvent[];
-  // API is newest-first with the opening rows (the state before `from`) leading; we want
-  // chronological: opening rows first, then the in-range rows oldest-first.
-  return [...items.filter((i) => i.opening).reverse(), ...items.filter((i) => !i.opening).reverse()];
-}
 
 // The recurrence punchcard and the cause-aligned board always cover 30 days,
 // independent of the range picker: recurrence needs columns to compare, and
@@ -115,7 +99,7 @@ function App({ subjects }: { subjects: Subject[] }) {
     setLoading(true);
     Promise.all([
       subject.kind === "target" ? fetchRollups(subject.id, from, to) : Promise.resolve([]),
-      fetchTransitions(subject.id, from, to),
+      fetchTransitions({ subjectId: subject.id, from, to, limit: 1000, opening: true }),
     ]).then(([r, t]) => {
       if (!live) return;
       setRollups(r);

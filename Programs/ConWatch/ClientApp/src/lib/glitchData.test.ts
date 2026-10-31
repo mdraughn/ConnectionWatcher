@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chronicTargets, type GlitchItem } from "./glitchData";
+import { chronicTargets } from "./glitchData";
+import type { GlitchItem } from "./types";
 
 // Timestamps are built FROM local wall-clock components so the expected
 // hour mapping holds in any timezone the test machine runs in.

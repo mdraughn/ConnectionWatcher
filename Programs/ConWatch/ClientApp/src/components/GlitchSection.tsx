@@ -1,16 +1,11 @@
 // Recent glitches: the small stuff below the outage threshold, as a table,
 // with a chronic-target callout. Fetches its own data. Placement-agnostic.
 import { useEffect, useState } from "react";
-import { chronicTargets, type GlitchItem } from "../lib/glitchData";
+import { fetchGlitches } from "../lib/api";
+import { chronicTargets } from "../lib/glitchData";
 import { formatProse } from "../lib/format";
 import { isoMs } from "../lib/localTime";
-
-async function fetchGlitches(from: Date, to: Date): Promise<GlitchItem[]> {
-  const url = `/api/v1/glitches?from=${from.toISOString()}&to=${to.toISOString()}&limit=1000&scope=internet`;
-  const response = await fetch(url);
-  if (!response.ok) return [];
-  return (await response.json()).items as GlitchItem[];
-}
+import type { GlitchItem } from "../lib/types";
 
 export function GlitchSection({ from, to, subtitle }: {
   from: Date;
@@ -21,7 +16,7 @@ export function GlitchSection({ from, to, subtitle }: {
 
   useEffect(() => {
     let live = true;
-    fetchGlitches(from, to).then((g) => { if (live) setGlitches(g); });
+    fetchGlitches({ from, to, limit: 1000, scope: "internet" }).then((g) => { if (live) setGlitches(g); });
     return () => { live = false; };
   }, [from.getTime(), to.getTime()]);
 

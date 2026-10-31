@@ -3,7 +3,7 @@ import { HATCH, HEALTHY, HEALTHY_VIVID, markCss, markRank, RAMP, ribbonFill, ver
 import {
   buildLedger, glitchMark, punchcardCells, stripBins, verdictWindows, windowMark,
 } from "./incidents";
-import type { GlitchItem } from "./glitchData";
+import type { GlitchItem } from "./types";
 import type { TransitionEvent } from "./types";
 
 function vt(timestamp: string, from: string, to: string, verdict: string, detail = ""): TransitionEvent {

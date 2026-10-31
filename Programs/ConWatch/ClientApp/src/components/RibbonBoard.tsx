@@ -4,9 +4,9 @@
 // (explained by an upstream failure; no data recorded, no blame).
 // Placement-agnostic.
 import { useEffect, useState } from "react";
+import { fetchTransitions } from "../lib/api";
 import { ribbonFill, type RowRole } from "../lib/encoding";
 import { clipAtReset, ribbonSegments, type RibbonSegment } from "../lib/historyData";
-import type { TransitionEvent } from "../lib/types";
 import { HatchSwatch, MarkSwatch } from "./marks";
 
 export interface BoardSubject {
@@ -77,11 +77,8 @@ export function RibbonBoard({ subjects, rangeStart, rangeEnd }: {
   useEffect(() => {
     let live = true;
     Promise.all(rows.map(async (s) => {
-      const url = `/api/v1/transitions?subjectId=${s.id}` +
-        `&from=${rangeStart.toISOString()}&to=${rangeEnd.toISOString()}&limit=1000`;
-      const response = await fetch(url);
-      const items = response.ok
-        ? ((await response.json()).items as TransitionEvent[]).reverse() : [];
+      const items = await fetchTransitions(
+        { subjectId: s.id, from: rangeStart, to: rangeEnd, limit: 1000 });
       const { transitions } = clipAtReset(items);
       return [s.id, ribbonSegments(transitions, rangeStart.toISOString(), rangeEnd.toISOString())] as const;
     })).then((pairs) => { if (live) setSegmentsById(new Map(pairs)); });

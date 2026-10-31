@@ -3,18 +3,7 @@
 // pattern heatmap only makes sense in the viewer's own clock.
 
 import { DAY_MS, localHourKey } from "./localTime";
-
-export interface GlitchItem {
-  id: number;
-  targetId: string;
-  targetName: string;
-  class: "Target" | "Internet";
-  startUtc: string;
-  endUtc: string;
-  lostCount: number;
-  sampleCount: number;
-  detail: string | null;
-}
+import type { GlitchItem } from "./types";
 
 /**
  * Targets with glitches in >= 3 distinct local hours of the last 24 —

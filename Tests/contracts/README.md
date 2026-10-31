@@ -10,10 +10,9 @@ Each line is a known difference between `ClientApp/src/lib/types.ts` (or the nam
 // AUDIT: transition[].ancestorId: the server sends it; TransitionEvent does not declare it.
 // AUDIT: transition[].avgRtt: the server sends it; TransitionEvent does not declare it.
 // AUDIT: transitions.nextBefore: the server sends the paging cursor; the client never reads it (it asks for one page with a limit).
-// AUDIT: glitch[].scope: the server sends it; GlitchItem (glitchData.ts) does not declare it.
+// AUDIT: glitch[].scope: the server sends it; GlitchItem (types.ts) does not declare it.
 // AUDIT: rollups.resolution: the server sends it; history.tsx reads only `points`.
 // AUDIT: live transitions (SignalR "transition") carry `dns`, the DnsDown blame, on a DnsDown verdict row; TransitionEvent does not declare it. History rows never carry it, so no fixture holds it.
-// AUDIT: index.island: InitialData is module-private in dashboard.tsx, so its key list in contracts.test.ts cannot be typed against it; only the runtime comparison guards it.
 // AUDIT: ModelWarning.kind, DnsBlame.kind, DnsStatus.state and DnsLookupNameStatus.lastResult end in `| string`, which widens each union to string; a `satisfies` against them cannot catch a missing literal. The ModelWarningKind check in contracts.test.ts relies on set equality with vocabulary.json instead.
 
 Not counted as differences: the client marks several keys optional (`Snapshot.enabled`, `warnings`, `dns`; most of TargetStatus's later fields; `TransitionEvent.id` and `scope`) that the server's REST answers always send. Live SignalR transitions omit `id` and `scope`, which is why those two are optional.

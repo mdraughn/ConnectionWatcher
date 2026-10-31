@@ -6,10 +6,11 @@ import { GlitchSection } from "./components/GlitchSection";
 import { LanSection } from "./components/LanSection";
 import { NameResolutionSection } from "./components/NameResolutionSection";
 import { Ledger } from "./components/Ledger";
-import { NotesPanel, acknowledgeWarning } from "./components/NotesPanel";
+import { NotesPanel } from "./components/NotesPanel";
 import { StatusBar } from "./components/StatusBar";
 import { Tree, type Topology } from "./components/Tree";
 import { VerdictBanner } from "./components/VerdictBanner";
+import { acknowledgeWarning, fetchTransitionsNewestFirst } from "./lib/api";
 import { startHub } from "./lib/hub";
 import { isTreeTarget } from "./lib/scope";
 import { DAY_MS, isoCompare } from "./lib/localTime";
@@ -17,20 +18,7 @@ import { createStatusStore, type StatusStore } from "./lib/statusStore";
 import { answerClock } from "./lib/verdictClock";
 import { VERDICT_SUBJECT_ID } from "./lib/verdictSubject";
 import { fetchStory, type Story } from "./lib/story";
-import type { Snapshot, TransitionEvent } from "./lib/types";
-
-interface InitialData {
-  snapshot: Snapshot | null;
-  parents: Record<string, string | null>;
-  poolMembers: Record<string, string[]>;
-  trunkNames?: string[];
-  anchorNames?: string[];
-  weatherThreshold?: number;
-  /** Master enable switch off: archive mode — history serves, nothing pings. */
-  engineDisabled?: boolean;
-  cloneSource?: string | null;
-  admin?: boolean;
-}
+import type { InitialData, TransitionEvent } from "./lib/types";
 
 // The dashboard ledger is the 10 most recent events, looked for across the
 // last 90 days (the glitch retention window); the History page has the rest.
@@ -65,13 +53,10 @@ function App({ store, topology, initial }: {
   const [trail, setTrail] = useState<{ items: TransitionEvent[]; complete: boolean } | null>(null);
   useEffect(() => {
     let live = true;
-    fetch(`/api/v1/transitions?subjectId=${VERDICT_SUBJECT_ID}&limit=${TRAIL_LIMIT}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (live && body?.items)
-          setTrail({ items: body.items, complete: body.items.length < TRAIL_LIMIT });
-      })
-      .catch(() => undefined);
+    fetchTransitionsNewestFirst({ subjectId: VERDICT_SUBJECT_ID, limit: TRAIL_LIMIT })
+      .then((items) => {
+        if (live && items) setTrail({ items, complete: items.length < TRAIL_LIMIT });
+      });
     return () => { live = false; };
   }, []);
   useEffect(() => {
@@ -150,12 +135,8 @@ if (el && dataEl) {
   const store = createStatusStore();
   if (initial.snapshot) store.applySnapshot(initial.snapshot);
 
-  fetch("/api/v1/transitions?limit=50&scope=internet")
-    .then((r) => (r.ok ? r.json() : null))
-    .then((body) => {
-      if (body?.items) store.seedRecent(body.items as TransitionEvent[]);
-    })
-    .catch(() => undefined);
+  void fetchTransitionsNewestFirst({ limit: 50, scope: "internet" })
+    .then((items) => { if (items) store.seedRecent(items); });
   startHub({
     onSnapshot: (s) => store.applySnapshot(s),
     onTransition: (t) => store.applyTransition(t),

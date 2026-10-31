@@ -8,9 +8,8 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { describe, expect, it } from "vitest";
-import type { GlitchItem } from "./glitchData";
 import type {
-  DnsBlame, DnsLookupNameStatus, DnsResolverStatus, DnsStatus, ModelWarning, PoolStatus,
+  DnsBlame, DnsLookupNameStatus, DnsResolverStatus, DnsStatus, GlitchItem, InitialData, ModelWarning, PoolStatus,
   RollupPoint, Snapshot, TargetScope, TargetStatus, TransitionEvent, VerdictStatus,
 } from "./types";
 import { VERDICT_SUBJECT_ID } from "./verdictSubject";
@@ -45,9 +44,8 @@ const rollupKeys = ["periodStart", "pingCount", "successCount", "rttAvg", "rttMi
 const transitionsPageKeys = ["items"] as const;
 const glitchesPageKeys = ["items"] as const;
 const rollupsPageKeys = ["points"] as const;
-// AUDIT (README): InitialData is module-private in dashboard.tsx, so this list cannot be typed against it.
 const islandKeys = ["snapshot", "parents", "poolMembers", "trunkNames", "anchorNames", "weatherThreshold",
-  "engineDisabled", "cloneSource", "admin"] as const;
+  "engineDisabled", "cloneSource", "admin"] as const satisfies readonly (keyof InitialData)[];
 
 // Referenced so tsc evaluates every Covers<> (an unsatisfied one is not assignable from `true`).
 const covered: true[] = [
@@ -63,6 +61,7 @@ const covered: true[] = [
   true satisfies Covers<TransitionEvent, typeof transitionKeys>,
   true satisfies Covers<GlitchItem, typeof glitchKeys>,
   true satisfies Covers<RollupPoint, typeof rollupKeys>,
+  true satisfies Covers<InitialData, typeof islandKeys>,
 ];
 
 interface Audit {

@@ -8,11 +8,6 @@ export function unacknowledgedCount(warnings: ModelWarning[]): number {
   return warnings.filter((w) => !w.acknowledged).length;
 }
 
-export async function acknowledgeWarning(key: string): Promise<boolean> {
-  const r = await fetch(`/api/v1/warnings/${encodeURIComponent(key)}/acknowledge`, { method: "POST" });
-  return r.ok;
-}
-
 export function NotesPanel({ warnings, onAcknowledge }: {
   warnings: ModelWarning[];
   onAcknowledge?: (key: string) => void;

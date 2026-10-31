@@ -96,3 +96,29 @@ export interface RollupPoint {
   rttMin: number;
   rttMax: number;
 }
+
+export interface GlitchItem {
+  id: number;
+  targetId: string;
+  targetName: string;
+  class: "Target" | "Internet";
+  startUtc: string;
+  endUtc: string;
+  lostCount: number;
+  sampleCount: number;
+  detail: string | null;
+}
+
+/** The Index page's server-rendered island (#initial-data). */
+export interface InitialData {
+  snapshot: Snapshot | null;
+  parents: Record<string, string | null>;
+  poolMembers: Record<string, string[]>;
+  trunkNames?: string[];
+  anchorNames?: string[];
+  weatherThreshold?: number;
+  /** Master enable switch off: archive mode — history serves, nothing pings. */
+  engineDisabled?: boolean;
+  cloneSource?: string | null;
+  admin?: boolean;
+}
