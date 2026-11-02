@@ -39,7 +39,9 @@ run it.
 
 Windows is suspicious of programs it hasn't seen many times before, so
 SmartScreen may interpose a blue **"Windows protected your PC"** screen.
-ConnectionWatcher *is* codesigned, so it should show a verified publisher, but it is not well-known to Microsoft. If SmartScreen shows *"Unknown publisher"* instead, stop — that's not a release build.
+ConnectionWatcher *is* code-signed, but it is not well-known to Microsoft.
+Click **More info** — it should show a verified publisher. If SmartScreen
+shows *"Unknown publisher"* instead, stop — that's not a release build.
 
 Click **Run anyway** to proceed.
 
@@ -88,10 +90,10 @@ wizard**:
    **critical** — you'll be told when it's down even if the internet is
    somehow still up.
 2. **Internet anchors.** Four well-known public DNS services (Google,
-   Cloudflare, Quad9, OpenDNS), all checked by default.  These are polled
+   Cloudflare, Quad9, OpenDNS), all checked by default. These are polled
    periodically to test if your computer can reach the internet. Keep all four.
-3. **Which public Domain Name resolver do you use?** If you know that one of those
-   services provids you with Domain Name Services, say which — it lets ConnectionWatcher
+3. **Which public resolver do you use?** If you know that one of those
+   services handles your name lookups, say which — it lets ConnectionWatcher
    tell *your resolver is down* from *DNS is down everywhere*. "I don't
    know" is a fine answer.
 4. **Your router's public address (optional).** The wizard can probe for
@@ -99,7 +101,7 @@ wizard**:
    internet provider is — that name is what lets the banner say "Comcast is
    not carrying your traffic" instead of naming an IP address.
 
-Press **Start monitoring** and after a few minutes od data collection it shows you the that status of your internet connection.
+Press **Start monitoring** and after a few minutes of data collection it shows you the status of your internet connection.
 
 (For better results later, you can add more of your ISP's equipment to the
 path — see [Targets](#targets) below.)
@@ -118,21 +120,23 @@ for the honest trust model).
 
 Forgot the password? Delete
 `admin-password.txt` next to the database
-(`C:\ProgramData\DSoftCo\ConnectionWatcher\data\` on Windows, unless you changed it during install.) and reload the page.
+(`C:\ProgramData\DSoftCo\ConnectionWatcher\data\` on Windows, the mapped
+`data/` folder on Docker) and reload the page.
 
 ### The tray companion
 
 ![The tray icon with its menu open: dashboard links, network searches, and tray settings](docs/images/tray-menu.png)
 
-- Keeps the verdict in the corner of your eye:
+The tray icon keeps the verdict in the corner of your eye:
 
-  - **Green** — Healthy.
-  - **Orange** — Your link is degraded.
-  -  **Red with a slash** — Down or experiencing serious problems.
-  - **Muted green** — Still gathering data.
-  -  **Gray** — the tray can't reach the ConnectionWatcher service
+- **Green** — Healthy (it stays green through trouble that isn't yours,
+  like a site incident or internet weather).
+- **Orange** — Your link is degraded.
+- **Red with a slash** — Down or experiencing serious problems.
+- **Muted green** — Still gathering data.
+- **Gray** — the tray can't reach the ConnectionWatcher service
   at all.
-  - A small neutral dot on the icon means ConnectionWatcher has
+- A small neutral dot on the icon means ConnectionWatcher has
   [notes](THEORY_OF_OPERATION.md#model-warnings-connectionwatcher-notes)
   for the administrator — never an alarm, just a "look when you get a
   minute."
@@ -140,7 +144,8 @@ Forgot the password? Delete
 - **Single click** (either button)
   opens the menu: Open ConnectionWatcher, ConnectionWatcher notes (when
   there are any), History, the ISP report, Server settings, the three
-  scouting actions (below), Tray settings, and Exit.
+  scouting actions (see [Running in Docker](#running-in-docker)), Tray
+  settings, and Exit.
 - **Notifications** announce important changes in the detected quality of your internet service.
   Turn them off in Tray settings if you'd rather just glance
   at the color.
