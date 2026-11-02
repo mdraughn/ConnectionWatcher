@@ -3,55 +3,45 @@
 [![ci](https://github.com/mdraughn/ConnectionWatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mdraughn/ConnectionWatcher/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A home internet connectivity monitor that answers the question *"is my internet down,
-and what kind of down is it?"*
+A home internet connectivity monitor that answers the question *"is my internet down, and what kind of down is it?"*
 
-ConnectionWatcher monitors your path to the internet and periodically checks a
-few key websites, giving it the ability to pretty accurately tell the
+ConnectionWatcher runs on Windows or in a Docker container and monitors your path to the internet, periodically checking a
+few key websites. This gives it the ability to pretty accurately tell the
 difference between problems out on the internet and problems with your
 connection to it.
 
 ![The dashboard: verdict, uptime clock, and the path to the internet](docs/images/dashboard.png)
 
 When your connection *is* the problem, ConnectionWatcher tells you which hop
-broke, keeps the evidence (a printable ISP report with timestamps your
-provider can correlate), and can page you through Home Assistant, MQTT, or
+broke, keeps the evidence, and can page you through Home Assistant, MQTT, or
 webhooks. When it isn't, it says so — a Netflix outage should never send you
 to reboot your modem.
 
-## Documentation
+## Other Documentation
 
-- **[Theory of operation](THEORY_OF_OPERATION.md)** — how the verdict is
-  decided: anchors, the reachability tree, states, glitches, blame, and why
-  a router that ignores pings doesn't count as an outage.
-- **[Privacy](PRIVACY.md)** — no telemetry, and the complete list of network
-  traffic the app can generate.
-- **[Security](SECURITY.md)** — the trust model, what's open and what's
-  behind the admin password, and how to report a vulnerability.
-- **[Development](DEVELOPMENT.md)** — building and running from source,
-  project layout, tests, releases.
-- **[Contributing](CONTRIBUTING.md)** — bug reports and pull requests.
-- **[Docker deployment notes](deploy/docker/README.md)** — compose details,
-  bridge vs. host networking, Synology tips.
+- **[Docker Deployment](deploy/docker/README.md)**
+- **[Privacy](PRIVACY.md)**
+- **[Security](SECURITY.md)**
+- **[Theory of Operation](THEORY_OF_OPERATION.md)**
+- **[Development](DEVELOPMENT.md)**
+- **[Contributing](CONTRIBUTING.md)**
 
-## Quick start (Windows)
+## Quick start - Windows
 
-Most people's always-on machine is a Windows PC, so that's the easy path:
-download `ConnectionWatcher-Setup-<version>.exe` from the
+Download `ConnectionWatcher-Setup-<version>.exe` from the
 [Releases page](https://github.com/mdraughn/ConnectionWatcher/releases) and
-run it. (Got a NAS or a home lab instead? See
+run it.
+
+(Got a NAS or a home lab instead? See
 [Running in Docker](#running-in-docker).)
 
 ### About Microsoft's warnings
 
 Windows is suspicious of programs it hasn't seen many times before, so
 SmartScreen may interpose a blue **"Windows protected your PC"** screen.
-The installer *is* code-signed — click **More info** and the dialog should
-show **Publisher: Mark Draughn**; that signature means the file is exactly
-what was built from this repository by the release pipeline. Click **Run
-anyway** to proceed. (You can also verify before running: right-click the
-downloaded file → Properties → **Digital Signatures** tab.) If SmartScreen
-shows *"Unknown publisher"* instead, stop — that's not a release build.
+ConnectionWatcher *is* codesigned, so it should show a verified publisher, but it is not well-known to Microsoft. If SmartScreen shows *"Unknown publisher"* instead, stop — that's not a release build.
+
+Click **Run anyway** to proceed.
 
 The installer then asks for administrator rights (it registers a Windows
 service), so expect one UAC prompt naming the same publisher.
@@ -79,11 +69,11 @@ service), so expect one UAC prompt naming the same publisher.
 5. Install, and finish with **Open the ConnectionWatcher dashboard**
    checked.
 
-The result: a `ConnectionWatcher` service that starts with Windows (and
-restarts itself if it crashes), the tray icon at sign-in, a Start Menu
+The result: a `ConnectionWatcher` service that starts with Windows, the tray icon at sign-in, a Start Menu
 "ConnectionWatcher Dashboard" link, and your browser open on the setup
-wizard. Uninstalling removes the program, service, and tray, then asks —
-twice — before touching your data.
+wizard.
+
+Uninstalling removes the program, service, and tray, and optionally allows you to remove captured data.
 
 ### First-run setup
 
@@ -98,11 +88,10 @@ wizard**:
    **critical** — you'll be told when it's down even if the internet is
    somehow still up.
 2. **Internet anchors.** Four well-known public DNS services (Google,
-   Cloudflare, Quad9, OpenDNS), all checked by default. These are the
-   witnesses the verdict trusts: the internet is up when at least one of
-   them answers. Keep all four.
-3. **Which public resolver do you use?** If your network resolves names
-   through one of those services, say which — it lets ConnectionWatcher
+   Cloudflare, Quad9, OpenDNS), all checked by default.  These are polled
+   periodically to test if your computer can reach the internet. Keep all four.
+3. **Which public Domain Name resolver do you use?** If you know that one of those
+   services provids you with Domain Name Services, say which — it lets ConnectionWatcher
    tell *your resolver is down* from *DNS is down everywhere*. "I don't
    know" is a fine answer.
 4. **Your router's public address (optional).** The wizard can probe for
@@ -110,13 +99,10 @@ wizard**:
    internet provider is — that name is what lets the banner say "Comcast is
    not carrying your traffic" instead of naming an IP address.
 
-Press **Start monitoring** and you're watching. (Moving from another
-ConnectionWatcher instead? The wizard's "Copy everything from a running
-ConnectionWatcher" section is the way — see
-[Moving to a new machine](#moving-to-a-new-machine-clone--take-over).)
+Press **Start monitoring** and after a few minutes od data collection it shows you the that status of your internet connection.
 
-For better results later, you can add more of your ISP's equipment to the
-path — see [Targets](#targets) below.
+(For better results later, you can add more of your ISP's equipment to the
+path — see [Targets](#targets) below.)
 
 ### Secure the admin pages
 
@@ -128,49 +114,39 @@ dashboard, History, reports — stay open. A 🔒 button on the dashboard
 enters admin mode for the browser session.
 
 It stops casual tinkering, not attackers (see [SECURITY.md](SECURITY.md)
-for the honest trust model). Forgot the password? Delete
+for the honest trust model).
+
+Forgot the password? Delete
 `admin-password.txt` next to the database
-(`C:\ProgramData\DSoftCo\ConnectionWatcher\data\` on Windows, the mapped
-`data/` folder on Docker) and reload.
+(`C:\ProgramData\DSoftCo\ConnectionWatcher\data\` on Windows, unless you changed it during install.) and reload the page.
 
 ### The tray companion
 
 ![The tray icon with its menu open: dashboard links, network searches, and tray settings](docs/images/tray-menu.png)
 
-`conwatch-tray.exe` keeps the verdict in the corner of your eye:
+- Keeps the verdict in the corner of your eye:
 
-- **Green** — healthy (including trouble that isn't yours: a site incident
-  or internet weather). **Orange** — your link is degraded. **Red with a
-  slash** — down, or name lookups are failing. **Muted green** — still
-  measuring. **Gray** — the tray can't reach the ConnectionWatcher service
-  at all. A small neutral dot on the icon means ConnectionWatcher has
+  - **Green** — Healthy.
+  - **Orange** — Your link is degraded.
+  -  **Red with a slash** — Down or experiencing serious problems.
+  - **Muted green** — Still gathering data.
+  -  **Gray** — the tray can't reach the ConnectionWatcher service
+  at all.
+  - A small neutral dot on the icon means ConnectionWatcher has
   [notes](THEORY_OF_OPERATION.md#model-warnings-connectionwatcher-notes)
   for the administrator — never an alarm, just a "look when you get a
   minute."
-- **Double-click** opens the dashboard; a **single click** (either button)
+- **Double-click** opens the dashboard.
+- **Single click** (either button)
   opens the menu: Open ConnectionWatcher, ConnectionWatcher notes (when
   there are any), History, the ISP report, Server settings, the three
   scouting actions (below), Tray settings, and Exit.
-- **Toasts** announce verdict changes ("Internet DOWN", "Internet healthy
-  again", "Your internet is up, but name lookups are failing"), a critical
-  target failing or recovering, and the service itself becoming
-  unreachable. Turn them off in Tray settings if you'd rather just glance
+- **Notifications** announce important changes in the detected quality of your internet service.
+  Turn them off in Tray settings if you'd rather just glance
   at the color.
-- **Tray settings** holds the server URL (with a Test button and a
-  "use installed default" reset), the toast toggle, and a "Forget saved
-  admin password" button.
+- **Tray settings** holds the server URL and the notifications toggle.
 
-The tray runs happily on machines that aren't running the server — point
-it at the NAS with `conwatch tray install --url http://nas:8080`, or just
-run the installer with the Service box unchecked.
-
-**Scouting.** The tray's *Find my router*, *Find the network edge*, and
-*Scan this network* menu items run network searches **from your PC** and
-post the results to the server's Discoveries inbox — exactly what you need
-when the server runs in a container that can't see your LAN. If the server
-has an admin password, the tray prompts for it; *Remember on this PC*
-stores it encrypted for your Windows account, bound to that server, and
-only after the server accepts it.
+You can install the tray icon on machines that aren't running the server — just point it at the server host while installing or in the tray settings.
 
 ## Setting up targets and pools
 
@@ -352,10 +328,17 @@ folders). Router autodetect inside a bridge network finds the container
 bridge rather than your home router, LAN scans see only the container's
 subnet, and the container's resolver (labelled "Docker's resolver") is
 what the name-resolution watch measures. On a Linux host,
-`network_mode: host` fixes the visibility problems; on any host, the
-Windows tray's scouting items search from a real PC and post the results
-to the container. [deploy/docker/README.md](deploy/docker/README.md) has
-the full bridge-vs-host rundown and Synology notes.
+`network_mode: host` fixes the visibility problems.
+
+**Alternatively**, if you install the tray icon on a Windows computer,
+you can use its *Find my router*, *Find the network edge*, and
+*Scan this network* menu items to run network searches *from your PC* and
+post the results to the server's Discoveries inbox — exactly what you need
+when the server runs in a container that can't see your LAN.
+
+For the full bridge-vs-host rundown and Synology notes, see
+[deploy/docker/README.md](deploy/docker/README.md)
+
 
 ### Moving to a new machine (clone + take over)
 

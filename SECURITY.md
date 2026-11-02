@@ -4,7 +4,7 @@
 
 Please report suspected vulnerabilities privately via
 [GitHub security advisories](../../security/advisories/new) rather than a
-public issue. You should get a human reply within a week. There is no bug
+public issue. There is no bug
 bounty — this is an MIT-licensed home project — but reports are genuinely
 appreciated and fixes are prioritized.
 

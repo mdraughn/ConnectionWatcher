@@ -4,6 +4,11 @@ How to build, run, and work on ConnectionWatcher from source. For
 contribution guidelines (PR etiquette, what makes a good bug report), see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Notice of AI development
+
+This application started out as a hand-coded program that pinged several websites and reported their status.  It then went through a period of rapid-AI-driven growth on the way to becoming what it is today.
+While not strictly vibe-coded, it is almost 100% AI-written code.
+
 ## Prerequisites
 
 - **.NET 10 SDK**

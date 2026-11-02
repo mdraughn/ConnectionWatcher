@@ -1,8 +1,7 @@
 # Privacy
 
 ConnectionWatcher has **no telemetry**: nothing phones home to the author or
-anyone else — no usage analytics, no crash reporting, no version checks (if
-an update check is ever added, it will be opt-in and documented here).
+anyone else — no usage analytics, no crash reporting, no version checks.
 
 ## The complete list of network traffic the app can generate
 
