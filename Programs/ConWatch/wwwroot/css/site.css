@@ -9,6 +9,9 @@
     --primary: #0172ad; --primary-soft: rgba(1, 114, 173, 0.10);
     --cw-ok: #2e9e52; --cw-warn: #e08a00; --cw-down: #cc3333;
     --cw-unreach: #999999; --cw-quiet: #6a8;
+    /* Form fields: typed text a shade stronger than Pico's, placeholder
+       (example) text lighter and violet so it never reads as a real value. */
+    --input-text: #15171c; --input-placeholder: #9088b4;
     /* Tree rails: heavy spine for the path to the internet, light rails
        for off-path branches. */
     --cw-spine: #c2cbd9; --cw-rail: #d6dbe4;
@@ -36,6 +39,7 @@
     --primary: #01aaff; --primary-soft: rgba(1, 170, 255, 0.13);
     --cw-ok: #3fb567; --cw-warn: #f0a02a; --cw-down: #e8544b; --cw-unreach: #6d7585;
     --cw-spine: #3a445a; --cw-rail: #323a4b;
+    --input-text: #f1f3f6; --input-placeholder: #7a72a0;
     --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
     --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
     --resolver-glitch: #1f3347; --resolver-degraded: #3f8fd0; --resolver-out: #01aaff;
@@ -52,6 +56,7 @@
         --primary: #01aaff; --primary-soft: rgba(1, 170, 255, 0.13);
         --cw-ok: #3fb567; --cw-warn: #f0a02a; --cw-down: #e8544b; --cw-unreach: #6d7585;
         --cw-spine: #3a445a; --cw-rail: #323a4b;
+        --input-text: #f1f3f6; --input-placeholder: #7a72a0;
         --warm-glitch: #c98a3c; --warm-degraded: #f0a02a; --warm-out: #e8544b;
         --grey-glitch: #39404f; --grey-degraded: #8c94a6; --grey-out: #e2e6ee;
         --resolver-glitch: #1f3347; --resolver-degraded: #3f8fd0; --resolver-out: #01aaff;
@@ -62,6 +67,13 @@
 }
 
 body { background: var(--bg); }
+
+/* Pico defines these on :root; setting them on the fields themselves wins
+   regardless of which theme selector Pico matched. */
+input, select, textarea {
+    --pico-form-element-color: var(--input-text);
+    --pico-form-element-placeholder-color: var(--input-placeholder);
+}
 
 /* ------------------------------------------------------------- app bar */
 .cw-appbar { height: 56px; background: var(--surface); border-bottom: 1px solid var(--border);
