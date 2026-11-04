@@ -25,6 +25,7 @@ to reboot your modem.
 - **[Theory of Operation](THEORY_OF_OPERATION.md)**
 - **[Development](DEVELOPMENT.md)**
 - **[Contributing](CONTRIBUTING.md)**
+- **[Third-party notices](THIRD-PARTY-NOTICES.md)**
 
 ## Quick start - Windows
 

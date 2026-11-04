@@ -1,36 +1,43 @@
 <#
 .SYNOPSIS
-  Regenerates Libraries/ConInfrastructure/Discovery/oui.tsv from the Wireshark "manuf" vendor list.
+  Regenerates Libraries/ConInfrastructure/Discovery/oui.tsv from the IEEE MA-L (OUI) registry.
 .DESCRIPTION
-  Downloads https://www.wireshark.org/download/automated/data/manuf (public data derived from the IEEE
-  registries, a few MB) and writes a compact "AABBCC<TAB>Vendor" file, one line per 3-octet OUI, sorted.
-  Sub-assignments (xx:xx:xx:xx:xx:xx/28 and similar) are skipped. Run it by hand when you want fresher
-  vendor names; the result is committed and embedded in the binary — the app never touches the network
-  for this. (IEEE's own oui.csv host refused connections when this was first written, and its
-  registration-authority endpoint returns only the first 10,000 rows.)
+  Downloads https://standards-oui.ieee.org/oui/oui.csv (the IEEE Registration Authority's public MA-L
+  listing, about 4 MB) and writes a compact "AABBCC<TAB>Vendor" file, one line per 24-bit OUI, sorted.
+  Only the MA-L registry is used; the smaller MA-M/MA-S blocks are not. Run it by hand when you want
+  fresher vendor names; the result is committed and embedded in the binary — the app never touches the
+  network for this. See THIRD-PARTY-NOTICES.md for the data's source.
 #>
 [CmdletBinding()]
 param(
-    [string]$Url = 'https://www.wireshark.org/download/automated/data/manuf',
+    [string]$Url = 'https://standards-oui.ieee.org/oui/oui.csv',
     [string]$Out = (Join-Path $PSScriptRoot '..\Libraries\ConInfrastructure\Discovery\oui.tsv')
 )
 $ErrorActionPreference = 'Stop'
 
-$temp = Join-Path ([IO.Path]::GetTempPath()) "manuf-$([Guid]::NewGuid()).txt"
+$temp = Join-Path ([IO.Path]::GetTempPath()) "oui-$([Guid]::NewGuid()).csv"
 try {
     Invoke-WebRequest -Uri $Url -OutFile $temp -UseBasicParsing
-    $lines = foreach ($line in [IO.File]::ReadLines($temp)) {
-        if ($line -notmatch '^([0-9A-Fa-f]{2}):([0-9A-Fa-f]{2}):([0-9A-Fa-f]{2})\s') { continue }
-        $oui = ($Matches[1] + $Matches[2] + $Matches[3]).ToUpperInvariant()
-        $cols = $line -split "`t"
-        $name = if ($cols.Count -ge 3 -and $cols[2].Trim().Length -gt 0) { $cols[2] } elseif ($cols.Count -ge 2) { $cols[1] } else { '' }
-        $name = ($name.Trim() -replace '\s+', ' ')
+    # Columns: Registry, Assignment (6 hex digits), Organization Name, Organization Address.
+    $lines = foreach ($row in (Import-Csv -Path $temp -Encoding UTF8)) {
+        if ($row.Registry -ne 'MA-L') { continue }
+        $oui = "$($row.Assignment)".Trim().ToUpperInvariant()
+        if ($oui -notmatch '^[0-9A-F]{6}$') { continue }
+        # A handful of registry names carry HTML entities ("R&amp;M AG"); decode them.
+        $name = ([Net.WebUtility]::HtmlDecode("$($row.'Organization Name')").Trim() -replace '\s+', ' ')
         if ($name.Length -eq 0) { continue }
+        # About a fifth of the registry is ALL CAPS; shouting names read badly in the UI. Recase those
+        # (and only those): each letter that follows a non-letter starts a word, apostrophes excepted,
+        # so "HUAWEI TECHNOLOGIES CO.,LTD" -> "Huawei Technologies Co.,Ltd" and "3COM" -> "3Com".
+        if ($name -cnotmatch '\p{Ll}') {
+            $name = [regex]::Replace($name.ToLowerInvariant(), "(?<![\p{L}'])\p{L}", { $args[0].Value.ToUpperInvariant() })
+        }
         if ($name.Length -gt 48) { $name = $name.Substring(0, 48).TrimEnd() }
         "$oui`t$name"
     }
     $sorted = $lines | Sort-Object -Unique
-    [IO.File]::WriteAllLines($Out, $sorted, (New-Object Text.UTF8Encoding($false)))
+    if ($sorted.Count -lt 10000) { throw "Only $($sorted.Count) entries parsed from $Url — refusing to overwrite $Out." }
+    [IO.File]::WriteAllLines($Out, [string[]]$sorted, (New-Object Text.UTF8Encoding($false)))
     Write-Host "Wrote $($sorted.Count) entries to $Out"
 }
 finally {
