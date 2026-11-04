@@ -93,5 +93,3 @@ jobs:
             **Windows:** `ConnectionWatcher-Setup-${{ steps.ver.outputs.version }}.exe` (wizard) or
             `ConnectionWatcher-${{ steps.ver.outputs.version }}-win-x64.zip` (unzip, then `conwatch service install`).
             Both are code-signed (Azure Artifact Signing, publisher "Mark Draughn"); a new certificate has little SmartScreen reputation at first, so Windows may still ask you to confirm.
-            Upgrading from 0.9: the installer replaces `ConWatch.exe`/`ConTray.exe` with `conwatch.exe`/`conwatch-tray.exe`,
-            re-registers the service, and moves your tray URL into the new config file automatically.

@@ -5,7 +5,7 @@
        overrides prefix and suffix. Bump VersionPrefix right after a release
        so dev builds announce the version they are heading toward. -->
   <PropertyGroup>
-    <VersionPrefix>0.10.0</VersionPrefix>
+    <VersionPrefix>1.0.0</VersionPrefix>
     <VersionSuffix>dev</VersionSuffix>
     <Company>DSoftCo</Company>
     <Product>ConnectionWatcher</Product>
